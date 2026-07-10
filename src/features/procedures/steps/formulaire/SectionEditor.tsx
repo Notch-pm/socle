@@ -18,6 +18,7 @@ import { GripVertical, Trash2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import type { Field as FormField, Section } from "@/features/procedures/formSchema";
+import type { DocumentType } from "@/features/document-types/useDocumentTypes";
 import { ConditionEditor } from "./ConditionEditor";
 import { FieldRow } from "./FieldRow";
 
@@ -27,12 +28,18 @@ export function SectionEditor({
   onChange,
   onRemove,
   allInputFields,
+  documentTypes,
+  missingDocTypeIds,
 }: {
   section: Section;
   onChange: (section: Section) => void;
   onRemove: () => void;
   /** Tous les champs de saisie du formulaire (sources de condition). */
   allInputFields: FormField[];
+  /** Catalogue de types de pièce de l'organisation (pour les pièces jointes). */
+  documentTypes: DocumentType[];
+  /** Ids des pièces jointes à signaler comme non typées. */
+  missingDocTypeIds: Set<string>;
 }) {
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({
     id: section.id,
@@ -119,6 +126,8 @@ export function SectionEditor({
                     key={field.id}
                     field={field}
                     sources={allInputFields.filter((f) => f.id !== field.id)}
+                    documentTypes={documentTypes}
+                    invalid={missingDocTypeIds.has(field.id)}
                     onChange={(updated) =>
                       setFields(section.fields.map((f) => (f.id === field.id ? updated : f)))
                     }

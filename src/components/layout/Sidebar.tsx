@@ -1,5 +1,5 @@
 import { NavLink } from "react-router-dom";
-import { LayoutDashboard, Network, ListChecks, Tags, Users } from "lucide-react";
+import { LayoutDashboard, Network, ListChecks, Tags, FileCheck2, Users } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 interface NavItem {
@@ -15,6 +15,7 @@ const ITEMS: NavItem[] = [
   { to: "/organisations", title: "Organisations", icon: Network },
   { to: "/demarches", title: "Démarches", icon: ListChecks },
   { to: "/categories", title: "Catégories", icon: Tags },
+  { to: "/types-pieces", title: "Types de pièce justificative", icon: FileCheck2 },
   { to: "/utilisateurs", title: "Utilisateurs & rôles", icon: Users },
 ];
 

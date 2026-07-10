@@ -39,6 +39,7 @@ function makeProcedure(requesterConfig: unknown = null): Procedure {
     translations: null,
     requester_config: requesterConfig as Procedure["requester_config"],
     form_schema: null,
+    knowledge_base: null,
     created_at: null,
     updated_at: null,
   };

@@ -8,9 +8,11 @@ import { PROCEDURE_STEPS } from "@/features/procedures/steps";
 import { DescriptifStep, type DescriptifValues } from "@/features/procedures/steps/DescriptifStep";
 import { DemandeurStep } from "@/features/procedures/steps/DemandeurStep";
 import { FormulaireStep } from "@/features/procedures/steps/FormulaireStep";
+import { KnowledgeBaseStep } from "@/features/procedures/steps/KnowledgeBaseStep";
 import { PlaceholderStep } from "@/features/procedures/steps/PlaceholderStep";
 import type { RequesterConfig } from "@/features/procedures/requesterFields";
 import type { FormSchema } from "@/features/procedures/formSchema";
+import type { KnowledgeBase } from "@/features/procedures/knowledgeBase";
 import {
   useProcedure,
   useCreateProcedure,
@@ -21,6 +23,7 @@ import type { Json } from "@/types/database.types";
 const DESCRIPTIF_FORM_ID = "procedure-descriptif-form";
 const DEMANDEUR_FORM_ID = "procedure-demandeur-form";
 const FORMULAIRE_FORM_ID = "procedure-formulaire-form";
+const CONNAISSANCES_FORM_ID = "procedure-connaissances-form";
 const LAST_STEP = PROCEDURE_STEPS.length - 1;
 
 export function ProcedureEditor({
@@ -93,6 +96,13 @@ export function ProcedureEditor({
     );
   }
 
+  function handleConnaissancesSubmit(kb: KnowledgeBase) {
+    updateProc.mutate(
+      { id: procedureId!, knowledge_base: kb as unknown as Json },
+      { onSuccess: () => setCurrent((c) => Math.min(c + 1, LAST_STEP)) },
+    );
+  }
+
   // Étapes fonctionnelles : chacune a un formulaire soumis depuis le pied de page.
   const currentFormId =
     current === 0
@@ -101,7 +111,9 @@ export function ProcedureEditor({
         ? DEMANDEUR_FORM_ID
         : current === 2
           ? FORMULAIRE_FORM_ID
-          : null;
+          : current === 4
+            ? CONNAISSANCES_FORM_ID
+            : null;
 
   return (
     <div className="flex h-full min-h-0 flex-col overflow-hidden">
@@ -153,6 +165,12 @@ export function ProcedureEditor({
                 formId={FORMULAIRE_FORM_ID}
                 procedure={procedure}
                 onSubmit={handleFormulaireSubmit}
+              />
+            ) : current === 4 && procedure ? (
+              <KnowledgeBaseStep
+                formId={CONNAISSANCES_FORM_ID}
+                procedure={procedure}
+                onSubmit={handleConnaissancesSubmit}
               />
             ) : (
               <PlaceholderStep label={PROCEDURE_STEPS[current].label} />

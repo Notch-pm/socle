@@ -13,9 +13,10 @@ import {
   type DragStartEvent,
 } from "@dnd-kit/core";
 import { SortableContext, arrayMove, verticalListSortingStrategy } from "@dnd-kit/sortable";
-import { LayoutList, Eye } from "lucide-react";
+import { LayoutList, Eye, AlertTriangle } from "lucide-react";
 import { cn } from "@/lib/utils";
 import {
+  attachmentFieldsMissingDocumentType,
   conditionSourceFields,
   createField,
   createSection,
@@ -26,6 +27,7 @@ import {
   type FormSchema,
 } from "@/features/procedures/formSchema";
 import type { Procedure } from "@/features/procedures/useProcedures";
+import { useDocumentTypesForOrg } from "@/features/document-types/useDocumentTypes";
 import { SectionEditor } from "./formulaire/SectionEditor";
 import { FieldRow } from "./formulaire/FieldRow";
 import { FormPreview } from "./formulaire/FormPreview";
@@ -61,10 +63,32 @@ export function FormulaireStep({
   );
   const [view, setView] = React.useState<"builder" | "preview">("builder");
   const [dragLabel, setDragLabel] = React.useState<string | null>(null);
+  // Passe à true après une tentative d'enregistrement invalide (PJ sans type).
+  const [showErrors, setShowErrors] = React.useState(false);
+
+  const { data: documentTypes } = useDocumentTypesForOrg(procedure.organization_id);
+  const catalog = documentTypes ?? [];
 
   const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 5 } }));
   const inputFields = conditionSourceFields(schema);
   const content = schema.content;
+
+  // Pièces jointes non typées à signaler (uniquement après une tentative).
+  const missingDocTypeIds = React.useMemo(
+    () => (showErrors ? new Set(attachmentFieldsMissingDocumentType(schema)) : new Set<string>()),
+    [showErrors, schema],
+  );
+
+  function handleSubmit(e: React.FormEvent) {
+    e.preventDefault();
+    if (attachmentFieldsMissingDocumentType(schema).length > 0) {
+      setShowErrors(true);
+      setView("builder"); // ramener sur l'éditeur pour voir les champs en erreur
+      return;
+    }
+    setShowErrors(false);
+    onSubmit(schema);
+  }
 
   function setContent(next: FormNode[]) {
     setSchema((s) => ({ ...s, content: next }));
@@ -116,14 +140,14 @@ export function FormulaireStep({
   }
 
   return (
-    <form
-      id={formId}
-      onSubmit={(e) => {
-        e.preventDefault();
-        onSubmit(schema);
-      }}
-      className="flex flex-col gap-4"
-    >
+    <form id={formId} onSubmit={handleSubmit} className="flex flex-col gap-4">
+      {showErrors && missingDocTypeIds.size > 0 ? (
+        <p className="flex items-center gap-2 rounded-lg border border-destructive/30 bg-destructive/5 px-4 py-2 text-sm text-destructive">
+          <AlertTriangle className="size-4 shrink-0" />
+          Chaque pièce justificative doit avoir un type. Complétez les champs signalés en rouge.
+        </p>
+      ) : null}
+
       <div className="inline-flex self-start rounded-lg border border-input p-0.5">
         <TabButton active={view === "builder"} onClick={() => setView("builder")} icon={<LayoutList className="size-4" />}>
           Éditeur
@@ -151,6 +175,8 @@ export function FormulaireStep({
                           key={node.id}
                           section={node}
                           allInputFields={inputFields}
+                          documentTypes={catalog}
+                          missingDocTypeIds={missingDocTypeIds}
                           onChange={(updated) => replaceNode(node.id, updated)}
                           onRemove={() => removeNode(node.id)}
                         />
@@ -159,6 +185,8 @@ export function FormulaireStep({
                           key={node.id}
                           field={node}
                           sources={inputFields.filter((f) => f.id !== node.id)}
+                          documentTypes={catalog}
+                          invalid={missingDocTypeIds.has(node.id)}
                           onChange={(updated) => replaceNode(node.id, updated)}
                           onRemove={() => removeNode(node.id)}
                         />

@@ -58,8 +58,11 @@ export const MAX_ATTACHMENT_FILES = 5;
 
 export interface AttachmentField extends FieldCommon {
   type: "attachment";
-  /** Type de pièce justificative (catalogue paramétrable prochainement). */
-  documentType?: string;
+  /**
+   * Référence vers un type du catalogue `document_types` (l'`id`). Obligatoire à
+   * la saisie — voir `attachmentFieldsMissingDocumentType`.
+   */
+  documentTypeId?: string;
   /** 1 = un seul fichier ; 2..5 = plusieurs fichiers (jusqu'à MAX_ATTACHMENT_FILES). */
   maxFiles: number;
   /** Formats de fichier acceptés (ex. ["pdf", "jpg"]). */
@@ -147,6 +150,23 @@ export function conditionSourceFields(schema: FormSchema): Field[] {
   return fields.filter((f) => f.type !== "attachment");
 }
 
+/**
+ * Ids des pièces justificatives (racine + sections) auxquelles il manque un
+ * type de pièce. Le type est **obligatoire à la saisie** : sert à bloquer
+ * l'enregistrement du formulaire tant qu'une PJ n'est pas typée.
+ */
+export function attachmentFieldsMissingDocumentType(schema: FormSchema): string[] {
+  const missing: string[] = [];
+  const check = (field: Field) => {
+    if (field.type === "attachment" && !field.documentTypeId) missing.push(field.id);
+  };
+  for (const node of schema.content) {
+    if (isSection(node)) node.fields.forEach(check);
+    else check(node);
+  }
+  return missing;
+}
+
 // ---- Validation / parsing --------------------------------------------------
 
 const conditionSchema = z.object({
@@ -185,7 +205,7 @@ const choiceFieldSchema = z.object({
 const attachmentFieldSchema = z.object({
   ...fieldCommonShape,
   type: z.literal("attachment"),
-  documentType: z.string().optional(),
+  documentTypeId: z.string().optional(),
   maxFiles: z.number().default(1),
   acceptedFormats: z.array(z.string()).default([]),
   requiredIf: conditionSchema.optional(),

@@ -8,6 +8,7 @@ import { SetPasswordPage } from "@/features/auth/SetPasswordPage";
 import { ForgotPasswordPage } from "@/features/auth/ForgotPasswordPage";
 import { DashboardPage } from "@/pages/DashboardPage";
 import { CategoriesPage } from "@/features/categories/CategoriesPage";
+import { DocumentTypesPage } from "@/features/document-types/DocumentTypesPage";
 import { OrganizationsPage } from "@/features/organizations/OrganizationsPage";
 import { ProceduresPage } from "@/features/procedures/ProceduresPage";
 import { ProcedureEditorPage } from "@/features/procedures/ProcedureEditorPage";
@@ -52,6 +53,7 @@ export function App() {
               <Route path="demarches/nouveau" element={<ProcedureEditorPage variant="admin" />} />
               <Route path="demarches/:procId" element={<ProcedureEditorPage variant="admin" />} />
               <Route path="categories" element={<CategoriesPage />} />
+              <Route path="types-pieces" element={<DocumentTypesPage />} />
               <Route path="utilisateurs" element={<UtilisateursPage />} />
             </Route>
           </Route>

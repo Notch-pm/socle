@@ -47,6 +47,35 @@ export type Database = {
           },
         ];
       };
+      document_types: {
+        Row: {
+          created_at: string | null;
+          id: string;
+          name: string;
+          organization_id: string;
+        };
+        Insert: {
+          created_at?: string | null;
+          id?: string;
+          name: string;
+          organization_id: string;
+        };
+        Update: {
+          created_at?: string | null;
+          id?: string;
+          name?: string;
+          organization_id?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "document_types_organization_id_fkey";
+            columns: ["organization_id"];
+            isOneToOne: false;
+            referencedRelation: "organizations";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
       organization_procedures: {
         Row: {
           custom_name: string | null;
@@ -155,6 +184,7 @@ export type Database = {
           input_duration_minutes: number | null;
           is_active_global: boolean | null;
           keywords: string[] | null;
+          knowledge_base: Json | null;
           name: string;
           order_index: number | null;
           organization_id: string | null;
@@ -174,6 +204,7 @@ export type Database = {
           input_duration_minutes?: number | null;
           is_active_global?: boolean | null;
           keywords?: string[] | null;
+          knowledge_base?: Json | null;
           name: string;
           order_index?: number | null;
           organization_id?: string | null;
@@ -193,6 +224,7 @@ export type Database = {
           input_duration_minutes?: number | null;
           is_active_global?: boolean | null;
           keywords?: string[] | null;
+          knowledge_base?: Json | null;
           name?: string;
           order_index?: number | null;
           organization_id?: string | null;

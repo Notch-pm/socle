@@ -3,7 +3,12 @@ import { Input } from "@/components/ui/input";
 import { Field } from "@/components/ui/field";
 import { EmptyState } from "@/components/shared/EmptyState";
 import { evaluateCondition, type FormValues } from "@/features/procedures/conditions";
-import { isSection, type Field as FormField, type FormSchema } from "@/features/procedures/formSchema";
+import {
+  isSection,
+  type AttachmentField,
+  type Field as FormField,
+  type FormSchema,
+} from "@/features/procedures/formSchema";
 
 const inputClass =
   "h-10 w-full rounded-lg border border-input bg-background px-3 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring";
@@ -49,6 +54,51 @@ export function FormPreview({ schema }: { schema: FormSchema }) {
         );
       })}
     </div>
+  );
+}
+
+/**
+ * Champ fichier de l'aperçu. L'attribut HTML `multiple` n'impose aucune borne
+ * supérieure : on contrôle donc le nombre de fichiers à la sélection et on
+ * rejette une sélection trop grande (implémentation de référence du contrat).
+ */
+function AttachmentPreview({ id, field }: { id: string; field: AttachmentField }) {
+  const [error, setError] = React.useState<string | null>(null);
+  const accept = field.acceptedFormats.map((f) => "." + f.replace(/^\./, "")).join(",");
+
+  const formatsLabel =
+    field.acceptedFormats.length > 0
+      ? "Formats acceptés : " + field.acceptedFormats.map((f) => f.toUpperCase()).join(", ")
+      : "Tous formats acceptés";
+  const filesLabel =
+    field.maxFiles > 1 ? `${field.maxFiles} fichiers maximum` : "1 fichier maximum";
+
+  return (
+    <>
+      <input
+        id={id}
+        type="file"
+        multiple={field.maxFiles > 1}
+        accept={accept || undefined}
+        onChange={(e) => {
+          const count = e.target.files?.length ?? 0;
+          if (count > field.maxFiles) {
+            setError(
+              `${field.maxFiles} fichier${field.maxFiles > 1 ? "s" : ""} maximum — sélection ignorée.`,
+            );
+            e.target.value = "";
+          } else {
+            setError(null);
+          }
+        }}
+        aria-invalid={error != null}
+        className={inputClass + " py-1.5 file:mr-3 file:rounded file:border-0 file:bg-muted file:px-2 file:py-1"}
+      />
+      <p className="mt-1 text-xs text-muted-foreground">
+        {formatsLabel} · {filesLabel}
+      </p>
+      {error ? <p className="mt-1 text-sm text-destructive">{error}</p> : null}
+    </>
   );
 }
 
@@ -141,13 +191,7 @@ function PreviewField({
           })}
         </div>
       ) : field.type === "attachment" ? (
-        <input
-          id={`prev-${field.id}`}
-          type="file"
-          multiple={field.maxFiles > 1}
-          accept={field.acceptedFormats.map((f) => "." + f.replace(/^\./, "")).join(",")}
-          className={inputClass + " py-1.5 file:mr-3 file:rounded file:border-0 file:bg-muted file:px-2 file:py-1"}
-        />
+        <AttachmentPreview id={`prev-${field.id}`} field={field} />
       ) : (
         <Input
           id={`prev-${field.id}`}

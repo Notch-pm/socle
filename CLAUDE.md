@@ -130,8 +130,8 @@ viendra plus tard. Paramétrage par **admin** (sa principale) et **superadmin** 
 
 - **Formulaire = stepper horizontal à 5 étapes** (`src/features/procedures/steps.ts`) : Descriptif,
   Informations demandeur, Formulaire, Communication, Base de connaissances. **Descriptif, Informations
-  demandeur et Formulaire sont fonctionnelles** ; Communication et Base de connaissances sont des
-  placeholders. Chaque étape fonctionnelle a un `<form id>` soumis depuis le pied de `ProcedureEditor`
+  demandeur, Formulaire et Base de connaissances sont fonctionnelles** ; seule Communication reste un
+  placeholder. Chaque étape fonctionnelle a un `<form id>` soumis depuis le pied de `ProcedureEditor`
   (`currentFormId`) et persiste via `useUpdateProcedure`.
 - **Descriptif** → colonnes `procedures` : `name` (obligatoire), `category_id` (obligatoire, catégories
   de la racine), `type` (`interne`/`externe`), `keywords` (text[], CSV), `short_description`,
@@ -141,9 +141,17 @@ viendra plus tard. Paramétrage par **admin** (sa principale) et **superadmin** 
   `obligatoire`. Logique pure + parseur robuste `requesterFields.ts` (testé), UI `steps/DemandeurStep.tsx`.
 - **Formulaire** → colonne `procedures.form_schema` (JSONB) : **form builder maison**, schéma
   **possédé** (contrat public consommé en aval). Contenu = liste ordonnée de nœuds *champ* ou *section* ;
-  champs simples / choix (options) / **pièce justificative** (type, 1–5 fichiers, formats, obligatoire +
+  champs simples / choix (options) / **pièce justificative** (1–5 fichiers, formats, obligatoire +
   conditionnel) ; **conditions** d'affichage & d'obligation (moteur pur `conditions.ts`). Ajout des
   champs par **palette** (glisser-déposer positionné, ou clic → ajout à la fin).
+- **Base de connaissances** → colonne `procedures.knowledge_base` (JSONB) : informations à destination
+  de **l'agent et de son assistant LLM**, schéma **possédé** (contrat consommé en aval). Champs : texte
+  d'aide agent & procédures (**Markdown**, aperçu via `markdown.ts` — rendu HTML échappé, aucune
+  dépendance), liens utiles agent + sources IA (`{url, description}`), FAQ (`{question, answer}`),
+  garde-fous (liste). Deux jeux de **documents** (aide agent PDF/image ; entraînement IA formats
+  étendus) : sections **placeholder « à venir »** — l'upload attend un bucket Supabase (le schéma
+  réserve déjà `agentDocuments`/`trainingDocuments`). Logique pure + parseur robuste `knowledgeBase.ts`
+  (testé), UI `steps/KnowledgeBaseStep.tsx` (+ `steps/connaissances/*`).
 - RLS `procedures` : écriture `is_super_admin() OR is_org_admin(organization_id)` (la policy
   permissive `write procedures` par `global_role` a été retirée → isolation tenant). Suppression
   réservée au superadmin (UI).
@@ -151,12 +159,47 @@ viendra plus tard. Paramétrage par **admin** (sa principale) et **superadmin** 
   `Stepper.tsx`, `ProcedureEditor.tsx`, `ProceduresListPanel.tsx`, `ProceduresPage.tsx` (admin
   `/demarches`), `ProcedureEditorPage.tsx` (`variant` admin/superadmin). Étapes : `steps/DescriptifStep`,
   `steps/DemandeurStep`, `steps/FormulaireStep` (+ `steps/formulaire/*` : `FieldPalette`, `SectionEditor`,
-  `FieldRow`, `ConditionEditor`, `FormPreview`), `steps/PlaceholderStep`. Logique pure **testée** :
-  `requesterFields.ts`, `formSchema.ts`, `conditions.ts`. Superadmin : section « Catalogue de démarches »
-  dans `OrgSettingsPage` (racine uniquement). Prochaine évolution : catalogue paramétré des **types de
-  pièce justificative**.
+  `FieldRow`, `ConditionEditor`, `FormPreview`, `FormatsPicker`), `steps/KnowledgeBaseStep` (+
+  `steps/connaissances/*` : `MarkdownField`, `LinkListEditor`, `FaqEditor`, `StringListEditor`,
+  `DeferredDocuments`, `controls`), `steps/PlaceholderStep`. Logique pure **testée** : `requesterFields.ts`,
+  `formSchema.ts`, `conditions.ts`, `formats.ts`, `knowledgeBase.ts`, `markdown.ts`. Superadmin : section
+  « Catalogue de démarches » dans `OrgSettingsPage` (racine uniquement).
 - Prérequis : une racine sans **catégorie** ne permet pas de créer une démarche (catégorie
   obligatoire) → créer d'abord des catégories via `/categories`.
+- La **pièce justificative** porte un `documentTypeId?: string` référençant un type du catalogue
+  `document_types` (voir feature ci-dessous). Le type est **obligatoire à la saisie** : `FormulaireStep`
+  bloque l'enregistrement tant qu'une PJ n'est pas typée (helper pur `attachmentFieldsMissingDocumentType`,
+  testé) et signale les champs fautifs. Le sélecteur charge le catalogue de la racine via
+  `useDocumentTypesForOrg`. Les **formats acceptés** se saisissent via `FormatsPicker` (puces
+  retirables + formats courants en un clic + saisie libre ; logique pure `formats.ts`, testée).
+  L'**aperçu** (`FormPreview`) affiche les formats autorisés et le nombre de fichiers max, et applique
+  la borne `maxFiles` (l'attribut HTML `multiple` seul n'impose aucune limite) : une sélection trop
+  grande est refusée.
+
+## Feature : types de pièce justificative (`document_types`)
+
+Catalogue des types de pièce justificative, **multi-tenant strict** comme les démarches : chaque
+type est rattaché à une **organisation principale (racine)** — imposé par le trigger DB
+`enforce_document_type_root_org` (calqué sur `enforce_procedure_root_org`). Il **alimente le champ
+pièce justificative** du form builder (`documentTypeId`, obligatoire — cf. feature démarches).
+
+- Champs : `name` (**obligatoire**, **unique par organisation, insensible à la casse** via l'index
+  `document_types_org_name_unique` sur `(organization_id, lower(name))`), `organization_id` (FK
+  racine, `ON DELETE CASCADE`).
+- RLS `document_types` (calqué sur `categories`) : lecture `has_org_access(organization_id)` ·
+  écriture (ALL) `is_org_admin(organization_id)`. Pas de policy super_admin dédiée (`is_org_admin`
+  court-circuite déjà le super admin).
+- Unicité vérifiée côté client (feedback immédiat) **et** garantie en base (repli sur l'erreur
+  Postgres `23505`).
+- **Deux points d'entrée**, tous deux via le composant partagé `DocumentTypesManager` (liste + CRUD) :
+  - **Admin** : écran **`/types-pieces`** dans l'app par organisation (comme `/categories`) — mode
+    « toutes mes racines », le dialogue propose un sélecteur d'organisation (masqué s'il n'y en a qu'une).
+  - **Superadmin** : section « Types de pièce justificative » de `OrgSettingsPage` (racine uniquement) —
+    mode **org fixée** : `DocumentTypesManager organizationId=…`, le dialogue **verrouille** l'organisation
+    (`fixedOrganizationId`) et la liste n'affiche que les types de cette organisation.
+- Code : `src/features/document-types/` — `useDocumentTypes.ts` (`useDocumentTypesQuery(enabled?)`,
+  `useDocumentTypesForOrg(orgId)`, mutations), `DocumentTypesManager`, `DocumentTypeFormDialog`,
+  `DocumentTypesPage` (fin conteneur). Sélecteur d'organisation via `useWritableRootOrganizations`.
 
 ## Design system
 

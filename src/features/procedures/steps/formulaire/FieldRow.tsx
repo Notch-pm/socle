@@ -7,13 +7,14 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Field } from "@/components/ui/field";
 import { Switch } from "@/components/ui/switch";
-import { parseKeywords } from "@/features/procedures/keywords";
 import {
   FIELD_TYPES,
   MAX_ATTACHMENT_FILES,
   type Field as FormField,
 } from "@/features/procedures/formSchema";
+import type { DocumentType } from "@/features/document-types/useDocumentTypes";
 import { ConditionEditor } from "./ConditionEditor";
+import { FormatsPicker } from "./FormatsPicker";
 
 const PLACEHOLDER_TYPES = ["text", "textarea", "number", "email", "phone", "select"];
 
@@ -30,12 +31,18 @@ export function FieldRow({
   onChange,
   onRemove,
   sources,
+  documentTypes,
+  invalid,
 }: {
   field: FormField;
   onChange: (field: FormField) => void;
   onRemove: () => void;
   /** Champs sources pour les conditions (déjà filtrés hors champ courant). */
   sources: FormField[];
+  /** Catalogue de types de pièce de l'organisation (pour les pièces jointes). */
+  documentTypes: DocumentType[];
+  /** Vrai si la pièce jointe doit signaler un type manquant (après tentative d'enregistrement). */
+  invalid?: boolean;
 }) {
   // Ouvert d'emblée pour les types qui nécessitent une configuration (options / formats).
   const [open, setOpen] = React.useState(() => "options" in field || field.type === "attachment");
@@ -165,15 +172,40 @@ export function FieldRow({
                 <Field
                   label="Type de pièce justificative"
                   htmlFor={`doctype-${field.id}`}
-                  hint="Catalogue de types paramétrable prochainement"
+                  hint="Obligatoire — issu du paramétrage « Types de pièce justificative »"
                 >
-                  <Input
-                    id={`doctype-${field.id}`}
-                    value={field.documentType ?? ""}
-                    onChange={(e) => onChange({ ...field, documentType: e.target.value || undefined })}
-                    placeholder="ex. Justificatif de domicile"
-                    className="h-9"
-                  />
+                  {documentTypes.length === 0 ? (
+                    <p className="text-sm text-muted-foreground">
+                      Aucun type disponible. Créez-en d'abord dans « Types de pièce justificative ».
+                    </p>
+                  ) : (
+                    // Pas d'attribut `required` : la validation native masquerait le
+                    // blocage JS (bannière + surlignage) et ne couvrirait pas les
+                    // panneaux repliés. On s'appuie sur attachmentFieldsMissingDocumentType.
+                    <select
+                      id={`doctype-${field.id}`}
+                      value={field.documentTypeId ?? ""}
+                      onChange={(e) =>
+                        onChange({ ...field, documentTypeId: e.target.value || undefined })
+                      }
+                      aria-invalid={invalid}
+                      className={cn(selectClass, invalid && "border-destructive ring-1 ring-destructive")}
+                    >
+                      <option value="" disabled>
+                        Sélectionner un type…
+                      </option>
+                      {documentTypes.map((dt) => (
+                        <option key={dt.id} value={dt.id}>
+                          {dt.name}
+                        </option>
+                      ))}
+                    </select>
+                  )}
+                  {invalid ? (
+                    <p className="mt-1 text-sm text-destructive">
+                      Sélectionnez un type de pièce.
+                    </p>
+                  ) : null}
                 </Field>
                 <Field label="Nombre de fichiers" htmlFor={`nfiles-${field.id}`}>
                   <select
@@ -191,13 +223,11 @@ export function FieldRow({
                   </select>
                 </Field>
               </div>
-              <Field label="Formats acceptés" htmlFor={`fmt-${field.id}`} hint="Extensions séparées par une virgule">
-                <Input
+              <Field label="Formats acceptés" htmlFor={`fmt-${field.id}`} hint="Cliquez un format courant ou saisissez une extension">
+                <FormatsPicker
                   id={`fmt-${field.id}`}
-                  defaultValue={field.acceptedFormats.join(", ")}
-                  onBlur={(e) => onChange({ ...field, acceptedFormats: parseKeywords(e.target.value) })}
-                  placeholder="pdf, jpg, png"
-                  className="h-9"
+                  value={field.acceptedFormats}
+                  onChange={(acceptedFormats) => onChange({ ...field, acceptedFormats })}
                 />
               </Field>
               <ConditionEditor

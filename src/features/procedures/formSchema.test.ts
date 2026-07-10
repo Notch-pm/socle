@@ -1,5 +1,6 @@
 import { describe, it, expect } from "vitest";
 import {
+  attachmentFieldsMissingDocumentType,
   conditionSourceFields,
   createField,
   createSection,
@@ -70,6 +71,46 @@ describe("conditionSourceFields", () => {
       ],
     };
     expect(conditionSourceFields(schema).map((f) => f.id)).toEqual(["f0", "f1"]);
+  });
+});
+
+describe("attachmentFieldsMissingDocumentType", () => {
+  it("liste les pièces jointes sans type (racine + sections) et ignore les autres champs", () => {
+    const schema: FormSchema = {
+      version: 1,
+      content: [
+        { id: "t0", key: "nom", type: "text", label: "Nom" },
+        { id: "a0", key: "pj0", type: "attachment", label: "PJ sans type", acceptedFormats: [], maxFiles: 1 },
+        {
+          id: "a1",
+          key: "pj1",
+          type: "attachment",
+          label: "PJ typée",
+          acceptedFormats: [],
+          maxFiles: 1,
+          documentTypeId: "dt-1",
+        },
+        {
+          id: "s1",
+          kind: "section",
+          title: "S",
+          fields: [
+            { id: "a2", key: "pj2", type: "attachment", label: "PJ section sans type", acceptedFormats: [], maxFiles: 1 },
+          ],
+        },
+      ],
+    };
+    expect(attachmentFieldsMissingDocumentType(schema)).toEqual(["a0", "a2"]);
+  });
+
+  it("renvoie une liste vide quand toutes les pièces jointes sont typées", () => {
+    const schema: FormSchema = {
+      version: 1,
+      content: [
+        { id: "a1", key: "pj", type: "attachment", label: "PJ", acceptedFormats: [], maxFiles: 1, documentTypeId: "dt-9" },
+      ],
+    };
+    expect(attachmentFieldsMissingDocumentType(schema)).toEqual([]);
   });
 });
 

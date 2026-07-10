@@ -5,6 +5,15 @@ import { FormulaireStep } from "./FormulaireStep";
 import type { FormSchema } from "@/features/procedures/formSchema";
 import type { Procedure } from "@/features/procedures/useProcedures";
 
+// Catalogue de types de pièce : on court-circuite l'appel réseau TanStack Query.
+vi.mock("@/features/document-types/useDocumentTypes", () => ({
+  useDocumentTypesForOrg: () => ({
+    data: [
+      { id: "dt-1", name: "Justificatif de domicile", organization_id: "org-1", created_at: null },
+    ],
+  }),
+}));
+
 // Primitives Radix (Switch) : polyfills absents de jsdom.
 if (!Element.prototype.hasPointerCapture) {
   Element.prototype.hasPointerCapture = () => false;
@@ -36,6 +45,7 @@ function makeProcedure(formSchema: unknown = null): Procedure {
     translations: null,
     requester_config: null,
     form_schema: formSchema as Procedure["form_schema"],
+    knowledge_base: null,
     created_at: null,
     updated_at: null,
   };
@@ -69,12 +79,37 @@ describe("FormulaireStep — construction et émission du schéma", () => {
     expect(schema.content[0]).toMatchObject({ type: "checkboxes", label: "Loisirs", options: [] });
   });
 
-  it("ajoute une pièce justificative depuis la palette (un seul fichier par défaut)", () => {
+  it("ajoute une pièce justificative typée depuis la palette (un seul fichier par défaut)", () => {
     const { onSubmit, submit } = renderStep(makeProcedure(null));
     fireEvent.click(screen.getByRole("button", { name: "Pièce justificative" }));
+    // Le type de pièce est obligatoire : on le choisit dans le catalogue.
+    fireEvent.change(screen.getByLabelText("Type de pièce justificative"), {
+      target: { value: "dt-1" },
+    });
     submit();
     const schema = onSubmit.mock.calls[0][0] as FormSchema;
-    expect(schema.content[0]).toMatchObject({ type: "attachment", maxFiles: 1 });
+    expect(schema.content[0]).toMatchObject({
+      type: "attachment",
+      maxFiles: 1,
+      documentTypeId: "dt-1",
+    });
+  });
+
+  it("bloque l'enregistrement d'une pièce justificative sans type, puis l'autorise une fois typée", () => {
+    const { onSubmit, submit } = renderStep(makeProcedure(null));
+    fireEvent.click(screen.getByRole("button", { name: "Pièce justificative" }));
+
+    // Sans type sélectionné → soumission bloquée + alerte visible.
+    submit();
+    expect(onSubmit).not.toHaveBeenCalled();
+    expect(screen.getByText(/chaque pièce justificative doit avoir un type/i)).toBeTruthy();
+
+    // Une fois le type choisi → l'enregistrement passe.
+    fireEvent.change(screen.getByLabelText("Type de pièce justificative"), {
+      target: { value: "dt-1" },
+    });
+    submit();
+    expect(onSubmit).toHaveBeenCalledTimes(1);
   });
 
   it("ajoute une section depuis la palette", () => {

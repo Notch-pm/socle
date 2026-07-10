@@ -1,6 +1,6 @@
 import * as React from "react";
 import { useParams, useNavigate } from "react-router-dom";
-import { ArrowLeft, Settings2, Network, Users as UsersIcon, ListChecks, Mail, type LucideIcon } from "lucide-react";
+import { ArrowLeft, Settings2, Network, Users as UsersIcon, ListChecks, FileCheck2, Mail, type LucideIcon } from "lucide-react";
 import { Card, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { EmptyState } from "@/components/shared/EmptyState";
@@ -10,14 +10,23 @@ import { SubOrganizationsSection } from "@/features/superadmin/organizations/sec
 import { SmtpSettingsSection } from "@/features/superadmin/organizations/sections/SmtpSettingsSection";
 import { UsersManagementPage } from "@/features/users/UsersManagementPage";
 import { ProceduresListPanel } from "@/features/procedures/ProceduresListPanel";
+import { DocumentTypesManager } from "@/features/document-types/DocumentTypesManager";
 
-type Section = "menu" | "general" | "sous-organisations" | "utilisateurs" | "demarches" | "smtp";
+type Section =
+  | "menu"
+  | "general"
+  | "sous-organisations"
+  | "utilisateurs"
+  | "demarches"
+  | "types-pieces"
+  | "smtp";
 
 const SECTIONS: { key: Section; title: string; description: string; icon: LucideIcon }[] = [
   { key: "general", title: "Informations générales", description: "Nom, slug, type, organisation parente", icon: Settings2 },
   { key: "sous-organisations", title: "Sous-organisations", description: "Organisations rattachées à celle-ci", icon: Network },
   { key: "utilisateurs", title: "Utilisateurs", description: "Membres et rôles de cette organisation", icon: UsersIcon },
   { key: "demarches", title: "Catalogue de démarches", description: "Démarches de l'organisation principale", icon: ListChecks },
+  { key: "types-pieces", title: "Types de pièce justificative", description: "Pièces demandées dans les démarches", icon: FileCheck2 },
   { key: "smtp", title: "Emails (SMTP)", description: "Serveur SMTP utilisé pour les emails de cette organisation", icon: Mail },
 ];
 
@@ -27,6 +36,7 @@ const SECTION_LABELS: Record<Section, string> = {
   "sous-organisations": "Sous-organisations",
   utilisateurs: "Utilisateurs",
   demarches: "Catalogue de démarches",
+  "types-pieces": "Types de pièce justificative",
   smtp: "Emails (SMTP)",
 };
 
@@ -89,6 +99,12 @@ export function OrgSettingsPage() {
             />
           ) : (
             <EmptyState message="Les démarches se paramètrent au niveau de l'organisation principale (racine)." />
+          ))}
+        {activeSection === "types-pieces" &&
+          (organization.parent_id === null ? (
+            <DocumentTypesManager organizationId={organization.id} />
+          ) : (
+            <EmptyState message="Les types de pièce se paramètrent au niveau de l'organisation principale (racine)." />
           ))}
         {activeSection === "smtp" && <SmtpSettingsSection organizationId={organization.id} />}
       </div>
