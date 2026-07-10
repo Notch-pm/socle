@@ -1,0 +1,13 @@
+echo "🔎 Vérification des types (tsc)…"
+npm run lint || {
+  echo "❌ Le typecheck a échoué — commit annulé."
+  exit 1
+}
+
+echo "🧪 Tests unitaires (vitest)…"
+npm test || {
+  echo "❌ Des tests ont échoué — commit annulé."
+  exit 1
+}
+
+echo "✅ Types OK et tests verts — commit autorisé."
