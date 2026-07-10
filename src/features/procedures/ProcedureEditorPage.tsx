@@ -22,12 +22,10 @@ export function ProcedureEditorPage({ variant }: { variant: "admin" | "superadmi
     ? `/superadmin/organisations/${params.orgId}/demarches`
     : "/demarches";
 
-  // Remplit toute la hauteur de la zone principale. En superadmin, on neutralise
-  // le padding p-6 du SuperAdminLayout pour que l'en-tête/pied soient pleine largeur.
-  const wrapperClass = isSuper ? "-m-6 h-[calc(100%+3rem)]" : "h-full";
-
+  // Remplit toute la hauteur de la zone principale (main sans padding dans les
+  // deux layouts) ; l'éditeur gère son propre scroll interne.
   return (
-    <div className={wrapperClass}>
+    <div className="h-full">
       <ProcedureEditor
         organizationId={organizationId}
         procedureId={procedureId}

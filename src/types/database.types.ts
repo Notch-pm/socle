@@ -150,6 +150,7 @@ export type Database = {
           agent_description: string | null;
           category_id: string | null;
           created_at: string | null;
+          form_schema: Json | null;
           id: string;
           input_duration_minutes: number | null;
           is_active_global: boolean | null;
@@ -157,6 +158,7 @@ export type Database = {
           name: string;
           order_index: number | null;
           organization_id: string | null;
+          requester_config: Json | null;
           short_description: string | null;
           translations: Json | null;
           type: string;
@@ -167,6 +169,7 @@ export type Database = {
           agent_description?: string | null;
           category_id?: string | null;
           created_at?: string | null;
+          form_schema?: Json | null;
           id?: string;
           input_duration_minutes?: number | null;
           is_active_global?: boolean | null;
@@ -174,6 +177,7 @@ export type Database = {
           name: string;
           order_index?: number | null;
           organization_id?: string | null;
+          requester_config?: Json | null;
           short_description?: string | null;
           translations?: Json | null;
           type?: string;
@@ -184,6 +188,7 @@ export type Database = {
           agent_description?: string | null;
           category_id?: string | null;
           created_at?: string | null;
+          form_schema?: Json | null;
           id?: string;
           input_duration_minutes?: number | null;
           is_active_global?: boolean | null;
@@ -191,6 +196,7 @@ export type Database = {
           name?: string;
           order_index?: number | null;
           organization_id?: string | null;
+          requester_config?: Json | null;
           short_description?: string | null;
           translations?: Json | null;
           type?: string;

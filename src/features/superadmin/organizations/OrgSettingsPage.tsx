@@ -37,16 +37,24 @@ export function OrgSettingsPage() {
   const { data: organization, isLoading } = useOrganization(orgId);
 
   if (isLoading) {
-    return <div className="h-32 animate-pulse rounded-lg bg-muted/40" />;
+    return (
+      <div className="p-6">
+        <div className="h-32 animate-pulse rounded-lg bg-muted/40" />
+      </div>
+    );
   }
 
   if (!organization) {
-    return <EmptyState message="Organisation introuvable." />;
+    return (
+      <div className="p-6">
+        <EmptyState message="Organisation introuvable." />
+      </div>
+    );
   }
 
   if (activeSection !== "menu") {
     return (
-      <div className="flex flex-col gap-6">
+      <div className="flex flex-col gap-6 p-6">
         <div className="flex items-center gap-3">
           <Button
             variant="ghost"

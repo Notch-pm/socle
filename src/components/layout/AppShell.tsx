@@ -4,7 +4,7 @@ import { Sidebar } from "@/components/layout/Sidebar";
 
 export function AppShell() {
   return (
-    <div className="flex h-screen flex-col">
+    <div className="flex h-screen flex-col overflow-hidden">
       <Header />
       <div className="flex flex-1 overflow-hidden">
         <Sidebar />

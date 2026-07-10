@@ -21,7 +21,7 @@ export function SuperAdminDashboardPage() {
   const { data: userCount } = useCount("users");
 
   return (
-    <div className="flex flex-col gap-6">
+    <div className="flex flex-col gap-6 p-6">
       <div>
         <h1 className="text-2xl font-bold tracking-tight">Administration</h1>
         <p className="text-muted-foreground">Vue d'ensemble de la plateforme Edilumen</p>

@@ -6,14 +6,21 @@ import { EmptyState } from "@/components/shared/EmptyState";
 import { Stepper } from "@/features/procedures/Stepper";
 import { PROCEDURE_STEPS } from "@/features/procedures/steps";
 import { DescriptifStep, type DescriptifValues } from "@/features/procedures/steps/DescriptifStep";
+import { DemandeurStep } from "@/features/procedures/steps/DemandeurStep";
+import { FormulaireStep } from "@/features/procedures/steps/FormulaireStep";
 import { PlaceholderStep } from "@/features/procedures/steps/PlaceholderStep";
+import type { RequesterConfig } from "@/features/procedures/requesterFields";
+import type { FormSchema } from "@/features/procedures/formSchema";
 import {
   useProcedure,
   useCreateProcedure,
   useUpdateProcedure,
 } from "@/features/procedures/useProcedures";
+import type { Json } from "@/types/database.types";
 
 const DESCRIPTIF_FORM_ID = "procedure-descriptif-form";
+const DEMANDEUR_FORM_ID = "procedure-demandeur-form";
+const FORMULAIRE_FORM_ID = "procedure-formulaire-form";
 const LAST_STEP = PROCEDURE_STEPS.length - 1;
 
 export function ProcedureEditor({
@@ -71,8 +78,33 @@ export function ProcedureEditor({
     }
   }
 
+  function handleDemandeurSubmit(config: RequesterConfig) {
+    // Config typée de l'app → colonne JSONB générique de Supabase.
+    updateProc.mutate(
+      { id: procedureId!, requester_config: config as unknown as Json },
+      { onSuccess: () => setCurrent((c) => Math.min(c + 1, LAST_STEP)) },
+    );
+  }
+
+  function handleFormulaireSubmit(schema: FormSchema) {
+    updateProc.mutate(
+      { id: procedureId!, form_schema: schema as unknown as Json },
+      { onSuccess: () => setCurrent((c) => Math.min(c + 1, LAST_STEP)) },
+    );
+  }
+
+  // Étapes fonctionnelles : chacune a un formulaire soumis depuis le pied de page.
+  const currentFormId =
+    current === 0
+      ? DESCRIPTIF_FORM_ID
+      : current === 1
+        ? DEMANDEUR_FORM_ID
+        : current === 2
+          ? FORMULAIRE_FORM_ID
+          : null;
+
   return (
-    <div className="flex h-full flex-col">
+    <div className="flex h-full min-h-0 flex-col overflow-hidden">
       {/* En-tête fixe : titre + stepper */}
       <div className="shrink-0 border-b border-border bg-background px-6 pb-5 pt-6">
         <div className="flex items-center gap-3">
@@ -110,6 +142,18 @@ export function ProcedureEditor({
                 procedure={procedure ?? null}
                 onSubmit={handleDescriptifSubmit}
               />
+            ) : current === 1 && procedure ? (
+              <DemandeurStep
+                formId={DEMANDEUR_FORM_ID}
+                procedure={procedure}
+                onSubmit={handleDemandeurSubmit}
+              />
+            ) : current === 2 && procedure ? (
+              <FormulaireStep
+                formId={FORMULAIRE_FORM_ID}
+                procedure={procedure}
+                onSubmit={handleFormulaireSubmit}
+              />
             ) : (
               <PlaceholderStep label={PROCEDURE_STEPS[current].label} />
             )}
@@ -130,8 +174,8 @@ export function ProcedureEditor({
           >
             Précédent
           </Button>
-          {current === 0 ? (
-            <Button type="submit" form={DESCRIPTIF_FORM_ID} disabled={submitting}>
+          {currentFormId ? (
+            <Button type="submit" form={currentFormId} disabled={submitting}>
               {submitting ? "Enregistrement…" : "Enregistrer et continuer"}
             </Button>
           ) : current < LAST_STEP ? (

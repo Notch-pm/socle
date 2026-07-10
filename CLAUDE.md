@@ -31,7 +31,8 @@ application élu, etc. Socle est le socle de paramétrage commun à tous ces pro
 ```bash
 npm run dev      # serveur de dev → http://localhost:5173 (port fixé dans vite.config.ts)
 npm run build    # tsc -b && vite build
-npm run lint     # tsc --noEmit (typecheck seul, pas d'ESLint)
+npm run lint     # tsc -b (typecheck du projet, pas d'ESLint)
+npm test         # vitest run (unitaires + composants) ; npm run test:watch en veille
 ```
 
 ## Environnement
@@ -127,20 +128,33 @@ Catalogue des démarches, **multi-tenant strict** : une démarche est rattachée
 `enforce_procedure_root_org`. L'activation par sous-organisation (via `organization_procedures`)
 viendra plus tard. Paramétrage par **admin** (sa principale) et **superadmin** (toutes).
 
-- **Formulaire = stepper horizontal à 6 étapes** (`src/features/procedures/steps.ts`) : Descriptif,
-  Publication, Informations demandeur, Formulaire, Communication, Base de connaissances.
-  **Seule l'étape 1 « Descriptif » est fonctionnelle** ; les autres sont des placeholders.
-- Étape 1 → colonnes `procedures` : `name` (libellé, obligatoire), `category_id` (obligatoire,
-  catégories de la racine), `type` (`interne`/`externe`, défaut `externe`), `keywords` (text[],
-  saisie CSV), `short_description`, `input_duration_minutes`, `order_index` (rang, défaut max+1).
+- **Formulaire = stepper horizontal à 5 étapes** (`src/features/procedures/steps.ts`) : Descriptif,
+  Informations demandeur, Formulaire, Communication, Base de connaissances. **Descriptif, Informations
+  demandeur et Formulaire sont fonctionnelles** ; Communication et Base de connaissances sont des
+  placeholders. Chaque étape fonctionnelle a un `<form id>` soumis depuis le pied de `ProcedureEditor`
+  (`currentFormId`) et persiste via `useUpdateProcedure`.
+- **Descriptif** → colonnes `procedures` : `name` (obligatoire), `category_id` (obligatoire, catégories
+  de la racine), `type` (`interne`/`externe`), `keywords` (text[], CSV), `short_description`,
+  `input_duration_minutes`, `order_index` (rang, défaut max+1).
+- **Informations demandeur** → colonne `procedures.requester_config` (JSONB). Publics
+  citoyen/entreprise/association activables ; par public, chaque donnée vaut `masque`/`visible`/
+  `obligatoire`. Logique pure + parseur robuste `requesterFields.ts` (testé), UI `steps/DemandeurStep.tsx`.
+- **Formulaire** → colonne `procedures.form_schema` (JSONB) : **form builder maison**, schéma
+  **possédé** (contrat public consommé en aval). Contenu = liste ordonnée de nœuds *champ* ou *section* ;
+  champs simples / choix (options) / **pièce justificative** (type, 1–5 fichiers, formats, obligatoire +
+  conditionnel) ; **conditions** d'affichage & d'obligation (moteur pur `conditions.ts`). Ajout des
+  champs par **palette** (glisser-déposer positionné, ou clic → ajout à la fin).
 - RLS `procedures` : écriture `is_super_admin() OR is_org_admin(organization_id)` (la policy
   permissive `write procedures` par `global_role` a été retirée → isolation tenant). Suppression
   réservée au superadmin (UI).
 - Code : `src/features/procedures/` — `useProcedures.ts`, `useWritableRootOrganizations.ts`,
-  `Stepper.tsx`, `ProcedureEditor.tsx` + `steps/DescriptifStep.tsx`/`PlaceholderStep.tsx`,
-  `ProceduresListPanel.tsx` (réutilisée), `ProceduresPage.tsx` (admin `/demarches`),
-  `ProcedureEditorPage.tsx` (`variant` admin/superadmin). Superadmin : section « Catalogue de
-  démarches » dans `OrgSettingsPage` (racine uniquement).
+  `Stepper.tsx`, `ProcedureEditor.tsx`, `ProceduresListPanel.tsx`, `ProceduresPage.tsx` (admin
+  `/demarches`), `ProcedureEditorPage.tsx` (`variant` admin/superadmin). Étapes : `steps/DescriptifStep`,
+  `steps/DemandeurStep`, `steps/FormulaireStep` (+ `steps/formulaire/*` : `FieldPalette`, `SectionEditor`,
+  `FieldRow`, `ConditionEditor`, `FormPreview`), `steps/PlaceholderStep`. Logique pure **testée** :
+  `requesterFields.ts`, `formSchema.ts`, `conditions.ts`. Superadmin : section « Catalogue de démarches »
+  dans `OrgSettingsPage` (racine uniquement). Prochaine évolution : catalogue paramétré des **types de
+  pièce justificative**.
 - Prérequis : une racine sans **catégorie** ne permet pas de créer une démarche (catégorie
   obligatoire) → créer d'abord des catégories via `/categories`.
 
