@@ -1,6 +1,6 @@
 import * as React from "react";
 import { useParams, useNavigate } from "react-router-dom";
-import { ArrowLeft, Settings2, Network, Users as UsersIcon, ListChecks, FileCheck2, Mail, type LucideIcon } from "lucide-react";
+import { ArrowLeft, Settings2, Network, Users as UsersIcon, ListChecks, FileCheck2, Mail, KeyRound, type LucideIcon } from "lucide-react";
 import { Card, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { EmptyState } from "@/components/shared/EmptyState";
@@ -8,6 +8,7 @@ import { useOrganization } from "@/features/superadmin/organizations/useOrganiza
 import { GeneralInfoSection } from "@/features/superadmin/organizations/sections/GeneralInfoSection";
 import { SubOrganizationsSection } from "@/features/superadmin/organizations/sections/SubOrganizationsSection";
 import { SmtpSettingsSection } from "@/features/superadmin/organizations/sections/SmtpSettingsSection";
+import { ApiKeysSection } from "@/features/superadmin/organizations/sections/ApiKeysSection";
 import { UsersManagementPage } from "@/features/users/UsersManagementPage";
 import { ProceduresListPanel } from "@/features/procedures/ProceduresListPanel";
 import { DocumentTypesManager } from "@/features/document-types/DocumentTypesManager";
@@ -19,7 +20,8 @@ type Section =
   | "utilisateurs"
   | "demarches"
   | "types-pieces"
-  | "smtp";
+  | "smtp"
+  | "api";
 
 const SECTIONS: { key: Section; title: string; description: string; icon: LucideIcon }[] = [
   { key: "general", title: "Informations générales", description: "Nom, slug, type, organisation parente", icon: Settings2 },
@@ -28,6 +30,7 @@ const SECTIONS: { key: Section; title: string; description: string; icon: Lucide
   { key: "demarches", title: "Catalogue de démarches", description: "Démarches de l'organisation principale", icon: ListChecks },
   { key: "types-pieces", title: "Types de pièce justificative", description: "Pièces demandées dans les démarches", icon: FileCheck2 },
   { key: "smtp", title: "Emails (SMTP)", description: "Serveur SMTP utilisé pour les emails de cette organisation", icon: Mail },
+  { key: "api", title: "API publique", description: "Clés d'accès en lecture seule (organisations, démarches, catégories)", icon: KeyRound },
 ];
 
 const SECTION_LABELS: Record<Section, string> = {
@@ -38,6 +41,7 @@ const SECTION_LABELS: Record<Section, string> = {
   demarches: "Catalogue de démarches",
   "types-pieces": "Types de pièce justificative",
   smtp: "Emails (SMTP)",
+  api: "API publique",
 };
 
 export function OrgSettingsPage() {
@@ -107,6 +111,12 @@ export function OrgSettingsPage() {
             <EmptyState message="Les types de pièce se paramètrent au niveau de l'organisation principale (racine)." />
           ))}
         {activeSection === "smtp" && <SmtpSettingsSection organizationId={organization.id} />}
+        {activeSection === "api" &&
+          (organization.parent_id === null ? (
+            <ApiKeysSection organizationId={organization.id} />
+          ) : (
+            <EmptyState message="Les clés API se gèrent au niveau de l'organisation principale (racine)." />
+          ))}
       </div>
     );
   }

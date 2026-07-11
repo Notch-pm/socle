@@ -1,0 +1,669 @@
+/**
+ * Document OpenAPI 3.1 de l'API publique Socle — servi tel quel à
+ * `GET /openapi.json` et rendu par Redoc à `GET /docs`. **La documentation est
+ * un livrable de premier ordre** : descriptions en français, formats décrits,
+ * exemples, et erreurs (400/401/403/404/405/500) documentées par endpoint.
+ *
+ * Les schémas des JSON possédés (`FormSchema`, `RequesterConfig`,
+ * `KnowledgeBase`) reflètent les modules sources (contrat public) :
+ * `src/features/procedures/{formSchema,requesterFields,knowledgeBase,conditions}.ts`.
+ */
+
+const ERROR_SCHEMA_REF = "#/components/schemas/Error";
+
+function errorResponses(...codes: Array<"400" | "401" | "403" | "404" | "500">) {
+  const map: Record<string, { $ref: string }> = {};
+  const refByCode: Record<string, string> = {
+    "400": "#/components/responses/BadRequest",
+    "401": "#/components/responses/Unauthorized",
+    "403": "#/components/responses/Forbidden",
+    "404": "#/components/responses/NotFound",
+    "500": "#/components/responses/InternalError",
+  };
+  for (const c of codes) map[c] = { $ref: refByCode[c] };
+  return map;
+}
+
+export function buildOpenApiDocument(serverUrl: string): Record<string, unknown> {
+  return {
+    openapi: "3.1.0",
+    info: {
+      title: "API Socle — Référentiel de la gamme",
+      version: "1.0.0",
+      description: [
+        "API **en lecture seule** exposant le référentiel central de la gamme : les",
+        "**organisations** (et sous-organisations) avec l'intégralité de leur configuration,",
+        "les **démarches** (descriptif + formulaire + informations demandeur + base de",
+        "connaissances), les **catégories** (libellé + icône) et les **types de pièce",
+        "justificative**.",
+        "",
+        "Ces données sont la **source de vérité** consommée en aval par les autres",
+        "applications de la gamme (Ariane, Clara, …) et, potentiellement, par des",
+        "partenaires externes.",
+        "",
+        "## Authentification",
+        "Chaque appel doit porter une **clé API** dans l'en-tête",
+        "`Authorization: Bearer <clé>`. Les clés sont **destinées à un usage serveur-à-serveur**",
+        "(ne pas les exposer dans un navigateur). Une clé est délivrée par un super",
+        "administrateur Socle et **rattachée à une organisation principale** : elle ne donne",
+        "accès qu'à **cette organisation et à toute sa descendance** (isolation multi-tenant).",
+        "",
+        "## Formats",
+        "Réponses en **JSON** (`application/json`, UTF-8). Les dates sont au format ISO 8601.",
+        "Les blocs de configuration possédés (`form_schema`, `requester_config`,",
+        "`knowledge_base`) sont des objets JSON dont la structure est décrite dans les schémas.",
+        "",
+        "## Erreurs",
+        "Toute erreur renvoie `{ \"error\": { \"code\": \"...\", \"message\": \"...\" } }` avec un",
+        "statut HTTP adapté : `400` (requête invalide), `401` (clé absente/invalide/révoquée/",
+        "expirée), `403` (accès refusé), `404` (ressource inexistante ou hors périmètre),",
+        "`405` (méthode non autorisée — l'API est en lecture seule), `500` (erreur interne).",
+      ].join("\n"),
+      contact: { name: "Équipe Socle" },
+    },
+    servers: [{ url: serverUrl, description: "Point d'entrée de l'API" }],
+    security: [{ bearerApiKey: [] }],
+    tags: [
+      { name: "Organisations", description: "Organisations et sous-organisations." },
+      { name: "Catégories", description: "Catégories de démarches (libellé + icône)." },
+      { name: "Démarches", description: "Démarches et leur configuration intégrale." },
+      {
+        name: "Types de pièce",
+        description: "Types de pièce justificative référencés par les champs PJ.",
+      },
+      { name: "Documents", description: "Accès temporaire aux documents privés." },
+    ],
+    paths: {
+      "/v1/organizations": {
+        get: {
+          tags: ["Organisations"],
+          summary: "Lister les organisations",
+          description:
+            "Renvoie les organisations du périmètre de la clé (organisation principale + " +
+            "descendance). Par défaut une **liste plate** ; `tree=true` renvoie un **arbre imbriqué**.",
+          parameters: [
+            {
+              name: "status",
+              in: "query",
+              required: false,
+              description: "Filtre sur le statut.",
+              schema: { type: "string", enum: ["active", "obsolete"] },
+            },
+            {
+              name: "tree",
+              in: "query",
+              required: false,
+              description: "Si `true`, renvoie un arbre imbriqué (`children`) au lieu d'une liste plate.",
+              schema: { type: "boolean", default: false },
+            },
+          ],
+          responses: {
+            "200": {
+              description: "Liste des organisations.",
+              content: {
+                "application/json": {
+                  schema: {
+                    oneOf: [
+                      { type: "array", items: { $ref: "#/components/schemas/Organization" } },
+                      { type: "array", items: { $ref: "#/components/schemas/OrganizationTreeNode" } },
+                    ],
+                  },
+                },
+              },
+            },
+            ...errorResponses("401", "500"),
+          },
+        },
+      },
+      "/v1/organizations/{id}": {
+        get: {
+          tags: ["Organisations"],
+          summary: "Récupérer une organisation",
+          description: "Configuration complète d'une organisation du périmètre de la clé.",
+          parameters: [
+            {
+              name: "id",
+              in: "path",
+              required: true,
+              description: "Identifiant UUID de l'organisation.",
+              schema: { type: "string", format: "uuid" },
+            },
+          ],
+          responses: {
+            "200": {
+              description: "L'organisation.",
+              content: {
+                "application/json": { schema: { $ref: "#/components/schemas/Organization" } },
+              },
+            },
+            ...errorResponses("400", "401", "404", "500"),
+          },
+        },
+      },
+      "/v1/categories": {
+        get: {
+          tags: ["Catégories"],
+          summary: "Lister les catégories",
+          description: "Catégories (libellé + icône) du périmètre de la clé.",
+          responses: {
+            "200": {
+              description: "Liste des catégories.",
+              content: {
+                "application/json": {
+                  schema: { type: "array", items: { $ref: "#/components/schemas/Category" } },
+                },
+              },
+            },
+            ...errorResponses("401", "500"),
+          },
+        },
+      },
+      "/v1/procedures": {
+        get: {
+          tags: ["Démarches"],
+          summary: "Lister les démarches",
+          description:
+            "Démarches de l'organisation principale du périmètre. Filtrables par catégorie, " +
+            "type, ou activation pour une organisation donnée.",
+          parameters: [
+            {
+              name: "category_id",
+              in: "query",
+              required: false,
+              description: "Ne renvoyer que les démarches de cette catégorie.",
+              schema: { type: "string", format: "uuid" },
+            },
+            {
+              name: "type",
+              in: "query",
+              required: false,
+              description: "Filtre sur le type de démarche.",
+              schema: { type: "string", enum: ["interne", "externe"] },
+            },
+            {
+              name: "enabled_for",
+              in: "query",
+              required: false,
+              description:
+                "Ne renvoyer que les démarches **activées** pour cette organisation " +
+                "(qui doit appartenir au périmètre de la clé).",
+              schema: { type: "string", format: "uuid" },
+            },
+          ],
+          responses: {
+            "200": {
+              description: "Liste des démarches.",
+              content: {
+                "application/json": {
+                  schema: { type: "array", items: { $ref: "#/components/schemas/Procedure" } },
+                },
+              },
+            },
+            ...errorResponses("400", "401", "500"),
+          },
+        },
+      },
+      "/v1/procedures/{id}": {
+        get: {
+          tags: ["Démarches"],
+          summary: "Récupérer une démarche",
+          description:
+            "Configuration **intégrale** d'une démarche : descriptif, informations demandeur " +
+            "(`requester_config`), formulaire (`form_schema`), base de connaissances " +
+            "(`knowledge_base`), traductions et mots-clés.",
+          parameters: [
+            {
+              name: "id",
+              in: "path",
+              required: true,
+              description: "Identifiant UUID de la démarche.",
+              schema: { type: "string", format: "uuid" },
+            },
+          ],
+          responses: {
+            "200": {
+              description: "La démarche.",
+              content: {
+                "application/json": { schema: { $ref: "#/components/schemas/Procedure" } },
+              },
+            },
+            ...errorResponses("400", "401", "404", "500"),
+          },
+        },
+      },
+      "/v1/document-types": {
+        get: {
+          tags: ["Types de pièce"],
+          summary: "Lister les types de pièce justificative",
+          description:
+            "Types de pièce du périmètre, référencés par le champ `documentTypeId` des pièces " +
+            "justificatives dans `form_schema`.",
+          responses: {
+            "200": {
+              description: "Liste des types de pièce.",
+              content: {
+                "application/json": {
+                  schema: { type: "array", items: { $ref: "#/components/schemas/DocumentType" } },
+                },
+              },
+            },
+            ...errorResponses("401", "500"),
+          },
+        },
+      },
+      "/v1/documents/signed-url": {
+        get: {
+          tags: ["Documents"],
+          summary: "Obtenir une URL signée pour un document",
+          description:
+            "Renvoie une **URL signée temporaire** (5 min) permettant de télécharger un document " +
+            "de la base de connaissances (bucket privé). Le `path` est celui stocké dans " +
+            "`knowledge_base` (`agentDocuments[].path` / `trainingDocuments[].path`). Son " +
+            "premier segment (l'organisation) doit appartenir au périmètre de la clé.",
+          parameters: [
+            {
+              name: "path",
+              in: "query",
+              required: true,
+              description: "Chemin du document dans le bucket (tel que fourni par la démarche).",
+              schema: { type: "string" },
+              example: "d5227d25-f327-493a-a9a2-278397531e33/1a2b/agent/uid-guide.pdf",
+            },
+          ],
+          responses: {
+            "200": {
+              description: "URL signée.",
+              content: {
+                "application/json": { schema: { $ref: "#/components/schemas/SignedUrl" } },
+              },
+            },
+            ...errorResponses("400", "401", "403", "404", "500"),
+          },
+        },
+      },
+    },
+    components: {
+      securitySchemes: {
+        bearerApiKey: {
+          type: "http",
+          scheme: "bearer",
+          description:
+            "Clé API délivrée par un super administrateur Socle, rattachée à une organisation " +
+            "principale. À envoyer en `Authorization: Bearer <clé>`.",
+        },
+      },
+      responses: {
+        BadRequest: errorResponseObject("bad_request", "Paramètre ou identifiant invalide."),
+        Unauthorized: errorResponseObject(
+          "unauthorized",
+          "Clé API absente, invalide, révoquée ou expirée.",
+        ),
+        Forbidden: errorResponseObject("forbidden", "Accès refusé à cette ressource."),
+        NotFound: errorResponseObject(
+          "not_found",
+          "Ressource inexistante ou hors du périmètre de la clé.",
+        ),
+        InternalError: errorResponseObject("internal_error", "Erreur interne du serveur."),
+      },
+      schemas: {
+        Error: {
+          type: "object",
+          required: ["error"],
+          properties: {
+            error: {
+              type: "object",
+              required: ["code", "message"],
+              properties: {
+                code: {
+                  type: "string",
+                  description: "Code d'erreur stable.",
+                  enum: [
+                    "bad_request",
+                    "unauthorized",
+                    "forbidden",
+                    "not_found",
+                    "method_not_allowed",
+                    "internal_error",
+                  ],
+                },
+                message: { type: "string", description: "Message lisible (français)." },
+              },
+            },
+          },
+          example: { error: { code: "not_found", message: "Organisation introuvable." } },
+        },
+        Organization: {
+          type: "object",
+          description: "Organisation ou sous-organisation avec sa configuration.",
+          properties: {
+            id: { type: "string", format: "uuid" },
+            parent_id: {
+              type: ["string", "null"],
+              format: "uuid",
+              description: "Organisation parente (null pour une organisation principale).",
+            },
+            name: { type: "string" },
+            slug: { type: ["string", "null"] },
+            type: { type: ["string", "null"], description: "Type libre (ex. collectivité, service)." },
+            status: { type: "string", enum: ["active", "obsolete"] },
+            address: { type: ["string", "null"] },
+            phone: { type: ["string", "null"] },
+            email: { type: ["string", "null"], format: "email" },
+            logo_url: { type: ["string", "null"], format: "uri" },
+            email_sender_override: {
+              type: "boolean",
+              description: "Si vrai, un nom d'expéditeur propre à l'organisation est utilisé.",
+            },
+            email_sender_name: { type: ["string", "null"] },
+            metadata: { type: ["object", "null"], additionalProperties: true },
+            created_at: { type: ["string", "null"], format: "date-time" },
+          },
+          example: {
+            id: "d5227d25-f327-493a-a9a2-278397531e33",
+            parent_id: null,
+            name: "ACCM",
+            slug: "accm",
+            type: "collectivité",
+            status: "active",
+            address: "1 place de la Mairie",
+            phone: "0490000000",
+            email: "contact@accm.fr",
+            logo_url: null,
+            email_sender_override: false,
+            email_sender_name: null,
+            metadata: null,
+            created_at: "2026-01-15T09:00:00Z",
+          },
+        },
+        OrganizationTreeNode: {
+          allOf: [
+            { $ref: "#/components/schemas/Organization" },
+            {
+              type: "object",
+              properties: {
+                children: {
+                  type: "array",
+                  description: "Sous-organisations imbriquées (mode `tree=true`).",
+                  items: { $ref: "#/components/schemas/OrganizationTreeNode" },
+                },
+              },
+            },
+          ],
+        },
+        Category: {
+          type: "object",
+          description: "Catégorie de démarches.",
+          properties: {
+            id: { type: "string", format: "uuid" },
+            organization_id: { type: ["string", "null"], format: "uuid" },
+            name: { type: "string", description: "Libellé de la catégorie." },
+            icon: {
+              type: ["string", "null"],
+              description: "Icône (identifiant d'icône lucide-react, ex. \"FileText\").",
+            },
+            created_at: { type: ["string", "null"], format: "date-time" },
+          },
+          example: {
+            id: "b1e2c3d4-0000-0000-0000-000000000001",
+            organization_id: "d5227d25-f327-493a-a9a2-278397531e33",
+            name: "État civil",
+            icon: "FileText",
+            created_at: "2026-01-20T10:00:00Z",
+          },
+        },
+        Procedure: {
+          type: "object",
+          description: "Démarche et sa configuration intégrale.",
+          properties: {
+            id: { type: "string", format: "uuid" },
+            organization_id: {
+              type: ["string", "null"],
+              format: "uuid",
+              description: "Organisation principale propriétaire du catalogue.",
+            },
+            category_id: { type: ["string", "null"], format: "uuid" },
+            name: { type: "string" },
+            type: { type: "string", enum: ["interne", "externe"] },
+            keywords: { type: "array", items: { type: "string" } },
+            short_description: { type: ["string", "null"] },
+            user_description: { type: ["string", "null"] },
+            agent_description: { type: ["string", "null"] },
+            input_duration_minutes: {
+              type: ["integer", "null"],
+              description: "Durée estimée de saisie (minutes).",
+            },
+            order_index: { type: ["integer", "null"], description: "Rang d'affichage." },
+            requester_config: {
+              $ref: "#/components/schemas/RequesterConfig",
+            },
+            form_schema: { $ref: "#/components/schemas/FormSchema" },
+            knowledge_base: { $ref: "#/components/schemas/KnowledgeBase" },
+            translations: {
+              type: ["object", "null"],
+              additionalProperties: true,
+              description: "Traductions éventuelles (structure libre).",
+            },
+            created_at: { type: ["string", "null"], format: "date-time" },
+            updated_at: { type: ["string", "null"], format: "date-time" },
+          },
+        },
+        RequesterConfig: {
+          type: ["object", "null"],
+          description:
+            "Informations demandées au requérant, par public. Chaque public " +
+            "(`citoyen`/`entreprise`/`association`) est activable, et chaque champ vaut " +
+            "`masque`, `visible` ou `obligatoire`.",
+          properties: {
+            citoyen: { $ref: "#/components/schemas/AudienceConfig" },
+            entreprise: { $ref: "#/components/schemas/AudienceConfig" },
+            association: { $ref: "#/components/schemas/AudienceConfig" },
+          },
+          example: {
+            citoyen: {
+              enabled: true,
+              fields: { nom_usuel: "obligatoire", courriel: "visible", tel_fixe: "masque" },
+            },
+            entreprise: { enabled: false, fields: {} },
+            association: { enabled: false, fields: {} },
+          },
+        },
+        AudienceConfig: {
+          type: "object",
+          properties: {
+            enabled: { type: "boolean" },
+            fields: {
+              type: "object",
+              additionalProperties: { type: "string", enum: ["masque", "visible", "obligatoire"] },
+              description: "État par clé de champ (ex. civilite, nom_usuel, courriel, siret…).",
+            },
+          },
+        },
+        FormSchema: {
+          type: ["object", "null"],
+          description:
+            "Formulaire possédé : liste ordonnée de nœuds (champ ou section). Un champ peut être " +
+            "simple, un choix (avec options) ou une pièce justificative. Les conditions " +
+            "d'affichage (`visibleIf`) et d'obligation (`requiredIf`) suivent le schéma `Condition`.",
+          properties: {
+            version: { type: "integer", enum: [1] },
+            content: {
+              type: "array",
+              items: {
+                oneOf: [
+                  { $ref: "#/components/schemas/FormField" },
+                  { $ref: "#/components/schemas/FormSection" },
+                ],
+              },
+            },
+          },
+        },
+        FormSection: {
+          type: "object",
+          properties: {
+            id: { type: "string" },
+            kind: { type: "string", enum: ["section"] },
+            title: { type: "string" },
+            description: { type: "string" },
+            visibleIf: { $ref: "#/components/schemas/Condition" },
+            fields: { type: "array", items: { $ref: "#/components/schemas/FormField" } },
+          },
+        },
+        FormField: {
+          type: "object",
+          description: "Champ de formulaire (simple, choix ou pièce justificative).",
+          properties: {
+            id: { type: "string" },
+            key: { type: "string", description: "Clé machine — la donnée du contrat en aval." },
+            label: { type: "string" },
+            help: { type: "string" },
+            placeholder: { type: "string" },
+            required: { type: "boolean" },
+            type: {
+              type: "string",
+              enum: [
+                "text",
+                "textarea",
+                "number",
+                "date",
+                "email",
+                "phone",
+                "boolean",
+                "select",
+                "radio",
+                "checkboxes",
+                "attachment",
+              ],
+            },
+            maxLength: { type: "integer", description: "Champs texte." },
+            options: {
+              type: "array",
+              description: "Champs de choix (select/radio/checkboxes).",
+              items: {
+                type: "object",
+                properties: { value: { type: "string" }, label: { type: "string" } },
+              },
+            },
+            documentTypeId: {
+              type: "string",
+              format: "uuid",
+              description: "Pièce justificative : type de pièce référencé (voir /v1/document-types).",
+            },
+            maxFiles: { type: "integer", description: "Pièce justificative : 1 à 5 fichiers." },
+            acceptedFormats: {
+              type: "array",
+              items: { type: "string" },
+              description: "Pièce justificative : formats acceptés (ex. [\"pdf\", \"jpg\"]).",
+            },
+            visibleIf: { $ref: "#/components/schemas/Condition" },
+            requiredIf: { $ref: "#/components/schemas/Condition" },
+          },
+        },
+        Condition: {
+          type: "object",
+          description: "Condition d'affichage/obligation : combinaison de règles.",
+          properties: {
+            combinator: { type: "string", enum: ["and", "or"] },
+            rules: {
+              type: "array",
+              items: {
+                type: "object",
+                properties: {
+                  fieldId: { type: "string" },
+                  operator: {
+                    type: "string",
+                    enum: ["equals", "notEquals", "includes", "isEmpty", "isNotEmpty"],
+                  },
+                  value: {
+                    oneOf: [{ type: "string" }, { type: "array", items: { type: "string" } }],
+                  },
+                },
+              },
+            },
+          },
+        },
+        KnowledgeBase: {
+          type: ["object", "null"],
+          description:
+            "Informations à destination de l'agent et de son assistant LLM. Textes en Markdown, " +
+            "liens, FAQ, garde-fous et références de documents (bucket privé).",
+          properties: {
+            agentHelpText: { type: "string", description: "Aide agent (Markdown)." },
+            proceduresText: { type: "string", description: "Procédures (Markdown)." },
+            agentDocuments: {
+              type: "array",
+              items: { $ref: "#/components/schemas/KbDocument" },
+              description: "Documents d'aide agent (PDF/image).",
+            },
+            trainingDocuments: {
+              type: "array",
+              items: { $ref: "#/components/schemas/KbDocument" },
+              description: "Documents d'entraînement IA.",
+            },
+            agentLinks: { type: "array", items: { $ref: "#/components/schemas/KbLink" } },
+            aiSources: { type: "array", items: { $ref: "#/components/schemas/KbLink" } },
+            faq: {
+              type: "array",
+              items: {
+                type: "object",
+                properties: { question: { type: "string" }, answer: { type: "string" } },
+              },
+            },
+            guardrails: { type: "array", items: { type: "string" } },
+          },
+        },
+        KbDocument: {
+          type: "object",
+          properties: {
+            path: {
+              type: "string",
+              description: "Chemin dans le bucket privé — à passer à /v1/documents/signed-url.",
+            },
+            name: { type: "string", description: "Nom de fichier d'origine." },
+          },
+        },
+        KbLink: {
+          type: "object",
+          properties: {
+            url: { type: "string", format: "uri" },
+            description: { type: "string" },
+          },
+        },
+        DocumentType: {
+          type: "object",
+          description: "Type de pièce justificative.",
+          properties: {
+            id: { type: "string", format: "uuid" },
+            organization_id: { type: "string", format: "uuid" },
+            name: { type: "string" },
+            created_at: { type: ["string", "null"], format: "date-time" },
+          },
+          example: {
+            id: "c9d8e7f6-0000-0000-0000-000000000002",
+            organization_id: "d5227d25-f327-493a-a9a2-278397531e33",
+            name: "Justificatif de domicile",
+            created_at: "2026-02-01T08:30:00Z",
+          },
+        },
+        SignedUrl: {
+          type: "object",
+          properties: {
+            url: { type: "string", format: "uri", description: "URL de téléchargement signée." },
+            expires_at: { type: "string", format: "date-time", description: "Expiration de l'URL." },
+          },
+        },
+      },
+    },
+  };
+}
+
+function errorResponseObject(code: string, message: string) {
+  return {
+    description: message,
+    content: {
+      "application/json": {
+        schema: { $ref: ERROR_SCHEMA_REF },
+        example: { error: { code, message } },
+      },
+    },
+  };
+}

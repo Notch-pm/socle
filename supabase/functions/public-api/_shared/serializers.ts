@@ -1,0 +1,99 @@
+/**
+ * Sérialiseurs : ligne DB (brute, éventuellement issue d'un `select *`) → DTO
+ * public. **Whitelist stricte** : chaque champ exposé est recopié explicitement,
+ * donc aucune colonne sensible (SMTP, mots de passe, hash de clé…) ne peut fuir,
+ * même si la requête ramène des colonnes en trop. Logique pure et testée.
+ */
+import type {
+  CategoryDto,
+  DocumentTypeDto,
+  OrganizationDto,
+  OrganizationProcedureDto,
+  ProcedureDto,
+} from "./dto.ts";
+
+/** Ligne DB brute, structure inconnue à la compilation. */
+type Row = Record<string, unknown>;
+
+function str(value: unknown): string {
+  return typeof value === "string" ? value : String(value ?? "");
+}
+
+function nullableStr(value: unknown): string | null {
+  return typeof value === "string" ? value : null;
+}
+
+function nullableNum(value: unknown): number | null {
+  return typeof value === "number" ? value : null;
+}
+
+export function serializeOrganization(row: Row): OrganizationDto {
+  return {
+    id: str(row.id),
+    parent_id: nullableStr(row.parent_id),
+    name: str(row.name),
+    slug: nullableStr(row.slug),
+    type: nullableStr(row.type),
+    status: str(row.status),
+    address: nullableStr(row.address),
+    phone: nullableStr(row.phone),
+    email: nullableStr(row.email),
+    logo_url: nullableStr(row.logo_url),
+    email_sender_override: Boolean(row.email_sender_override),
+    email_sender_name: nullableStr(row.email_sender_name),
+    metadata: row.metadata ?? null,
+    created_at: nullableStr(row.created_at),
+  };
+}
+
+export function serializeCategory(row: Row): CategoryDto {
+  return {
+    id: str(row.id),
+    organization_id: nullableStr(row.organization_id),
+    name: str(row.name),
+    icon: nullableStr(row.icon),
+    created_at: nullableStr(row.created_at),
+  };
+}
+
+export function serializeProcedure(row: Row): ProcedureDto {
+  return {
+    id: str(row.id),
+    organization_id: nullableStr(row.organization_id),
+    category_id: nullableStr(row.category_id),
+    name: str(row.name),
+    type: str(row.type),
+    keywords: Array.isArray(row.keywords) ? (row.keywords as string[]) : [],
+    short_description: nullableStr(row.short_description),
+    user_description: nullableStr(row.user_description),
+    agent_description: nullableStr(row.agent_description),
+    input_duration_minutes: nullableNum(row.input_duration_minutes),
+    order_index: nullableNum(row.order_index),
+    requester_config: row.requester_config ?? null,
+    form_schema: row.form_schema ?? null,
+    knowledge_base: row.knowledge_base ?? null,
+    translations: row.translations ?? null,
+    created_at: nullableStr(row.created_at),
+    updated_at: nullableStr(row.updated_at),
+  };
+}
+
+export function serializeOrganizationProcedure(row: Row): OrganizationProcedureDto {
+  return {
+    organization_id: nullableStr(row.organization_id),
+    procedure_id: nullableStr(row.procedure_id),
+    is_enabled: Boolean(row.is_enabled),
+    custom_name: nullableStr(row.custom_name),
+    custom_order: nullableNum(row.custom_order),
+    metadata: row.metadata ?? null,
+  };
+}
+
+export function serializeDocumentType(row: Row): DocumentTypeDto {
+  return {
+    id: str(row.id),
+    organization_id: str(row.organization_id),
+    name: str(row.name),
+    created_at: nullableStr(row.created_at),
+  };
+}

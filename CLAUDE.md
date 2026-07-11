@@ -92,6 +92,7 @@ une table protégée doit suivre le même motif.
 - `users`, `user_organizations` (jointure user↔org + `role`).
 - `categories`, `procedures`, `organization_procedures` (catalogue de démarches).
 - `smtp_settings` (SMTP par organisation).
+- `api_keys` (clés de l'API publique en lecture seule, rattachées à une racine — voir feature).
 
 Types TS générés dans `src/types/database.types.ts` — **ne pas éditer à la main**,
 régénérer depuis le schéma live (Supabase MCP `generate_typescript_types` / CLI).
@@ -263,6 +264,48 @@ pièce justificative** du form builder (`documentTypeId`, obligatoire — cf. fe
 - Code : `src/features/document-types/` — `useDocumentTypes.ts` (`useDocumentTypesQuery(enabled?)`,
   `useDocumentTypesForOrg(orgId)`, mutations), `DocumentTypesManager`, `DocumentTypeFormDialog`,
   `DocumentTypesPage` (fin conteneur). Sélecteur d'organisation via `useWritableRootOrganizations`.
+
+## Feature : API publique (lecture seule) — `public-api`
+
+Socle expose son référentiel via une **API REST versionnée en lecture seule** (`GET` uniquement),
+**contrat public** consommé en aval (Ariane, Clara, partenaires). C'est une **Edge Function Deno**
+`supabase/functions/public-api`, servie sous `{SUPABASE_URL}/functions/v1/public-api/…`, déployée
+avec **`verify_jwt = false`** (l'auth est portée par la fonction, pas par la passerelle).
+
+- **Authentification = clé API** en `Authorization: Bearer <clé>`. Table `api_keys` (secret **haché
+  SHA-256** dans `key_hash`, jamais en clair ; `key_prefix` affiché pour repérage ; `expires_at`,
+  `revoked_at`, `last_used_at`). Une clé est **rattachée à une organisation principale (racine)** —
+  trigger `enforce_api_key_root_org` (calqué sur `enforce_procedure_root_org`). RLS `api_keys` =
+  `is_super_admin()` pour tout (gestion super admin uniquement).
+- **Isolation** : la fonction lit avec la **service role** (hors RLS) mais **restreint chaque requête
+  au sous-arbre** de l'org de la clé, via `public.org_subtree_ids(root uuid) returns uuid[]`
+  (récursif, `SECURITY INVOKER`, `EXECUTE` révoqué de `anon`/`authenticated`, accordé à
+  `service_role`). C'est LE point où vit l'isolation → couvert par tests + vérif bout en bout.
+- **Endpoints** (préfixe `/v1`) : `organizations` (+`/{id}`, filtres `status`, `tree=true`),
+  `categories`, `procedures` (+`/{id}`, filtres `category_id`, `type`, `enabled_for`),
+  `document-types`, `documents/signed-url?path=` (URL signée temporaire, bucket privé
+  `procedure-documents`). Docs : `openapi.json` (public) et `docs` (Redoc, cf. ci-dessous).
+- **Erreurs** : enveloppe `{ "error": { code, message } }` → `400`/`401`/`403`/`404`/`405`/`500`.
+  Ressource hors périmètre = **404** (on ne révèle pas son existence).
+- **Sérialisation = whitelist stricte** (`_shared/serializers.ts`) : aucune colonne sensible (SMTP,
+  `key_hash`…) ne peut fuir même sur un `select *`. Les JSON possédés (`form_schema`,
+  `requester_config`, `knowledge_base`, `translations`, `metadata`) sont **transmis tels quels**.
+- **Logique pure co-localisée** dans `supabase/functions/public-api/_shared/` (`dto`, `serializers`,
+  `scope`, `errors`, `openapi`) — **sans dépendance Deno/`@/`**, donc **testée par vitest**
+  (`include` étendu dans `vite.config.ts` à `supabase/functions/**`) **et** déployée avec la fonction
+  (tableau `files` de `deploy_edge_function`). Le déploiement inclut `index.ts` + tout `_shared/*.ts`.
+- **Documentation humaine (type Swagger)** = **page in-app `/api-doc`** (`ApiDocsPage`, route
+  **publique**) qui charge **Redoc** (CDN) pointé sur `…/public-api/openapi.json`. ⚠️ Pourquoi pas
+  servie par la function : la passerelle Supabase force les réponses **HTML** des functions en
+  `text/plain` + CSP `sandbox` (anti-hameçonnage sur `*.supabase.co`) → un rendu HTML depuis la
+  function ne s'affiche pas. Le `openapi.json` (JSON) est, lui, servi normalement.
+- **Gestion des clés (super admin)** : section **« API publique »** de `OrgSettingsPage`
+  (**racine uniquement**), à côté de SMTP / catalogue / types de PJ. `ApiKeysSection` (liste +
+  révocation via `AlertDialog`) + `ApiKeyFormDialog` (**génération + hachage navigateur** via
+  `apiKeys.ts`, secret **affiché une seule fois**) + `useApiKeys.ts` (`useApiKeys`/`useCreateApiKey`/
+  `useRevokeApiKey` ; la liste **ne sélectionne pas** `key_hash`). `created_by` = `profile.id`.
+- Logique pure **testée** : `_shared/{serializers,scope,errors,openapi}.ts`,
+  `superadmin/organizations/apiKeys.ts`.
 
 ## Design system
 

@@ -17,6 +17,7 @@ import { UtilisateursPage } from "@/pages/UtilisateursPage";
 import { SuperAdminDashboardPage } from "@/features/superadmin/SuperAdminDashboardPage";
 import { OrganizationsAdminPage } from "@/features/superadmin/organizations/OrganizationsAdminPage";
 import { OrgSettingsPage } from "@/features/superadmin/organizations/OrgSettingsPage";
+import { ApiDocsPage } from "@/features/public-api-docs/ApiDocsPage";
 
 export function App() {
   return (
@@ -27,6 +28,9 @@ export function App() {
           <Route path="/mot-de-passe-oublie" element={<ForgotPasswordPage />} />
           <Route path="/activer-compte" element={<SetPasswordPage />} />
           <Route path="/reinitialiser-mot-de-passe" element={<SetPasswordPage />} />
+
+          {/* Documentation publique de l'API (rendu Redoc du contrat OpenAPI) */}
+          <Route path="/api-doc" element={<ApiDocsPage />} />
 
           {/* Super admin — separate area, separate menu, only reachable by global_role = super_admin */}
           <Route element={<SuperAdminRoute />}>
