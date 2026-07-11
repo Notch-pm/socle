@@ -2,6 +2,8 @@ import { describe, it, expect } from "vitest";
 import {
   buildOrgTree,
   collectDescendantIds,
+  collectDescendantIdsFlat,
+  findRootAncestor,
   type Organization,
   type OrgNode,
 } from "./orgTree";
@@ -15,6 +17,8 @@ function org(id: string, name: string, parent_id: string | null = null): Organiz
     address: null,
     created_at: null,
     email: null,
+    email_sender_name: null,
+    email_sender_override: false,
     logo_url: null,
     metadata: null,
     phone: null,
@@ -113,5 +117,53 @@ describe("collectDescendantIds", () => {
     const tree = buildOrgTree([org("root", "Racine"), org("child", "Enfant", "root")]);
     const root = find(tree, "root")!;
     expect(collectDescendantIds(root)).not.toContain("root");
+  });
+});
+
+describe("collectDescendantIdsFlat", () => {
+  const flat = [
+    org("root", "Racine"),
+    org("a", "A", "root"),
+    org("b", "B", "root"),
+    org("a1", "A1", "a"),
+  ];
+
+  it("renvoie toute la descendance depuis la liste plate", () => {
+    expect(collectDescendantIdsFlat(flat, "root").sort()).toEqual(["a", "a1", "b"]);
+  });
+
+  it("renvoie une liste vide pour une feuille ou un id inconnu", () => {
+    expect(collectDescendantIdsFlat(flat, "a1")).toEqual([]);
+    expect(collectDescendantIdsFlat(flat, "absent")).toEqual([]);
+  });
+});
+
+describe("findRootAncestor", () => {
+  const flat = [
+    org("root", "Racine"),
+    org("child", "Enfant", "root"),
+    org("grandchild", "Petit-enfant", "child"),
+  ];
+
+  it("remonte jusqu'à la racine (parent_id null)", () => {
+    expect(findRootAncestor(flat, "grandchild")?.id).toBe("root");
+    expect(findRootAncestor(flat, "child")?.id).toBe("root");
+  });
+
+  it("renvoie l'org elle-même si elle est déjà racine", () => {
+    expect(findRootAncestor(flat, "root")?.id).toBe("root");
+  });
+
+  it("s'arrête au sommet visible quand l'ancêtre est hors périmètre", () => {
+    // L'admin voit « visible » et sa feuille, mais pas l'ancêtre référencé.
+    const partial = [
+      org("visible", "Visible", "invisible-ancestor"),
+      org("leaf", "Feuille", "visible"),
+    ];
+    expect(findRootAncestor(partial, "leaf")?.id).toBe("visible");
+  });
+
+  it("renvoie undefined pour un id absent", () => {
+    expect(findRootAncestor(flat, "absent")).toBeUndefined();
   });
 });

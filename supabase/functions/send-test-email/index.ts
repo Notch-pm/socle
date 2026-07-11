@@ -76,12 +76,18 @@ Deno.serve(async (req: Request) => {
 
     const { data: org } = await adminClient
       .from("organizations")
-      .select("name")
+      .select("name, email_sender_override, email_sender_name")
       .eq("id", organization_id)
       .single();
 
     const siteName = org?.name || "Edilumen";
     const primary = "#0aaa6b";
+
+    // Nom d'expéditeur propre à l'organisation si activé, sinon celui du SMTP.
+    const senderName =
+      org?.email_sender_override && org?.email_sender_name
+        ? org.email_sender_name
+        : smtp.from_name;
 
     const transporter = nodemailer.createTransport({
       host: smtp.host,
@@ -92,7 +98,7 @@ Deno.serve(async (req: Request) => {
     });
 
     await transporter.sendMail({
-      from: smtp.from_name ? `${smtp.from_name} <${smtp.from_email}>` : smtp.from_email,
+      from: senderName ? `${senderName} <${smtp.from_email}>` : smtp.from_email,
       to,
       subject: `Test SMTP — ${siteName}`,
       text: `Ceci est un email de test envoyé depuis ${siteName}.\n\nVotre configuration SMTP fonctionne correctement.`,

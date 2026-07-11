@@ -126,6 +126,8 @@ export type Database = {
           address: string | null;
           created_at: string | null;
           email: string | null;
+          email_sender_name: string | null;
+          email_sender_override: boolean;
           id: string;
           logo_url: string | null;
           metadata: Json | null;
@@ -140,6 +142,8 @@ export type Database = {
           address?: string | null;
           created_at?: string | null;
           email?: string | null;
+          email_sender_name?: string | null;
+          email_sender_override?: boolean;
           id?: string;
           logo_url?: string | null;
           metadata?: Json | null;
@@ -154,6 +158,8 @@ export type Database = {
           address?: string | null;
           created_at?: string | null;
           email?: string | null;
+          email_sender_name?: string | null;
+          email_sender_override?: boolean;
           id?: string;
           logo_url?: string | null;
           metadata?: Json | null;

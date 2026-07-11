@@ -2,6 +2,14 @@
 import { describe, it, expect, vi } from "vitest";
 import { render, screen, fireEvent } from "@testing-library/react";
 import { KnowledgeBaseStep } from "./KnowledgeBaseStep";
+
+// Téléversement de documents : on court-circuite les hooks Supabase/TanStack Query
+// (le comportement du stockage est couvert par les tests unitaires de `procedureStorage`).
+vi.mock("@/features/procedures/useProcedureDocuments", () => ({
+  useUploadProcedureDocument: () => ({ mutateAsync: vi.fn(), isPending: false }),
+  useRemoveProcedureDocument: () => ({ mutateAsync: vi.fn(), isPending: false }),
+  createSignedDocumentUrl: vi.fn(),
+}));
 import { defaultKnowledgeBase, type KnowledgeBase } from "@/features/procedures/knowledgeBase";
 import type { Procedure } from "@/features/procedures/useProcedures";
 
@@ -41,8 +49,9 @@ describe("KnowledgeBaseStep", () => {
     expect(screen.getByText("Consignes pour l'agent")).toBeTruthy();
     expect(screen.getByText("Texte d'aide pour l'agent")).toBeTruthy();
     expect(screen.getByText("Procédures")).toBeTruthy();
-    // Sections « documents » en attente de l'infrastructure de stockage.
-    expect(screen.getAllByText("Bientôt disponible")).toHaveLength(2);
+    // Sections « documents » avec téléversement (bucket privé Supabase).
+    expect(screen.getByText("Documents d'aide agent")).toBeTruthy();
+    expect(screen.getByText("Documents d'entraînement IA")).toBeTruthy();
   });
 
   it("émet une base vierge quand rien n'est saisi", () => {

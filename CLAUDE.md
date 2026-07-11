@@ -121,12 +121,52 @@ Les migrations passent par `apply_migration` (Supabase MCP) ou la CLI.
 - Le même `OrganizationsManager` sert les deux zones : `canManageRoots=false` côté admin,
   `canManageRoots` + `onConfigure` côté superadmin.
 
+### Édition d'organisation en pleine page (app par organisation)
+
+Côté **admin** (`/organisations`), l'action « éditer » ouvre une **page dédiée à onglets**
+(`OrganizationEditorPage`, route `organisations/:orgId`) au lieu de la modale — le superadmin
+garde sa modale (`OrganizationsManager` reçoit `onEditOrganization` seulement côté admin).
+
+- **Onglet « Informations de base »** (`OrganizationInfoTab`) : formulaire complet
+  (nom, parent, logo, adresse, téléphone, courriel, type, slug) enregistré via
+  `useUpdateOrganization` + liste des **sous-organisations** (bouton « Éditer » → même page pour
+  l'enfant, « Ajouter » via `OrganizationFormDialog`). Inclut aussi, **pour toute organisation
+  (sous-orgs comprises)**, un toggle **« Expéditeur spécifique pour les e-mails »** :
+  colonnes `organizations.email_sender_override` (bool, défaut false) + `email_sender_name` (text).
+  Si activé, on saisit un nom d'expéditeur propre à l'org ; sinon le nom du SMTP racine est utilisé.
+  Le nom est **conservé** en base quand on désactive (le flag gouverne l'usage). L'edge function
+  `send-test-email` applique ce nom quand `email_sender_override` est vrai. La colonne est
+  consommée en aval (Ariane/Clara). Écriture couverte par le RLS UPDATE `organizations`
+  (`is_admin_of_self_or_ancestor`).
+- **Onglet « Démarches »** (`OrganizationProceduresTab`) : **activation par organisation**. Liste
+  le catalogue de l'**organisation principale** (ancêtre racine, `findRootAncestor`) avec un
+  `Switch` par démarche. L'activation est **opt-in** : une démarche est active ⇔ une liaison
+  `organization_procedures` existe avec `is_enabled = true` (helper pur `buildEnabledProcedureIds`,
+  testé). Écriture par **upsert** sur la contrainte unique `(organization_id, procedure_id)`
+  (`useSetProcedureEnabled`), lecture via `useOrganizationProcedureBindings`.
+- RLS `organization_procedures` : lecture `has_org_access(organization_id) OR
+  is_admin_of_self_or_ancestor(organization_id)` · écriture (INSERT/UPDATE/DELETE)
+  `is_admin_of_self_or_ancestor(organization_id)` — un admin active les démarches sur **tout son
+  sous-arbre** (migration `org_procedures_rls_admin_subtree` ; l'ancien `is_org_admin` bloquait les
+  sous-orgs en 403).
+- **Onglet « Emails (SMTP) »** (`rootOnly` — visible **uniquement sur la racine**) : réutilise le
+  composant partagé `SmtpSettingsSection` (+ `useSmtpSettings`, edge function `send-test-email`),
+  déjà utilisé côté superadmin dans `OrgSettingsPage`. Champs : hôte, port, identifiant, mot de
+  passe, e-mail/nom expéditeur, TLS, + envoi d'un **mail de test**. RLS `smtp_settings` : lecture
+  `is_org_admin(organization_id)` ; écriture ouverte aux admins d'org via
+  `is_org_admin(organization_id)` (migration `smtp_settings_org_admin_write` — l'écriture était
+  auparavant réservée au super admin). `send-test-email` autorise via `is_org_admin`.
+- Code : `src/features/organizations/` — `OrganizationEditorPage`, `OrganizationInfoTab`,
+  `OrganizationProceduresTab`, `useOrganizationProcedures.ts`, `organizationProcedures.ts` (pur,
+  testé). Helpers d'arbre purs `findRootAncestor` / `collectDescendantIdsFlat` dans `orgTree.ts`.
+
 ## Feature : paramétrage des démarches (`procedures`)
 
 Catalogue des démarches, **multi-tenant strict** : une démarche est rattachée à une
 **organisation principale (racine, `parent_id IS NULL`)** — imposé par le trigger DB
-`enforce_procedure_root_org`. L'activation par sous-organisation (via `organization_procedures`)
-viendra plus tard. Paramétrage par **admin** (sa principale) et **superadmin** (toutes).
+`enforce_procedure_root_org`. L'**activation par organisation** (via `organization_procedures`)
+est fonctionnelle (voir feature « Édition d'organisation » ci-dessous). Paramétrage par **admin**
+(sa principale) et **superadmin** (toutes).
 
 - **Formulaire = stepper horizontal à 5 étapes** (`src/features/procedures/steps.ts`) : Descriptif,
   Informations demandeur, Formulaire, Communication, Base de connaissances. **Descriptif, Informations
@@ -149,8 +189,9 @@ viendra plus tard. Paramétrage par **admin** (sa principale) et **superadmin** 
   d'aide agent & procédures (**Markdown**, aperçu via `markdown.ts` — rendu HTML échappé, aucune
   dépendance), liens utiles agent + sources IA (`{url, description}`), FAQ (`{question, answer}`),
   garde-fous (liste). Deux jeux de **documents** (aide agent PDF/image ; entraînement IA formats
-  étendus) : sections **placeholder « à venir »** — l'upload attend un bucket Supabase (le schéma
-  réserve déjà `agentDocuments`/`trainingDocuments`). Logique pure + parseur robuste `knowledgeBase.ts`
+  étendus, 10 fichiers max chacun) : **téléversement fonctionnel** vers le bucket privé Supabase
+  `procedure-documents` (voir feature ci-dessous), référencés dans le JSON par `{path, name}`
+  (`agentDocuments`/`trainingDocuments`). Logique pure + parseur robuste `knowledgeBase.ts`
   (testé), UI `steps/KnowledgeBaseStep.tsx` (+ `steps/connaissances/*`).
 - RLS `procedures` : écriture `is_super_admin() OR is_org_admin(organization_id)` (la policy
   permissive `write procedures` par `global_role` a été retirée → isolation tenant). Suppression
@@ -161,9 +202,11 @@ viendra plus tard. Paramétrage par **admin** (sa principale) et **superadmin** 
   `steps/DemandeurStep`, `steps/FormulaireStep` (+ `steps/formulaire/*` : `FieldPalette`, `SectionEditor`,
   `FieldRow`, `ConditionEditor`, `FormPreview`, `FormatsPicker`), `steps/KnowledgeBaseStep` (+
   `steps/connaissances/*` : `MarkdownField`, `LinkListEditor`, `FaqEditor`, `StringListEditor`,
-  `DeferredDocuments`, `controls`), `steps/PlaceholderStep`. Logique pure **testée** : `requesterFields.ts`,
-  `formSchema.ts`, `conditions.ts`, `formats.ts`, `knowledgeBase.ts`, `markdown.ts`. Superadmin : section
-  « Catalogue de démarches » dans `OrgSettingsPage` (racine uniquement).
+  `DocumentsUploader`, `controls`), `steps/PlaceholderStep`. Stockage des documents :
+  `procedureStorage.ts` (logique pure de chemin/validation, testée) + `useProcedureDocuments.ts`
+  (upload/suppression/URL signée). Logique pure **testée** : `requesterFields.ts`,
+  `formSchema.ts`, `conditions.ts`, `formats.ts`, `knowledgeBase.ts`, `markdown.ts`, `procedureStorage.ts`.
+  Superadmin : section « Catalogue de démarches » dans `OrgSettingsPage` (racine uniquement).
 - Prérequis : une racine sans **catégorie** ne permet pas de créer une démarche (catégorie
   obligatoire) → créer d'abord des catégories via `/categories`.
 - La **pièce justificative** porte un `documentTypeId?: string` référençant un type du catalogue
@@ -175,6 +218,26 @@ viendra plus tard. Paramétrage par **admin** (sa principale) et **superadmin** 
   L'**aperçu** (`FormPreview`) affiche les formats autorisés et le nombre de fichiers max, et applique
   la borne `maxFiles` (l'attribut HTML `multiple` seul n'impose aucune limite) : une sélection trop
   grande est refusée.
+
+### Stockage des documents (bucket privé `procedure-documents`)
+
+Les documents de la **base de connaissances** sont stockés dans un **bucket Supabase privé**
+`procedure-documents` (25 Mio max/fichier), **multi-tenant strict** comme les démarches — mais
+l'isolation est portée par le **RLS de `storage.objects`**, pas par une colonne.
+
+- **Convention de chemin** (le RLS s'appuie dessus) :
+  `{organization_id}/{procedure_id}/{agent|training}/{uid}-{fichier}`. Le **1er segment est
+  l'organisation principale (racine)** de la démarche.
+- **RLS `storage.objects`** (policies scopées `bucket_id = 'procedure-documents'`, rôle
+  `authenticated`) : lecture `has_org_access(org_id)`, écriture (INSERT/UPDATE/DELETE)
+  `is_org_admin(org_id)` — où `org_id = ((storage.foldername(name))[1])::uuid`. Reflète l'écriture
+  des `procedures` (`is_super_admin` court-circuité par `is_org_admin`).
+- **Consultation** via **URL signée temporaire** (bucket privé, pas d'accès public).
+- Référence stockée dans `procedures.knowledge_base` : `{ path, name }` (`KbDocument`). Upload
+  **immédiat** à la sélection (le chemin est persisté à l'enregistrement de l'étape ; un fichier
+  téléversé puis abandonné sans enregistrer laisse un objet orphelin — acceptable pour l'instant).
+- Code : `procedureStorage.ts` (pur, testé : chemin, formats, taille), `useProcedureDocuments.ts`
+  (hooks upload/suppression + `createSignedDocumentUrl`), UI `steps/connaissances/DocumentsUploader`.
 
 ## Feature : types de pièce justificative (`document_types`)
 

@@ -85,7 +85,7 @@ export function DemandeurStep({
   }
 
   return (
-    <form id={formId} onSubmit={handleSubmit} className="flex max-w-3xl flex-col gap-5">
+    <form id={formId} onSubmit={handleSubmit} className="flex max-w-5xl flex-col gap-5">
       <div>
         <h2 className="text-lg font-semibold">Public concerné</h2>
         <p className="mt-1 text-sm text-muted-foreground">
@@ -114,11 +114,11 @@ export function DemandeurStep({
             </header>
 
             {audienceConfig.enabled ? (
-              <ul className="divide-y divide-border">
+              <ul className="grid grid-cols-1 gap-2 p-4 sm:grid-cols-2">
                 {audience.fields.map((field) => (
                   <li
                     key={field.key}
-                    className="flex items-center justify-between gap-4 px-4 py-2.5"
+                    className="flex items-center justify-between gap-3 rounded-lg border border-border/60 bg-background px-3 py-2"
                   >
                     <span className="text-sm text-foreground">{field.label}</span>
                     <VisibilityControl

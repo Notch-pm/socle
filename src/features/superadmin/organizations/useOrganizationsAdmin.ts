@@ -9,6 +9,8 @@ export {
   MAX_ORG_DEPTH,
   buildOrgTree,
   collectDescendantIds,
+  collectDescendantIdsFlat,
+  findRootAncestor,
 } from "./orgTree";
 export type { Organization, OrgStatus, OrgNode } from "./orgTree";
 

@@ -52,3 +52,51 @@ export function collectDescendantIds(node: OrgNode): string[] {
   walk(node);
   return ids;
 }
+
+/**
+ * Ids strictement sous `orgId`, calculés à partir de la liste plate (sans construire
+ * l'arbre). Utile pour exclure une org et sa descendance d'un sélecteur de parent.
+ */
+export function collectDescendantIdsFlat(orgs: Organization[], orgId: string): string[] {
+  const childrenByParent = new Map<string, string[]>();
+  for (const o of orgs) {
+    if (!o.parent_id) continue;
+    const siblings = childrenByParent.get(o.parent_id) ?? [];
+    siblings.push(o.id);
+    childrenByParent.set(o.parent_id, siblings);
+  }
+
+  const ids: string[] = [];
+  const stack = [...(childrenByParent.get(orgId) ?? [])];
+  const seen = new Set<string>();
+  while (stack.length) {
+    const id = stack.pop()!;
+    if (seen.has(id)) continue;
+    seen.add(id);
+    ids.push(id);
+    stack.push(...(childrenByParent.get(id) ?? []));
+  }
+  return ids;
+}
+
+/**
+ * Ancêtre racine de `orgId` : on remonte `parent_id` jusqu'au sommet **visible**
+ * (une org dont le parent est `null` ou hors périmètre RLS). Côté admin, c'est
+ * l'« organisation principale » qui détient le catalogue de démarches. Renvoie
+ * l'org elle-même si elle est déjà racine, ou `undefined` si `orgId` est absent.
+ */
+export function findRootAncestor(
+  orgs: Organization[],
+  orgId: string,
+): Organization | undefined {
+  const byId = new Map(orgs.map((o) => [o.id, o]));
+  let current = byId.get(orgId);
+  if (!current) return undefined;
+
+  const seen = new Set<string>();
+  while (current.parent_id && byId.has(current.parent_id) && !seen.has(current.parent_id)) {
+    seen.add(current.id);
+    current = byId.get(current.parent_id)!;
+  }
+  return current;
+}

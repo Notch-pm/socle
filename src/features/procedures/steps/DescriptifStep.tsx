@@ -76,8 +76,12 @@ export function DescriptifStep({
   }
 
   return (
-    <form id={formId} onSubmit={handleSubmit} className="flex max-w-2xl flex-col gap-4">
-      <Field label="Libellé de la démarche" htmlFor="proc-name" required>
+    <form
+      id={formId}
+      onSubmit={handleSubmit}
+      className="grid max-w-5xl grid-cols-1 gap-4 sm:grid-cols-2"
+    >
+      <Field label="Libellé de la démarche" htmlFor="proc-name" required className="sm:col-span-2">
         <Input
           id="proc-name"
           required
@@ -88,52 +92,51 @@ export function DescriptifStep({
         />
       </Field>
 
-      <div className="grid gap-4 sm:grid-cols-2">
-        <Field
-          label="Catégorie"
-          htmlFor="proc-category"
+      <Field
+        label="Catégorie"
+        htmlFor="proc-category"
+        required
+        hint={noCategory ? "Aucune catégorie pour cette organisation." : undefined}
+      >
+        <select
+          id="proc-category"
           required
-          hint={noCategory ? "Aucune catégorie pour cette organisation." : undefined}
+          value={categoryId}
+          onChange={(e) => setCategoryId(e.target.value)}
+          className={selectClass}
         >
-          <select
-            id="proc-category"
-            required
-            value={categoryId}
-            onChange={(e) => setCategoryId(e.target.value)}
-            className={selectClass}
-          >
-            <option value="" disabled>
-              {loadingCategories ? "Chargement…" : "Sélectionner une catégorie"}
+          <option value="" disabled>
+            {loadingCategories ? "Chargement…" : "Sélectionner une catégorie"}
+          </option>
+          {orgCategories.map((c) => (
+            <option key={c.id} value={c.id}>
+              {c.name}
             </option>
-            {orgCategories.map((c) => (
-              <option key={c.id} value={c.id}>
-                {c.name}
-              </option>
-            ))}
-          </select>
-        </Field>
+          ))}
+        </select>
+      </Field>
 
-        <Field label="Type" htmlFor="proc-type" required>
-          <select
-            id="proc-type"
-            required
-            value={type}
-            onChange={(e) => setType(e.target.value as ProcedureType)}
-            className={selectClass}
-          >
-            {PROCEDURE_TYPES.map((t) => (
-              <option key={t.value} value={t.value}>
-                {t.label}
-              </option>
-            ))}
-          </select>
-        </Field>
-      </div>
+      <Field label="Type" htmlFor="proc-type" required>
+        <select
+          id="proc-type"
+          required
+          value={type}
+          onChange={(e) => setType(e.target.value as ProcedureType)}
+          className={selectClass}
+        >
+          {PROCEDURE_TYPES.map((t) => (
+            <option key={t.value} value={t.value}>
+              {t.label}
+            </option>
+          ))}
+        </select>
+      </Field>
 
       <Field
         label="Mots-clés (recherche)"
         htmlFor="proc-keywords"
         hint="Séparés par une virgule — ex. naissance, acte, état civil"
+        className="sm:col-span-2"
       >
         <Input
           id="proc-keywords"
@@ -143,7 +146,7 @@ export function DescriptifStep({
         />
       </Field>
 
-      <Field label="Descriptif court" htmlFor="proc-desc">
+      <Field label="Descriptif court" htmlFor="proc-desc" className="sm:col-span-2">
         <textarea
           id="proc-desc"
           value={shortDescription}
@@ -154,31 +157,29 @@ export function DescriptifStep({
         />
       </Field>
 
-      <div className="grid gap-4 sm:grid-cols-2">
-        <Field label="Durée de saisie (minutes)" htmlFor="proc-duration">
-          <Input
-            id="proc-duration"
-            type="number"
-            min={0}
-            step={1}
-            value={durationText}
-            onChange={(e) => setDurationText(e.target.value)}
-            placeholder="Ex. 10"
-          />
-        </Field>
+      <Field label="Durée de saisie (minutes)" htmlFor="proc-duration">
+        <Input
+          id="proc-duration"
+          type="number"
+          min={0}
+          step={1}
+          value={durationText}
+          onChange={(e) => setDurationText(e.target.value)}
+          placeholder="Ex. 10"
+        />
+      </Field>
 
-        <Field label="Rang" htmlFor="proc-rank" hint="Ordre d'affichage — par défaut, à la suite.">
-          <Input
-            id="proc-rank"
-            type="number"
-            step={1}
-            value={rankText}
-            onChange={(e) => setRankText(e.target.value)}
-          />
-        </Field>
-      </div>
+      <Field label="Rang" htmlFor="proc-rank" hint="Ordre d'affichage — par défaut, à la suite.">
+        <Input
+          id="proc-rank"
+          type="number"
+          step={1}
+          value={rankText}
+          onChange={(e) => setRankText(e.target.value)}
+        />
+      </Field>
 
-      <p className="text-xs text-muted-foreground">
+      <p className="text-xs text-muted-foreground sm:col-span-2">
         Les champs marqués d'un <span className="text-destructive">*</span> sont obligatoires.
       </p>
     </form>

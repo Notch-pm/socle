@@ -10,6 +10,7 @@ import { DashboardPage } from "@/pages/DashboardPage";
 import { CategoriesPage } from "@/features/categories/CategoriesPage";
 import { DocumentTypesPage } from "@/features/document-types/DocumentTypesPage";
 import { OrganizationsPage } from "@/features/organizations/OrganizationsPage";
+import { OrganizationEditorPage } from "@/features/organizations/OrganizationEditorPage";
 import { ProceduresPage } from "@/features/procedures/ProceduresPage";
 import { ProcedureEditorPage } from "@/features/procedures/ProcedureEditorPage";
 import { UtilisateursPage } from "@/pages/UtilisateursPage";
@@ -49,6 +50,7 @@ export function App() {
             <Route element={<AppShell />}>
               <Route index element={<DashboardPage />} />
               <Route path="organisations" element={<OrganizationsPage />} />
+              <Route path="organisations/:orgId" element={<OrganizationEditorPage />} />
               <Route path="demarches" element={<ProceduresPage />} />
               <Route path="demarches/nouveau" element={<ProcedureEditorPage variant="admin" />} />
               <Route path="demarches/:procId" element={<ProcedureEditorPage variant="admin" />} />

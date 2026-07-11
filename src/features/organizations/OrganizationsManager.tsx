@@ -33,9 +33,12 @@ export function OrganizationsManager({
   canManageRoots,
   /** Navigate to the org-settings area (super admin only). */
   onConfigure,
+  /** When provided, editing opens a full-page editor instead of the inline dialog. */
+  onEditOrganization,
 }: {
   canManageRoots: boolean;
   onConfigure?: (node: OrgNode) => void;
+  onEditOrganization?: (node: OrgNode) => void;
 }) {
   const { data: orgs, isLoading, isError } = useAllOrganizations();
   const createOrg = useCreateOrganization();
@@ -66,6 +69,10 @@ export function OrganizationsManager({
   }
 
   function openEdit(node: OrgNode) {
+    if (onEditOrganization) {
+      onEditOrganization(node);
+      return;
+    }
     setParentForNew(null);
     setEditing(node);
     setFormOpen(true);
