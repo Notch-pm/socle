@@ -48,6 +48,7 @@ export function FieldRow({
   const [open, setOpen] = React.useState(() => "options" in field || field.type === "attachment");
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({
     id: field.id,
+    data: { nodeKind: "field" },
   });
   const style: React.CSSProperties = {
     transform: CSS.Transform.toString(transform),

@@ -1,16 +1,25 @@
 import { useDraggable } from "@dnd-kit/core";
-import { GripVertical, Paperclip, FolderPlus } from "lucide-react";
+import { GripVertical, Paperclip, FolderPlus, MapPin } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { FIELD_TYPES, type FieldType } from "@/features/procedures/formSchema";
 
-/** Ce qu'un item de palette ajoute : un type de champ, une PJ, ou une section. */
-export type PaletteKind = FieldType | "section";
+/**
+ * Ce qu'un item de palette ajoute : un type de champ, une PJ, une section, ou
+ * le bloc « Lieu d'intervention » (section pré-remplie des champs d'adresse).
+ */
+export type PaletteKind = FieldType | "section" | "lieu_intervention";
 
 export const PALETTE_ITEMS: { kind: PaletteKind; label: string }[] = [
   ...FIELD_TYPES.map((t) => ({ kind: t.value as PaletteKind, label: t.label })),
   { kind: "attachment", label: "Pièce justificative" },
   { kind: "section", label: "Section" },
+  { kind: "lieu_intervention", label: "Lieu d'intervention" },
 ];
+
+/** L'item de palette produit-il une section (et non un champ) ? */
+export function paletteKindIsSection(kind: string): boolean {
+  return kind === "section" || kind === "lieu_intervention";
+}
 
 /**
  * Palette de champs disponibles (colonne de droite). Chaque item s'ajoute au
@@ -53,6 +62,8 @@ function PaletteItem({
       <Paperclip className="size-3.5 text-muted-foreground" />
     ) : kind === "section" ? (
       <FolderPlus className="size-3.5 text-muted-foreground" />
+    ) : kind === "lieu_intervention" ? (
+      <MapPin className="size-3.5 text-muted-foreground" />
     ) : (
       <GripVertical className="size-3.5 text-muted-foreground" />
     );
@@ -64,7 +75,7 @@ function PaletteItem({
       onClick={() => onAdd(kind)}
       className={cn(
         "flex cursor-grab items-center gap-2 rounded-lg border border-border bg-background px-3 py-2 text-left text-sm transition-colors hover:border-primary/40 hover:bg-muted",
-        kind === "section" && "font-medium",
+        paletteKindIsSection(kind) && "font-medium",
         isDragging && "opacity-50",
       )}
       {...attributes}

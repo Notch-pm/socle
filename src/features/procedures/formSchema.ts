@@ -133,6 +133,48 @@ export function createSection(): Section {
   return { id: genId(), kind: "section", title: "", fields: [] };
 }
 
+/**
+ * Bloc « Lieu d'intervention » : une section prête à l'emploi contenant tous
+ * les champs d'une adresse (numéro, BTQ, voie, complément, appartement, code
+ * postal, ville). C'est une section ordinaire du schéma (aucun type dédié dans
+ * le contrat) — tout reste modifiable après insertion. Les clés sont préfixées
+ * `intervention_` pour éviter les collisions avec d'autres champs.
+ */
+export function createLieuInterventionSection(): Section {
+  return {
+    id: genId(),
+    kind: "section",
+    title: "Lieu d'intervention",
+    fields: [
+      { id: genId(), key: "intervention_numero", label: "Numéro", type: "text" },
+      {
+        id: genId(),
+        key: "intervention_btq",
+        label: "BTQ",
+        help: "Bis, ter, quater",
+        type: "select",
+        options: [
+          { value: "bis", label: "Bis" },
+          { value: "ter", label: "Ter" },
+          { value: "quater", label: "Quater" },
+        ],
+      },
+      { id: genId(), key: "intervention_voie", label: "Voie", type: "text", required: true },
+      { id: genId(), key: "intervention_complement", label: "Complément d'adresse", type: "text" },
+      { id: genId(), key: "intervention_appartement", label: "Appartement", type: "text" },
+      {
+        id: genId(),
+        key: "intervention_code_postal",
+        label: "Code postal",
+        type: "text",
+        required: true,
+        maxLength: 5,
+      },
+      { id: genId(), key: "intervention_ville", label: "Ville", type: "text", required: true },
+    ],
+  };
+}
+
 export function defaultFormSchema(): FormSchema {
   return { version: 1, content: [] };
 }

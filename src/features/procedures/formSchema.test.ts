@@ -3,6 +3,7 @@ import {
   attachmentFieldsMissingDocumentType,
   conditionSourceFields,
   createField,
+  createLieuInterventionSection,
   createSection,
   defaultFormSchema,
   isChoiceType,
@@ -41,6 +42,49 @@ describe("createSection / isSection", () => {
     expect(section).toMatchObject({ kind: "section", fields: [] });
     expect(isSection(section)).toBe(true);
     expect(isSection(createField("text"))).toBe(false);
+  });
+});
+
+describe("createLieuInterventionSection", () => {
+  it("est une section pré-remplie avec tous les champs d'une adresse, dans l'ordre", () => {
+    const section = createLieuInterventionSection();
+    expect(isSection(section)).toBe(true);
+    expect(section.title).toBe("Lieu d'intervention");
+    expect(section.fields.map((f) => f.key)).toEqual([
+      "intervention_numero",
+      "intervention_btq",
+      "intervention_voie",
+      "intervention_complement",
+      "intervention_appartement",
+      "intervention_code_postal",
+      "intervention_ville",
+    ]);
+  });
+
+  it("BTQ est une liste déroulante bis/ter/quater ; voie, code postal et ville sont obligatoires", () => {
+    const section = createLieuInterventionSection();
+    const byKey = Object.fromEntries(section.fields.map((f) => [f.key, f]));
+    expect(byKey.intervention_btq).toMatchObject({
+      type: "select",
+      options: [
+        { value: "bis", label: "Bis" },
+        { value: "ter", label: "Ter" },
+        { value: "quater", label: "Quater" },
+      ],
+    });
+    expect(byKey.intervention_voie.required).toBe(true);
+    expect(byKey.intervention_code_postal).toMatchObject({ required: true, maxLength: 5 });
+    expect(byKey.intervention_ville.required).toBe(true);
+    expect(byKey.intervention_numero.required).toBeUndefined();
+  });
+
+  it("chaque appel produit des ids uniques et le schéma se re-parse à l'identique", () => {
+    const a = createLieuInterventionSection();
+    const b = createLieuInterventionSection();
+    const ids = [a.id, b.id, ...a.fields.map((f) => f.id), ...b.fields.map((f) => f.id)];
+    expect(new Set(ids).size).toBe(ids.length);
+    const schema: FormSchema = { version: 1, content: [a] };
+    expect(parseFormSchema(schema)).toEqual(schema);
   });
 });
 

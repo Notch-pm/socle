@@ -12,20 +12,26 @@ import {
   type DragEndEvent,
   type DragStartEvent,
 } from "@dnd-kit/core";
-import { SortableContext, arrayMove, verticalListSortingStrategy } from "@dnd-kit/sortable";
+import { SortableContext, verticalListSortingStrategy } from "@dnd-kit/sortable";
 import { LayoutList, Eye, AlertTriangle } from "lucide-react";
 import { cn } from "@/lib/utils";
 import {
   attachmentFieldsMissingDocumentType,
   conditionSourceFields,
   createField,
+  createLieuInterventionSection,
   createSection,
   isSection,
   parseFormSchema,
-  type Field,
   type FormNode,
   type FormSchema,
 } from "@/features/procedures/formSchema";
+import {
+  insertNode,
+  moveNode,
+  ROOT_DROP_ID,
+  type DropPosition,
+} from "@/features/procedures/formReorder";
 import type { Procedure } from "@/features/procedures/useProcedures";
 import { useDocumentTypesForOrg } from "@/features/document-types/useDocumentTypes";
 import { SectionEditor } from "./formulaire/SectionEditor";
@@ -40,14 +46,25 @@ import { FieldPalette, type PaletteKind } from "./formulaire/FieldPalette";
  */
 const collisionDetectionStrategy: CollisionDetection = (args) => {
   const collisions = pointerWithin(args).length > 0 ? pointerWithin(args) : rectIntersection(args);
-  const specific = collisions.filter((c) => c.id !== "root");
+  const specific = collisions.filter((c) => c.id !== ROOT_DROP_ID);
   return specific.length > 0 ? specific : collisions;
 };
+
+/** Le dépôt vise-t-il le haut ou le bas de la cible ? (centre du drag vs milieu de la cible) */
+function dropPosition(event: DragEndEvent): DropPosition {
+  const overRect = event.over?.rect;
+  const activeRect = event.active.rect.current.translated;
+  if (!overRect || !activeRect) return "before";
+  const activeCenter = activeRect.top + activeRect.height / 2;
+  return activeCenter > overRect.top + overRect.height / 2 ? "after" : "before";
+}
 
 /**
  * Étape « Formulaire » : concepteur de formulaire. Les champs se prennent dans
  * la palette de droite (glisser-déposer pour positionner, clic pour ajouter à
- * la fin) ; sections et champs cohabitent au niveau racine.
+ * la fin) ; sections et champs cohabitent au niveau racine. Un seul DndContext
+ * couvre racine + sections : les champs existants se déplacent librement entre
+ * conteneurs (logique pure dans `formReorder.ts`).
  */
 export function FormulaireStep({
   formId,
@@ -100,23 +117,11 @@ export function FormulaireStep({
     setContent(content.filter((n) => n.id !== id));
   }
 
-  /** Ajoute un item de palette : positionné (overId) ou à la fin (clic). */
-  function addFromPalette(kind: PaletteKind, overId?: string | null) {
-    const node: FormNode = kind === "section" ? createSection() : createField(kind);
-    const idx = overId ? content.findIndex((n) => n.id === overId) : -1;
-    if (idx < 0) {
-      setContent([...content, node]);
-      return;
-    }
-    const overNode = content[idx];
-    if (isSection(overNode) && !isSection(node)) {
-      // Déposé sur une section → ajouté dans cette section.
-      replaceNode(overNode.id, { ...overNode, fields: [...overNode.fields, node as Field] });
-      return;
-    }
-    const next = [...content];
-    next.splice(idx, 0, node);
-    setContent(next);
+  /** Fabrique le nœud correspondant à un item de palette. */
+  function nodeFromPalette(kind: PaletteKind): FormNode {
+    if (kind === "section") return createSection();
+    if (kind === "lieu_intervention") return createLieuInterventionSection();
+    return createField(kind);
   }
 
   function handleDragStart(event: DragStartEvent) {
@@ -129,14 +134,13 @@ export function FormulaireStep({
     const { active, over } = event;
     const data = active.data.current as { palette?: boolean; kind?: PaletteKind } | undefined;
     if (data?.palette && data.kind) {
-      addFromPalette(data.kind, over?.id != null ? String(over.id) : null);
+      const overId = over?.id != null ? String(over.id) : null;
+      setContent(insertNode(content, nodeFromPalette(data.kind), overId, dropPosition(event)));
       return;
     }
-    // Réordonnancement des nœuds racine.
+    // Déplacement d'un nœud existant (réordonnancement, ou changement de conteneur).
     if (!over || active.id === over.id) return;
-    const oldIndex = content.findIndex((n) => n.id === active.id);
-    const newIndex = content.findIndex((n) => n.id === over.id);
-    if (oldIndex >= 0 && newIndex >= 0) setContent(arrayMove(content, oldIndex, newIndex));
+    setContent(moveNode(content, String(active.id), String(over.id), dropPosition(event)));
   }
 
   return (
@@ -197,7 +201,7 @@ export function FormulaireStep({
               </CanvasDropzone>
             </div>
 
-            <FieldPalette onAdd={(kind) => addFromPalette(kind)} />
+            <FieldPalette onAdd={(kind) => setContent(insertNode(content, nodeFromPalette(kind), null))} />
           </div>
 
           <DragOverlay>
@@ -219,7 +223,7 @@ export function FormulaireStep({
 
 /** Zone de dépôt racine : cible pour un ajout depuis la palette (fin / vide). */
 function CanvasDropzone({ empty, children }: { empty: boolean; children: React.ReactNode }) {
-  const { setNodeRef, isOver } = useDroppable({ id: "root" });
+  const { setNodeRef, isOver } = useDroppable({ id: ROOT_DROP_ID });
   return (
     <div
       ref={setNodeRef}

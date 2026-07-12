@@ -64,6 +64,10 @@ Il n'utilise donc jamais les pages de l'app par organisation ; il a ses propres 
 
 - `AuthProvider` (`src/features/auth/`) expose `{ session, profile, loading, signOut }` via
   `useAuth()`. `profile` = ligne `public.users` de l'utilisateur courant.
+  ⚠️ Le chargement du profil est **keyé sur l'id utilisateur, pas sur l'objet session** :
+  supabase-js ré-émet `SIGNED_IN`/`TOKEN_REFRESHED` avec un **nouvel objet session** à chaque
+  retour sur l'onglet ; keyer sur l'objet repasse `loading` à `true`, `ProtectedRoute` affiche
+  l'écran de chargement et **démonte toute la page** (perte de l'étape du stepper et des saisies).
 - **Deux niveaux de rôle** :
   - `users.global_role` : `'super_admin'` (accès plateforme total) ou autre.
   - `user_organizations.role` : rôle par organisation, notamment `'admin'`.
@@ -173,7 +177,10 @@ est fonctionnelle (voir feature « Édition d'organisation » ci-dessous). Param
   Informations demandeur, Formulaire, Communication, Base de connaissances. **Descriptif, Informations
   demandeur, Formulaire et Base de connaissances sont fonctionnelles** ; seule Communication reste un
   placeholder. Chaque étape fonctionnelle a un `<form id>` soumis depuis le pied de `ProcedureEditor`
-  (`currentFormId`) et persiste via `useUpdateProcedure`.
+  (`currentFormId`) et persiste via `useUpdateProcedure`. Le pied propose **deux boutons** :
+  « Enregistrer » (reste sur l'étape, confirmation « Enregistré ✓ » éphémère) et « Enregistrer et
+  continuer » (avance) — dernière étape : « Enregistrer » seul. L'étape courante est **reflétée dans
+  `?step=`** (`onStepChange` → `setSearchParams` en `replace`) : position restaurée après rechargement.
 - **Descriptif** → colonnes `procedures` : `name` (obligatoire), `category_id` (obligatoire, catégories
   de la racine), `type` (`interne`/`externe`), `keywords` (text[], CSV), `short_description`,
   `input_duration_minutes`, `order_index` (rang, défaut max+1).
@@ -184,7 +191,15 @@ est fonctionnelle (voir feature « Édition d'organisation » ci-dessous). Param
   **possédé** (contrat public consommé en aval). Contenu = liste ordonnée de nœuds *champ* ou *section* ;
   champs simples / choix (options) / **pièce justificative** (1–5 fichiers, formats, obligatoire +
   conditionnel) ; **conditions** d'affichage & d'obligation (moteur pur `conditions.ts`). Ajout des
-  champs par **palette** (glisser-déposer positionné, ou clic → ajout à la fin).
+  champs par **palette** (glisser-déposer positionné, ou clic → ajout à la fin). La palette propose
+  aussi un bloc **« Lieu d'intervention »** : une **section pré-remplie** des champs d'adresse
+  (numéro, BTQ, voie, complément, appartement, code postal, ville ; clés `intervention_*`,
+  fabrique `createLieuInterventionSection`) — section ordinaire du schéma (pas de type dédié dans
+  le contrat), entièrement modifiable après insertion. Les champs
+  **existants** se déplacent au glisser-déposer entre racine et sections (entrée/sortie/changement
+  de section) : un **seul `DndContext`** couvre tout le canevas (pas de contexte imbriqué dans
+  `SectionEditor`, sinon les champs restent prisonniers de leur conteneur) ; logique pure
+  `formReorder.ts` (`insertNode`/`moveNode`, testée), position avant/après déduite du point de dépôt.
 - **Base de connaissances** → colonne `procedures.knowledge_base` (JSONB) : informations à destination
   de **l'agent et de son assistant LLM**, schéma **possédé** (contrat consommé en aval). Champs : texte
   d'aide agent & procédures (**Markdown**, aperçu via `markdown.ts` — rendu HTML échappé, aucune
@@ -206,7 +221,8 @@ est fonctionnelle (voir feature « Édition d'organisation » ci-dessous). Param
   `DocumentsUploader`, `controls`), `steps/PlaceholderStep`. Stockage des documents :
   `procedureStorage.ts` (logique pure de chemin/validation, testée) + `useProcedureDocuments.ts`
   (upload/suppression/URL signée). Logique pure **testée** : `requesterFields.ts`,
-  `formSchema.ts`, `conditions.ts`, `formats.ts`, `knowledgeBase.ts`, `markdown.ts`, `procedureStorage.ts`.
+  `formSchema.ts`, `formReorder.ts`, `conditions.ts`, `formats.ts`, `knowledgeBase.ts`,
+  `markdown.ts`, `procedureStorage.ts`.
   Superadmin : section « Catalogue de démarches » dans `OrgSettingsPage` (racine uniquement).
 - Prérequis : une racine sans **catégorie** ne permet pas de créer une démarche (catégorie
   obligatoire) → créer d'abord des catégories via `/categories`.
