@@ -42,15 +42,22 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     };
   }, []);
 
+  // Keyé sur l'id utilisateur, PAS sur l'objet session : supabase-js ré-émet
+  // SIGNED_IN / TOKEN_REFRESHED avec un nouvel objet session à chaque retour sur
+  // l'onglet ; repasser `loading` à true ferait afficher l'écran de chargement
+  // des routes protégées et démonterait toute la page (perte des états locaux :
+  // étape du stepper, saisies en cours…).
+  const userId = session?.user.id ?? null;
+
   React.useEffect(() => {
-    if (!session) return;
+    if (!userId) return;
     let active = true;
     setLoading(true);
 
     supabase
       .from("users")
       .select("*")
-      .eq("id", session.user.id)
+      .eq("id", userId)
       .maybeSingle()
       .then(({ data }) => {
         if (!active) return;
@@ -61,7 +68,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     return () => {
       active = false;
     };
-  }, [session]);
+  }, [userId]);
 
   const signOut = React.useCallback(async () => {
     await supabase.auth.signOut();

@@ -9,7 +9,7 @@ import { ProcedureEditor } from "@/features/procedures/ProcedureEditor";
  */
 export function ProcedureEditorPage({ variant }: { variant: "admin" | "superadmin" }) {
   const params = useParams();
-  const [searchParams] = useSearchParams();
+  const [searchParams, setSearchParams] = useSearchParams();
   const navigate = useNavigate();
 
   const isSuper = variant === "superadmin";
@@ -31,7 +31,19 @@ export function ProcedureEditorPage({ variant }: { variant: "admin" | "superadmi
         procedureId={procedureId}
         initialStep={initialStep}
         onClose={() => navigate(listPath)}
-        onCreated={(id) => navigate(`${editBase}/${id}?step=1`)}
+        onCreated={(id, step) => navigate(`${editBase}/${id}?step=${step}`)}
+        onStepChange={(step) =>
+          // Étape reflétée dans l'URL (remplacement, pas d'empilement d'historique)
+          // → position restaurée même après un rechargement complet de la page.
+          setSearchParams(
+            (prev) => {
+              const next = new URLSearchParams(prev);
+              next.set("step", String(step));
+              return next;
+            },
+            { replace: true },
+          )
+        }
       />
     </div>
   );

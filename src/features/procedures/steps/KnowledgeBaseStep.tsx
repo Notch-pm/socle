@@ -62,7 +62,7 @@ export function KnowledgeBaseStep({
   }
 
   return (
-    <form id={formId} onSubmit={handleSubmit} className="flex max-w-5xl flex-col gap-5">
+    <form id={formId} onSubmit={handleSubmit} className="flex flex-col gap-5">
       <div>
         <h2 className="text-lg font-semibold">Base de connaissances</h2>
         <p className="mt-1 text-sm text-muted-foreground">

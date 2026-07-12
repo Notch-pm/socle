@@ -32,13 +32,16 @@ export function ProcedureEditor({
   initialStep = 0,
   onClose,
   onCreated,
+  onStepChange,
 }: {
   /** Organisation principale (racine) — requise en création. */
   organizationId?: string;
   procedureId?: string;
   initialStep?: number;
   onClose: () => void;
-  onCreated: (newId: string) => void;
+  onCreated: (newId: string, step: number) => void;
+  /** Notifié à chaque changement d'étape (ex. pour refléter l'étape dans l'URL). */
+  onStepChange?: (step: number) => void;
 }) {
   const isEdit = Boolean(procedureId);
   const { data: procedure, isLoading, isError } = useProcedure(procedureId);
@@ -46,6 +49,11 @@ export function ProcedureEditor({
   const updateProc = useUpdateProcedure();
 
   const [current, setCurrent] = React.useState(initialStep);
+  // Le bouton cliqué décide si l'enregistrement avance le stepper ou non.
+  const advanceRef = React.useRef(true);
+  const [justSaved, setJustSaved] = React.useState(false);
+  const savedTimer = React.useRef<number>();
+  React.useEffect(() => () => window.clearTimeout(savedTimer.current), []);
 
   if (procedureId && isLoading) {
     return <div className="m-6 h-40 animate-pulse rounded-lg bg-muted/40" />;
@@ -67,16 +75,29 @@ export function ProcedureEditor({
   const submitting = createProc.isPending || updateProc.isPending;
   const error = (createProc.error || updateProc.error) as Error | null;
 
+  function goToStep(step: number) {
+    setCurrent(step);
+    onStepChange?.(step);
+  }
+
+  /** Après un enregistrement : avance ou confirme sur place, selon le bouton cliqué. */
+  function afterSave() {
+    if (advanceRef.current) {
+      goToStep(Math.min(current + 1, LAST_STEP));
+    } else {
+      setJustSaved(true);
+      window.clearTimeout(savedTimer.current);
+      savedTimer.current = window.setTimeout(() => setJustSaved(false), 2500);
+    }
+  }
+
   function handleDescriptifSubmit(values: DescriptifValues) {
     if (isEdit) {
-      updateProc.mutate(
-        { id: procedureId!, ...values },
-        { onSuccess: () => setCurrent((c) => Math.min(c + 1, LAST_STEP)) },
-      );
+      updateProc.mutate({ id: procedureId!, ...values }, { onSuccess: afterSave });
     } else {
       createProc.mutate(
         { ...values, organization_id: resolvedOrgId },
-        { onSuccess: (data) => onCreated(data.id) },
+        { onSuccess: (data) => onCreated(data.id, advanceRef.current ? 1 : 0) },
       );
     }
   }
@@ -85,21 +106,21 @@ export function ProcedureEditor({
     // Config typée de l'app → colonne JSONB générique de Supabase.
     updateProc.mutate(
       { id: procedureId!, requester_config: config as unknown as Json },
-      { onSuccess: () => setCurrent((c) => Math.min(c + 1, LAST_STEP)) },
+      { onSuccess: afterSave },
     );
   }
 
   function handleFormulaireSubmit(schema: FormSchema) {
     updateProc.mutate(
       { id: procedureId!, form_schema: schema as unknown as Json },
-      { onSuccess: () => setCurrent((c) => Math.min(c + 1, LAST_STEP)) },
+      { onSuccess: afterSave },
     );
   }
 
   function handleConnaissancesSubmit(kb: KnowledgeBase) {
     updateProc.mutate(
       { id: procedureId!, knowledge_base: kb as unknown as Json },
-      { onSuccess: () => setCurrent((c) => Math.min(c + 1, LAST_STEP)) },
+      { onSuccess: afterSave },
     );
   }
 
@@ -132,7 +153,7 @@ export function ProcedureEditor({
             steps={PROCEDURE_STEPS}
             current={current}
             enabledUpTo={enabledUpTo}
-            onSelect={setCurrent}
+            onSelect={goToStep}
           />
         </div>
       </div>
@@ -184,20 +205,47 @@ export function ProcedureEditor({
         <Button variant="ghost" onClick={onClose}>
           Annuler
         </Button>
-        <div className="flex gap-2">
+        <div className="flex items-center gap-2">
+          {justSaved ? (
+            <span role="status" className="mr-1 text-sm text-muted-foreground">
+              Enregistré ✓
+            </span>
+          ) : null}
           <Button
             variant="outline"
             disabled={current === 0}
-            onClick={() => setCurrent((c) => Math.max(c - 1, 0))}
+            onClick={() => goToStep(Math.max(current - 1, 0))}
           >
             Précédent
           </Button>
           {currentFormId ? (
-            <Button type="submit" form={currentFormId} disabled={submitting}>
-              {submitting ? "Enregistrement…" : "Enregistrer et continuer"}
-            </Button>
+            <>
+              <Button
+                type="submit"
+                form={currentFormId}
+                variant={current === LAST_STEP ? "primary" : "outline"}
+                disabled={submitting}
+                onClick={() => {
+                  advanceRef.current = false;
+                }}
+              >
+                {submitting && !advanceRef.current ? "Enregistrement…" : "Enregistrer"}
+              </Button>
+              {current < LAST_STEP ? (
+                <Button
+                  type="submit"
+                  form={currentFormId}
+                  disabled={submitting}
+                  onClick={() => {
+                    advanceRef.current = true;
+                  }}
+                >
+                  {submitting && advanceRef.current ? "Enregistrement…" : "Enregistrer et continuer"}
+                </Button>
+              ) : null}
+            </>
           ) : current < LAST_STEP ? (
-            <Button onClick={() => setCurrent((c) => Math.min(c + 1, LAST_STEP))}>Suivant</Button>
+            <Button onClick={() => goToStep(Math.min(current + 1, LAST_STEP))}>Suivant</Button>
           ) : (
             <Button onClick={onClose}>Terminer</Button>
           )}
