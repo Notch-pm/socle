@@ -11,10 +11,25 @@ import {
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Field } from "@/components/ui/field";
+import { Switch } from "@/components/ui/switch";
 import { useCreateApiKey } from "@/features/superadmin/organizations/useApiKeys";
 
+/** Accès attribuables à une clé (colonne `api_keys.scopes`). */
+const SCOPE_OPTIONS = [
+  {
+    scope: "read",
+    label: "Référentiel (lecture)",
+    description: "Organisations, démarches, catégories, types de pièce — API public-api.",
+  },
+  {
+    scope: "contacts",
+    label: "Usagers (lecture + écriture)",
+    description: "Référentiel des usagers (données personnelles) — API contacts-api.",
+  },
+] as const;
+
 /**
- * Création d'une clé API. Deux temps : (1) formulaire (nom + expiration
+ * Création d'une clé API. Deux temps : (1) formulaire (nom + accès + expiration
  * facultative) ; (2) révélation **unique** du secret (copiable), qui ne sera
  * plus jamais affiché.
  */
@@ -33,6 +48,7 @@ export function ApiKeyFormDialog({
 
   const [name, setName] = React.useState("");
   const [expiresAt, setExpiresAt] = React.useState("");
+  const [scopes, setScopes] = React.useState<string[]>(["read"]);
   const [secret, setSecret] = React.useState<string | null>(null);
   const [copied, setCopied] = React.useState(false);
 
@@ -41,6 +57,7 @@ export function ApiKeyFormDialog({
     if (open) {
       setName("");
       setExpiresAt("");
+      setScopes(["read"]);
       setSecret(null);
       setCopied(false);
       createKey.reset();
@@ -48,7 +65,11 @@ export function ApiKeyFormDialog({
   }, [open]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const trimmed = name.trim();
-  const canSubmit = trimmed.length > 0 && !createKey.isPending;
+  const canSubmit = trimmed.length > 0 && scopes.length > 0 && !createKey.isPending;
+
+  function toggleScope(scope: string, enabled: boolean) {
+    setScopes((prev) => (enabled ? [...prev, scope] : prev.filter((s) => s !== scope)));
+  }
 
   function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -56,7 +77,7 @@ export function ApiKeyFormDialog({
     // Expiration : fin de journée locale de la date saisie, sinon pas d'expiration.
     const expiresIso = expiresAt ? new Date(`${expiresAt}T23:59:59`).toISOString() : null;
     createKey.mutate(
-      { name: trimmed, expiresAt: expiresIso },
+      { name: trimmed, expiresAt: expiresIso, scopes },
       { onSuccess: (createdSecret) => setSecret(createdSecret) },
     );
   }
@@ -83,7 +104,7 @@ export function ApiKeyFormDialog({
           <DialogDescription>
             {secret
               ? "Copiez cette clé maintenant : elle ne sera plus jamais affichée."
-              : "Génère une clé de lecture seule pour cette organisation et sa descendance."}
+              : "Génère une clé d'accès aux API pour cette organisation et sa descendance."}
           </DialogDescription>
         </DialogHeader>
 
@@ -120,6 +141,28 @@ export function ApiKeyFormDialog({
                 placeholder="Ex. Clara — production"
               />
             </Field>
+            <fieldset className="flex flex-col gap-2">
+              <legend className="mb-1 text-sm font-medium">Accès de la clé</legend>
+              {SCOPE_OPTIONS.map((option) => (
+                <label
+                  key={option.scope}
+                  className="flex cursor-pointer items-start justify-between gap-3 rounded-lg border p-3"
+                >
+                  <span className="flex flex-col gap-0.5">
+                    <span className="text-sm font-medium">{option.label}</span>
+                    <span className="text-xs text-muted-foreground">{option.description}</span>
+                  </span>
+                  <Switch
+                    checked={scopes.includes(option.scope)}
+                    onCheckedChange={(checked) => toggleScope(option.scope, checked)}
+                    aria-label={option.label}
+                  />
+                </label>
+              ))}
+              {scopes.length === 0 ? (
+                <p className="text-xs text-destructive">Sélectionnez au moins un accès.</p>
+              ) : null}
+            </fieldset>
             <Field label="Expiration (facultatif)" htmlFor="api-key-expires">
               <Input
                 id="api-key-expires"

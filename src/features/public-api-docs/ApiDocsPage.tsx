@@ -8,11 +8,15 @@ import * as React from "react";
  * empêche un rendu HTML depuis la function. On charge donc Redoc ici et on le
  * pointe sur le contrat public `/openapi.json` (servi, lui, en JSON par la function).
  *
- * Route **publique** (`/api-doc`) : consultable sans authentification, y compris
- * par un partenaire externe.
+ * Routes **publiques** (`/api-doc`, `/api-doc-usagers`) : consultables sans
+ * authentification, y compris par un partenaire externe. La prop `api` choisit
+ * le contrat rendu (référentiel en lecture seule, ou API usagers).
  */
 
-const SPEC_URL = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/public-api/openapi.json`;
+const SPEC_URLS = {
+  "public-api": `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/public-api/openapi.json`,
+  "contacts-api": `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/contacts-api/openapi.json`,
+} as const;
 const REDOC_SRC = "https://cdn.jsdelivr.net/npm/redoc@2.1.5/bundles/redoc.standalone.js";
 
 declare global {
@@ -21,8 +25,9 @@ declare global {
   }
 }
 
-export function ApiDocsPage() {
+export function ApiDocsPage({ api = "public-api" }: { api?: keyof typeof SPEC_URLS }) {
   const containerRef = React.useRef<HTMLDivElement>(null);
+  const specUrl = SPEC_URLS[api];
 
   React.useEffect(() => {
     let cancelled = false;
@@ -30,7 +35,7 @@ export function ApiDocsPage() {
     const render = () => {
       if (cancelled || !containerRef.current || !window.Redoc) return;
       window.Redoc.init(
-        SPEC_URL,
+        specUrl,
         { hideDownloadButton: false, expandResponses: "200", theme: { colors: { primary: { main: "#0aaa6b" } } } },
         containerRef.current,
       );
@@ -61,7 +66,7 @@ export function ApiDocsPage() {
       cancelled = true;
       script.removeEventListener("load", render);
     };
-  }, []);
+  }, [specUrl]);
 
   return <div ref={containerRef} style={{ minHeight: "100vh" }} />;
 }

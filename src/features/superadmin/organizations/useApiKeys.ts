@@ -40,7 +40,11 @@ export function useApiKeys(organizationId: string) {
 export function useCreateApiKey(organizationId: string, createdBy: string | null | undefined) {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: async (input: { name: string; expiresAt: string | null }): Promise<string> => {
+    mutationFn: async (input: {
+      name: string;
+      expiresAt: string | null;
+      scopes: string[];
+    }): Promise<string> => {
       const generated = await generateApiKey();
       const { error } = await supabase.from("api_keys").insert({
         organization_id: organizationId,
@@ -48,6 +52,7 @@ export function useCreateApiKey(organizationId: string, createdBy: string | null
         key_prefix: generated.prefix,
         key_hash: generated.hash,
         expires_at: input.expiresAt,
+        scopes: input.scopes,
         created_by: createdBy ?? null,
       });
       if (error) throw error;

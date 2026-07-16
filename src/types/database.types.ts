@@ -106,6 +106,211 @@ export type Database = {
           },
         ]
       }
+      contact_external_references: {
+        Row: {
+          contact_id: string
+          created_at: string
+          external_id: string
+          id: string
+          organization_id: string
+          source: string
+          updated_at: string
+        }
+        Insert: {
+          contact_id: string
+          created_at?: string
+          external_id: string
+          id?: string
+          organization_id: string
+          source: string
+          updated_at?: string
+        }
+        Update: {
+          contact_id?: string
+          created_at?: string
+          external_id?: string
+          id?: string
+          organization_id?: string
+          source?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "contact_external_references_contact_id_fkey"
+            columns: ["contact_id"]
+            isOneToOne: false
+            referencedRelation: "contacts"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "contact_external_references_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      contact_role_assignments: {
+        Row: {
+          contact_id: string
+          created_at: string
+          id: string
+          role_id: string
+        }
+        Insert: {
+          contact_id: string
+          created_at?: string
+          id?: string
+          role_id: string
+        }
+        Update: {
+          contact_id?: string
+          created_at?: string
+          id?: string
+          role_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "contact_role_assignments_contact_id_fkey"
+            columns: ["contact_id"]
+            isOneToOne: false
+            referencedRelation: "contacts"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "contact_role_assignments_role_id_fkey"
+            columns: ["role_id"]
+            isOneToOne: false
+            referencedRelation: "contact_roles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      contact_roles: {
+        Row: {
+          created_at: string
+          id: string
+          name: string
+          organization_id: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          name: string
+          organization_id: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          name?: string
+          organization_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "contact_roles_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      contacts: {
+        Row: {
+          address_line1: string | null
+          address_line2: string | null
+          birth_date: string | null
+          city: string | null
+          civility: string | null
+          consent_email: boolean
+          consent_sms: boolean
+          contact_type: string
+          country: string
+          created_at: string
+          display_name: string | null
+          email: string | null
+          first_name: string | null
+          id: string
+          internal_notes: string | null
+          landline_phone: string | null
+          last_name: string | null
+          legal_name: string | null
+          mobile_phone: string | null
+          organization_id: string
+          postal_code: string | null
+          preferred_channel: string | null
+          siret: string | null
+          status: string
+          updated_at: string
+          usage_name: string | null
+        }
+        Insert: {
+          address_line1?: string | null
+          address_line2?: string | null
+          birth_date?: string | null
+          city?: string | null
+          civility?: string | null
+          consent_email?: boolean
+          consent_sms?: boolean
+          contact_type: string
+          country?: string
+          created_at?: string
+          display_name?: string | null
+          email?: string | null
+          first_name?: string | null
+          id?: string
+          internal_notes?: string | null
+          landline_phone?: string | null
+          last_name?: string | null
+          legal_name?: string | null
+          mobile_phone?: string | null
+          organization_id: string
+          postal_code?: string | null
+          preferred_channel?: string | null
+          siret?: string | null
+          status?: string
+          updated_at?: string
+          usage_name?: string | null
+        }
+        Update: {
+          address_line1?: string | null
+          address_line2?: string | null
+          birth_date?: string | null
+          city?: string | null
+          civility?: string | null
+          consent_email?: boolean
+          consent_sms?: boolean
+          contact_type?: string
+          country?: string
+          created_at?: string
+          display_name?: string | null
+          email?: string | null
+          first_name?: string | null
+          id?: string
+          internal_notes?: string | null
+          landline_phone?: string | null
+          last_name?: string | null
+          legal_name?: string | null
+          mobile_phone?: string | null
+          organization_id?: string
+          postal_code?: string | null
+          preferred_channel?: string | null
+          siret?: string | null
+          status?: string
+          updated_at?: string
+          usage_name?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "contacts_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       document_types: {
         Row: {
           created_at: string | null

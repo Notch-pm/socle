@@ -97,6 +97,8 @@ une table protégée doit suivre le même motif.
 - `categories`, `procedures`, `organization_procedures` (catalogue de démarches).
 - `smtp_settings` (SMTP par organisation).
 - `api_keys` (clés de l'API publique en lecture seule, rattachées à une racine — voir feature).
+- `contacts`, `contact_roles`, `contact_role_assignments`, `contact_external_references`
+  (référentiel des usagers — voir feature).
 
 Types TS générés dans `src/types/database.types.ts` — **ne pas éditer à la main**,
 régénérer depuis le schéma live (Supabase MCP `generate_typescript_types` / CLI).
@@ -322,6 +324,84 @@ avec **`verify_jwt = false`** (l'auth est portée par la fonction, pas par la pa
   `useRevokeApiKey` ; la liste **ne sélectionne pas** `key_hash`). `created_by` = `profile.id`.
 - Logique pure **testée** : `_shared/{serializers,scope,errors,openapi}.ts`,
   `superadmin/organizations/apiKeys.ts`.
+
+## Feature : référentiel des usagers (`contacts`)
+
+Référentiel **partagé par toute la gamme** (Ariane, Clara, Iris, portail citoyen), **multi-tenant
+strict** : un contact est rattaché à une **organisation principale (racine)** — trigger
+`enforce_contact_root_org` (motif habituel) ; les sous-organisations partagent le même référentiel.
+⚠️ **Écriture uniquement via l'API dédiée `contacts-api`** (voir feature ci-dessous) :
+**aucune policy RLS d'écriture** côté client sur les fiches ; pas d'UI Socle pour l'instant.
+
+- **`contacts`** (une seule table pour les 4 types) : `contact_type`
+  (`personne`/`entreprise`/`association`/`administration`), identité personne (`civility`
+  madame/monsieur, `first_name`, `last_name`, `usage_name` nom d'usage, `birth_date`), structure
+  (`legal_name`, `siret` 14 chiffres), coordonnées (`email`, `mobile_phone`, `landline_phone`),
+  adresse à plat (`address_line1/2`, `postal_code`, `city`, `country` défaut France),
+  `preferred_channel` (`email`/`telephone`/`courrier`), `consent_email`/`consent_sms`,
+  `internal_notes` (**agents uniquement — à exclure de toute sérialisation publique**), `status`
+  (`active`/`archived`, réversible), `display_name` **colonne générée** (nom d'usage/nom + prénom,
+  ou raison sociale). **Invariants par type via CHECK** : civilité obligatoire ⟺ personne ;
+  raison sociale obligatoire ⟺ structure ; SIRET et champs personne interdits sur le type opposé.
+  **Unicité** : SIRET unique par org (index partiel) ; **pas de contrainte dure** sur l'identité
+  pivot des personnes (homonymes réels — l'app avertira, choix validé).
+- **`contact_roles`** : catalogue de rôles **par racine** (motif `document_types`), nom unique par
+  org insensible à la casse. **Seed** : 8 rôles d'exemple insérés pour les racines existantes
+  (Habitant, Représentant d'entreprise, Président d'association, Élu, Agent, Propriétaire,
+  Demandeur, Bénéficiaire). Seule table du référentiel **modifiable côté client** (admins d'org).
+- **`contact_role_assignments`** : n-n contact↔rôle, unique `(contact_id, role_id)`, trigger
+  `enforce_contact_role_same_org` (contact et rôle de la même racine).
+- **`contact_external_references`** : identifiants tiers (`source` libre : `portail_citoyen`,
+  `logiciel_population`…). `organization_id` **dénormalisée par trigger**
+  (`sync_contact_external_ref_org`) pour porter l'unicité `(org, source, external_id)` ; unique
+  aussi `(contact_id, source)`.
+- **RLS** : SELECT `has_org_access(organization_id)` partout (assignments via `EXISTS` sur le
+  contact) ; écriture seulement `contact_roles` (`is_org_admin`). Les 4 fonctions trigger sont
+  `SECURITY DEFINER` avec **`EXECUTE` révoqué** de `anon`/`authenticated` (advisor).
+  **Étanchéité inter-tenants vérifiée de bout en bout** (2026-07-15) : test SQL simulant deux
+  racines + `auth.uid()` de chaque tenant + anonyme — visibilité croisée nulle, écritures client
+  refusées, unicité des refs externes bien scopée par org (transaction de test annulée).
+  Nuance : `has_org_access` exige l'appartenance à la **racine** — un membre d'une sous-org ne
+  voit aucun contact (comme `categories`).
+- Volontairement exclus (validé) : alias, historique, documents, workflow, dédoublonnage/fusion
+  automatique, données sensibles (NIR, CNI, IBAN), modèle d'adresses complexe.
+- Migrations : `contacts_referentiel_usagers`, `contacts_trigger_functions_revoke_execute`.
+
+## Feature : API usagers (lecture/écriture) — `contacts-api`
+
+Edge Function Deno **séparée de `public-api`** (qui reste contractuellement en lecture seule),
+servie sous `{SUPABASE_URL}/functions/v1/contacts-api/…`, déployée `verify_jwt = false` (l'auth
+est portée par la fonction). Permet de **consulter, créer, modifier, archiver** un usager —
+**aucune suppression** (pas de DELETE, méthode → 405).
+
+- **Auth = clé `api_keys`** (Bearer, SHA-256) comme `public-api`, **mais scope `contacts` requis**
+  (colonne `scopes` ; les clés `read` → 403 : les usagers sont des données personnelles). Les
+  scopes se choisissent à la création de clé (`ApiKeyFormDialog`, switches « Référentiel
+  (lecture) » / « Usagers (lecture + écriture) ») et s'affichent en badges (`ApiKeysSection`).
+- **Isolation** : service role (hors RLS) mais chaque requête bornée par
+  `organization_id = organisation (racine) de la clé` — égalité stricte, pas de sous-arbre (les
+  contacts sont rattachés aux racines). **Vérifiée bout en bout** (2026-07-15, 32 assertions :
+  cross-tenant 404/liste vide, 401/403, conflits 409, invariants 400, archive/restore, données de
+  test nettoyées).
+- **Endpoints** (préfixe `/v1`) : `contacts` GET (filtres `type`, `status`, `search` sur
+  `display_name`, lookup `source`+`external_id`, pagination `limit`/`offset` max 500) + POST ·
+  `contacts/{id}` GET + PATCH (partiel ; `contact_type` immuable ; `status` refusé) ·
+  `contacts/{id}/archive` et `/restore` POST (obsolescence réversible, idempotent) ·
+  `contact-roles` GET (catalogue → `role_ids`). Racine `/` + `openapi.json` publics.
+- **Payloads** : whitelist stricte des clés (clé inconnue → 400), chaînes normalisées (trim,
+  `""`→`null`), invariants par type vérifiés sur l'**état fusionné** au PATCH (messages français ;
+  les CHECK DB restent le garde-fou). `role_ids` / `external_references` fournis **remplacent**
+  l'ensemble (omis = intouchés ; remplacement par différence/upsert, pas de delete-all). Création :
+  compensation (delete) si rôles/refs échouent après l'insert. Erreurs `{error:{code,message}}`
+  + **409 `conflict`** (SIRET dupliqué, réf externe prise — mappage des contraintes 23505).
+- ⚠️ `internal_notes` **est exposée** (API serveur-à-serveur pour les apps agents) : un
+  consommateur servant des usagers finaux ne doit jamais la retransmettre — documenté dans l'OpenAPI.
+- **Docs** : `/api-doc-usagers` (route publique, `ApiDocsPage api="contacts-api"` — Redoc pointé
+  sur `…/contacts-api/openapi.json`) ; liens depuis la section « APIs de la gamme » de
+  `OrgSettingsPage`.
+- Code : `supabase/functions/contacts-api/` — `index.ts` + `_shared/{dto,errors,validation,
+  serializers,openapi}.ts` (logique pure **testée** par vitest, sans dépendance Deno, déployée avec
+  la fonction). Le déploiement (`deploy_edge_function`) doit inclure `index.ts` + tout `_shared/*.ts`.
 
 ## Design system
 

@@ -29,8 +29,9 @@ export function App() {
           <Route path="/activer-compte" element={<SetPasswordPage />} />
           <Route path="/reinitialiser-mot-de-passe" element={<SetPasswordPage />} />
 
-          {/* Documentation publique de l'API (rendu Redoc du contrat OpenAPI) */}
+          {/* Documentation publique des APIs (rendu Redoc des contrats OpenAPI) */}
           <Route path="/api-doc" element={<ApiDocsPage />} />
+          <Route path="/api-doc-usagers" element={<ApiDocsPage api="contacts-api" />} />
 
           {/* Super admin — separate area, separate menu, only reachable by global_role = super_admin */}
           <Route element={<SuperAdminRoute />}>
