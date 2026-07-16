@@ -1,0 +1,306 @@
+import { describe, expect, it } from "vitest";
+import {
+  contactInvariantError,
+  escapeIlikePattern,
+  hasContactsScope,
+  isUuid,
+  mergeContactShape,
+  parseContactPayload,
+  parsePagination,
+  type ContactShape,
+} from "./validation.ts";
+
+const UUID_A = "11111111-1111-4111-8111-111111111111";
+const UUID_B = "22222222-2222-4222-8222-222222222222";
+
+function expectFail(outcome: ReturnType<typeof parseContactPayload>, fragment: string) {
+  expect(outcome.ok).toBe(false);
+  if (!outcome.ok) expect(outcome.message).toContain(fragment);
+}
+
+describe("hasContactsScope", () => {
+  it("accepte uniquement un tableau contenant 'contacts'", () => {
+    expect(hasContactsScope(["contacts"])).toBe(true);
+    expect(hasContactsScope(["read", "contacts"])).toBe(true);
+    expect(hasContactsScope(["read"])).toBe(false);
+    expect(hasContactsScope("contacts")).toBe(false);
+    expect(hasContactsScope(null)).toBe(false);
+  });
+});
+
+describe("parseContactPayload — création", () => {
+  it("normalise une personne physique valide", () => {
+    const outcome = parseContactPayload(
+      {
+        contact_type: "personne",
+        civility: "madame",
+        first_name: "  Jeanne ",
+        last_name: "Martin",
+        usage_name: "",
+        email: "jeanne@example.org",
+        consent_email: true,
+      },
+      "create",
+    );
+    expect(outcome.ok).toBe(true);
+    if (outcome.ok) {
+      expect(outcome.value.fields).toMatchObject({
+        contact_type: "personne",
+        civility: "madame",
+        first_name: "Jeanne",
+        usage_name: null,
+        consent_email: true,
+      });
+      expect(outcome.value.roleIds).toBeUndefined();
+      expect(outcome.value.externalRefs).toBeUndefined();
+    }
+  });
+
+  it("exige contact_type et le valide", () => {
+    expectFail(parseContactPayload({}, "create"), "contact_type");
+    expectFail(parseContactPayload({ contact_type: "autre" }, "create"), "contact_type");
+  });
+
+  it("rejette un corps non-objet et les clés inconnues", () => {
+    expectFail(parseContactPayload(null, "create"), "objet JSON");
+    expectFail(parseContactPayload([], "create"), "objet JSON");
+    expectFail(
+      parseContactPayload({ contact_type: "personne", prenom: "X" }, "create"),
+      "Champ inconnu : prenom",
+    );
+  });
+
+  it("rejette status (endpoints dédiés archive/restore)", () => {
+    expectFail(
+      parseContactPayload({ contact_type: "personne", status: "archived" }, "create"),
+      "/archive",
+    );
+  });
+
+  it("valide les énumérations et formats", () => {
+    expectFail(
+      parseContactPayload({ contact_type: "personne", civility: "mx" }, "create"),
+      "civility",
+    );
+    expectFail(
+      parseContactPayload({ contact_type: "personne", preferred_channel: "pigeon" }, "create"),
+      "preferred_channel",
+    );
+    expectFail(
+      parseContactPayload({ contact_type: "entreprise", siret: "123" }, "create"),
+      "siret",
+    );
+    expectFail(
+      parseContactPayload({ contact_type: "personne", birth_date: "01/02/1990" }, "create"),
+      "birth_date",
+    );
+    expectFail(
+      parseContactPayload({ contact_type: "personne", consent_sms: "oui" }, "create"),
+      "consent_sms",
+    );
+  });
+
+  it("compacte le SIRET (espaces retirés)", () => {
+    const outcome = parseContactPayload(
+      { contact_type: "entreprise", legal_name: "ACME", siret: "123 456 789 01234" },
+      "create",
+    );
+    expect(outcome.ok).toBe(true);
+    if (outcome.ok) expect(outcome.value.fields.siret).toBe("12345678901234");
+  });
+
+  it("country vide à la création → champ omis (défaut France en base)", () => {
+    const outcome = parseContactPayload(
+      { contact_type: "personne", civility: "monsieur", country: "" },
+      "create",
+    );
+    expect(outcome.ok).toBe(true);
+    if (outcome.ok) expect("country" in outcome.value.fields).toBe(false);
+  });
+
+  it("valide role_ids (UUID) et déduplique", () => {
+    expectFail(
+      parseContactPayload({ contact_type: "personne", civility: "madame", role_ids: ["abc"] }, "create"),
+      "role_ids",
+    );
+    const outcome = parseContactPayload(
+      { contact_type: "personne", civility: "madame", role_ids: [UUID_A, UUID_A, UUID_B] },
+      "create",
+    );
+    expect(outcome.ok).toBe(true);
+    if (outcome.ok) expect(outcome.value.roleIds).toEqual([UUID_A, UUID_B]);
+  });
+
+  it("valide les références externes (forme, vides, doublons de source)", () => {
+    expectFail(
+      parseContactPayload(
+        { contact_type: "personne", civility: "madame", external_references: [{ source: "x" }] },
+        "create",
+      ),
+      "source et external_id",
+    );
+    expectFail(
+      parseContactPayload(
+        {
+          contact_type: "personne",
+          civility: "madame",
+          external_references: [{ source: "x", external_id: "1", extra: true }],
+        },
+        "create",
+      ),
+      "Champ inconnu",
+    );
+    expectFail(
+      parseContactPayload(
+        {
+          contact_type: "personne",
+          civility: "madame",
+          external_references: [
+            { source: "portail", external_id: "1" },
+            { source: "portail", external_id: "2" },
+          ],
+        },
+        "create",
+      ),
+      "double",
+    );
+    const outcome = parseContactPayload(
+      {
+        contact_type: "personne",
+        civility: "madame",
+        external_references: [{ source: " portail ", external_id: " USR-1 " }],
+      },
+      "create",
+    );
+    expect(outcome.ok).toBe(true);
+    if (outcome.ok) {
+      expect(outcome.value.externalRefs).toEqual([{ source: "portail", external_id: "USR-1" }]);
+    }
+  });
+});
+
+describe("parseContactPayload — modification", () => {
+  it("refuse contact_type (immuable) et accepte un patch partiel", () => {
+    expectFail(parseContactPayload({ contact_type: "entreprise" }, "update"), "immuable");
+    const outcome = parseContactPayload({ city: "Arles" }, "update");
+    expect(outcome.ok).toBe(true);
+    if (outcome.ok) expect(outcome.value.fields).toEqual({ city: "Arles" });
+  });
+
+  it("refuse un country vide en modification (NOT NULL en base)", () => {
+    expectFail(parseContactPayload({ country: "" }, "update"), "country");
+  });
+
+  it("[] pour role_ids / external_references = tout retirer (différent d'omis)", () => {
+    const outcome = parseContactPayload({ role_ids: [], external_references: [] }, "update");
+    expect(outcome.ok).toBe(true);
+    if (outcome.ok) {
+      expect(outcome.value.roleIds).toEqual([]);
+      expect(outcome.value.externalRefs).toEqual([]);
+    }
+  });
+});
+
+describe("contactInvariantError + mergeContactShape", () => {
+  const personne: ContactShape = {
+    contact_type: "personne",
+    civility: "madame",
+    first_name: "Jeanne",
+    last_name: "Martin",
+    usage_name: null,
+    birth_date: null,
+    legal_name: null,
+    siret: null,
+  };
+  const entreprise: ContactShape = {
+    contact_type: "entreprise",
+    civility: null,
+    first_name: null,
+    last_name: null,
+    usage_name: null,
+    birth_date: null,
+    legal_name: "ACME",
+    siret: "12345678901234",
+  };
+
+  it("accepte les fiches cohérentes", () => {
+    expect(contactInvariantError(personne)).toBeNull();
+    expect(contactInvariantError(entreprise)).toBeNull();
+  });
+
+  it("détecte les incohérences par type", () => {
+    expect(contactInvariantError({ ...personne, civility: null })).toContain("civilité");
+    expect(contactInvariantError({ ...personne, legal_name: "ACME" })).toContain("raison sociale");
+    expect(contactInvariantError({ ...personne, siret: "12345678901234" })).toContain("SIRET");
+    expect(contactInvariantError({ ...entreprise, legal_name: null })).toContain("raison sociale");
+    expect(contactInvariantError({ ...entreprise, civility: "madame" })).toContain("civilité");
+    expect(contactInvariantError({ ...entreprise, first_name: "X" })).toContain("identité");
+  });
+
+  it("mergeContactShape applique le patch sur l'état courant", () => {
+    const current = { ...personne, extra_column: "ignorée" };
+    const merged = mergeContactShape(current, { civility: null });
+    expect(merged.civility).toBeNull();
+    expect(merged.first_name).toBe("Jeanne");
+    expect(contactInvariantError(merged)).toContain("civilité");
+  });
+});
+
+describe("parsePagination", () => {
+  it("défauts et bornes", () => {
+    expect(parsePagination(null, null)).toEqual({ ok: true, limit: 100, offset: 0 });
+    expect(parsePagination("500", "10")).toEqual({ ok: true, limit: 500, offset: 10 });
+    expect(parsePagination("501", null).ok).toBe(false);
+    expect(parsePagination("0", null).ok).toBe(false);
+    expect(parsePagination("abc", null).ok).toBe(false);
+    expect(parsePagination(null, "-1").ok).toBe(false);
+  });
+});
+
+describe("parseContactPayload — relations", () => {
+  it("accepte un tableau { related_contact_id, role_id } et déduplique les paires", () => {
+    const outcome = parseContactPayload(
+      {
+        relations: [
+          { related_contact_id: UUID_A, role_id: UUID_B },
+          { related_contact_id: UUID_A, role_id: UUID_B },
+        ],
+      },
+      "update",
+    );
+    expect(outcome.ok).toBe(true);
+    if (outcome.ok) {
+      expect(outcome.value.relations).toEqual([{ related_contact_id: UUID_A, role_id: UUID_B }]);
+    }
+  });
+
+  it("[] = tout retirer ; absent = ne pas toucher", () => {
+    const cleared = parseContactPayload({ relations: [] }, "update");
+    expect(cleared.ok && cleared.value.relations).toEqual([]);
+    const untouched = parseContactPayload({ email: "a@b.fr" }, "update");
+    expect(untouched.ok && untouched.value.relations).toBeUndefined();
+  });
+
+  it("refuse les formes invalides", () => {
+    expect(parseContactPayload({ relations: "x" }, "update").ok).toBe(false);
+    expect(parseContactPayload({ relations: [{ related_contact_id: "nope", role_id: UUID_B }] }, "update").ok).toBe(false);
+    expect(parseContactPayload({ relations: [{ related_contact_id: UUID_A }] }, "update").ok).toBe(false);
+    expect(
+      parseContactPayload(
+        { relations: [{ related_contact_id: UUID_A, role_id: UUID_B, extra: 1 }] },
+        "update",
+      ).ok,
+    ).toBe(false);
+  });
+});
+
+describe("helpers", () => {
+  it("isUuid", () => {
+    expect(isUuid(UUID_A)).toBe(true);
+    expect(isUuid("pas-un-uuid")).toBe(false);
+  });
+
+  it("escapeIlikePattern neutralise % _ et \\", () => {
+    expect(escapeIlikePattern("100%_a\\b")).toBe("100\\%\\_a\\\\b");
+  });
+});
