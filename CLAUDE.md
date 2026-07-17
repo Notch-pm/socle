@@ -110,7 +110,7 @@ exécutables par `authenticated` : le RLS les évalue avec les droits de l'appel
 - `users`, `user_organizations` (jointure user↔org + `role`).
 - `categories`, `procedures`, `organization_procedures` (catalogue de démarches).
 - `smtp_settings` (SMTP par organisation).
-- `api_keys` (clés de l'API publique en lecture seule, rattachées à une racine — voir feature).
+- `api_keys` (clés d'API rattachées à une racine, ou **clé plateforme** — `organization_id` NULL, périmètre global, liaison unique avec Clara — voir feature).
 - `contacts`, `contact_roles`, `contact_role_assignments`, `contact_external_references`
   (référentiel des usagers — voir feature).
 - `quartiers` (découpage du territoire par racine, polygones PostGIS — voir feature).
@@ -308,8 +308,12 @@ avec **`verify_jwt = false`** (l'auth est portée par la fonction, pas par la pa
 - **Authentification = clé API** en `Authorization: Bearer <clé>`. Table `api_keys` (secret **haché
   SHA-256** dans `key_hash`, jamais en clair ; `key_prefix` affiché pour repérage ; `expires_at`,
   `revoked_at`, `last_used_at`). Une clé est **rattachée à une organisation principale (racine)** —
-  trigger `enforce_api_key_root_org` (calqué sur `enforce_procedure_root_org`). RLS `api_keys` =
-  `is_super_admin()` pour tout (gestion super admin uniquement).
+  trigger `enforce_api_key_root_org` (calqué sur `enforce_procedure_root_org`) — ou **plateforme**
+  (`organization_id` NULL, autorisé depuis le 2026-07-17) : périmètre = **toutes** les organisations,
+  toutes racines confondues — c'est la liaison unique avec Clara (une clé, deux plateformes
+  multi-tenant). Les géométries de quartiers exigent alors le paramètre `organization_id`.
+  RLS `api_keys` = `is_super_admin()` pour tout (gestion super admin uniquement — NB : l'UI liste
+  les clés par racine, une clé plateforme n'y apparaît pas).
 - **Isolation** : la fonction lit avec la **service role** (hors RLS) mais **restreint chaque requête
   au sous-arbre** de l'org de la clé, via `public.org_subtree_ids(root uuid) returns uuid[]`
   (récursif, `SECURITY INVOKER`, `EXECUTE` révoqué de `anon`/`authenticated`, accordé à
@@ -395,9 +399,11 @@ est portée par la fonction). Permet de **consulter, créer, modifier, archiver*
   (colonne `scopes` ; les clés `read` → 403 : les usagers sont des données personnelles). Les
   scopes se choisissent à la création de clé (`ApiKeyFormDialog`, switches « Référentiel
   (lecture) » / « Usagers (lecture + écriture) ») et s'affichent en badges (`ApiKeysSection`).
-- **Isolation** : service role (hors RLS) mais chaque requête bornée par
-  `organization_id = organisation (racine) de la clé` — égalité stricte, pas de sous-arbre (les
-  contacts sont rattachés aux racines). **Vérifiée bout en bout** (2026-07-15, 32 assertions :
+- **Isolation** : service role (hors RLS) mais chaque requête bornée à une organisation **racine**
+  (les contacts y sont rattachés) — égalité stricte, pas de sous-arbre. Clé liée :
+  `organization_id = organisation de la clé`. Clé **plateforme** : la racine servie est celle de
+  l'organisation portée par l'en-tête **`X-Organization-Id`** (requis, 400 sinon ;
+  `resolveRootOrgId` remonte les `parent_id`, protégé des cycles). **Vérifiée bout en bout** (2026-07-15, 32 assertions :
   cross-tenant 404/liste vide, 401/403, conflits 409, invariants 400, archive/restore, données de
   test nettoyées).
 - **Endpoints** (préfixe `/v1`) : `contacts` GET (filtres `type`, `status`, `search` sur
