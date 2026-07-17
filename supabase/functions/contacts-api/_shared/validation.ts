@@ -56,6 +56,9 @@ const ALLOWED_KEYS = new Set<string>([
   "birth_date",
   "consent_email",
   "consent_sms",
+  "address_lat",
+  "address_lon",
+  "quartier_id",
   "role_ids",
   "external_references",
   "relations",
@@ -74,7 +77,7 @@ export interface RelationInput {
 
 export interface ParsedContactInput {
   /** Colonnes de `contacts` à écrire (uniquement celles présentes dans le payload). */
-  fields: Record<string, string | boolean | null>;
+  fields: Record<string, string | number | boolean | null>;
   /** `undefined` = ne pas toucher aux rôles ; `[]` = tout retirer. */
   roleIds: string[] | undefined;
   /** `undefined` = ne pas toucher aux références ; `[]` = tout retirer. */
@@ -129,7 +132,7 @@ export function parseContactPayload(body: unknown, mode: "create" | "update"): P
     }
   }
 
-  const fields: Record<string, string | boolean | null> = {};
+  const fields: Record<string, string | number | boolean | null> = {};
 
   // --- contact_type : requis à la création, immuable ensuite ---
   if (mode === "create") {
@@ -190,6 +193,40 @@ export function parseContactPayload(body: unknown, mode: "create" | "update"): P
       return fail(`${key} doit être un booléen.`);
     }
     fields[key] = input[key] as boolean;
+  }
+
+  // --- Coordonnées géographiques (WGS 84) ---
+  // Fournies par un consommateur qui géocode lui-même (ex. autocomplétion
+  // d'adresse BAN) ; sinon l'API géocode côté serveur quand l'adresse change.
+  const COORD_BOUNDS = { address_lat: 90, address_lon: 180 } as const;
+  for (const key of ["address_lat", "address_lon"] as const) {
+    if (!(key in input)) continue;
+    const value = input[key];
+    if (value === null) {
+      fields[key] = null;
+      continue;
+    }
+    if (typeof value !== "number" || !Number.isFinite(value) || Math.abs(value) > COORD_BOUNDS[key]) {
+      return fail(`${key} invalide : nombre entre -${COORD_BOUNDS[key]} et ${COORD_BOUNDS[key]} attendu.`);
+    }
+    fields[key] = value;
+  }
+
+  // --- Quartier ---
+  // `quartier_id` non nul = assignation **manuelle** (protégée du recalcul :
+  // quartier_auto passe à false) ; `null` = retour à l'assignation
+  // **automatique** d'après les coordonnées (recalcul immédiat par trigger).
+  if ("quartier_id" in input) {
+    const value = input.quartier_id;
+    if (value === null) {
+      fields.quartier_id = null;
+      fields.quartier_auto = true;
+    } else if (typeof value === "string" && isUuid(value)) {
+      fields.quartier_id = value;
+      fields.quartier_auto = false;
+    } else {
+      return fail("quartier_id invalide : UUID de quartier, ou null pour l'assignation automatique.");
+    }
   }
 
   // --- Rôles ---
@@ -343,6 +380,18 @@ export function contactInvariantError(shape: ContactShape): string | null {
   return null;
 }
 
+/**
+ * Cohérence des coordonnées sur l'état **fusionné** : les deux, ou aucune —
+ * une latitude seule ne peut rattacher aucun quartier et signale une erreur
+ * d'intégration chez le consommateur.
+ */
+export function coordinatesPairError(lat: unknown, lon: unknown): string | null {
+  if ((lat == null) !== (lon == null)) {
+    return "address_lat et address_lon vont ensemble (fournir les deux, ou les deux à null).";
+  }
+  return null;
+}
+
 /** Bornes de pagination de la liste (défaut 100, maximum 500). */
 export const DEFAULT_LIMIT = 100;
 export const MAX_LIMIT = 500;
@@ -372,4 +421,210 @@ export function parsePagination(limitRaw: string | null, offsetRaw: string | nul
 /** Échappe `%`, `_` et `\` pour un motif `ilike` sûr. */
 export function escapeIlikePattern(term: string): string {
   return term.replace(/[\\%_]/g, (c) => `\\${c}`);
+}
+
+/**
+ * Numéro de téléphone réduit à ses chiffres significatifs — **miroir exact**
+ * de la fonction SQL `normalize_phone` (colonnes générées
+ * `mobile_phone_normalized` / `landline_phone_normalized`) : chiffres seuls,
+ * indicatif France (`+33` / `0033`) et `0` initial retirés. « +33 6 12 34 56 78 »,
+ * « 0033612345678 » et « 06 12 34 56 78 » donnent tous « 612345678 ».
+ */
+export function normalizePhoneNumber(raw: string): string | null {
+  let digits = raw.replace(/\D/g, "");
+  if (digits.length === 13 && digits.startsWith("0033")) {
+    digits = digits.slice(4);
+  } else if (digits.length === 11 && digits.startsWith("33")) {
+    digits = digits.slice(2);
+  }
+  if (digits.length === 10 && digits.startsWith("0")) {
+    digits = digits.slice(1);
+  }
+  return digits === "" ? null : digits;
+}
+
+/** Bornes du rapprochement d'identités (POST /v1/contacts/match). */
+export const MATCH_DEFAULT_LIMIT = 5;
+export const MATCH_MAX_LIMIT = 20;
+export const MATCH_MAX_PHONES = 10;
+
+/** Motifs de rapprochement possibles (vocabulaire du contrat, documenté OpenAPI). */
+export const MATCH_REASONS = [
+  "email",
+  "phone",
+  "siret",
+  "name_exact",
+  "name_similar",
+  "birth_date",
+] as const;
+
+/** Identité partielle normalisée, prête pour la RPC `match_contacts`. */
+export interface MatchInput {
+  contact_type: string | null;
+  first_name: string | null;
+  last_name: string | null;
+  usage_name: string | null;
+  legal_name: string | null;
+  /** Chiffres seuls (la RPC compare sur les chiffres). */
+  siret: string | null;
+  birth_date: string | null;
+  email: string | null;
+  /** Numéros normalisés (chiffres significatifs), dédoublonnés. */
+  phones: string[];
+  /** `"active"` (défaut) | `"archived"` | `null` = tous les statuts. */
+  status: string | null;
+  exclude_ids: string[];
+  limit: number;
+}
+
+export type MatchParseOutcome =
+  | { ok: true; value: MatchInput }
+  | { ok: false; message: string };
+
+const MATCH_TEXT_FIELDS = [
+  "first_name",
+  "last_name",
+  "usage_name",
+  "legal_name",
+  "email",
+] as const;
+
+const MATCH_ALLOWED_KEYS = new Set<string>([
+  "contact_type",
+  ...MATCH_TEXT_FIELDS,
+  "siret",
+  "birth_date",
+  "phones",
+  "status",
+  "exclude_ids",
+  "limit",
+]);
+
+/**
+ * Analyse et normalise le payload de `POST /v1/contacts/match` : identité
+ * partielle, tous champs optionnels, mais **au moins un critère exploitable**
+ * (email, téléphone, SIRET, nom de famille/d'usage, raison sociale ou date de
+ * naissance — un prénom seul ne rapproche rien). Whitelist stricte des clés,
+ * comme `parseContactPayload`.
+ */
+export function parseMatchPayload(body: unknown): MatchParseOutcome {
+  if (typeof body !== "object" || body === null || Array.isArray(body)) {
+    return { ok: false, message: "Le corps de la requête doit être un objet JSON." };
+  }
+  const input = body as Record<string, unknown>;
+
+  for (const key of Object.keys(input)) {
+    if (!MATCH_ALLOWED_KEYS.has(key)) {
+      return { ok: false, message: `Champ inconnu : ${key}.` };
+    }
+  }
+
+  const value: MatchInput = {
+    contact_type: null,
+    first_name: null,
+    last_name: null,
+    usage_name: null,
+    legal_name: null,
+    siret: null,
+    birth_date: null,
+    email: null,
+    phones: [],
+    status: "active",
+    exclude_ids: [],
+    limit: MATCH_DEFAULT_LIMIT,
+  };
+
+  if (input.contact_type != null) {
+    if (
+      typeof input.contact_type !== "string" ||
+      !(CONTACT_TYPES as readonly string[]).includes(input.contact_type)
+    ) {
+      return { ok: false, message: `contact_type invalide (valeurs : ${CONTACT_TYPES.join(", ")}).` };
+    }
+    value.contact_type = input.contact_type;
+  }
+
+  for (const key of MATCH_TEXT_FIELDS) {
+    if (!(key in input)) continue;
+    const normalized = normalizeText(input[key], key);
+    if (!normalized.ok) return { ok: false, message: normalized.message };
+    value[key] = normalized.value;
+  }
+
+  if (input.siret != null) {
+    if (typeof input.siret !== "string") {
+      return { ok: false, message: "Le champ siret doit être une chaîne de caractères." };
+    }
+    value.siret = input.siret.replace(/\D/g, "") || null;
+  }
+
+  if (input.birth_date != null) {
+    if (typeof input.birth_date !== "string" || !isValidIsoDate(input.birth_date)) {
+      return { ok: false, message: "birth_date invalide : format AAAA-MM-JJ attendu." };
+    }
+    value.birth_date = input.birth_date;
+  }
+
+  if (input.phones != null) {
+    if (!Array.isArray(input.phones) || input.phones.some((p) => typeof p !== "string")) {
+      return { ok: false, message: "phones doit être un tableau de numéros (chaînes, formats libres)." };
+    }
+    if (input.phones.length > MATCH_MAX_PHONES) {
+      return { ok: false, message: `phones : ${MATCH_MAX_PHONES} numéros maximum.` };
+    }
+    const normalized = (input.phones as string[])
+      .map(normalizePhoneNumber)
+      .filter((p): p is string => p !== null);
+    value.phones = Array.from(new Set(normalized));
+  }
+
+  if ("status" in input) {
+    const status = input.status;
+    if (status === null) {
+      value.status = null; // explicite : tous les statuts, archivés compris
+    } else if (status === "active" || status === "archived") {
+      value.status = status;
+    } else {
+      return { ok: false, message: "status invalide (active | archived, ou null pour tous)." };
+    }
+  }
+
+  if (input.exclude_ids != null) {
+    const ids = input.exclude_ids;
+    if (!Array.isArray(ids) || ids.some((v) => typeof v !== "string" || !isUuid(v))) {
+      return { ok: false, message: "exclude_ids doit être un tableau d'identifiants (UUID)." };
+    }
+    value.exclude_ids = Array.from(new Set(ids as string[]));
+  }
+
+  if (input.limit != null) {
+    if (
+      typeof input.limit !== "number" ||
+      !Number.isInteger(input.limit) ||
+      input.limit < 1 ||
+      input.limit > MATCH_MAX_LIMIT
+    ) {
+      return { ok: false, message: `limit invalide (entier entre 1 et ${MATCH_MAX_LIMIT}).` };
+    }
+    value.limit = input.limit;
+  }
+
+  const hasCriterion =
+    value.email !== null ||
+    value.phones.length > 0 ||
+    value.siret !== null ||
+    value.last_name !== null ||
+    value.usage_name !== null ||
+    value.legal_name !== null ||
+    value.birth_date !== null;
+  if (!hasCriterion) {
+    return {
+      ok: false,
+      message:
+        "Au moins un critère d'identité est requis : email, phones, siret, last_name, " +
+        "usage_name, legal_name ou birth_date (un prénom seul ne suffit pas).",
+    };
+  }
+
+  return { ok: true, value };
 }

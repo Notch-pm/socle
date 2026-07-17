@@ -6,10 +6,14 @@ ajouté à `GET /v1/contacts` dans ce chantier ; le reste est à prioriser.
 
 ## Recherche / lecture
 
-- **Recherche par téléphone** (mobile ou fixe, normalisation des espaces/points)
-  et **par SIRET** — aujourd'hui seuls `display_name` (search) et `email` sont
-  interrogeables ; le rapprochement d'un expéditeur qui n'écrit pas depuis son
-  email connu reste manuel.
+- **Recherche par téléphone** et **rapprochement d'identités** : livrés le
+  2026-07-17 — filtre `phone` (normalisé, mobile + fixe) sur `GET /v1/contacts`
+  et endpoint `POST /v1/contacts/match` (email, téléphone, SIRET, noms exacts et
+  similaires — pg_trgm/unaccent —, date de naissance en renfort ; candidats
+  scorés avec `reasons`). Voir la feature « API usagers » de CLAUDE.md. Clara
+  peut remplacer son scoring local (`src/lib/contact-duplicates.ts`) par un
+  appel unique à `/match`. Un filtre `siret` dédié sur la liste reste possible
+  si un consommateur en a besoin (le SIRET est déjà interrogeable via `/match`).
 - **Pagination avec total** (`X-Total-Count` ou enveloppe `{items, total}`) et/ou
   curseur — l'annuaire Clara pagine à l'aveugle (bouton « Suivant » tant que la
   page est pleine).
@@ -18,9 +22,11 @@ ajouté à `GET /v1/contacts` dans ce chantier ; le reste est à prioriser.
 
 ## Modèle
 
-- **Quartiers + géocodage** : traité comme phase 2 dédiée — voir
-  `references/clara-quartiers/README.md` (lat/lon sur contacts, table quartiers,
-  rattachement automatique, filtre et stats par quartier, UI d'import GeoJSON).
+- **Quartiers + géocodage** : livrés le 2026-07-17 (DB + UI Socle + API — feature
+  « Quartiers » de CLAUDE.md) : quartiers via `GET /v1/quartiers` (public-api),
+  géocodage BAN au create/patch, `quartier_id` dans la fiche et en filtre
+  (contacts-api). Restent : consommation Clara, et **stats par quartier** non
+  exposées par l'API (RPC `stats_contacts_by_quartier` disponible).
 - **État civil étendu** (ex-« fichier domiciliaire » de Clara) : date de décès,
   situation familiale, dates de mariage/PACS, dates d'arrivée/départ dans la
   commune, nationalité — supprimés de Clara sans équivalent Socle à ce jour.

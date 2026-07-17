@@ -23,6 +23,10 @@ function nullableStr(value: unknown): string | null {
   return typeof value === "string" ? value : null;
 }
 
+function nullableNum(value: unknown): number | null {
+  return typeof value === "number" ? value : null;
+}
+
 export function serializeContactRoleRef(row: Row): ContactRoleRefDto {
   return { id: str(row.id), name: str(row.name) };
 }
@@ -79,6 +83,10 @@ export function serializeContact(
     postal_code: nullableStr(row.postal_code),
     city: nullableStr(row.city),
     country: str(row.country),
+    address_lat: nullableNum(row.address_lat),
+    address_lon: nullableNum(row.address_lon),
+    quartier_id: nullableStr(row.quartier_id),
+    quartier_auto: Boolean(row.quartier_auto),
     preferred_channel: nullableStr(row.preferred_channel),
     consent_email: Boolean(row.consent_email),
     consent_sms: Boolean(row.consent_sms),

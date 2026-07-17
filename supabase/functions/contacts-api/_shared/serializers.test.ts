@@ -57,6 +57,24 @@ describe("serializeContact", () => {
     expect(dto.roles).toEqual([]);
     expect(dto.external_references).toEqual([]);
   });
+
+  it("expose les coordonnées et le quartier (null par défaut, auto coercé en booléen)", () => {
+    const bare = serializeContact(row, [], []);
+    expect(bare.address_lat).toBeNull();
+    expect(bare.address_lon).toBeNull();
+    expect(bare.quartier_id).toBeNull();
+    expect(bare.quartier_auto).toBe(false);
+
+    const located = serializeContact(
+      { ...row, address_lat: 43.6766, address_lon: 4.6278, quartier_id: "q-1", quartier_auto: true },
+      [],
+      [],
+    );
+    expect(located.address_lat).toBe(43.6766);
+    expect(located.address_lon).toBe(4.6278);
+    expect(located.quartier_id).toBe("q-1");
+    expect(located.quartier_auto).toBe(true);
+  });
 });
 
 describe("serializeContactRole", () => {

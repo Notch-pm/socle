@@ -151,6 +151,62 @@ export type Database = {
           },
         ]
       }
+      contact_relations: {
+        Row: {
+          contact_id: string
+          created_at: string
+          id: string
+          organization_id: string
+          related_contact_id: string
+          role_id: string
+        }
+        Insert: {
+          contact_id: string
+          created_at?: string
+          id?: string
+          organization_id: string
+          related_contact_id: string
+          role_id: string
+        }
+        Update: {
+          contact_id?: string
+          created_at?: string
+          id?: string
+          organization_id?: string
+          related_contact_id?: string
+          role_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "contact_relations_contact_id_fkey"
+            columns: ["contact_id"]
+            isOneToOne: false
+            referencedRelation: "contacts"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "contact_relations_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "contact_relations_related_contact_id_fkey"
+            columns: ["related_contact_id"]
+            isOneToOne: false
+            referencedRelation: "contacts"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "contact_relations_role_id_fkey"
+            columns: ["role_id"]
+            isOneToOne: false
+            referencedRelation: "contact_roles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       contact_role_assignments: {
         Row: {
           contact_id: string
@@ -218,8 +274,10 @@ export type Database = {
       }
       contacts: {
         Row: {
+          address_lat: number | null
           address_line1: string | null
           address_line2: string | null
+          address_lon: number | null
           birth_date: string | null
           city: string | null
           civility: string | null
@@ -234,20 +292,26 @@ export type Database = {
           id: string
           internal_notes: string | null
           landline_phone: string | null
+          landline_phone_normalized: string | null
           last_name: string | null
           legal_name: string | null
           mobile_phone: string | null
+          mobile_phone_normalized: string | null
           organization_id: string
           postal_code: string | null
           preferred_channel: string | null
+          quartier_auto: boolean
+          quartier_id: string | null
           siret: string | null
           status: string
           updated_at: string
           usage_name: string | null
         }
         Insert: {
+          address_lat?: number | null
           address_line1?: string | null
           address_line2?: string | null
+          address_lon?: number | null
           birth_date?: string | null
           city?: string | null
           civility?: string | null
@@ -262,20 +326,26 @@ export type Database = {
           id?: string
           internal_notes?: string | null
           landline_phone?: string | null
+          landline_phone_normalized?: string | null
           last_name?: string | null
           legal_name?: string | null
           mobile_phone?: string | null
+          mobile_phone_normalized?: string | null
           organization_id: string
           postal_code?: string | null
           preferred_channel?: string | null
+          quartier_auto?: boolean
+          quartier_id?: string | null
           siret?: string | null
           status?: string
           updated_at?: string
           usage_name?: string | null
         }
         Update: {
+          address_lat?: number | null
           address_line1?: string | null
           address_line2?: string | null
+          address_lon?: number | null
           birth_date?: string | null
           city?: string | null
           civility?: string | null
@@ -290,12 +360,16 @@ export type Database = {
           id?: string
           internal_notes?: string | null
           landline_phone?: string | null
+          landline_phone_normalized?: string | null
           last_name?: string | null
           legal_name?: string | null
           mobile_phone?: string | null
+          mobile_phone_normalized?: string | null
           organization_id?: string
           postal_code?: string | null
           preferred_channel?: string | null
+          quartier_auto?: boolean
+          quartier_id?: string | null
           siret?: string | null
           status?: string
           updated_at?: string
@@ -307,6 +381,13 @@ export type Database = {
             columns: ["organization_id"]
             isOneToOne: false
             referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "contacts_quartier_id_fkey"
+            columns: ["quartier_id"]
+            isOneToOne: false
+            referencedRelation: "quartiers"
             referencedColumns: ["id"]
           },
         ]
@@ -522,6 +603,47 @@ export type Database = {
           },
         ]
       }
+      quartiers: {
+        Row: {
+          color: string | null
+          created_at: string
+          created_by: string | null
+          geom: unknown
+          id: string
+          name: string
+          organization_id: string
+          updated_at: string
+        }
+        Insert: {
+          color?: string | null
+          created_at?: string
+          created_by?: string | null
+          geom: unknown
+          id?: string
+          name: string
+          organization_id: string
+          updated_at?: string
+        }
+        Update: {
+          color?: string | null
+          created_at?: string
+          created_by?: string | null
+          geom?: unknown
+          id?: string
+          name?: string
+          organization_id?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "quartiers_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       smtp_settings: {
         Row: {
           created_at: string
@@ -640,14 +762,94 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
+      contacts_outside_quartiers: {
+        Args: { p_org_id: string }
+        Returns: {
+          address_lat: number
+          address_lon: number
+          display_name: string
+          id: string
+        }[]
+      }
+      create_quartier_from_geojson: {
+        Args: {
+          p_color: string
+          p_geojson: Json
+          p_name: string
+          p_org_id: string
+        }
+        Returns: string
+      }
+      create_quartiers_batch: {
+        Args: { p_items: Json; p_org_id: string }
+        Returns: {
+          quartier_id: string
+          quartier_name: string
+        }[]
+      }
       has_org_access: { Args: { org_id: string }; Returns: boolean }
+      immutable_unaccent: { Args: { value: string }; Returns: string }
       is_admin_of_self_or_ancestor: {
         Args: { org_id: string }
         Returns: boolean
       }
       is_org_admin: { Args: { org_id: string }; Returns: boolean }
       is_super_admin: { Args: never; Returns: boolean }
+      list_quartiers_geojson: {
+        Args: { p_org_id: string }
+        Returns: {
+          color: string
+          geojson: Json
+          id: string
+          name: string
+        }[]
+      }
+      match_contacts: {
+        Args: {
+          p_birth_date?: string
+          p_contact_type?: string
+          p_email?: string
+          p_exclude_ids?: string[]
+          p_first_name?: string
+          p_last_name?: string
+          p_legal_name?: string
+          p_limit?: number
+          p_org_id: string
+          p_phones?: string[]
+          p_siret?: string
+          p_status?: string
+          p_usage_name?: string
+        }
+        Returns: {
+          contact_id: string
+          reasons: string[]
+          score: number
+        }[]
+      }
+      match_full_name: {
+        Args: { family: string; given: string }
+        Returns: string
+      }
+      normalize_name: { Args: { value: string }; Returns: string }
+      normalize_phone: { Args: { raw: string }; Returns: string }
       org_subtree_ids: { Args: { root: string }; Returns: string[] }
+      quartier_for_point: {
+        Args: { p_lat: number; p_lon: number; p_org_id: string }
+        Returns: string
+      }
+      recalculate_contact_quartiers: {
+        Args: { p_org_id: string }
+        Returns: undefined
+      }
+      stats_contacts_by_quartier: {
+        Args: { p_org_id: string }
+        Returns: {
+          color: string
+          count: number
+          quartier_id: string
+          quartier_name: string
+        }[]
+      }
     }
     Enums: {
       [_ in never]: never

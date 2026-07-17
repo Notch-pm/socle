@@ -63,6 +63,13 @@ export interface ContactDto {
   postal_code: string | null;
   city: string | null;
   country: string;
+  /** Coordonnées WGS 84 de l'adresse (géocodage BAN, ou fournies à l'écriture). */
+  address_lat: number | null;
+  address_lon: number | null;
+  /** Quartier de rattachement (voir /v1/quartiers de l'API référentiel). */
+  quartier_id: string | null;
+  /** true = rattachement automatique d'après l'adresse ; false = forcé manuellement. */
+  quartier_auto: boolean;
   preferred_channel: string | null;
   consent_email: boolean;
   consent_sms: boolean;
@@ -76,6 +83,31 @@ export interface ContactDto {
   reverse_relations: ContactRelationDto[];
   created_at: string | null;
   updated_at: string | null;
+}
+
+/**
+ * Motif de rapprochement (POST /v1/contacts/match) : `email` / `phone` /
+ * `siret` = égalités normalisées ; `name_exact` = nom complet normalisé
+ * identique (sans accents ni casse ni ponctuation) ; `name_similar` =
+ * similarité trigram ; `birth_date` = renfort (jamais suffisant seul).
+ */
+export type ContactMatchReason =
+  | "email"
+  | "phone"
+  | "siret"
+  | "name_exact"
+  | "name_similar"
+  | "birth_date";
+
+/**
+ * Candidat au rapprochement d'identités : la fiche **complète** (même
+ * sérialiseur que `GET /v1/contacts`), un score de classement (à ne comparer
+ * qu'au sein d'une même réponse) et les motifs du rapprochement.
+ */
+export interface ContactMatchDto {
+  contact: ContactDto;
+  score: number;
+  reasons: ContactMatchReason[];
 }
 
 /** Entrée du catalogue de rôles de l'organisation. */

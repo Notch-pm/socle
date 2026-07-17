@@ -26,15 +26,25 @@ import {
 import {
   CONTACT_TYPES,
   contactInvariantError,
+  coordinatesPairError,
   escapeIlikePattern,
   hasContactsScope,
   isUuid,
   mergeContactShape,
+  normalizePhoneNumber,
   parseContactPayload,
+  parseMatchPayload,
   parsePagination,
   type ExternalRefInput,
   type RelationInput,
 } from "./_shared/validation.ts";
+import {
+  addressTouched,
+  BAN_SEARCH_URL,
+  buildGeocodeQuery,
+  parseBanResult,
+  type GeocodableAddress,
+} from "./_shared/geocoding.ts";
 import { errorResponse, jsonResponse } from "./_shared/errors.ts";
 import { buildOpenApiDocument } from "./_shared/openapi.ts";
 
@@ -208,6 +218,53 @@ async function fetchContactDto(admin: AdminClient, orgId: string, id: string) {
     outByContact.get(id) ?? [],
     inByContact.get(id) ?? [],
   );
+}
+
+/**
+ * Géocode une adresse via la BAN (Géoplateforme IGN). **Best-effort** : toute
+ * erreur (réseau, quota, réponse malformée, score trop faible) renvoie `null`
+ * — l'écriture de la fiche n'échoue jamais à cause du géocodage.
+ */
+async function geocodeAddress(query: string): Promise<{ lat: number; lon: number } | null> {
+  try {
+    const params = new URLSearchParams({ q: query, limit: "1" });
+    const res = await fetch(`${BAN_SEARCH_URL}?${params.toString()}`, {
+      signal: AbortSignal.timeout(5000),
+    });
+    if (!res.ok) return null;
+    return parseBanResult(await res.json());
+  } catch (_) {
+    return null;
+  }
+}
+
+/**
+ * Adresse géocodable sur l'état fusionné (fiche courante + patch) — à la
+ * création, passer `{}` comme fiche courante.
+ */
+function mergedAddress(current: Row, patch: Record<string, unknown>): GeocodableAddress {
+  const pick = (key: string): string | null => {
+    const value = key in patch ? patch[key] : current[key];
+    return typeof value === "string" ? value : null;
+  };
+  return {
+    address_line1: pick("address_line1"),
+    postal_code: pick("postal_code"),
+    city: pick("city"),
+    country: pick("country"),
+  };
+}
+
+/** Vérifie que le quartier existe dans l'organisation (catalogue /v1/quartiers). */
+async function checkQuartierId(admin: AdminClient, orgId: string, quartierId: string): Promise<boolean> {
+  const { data, error } = await admin
+    .from("quartiers")
+    .select("id")
+    .eq("organization_id", orgId)
+    .eq("id", quartierId)
+    .maybeSingle();
+  if (error) throw error;
+  return data !== null;
 }
 
 /** Vérifie que tous les rôles existent dans le catalogue de l'organisation. */
@@ -456,6 +513,14 @@ Deno.serve(async (req: Request) => {
         if (status !== null && status !== "active" && status !== "archived") {
           return errorResponse("bad_request", "Paramètre status invalide (active | archived).", corsHeaders);
         }
+        const quartierId = url.searchParams.get("quartier_id");
+        if (quartierId !== null && quartierId !== "null" && !isUuid(quartierId)) {
+          return errorResponse(
+            "bad_request",
+            "Paramètre quartier_id invalide (UUID de quartier, ou null pour les usagers sans quartier).",
+            corsHeaders,
+          );
+        }
         const pagination = parsePagination(url.searchParams.get("limit"), url.searchParams.get("offset"));
         if (!pagination.ok) {
           return errorResponse("bad_request", pagination.message, corsHeaders);
@@ -483,6 +548,8 @@ Deno.serve(async (req: Request) => {
         let query = admin.from("contacts").select("*").eq("organization_id", orgId);
         if (type !== null) query = query.eq("contact_type", type);
         if (status !== null) query = query.eq("status", status);
+        if (quartierId === "null") query = query.is("quartier_id", null);
+        else if (quartierId !== null) query = query.eq("quartier_id", quartierId);
         const search = url.searchParams.get("search");
         if (search !== null && search.trim() !== "") {
           query = query.ilike("display_name", `%${escapeIlikePattern(search.trim())}%`);
@@ -492,6 +559,20 @@ Deno.serve(async (req: Request) => {
         const email = url.searchParams.get("email");
         if (email !== null && email.trim() !== "") {
           query = query.ilike("email", escapeIlikePattern(email.trim()));
+        }
+        // Filtre téléphone : égalité sur les chiffres significatifs (indicatif
+        // France et 0 initial retirés — colonnes générées normalisées), le
+        // numéro cherché est comparé au mobile ET au fixe.
+        const phone = url.searchParams.get("phone");
+        if (phone !== null && phone.trim() !== "") {
+          const normalizedPhone = normalizePhoneNumber(phone);
+          if (normalizedPhone === null) {
+            return errorResponse("bad_request", "Paramètre phone invalide (aucun chiffre).", corsHeaders);
+          }
+          // Chiffres seuls après normalisation → sûr dans la syntaxe .or().
+          query = query.or(
+            `mobile_phone_normalized.eq.${normalizedPhone},landline_phone_normalized.eq.${normalizedPhone}`,
+          );
         }
         if (idFilter !== null) query = query.in("id", idFilter);
         const { data, error } = await query
@@ -534,6 +615,29 @@ Deno.serve(async (req: Request) => {
       const invariant = contactInvariantError(mergeContactShape({}, fields));
       if (invariant) return errorResponse("bad_request", invariant, corsHeaders);
 
+      // Coordonnées fournies → cohérence de la paire ; sinon géocodage BAN
+      // best-effort de l'adresse (le trigger DB rattache ensuite le quartier).
+      if ("address_lat" in fields || "address_lon" in fields) {
+        const pairErr = coordinatesPairError(fields.address_lat ?? null, fields.address_lon ?? null);
+        if (pairErr) return errorResponse("bad_request", pairErr, corsHeaders);
+      } else {
+        const geocodeQuery = buildGeocodeQuery(mergedAddress({}, fields));
+        if (geocodeQuery) {
+          const position = await geocodeAddress(geocodeQuery);
+          if (position) {
+            fields.address_lat = position.lat;
+            fields.address_lon = position.lon;
+          }
+        }
+      }
+      if (typeof fields.quartier_id === "string" && !(await checkQuartierId(admin, orgId, fields.quartier_id))) {
+        return errorResponse(
+          "bad_request",
+          "quartier_id inconnu pour cette organisation (voir /v1/quartiers de l'API référentiel).",
+          corsHeaders,
+        );
+      }
+
       if (roleIds && !(await checkRoleIds(admin, orgId, roleIds))) {
         return errorResponse(
           "bad_request",
@@ -568,6 +672,83 @@ Deno.serve(async (req: Request) => {
 
       const dto = await fetchContactDto(admin, orgId, createdId);
       return jsonResponse(201, dto, corsHeaders);
+    }
+
+    // --- POST /v1/contacts/match : rapprochement d'identités ---------------
+    // **Lecture seule** malgré le POST (le corps porte une identité partielle,
+    // trop riche pour une query string) : aucune fiche n'est créée ni modifiée.
+    // Le rapprochement lui-même vit dans la RPC `match_contacts` (pg_trgm +
+    // unaccent, EXECUTE réservé à service_role), bornée à l'org de la clé.
+    if (segments.length === 3 && segments[2] === "match") {
+      if (req.method !== "POST") {
+        return errorResponse("method_not_allowed", "Seule la méthode POST est autorisée ici.", corsHeaders);
+      }
+      let body: unknown;
+      try {
+        body = await req.json();
+      } catch (_) {
+        return errorResponse("bad_request", "Corps JSON invalide.", corsHeaders);
+      }
+      const parsed = parseMatchPayload(body);
+      if (!parsed.ok) return errorResponse("bad_request", parsed.message, corsHeaders);
+      const input = parsed.value;
+
+      const { data: matches, error: matchErr } = await admin.rpc("match_contacts", {
+        p_org_id: orgId,
+        p_contact_type: input.contact_type,
+        p_first_name: input.first_name,
+        p_last_name: input.last_name,
+        p_usage_name: input.usage_name,
+        p_legal_name: input.legal_name,
+        p_siret: input.siret,
+        p_birth_date: input.birth_date,
+        p_email: input.email,
+        p_phones: input.phones,
+        p_status: input.status,
+        p_exclude_ids: input.exclude_ids,
+        p_limit: input.limit,
+      });
+      if (matchErr) throw matchErr;
+      const candidates = (matches ?? []) as Array<{
+        contact_id: string;
+        score: number;
+        reasons: string[];
+      }>;
+      if (candidates.length === 0) return jsonResponse(200, [], corsHeaders);
+
+      const ids = candidates.map((c) => c.contact_id);
+      const { data: contactRows, error: rowsErr } = await admin
+        .from("contacts")
+        .select("*")
+        .eq("organization_id", orgId)
+        .in("id", ids);
+      if (rowsErr) throw rowsErr;
+      const rowById = new Map(((contactRows ?? []) as Row[]).map((r) => [String(r.id), r]));
+      const [{ rolesByContact, refsByContact }, { outByContact, inByContact }] = await Promise.all([
+        loadRolesAndRefs(admin, ids),
+        loadRelations(admin, ids),
+      ]);
+      return jsonResponse(
+        200,
+        candidates.flatMap((candidate) => {
+          const row = rowById.get(candidate.contact_id);
+          if (!row) return [];
+          return [
+            {
+              contact: serializeContact(
+                row,
+                rolesByContact.get(candidate.contact_id) ?? [],
+                refsByContact.get(candidate.contact_id) ?? [],
+                outByContact.get(candidate.contact_id) ?? [],
+                inByContact.get(candidate.contact_id) ?? [],
+              ),
+              score: candidate.score,
+              reasons: candidate.reasons,
+            },
+          ];
+        }),
+        corsHeaders,
+      );
     }
 
     // --- Endpoints sur une fiche : /v1/contacts/{id}[...] ---
@@ -608,6 +789,29 @@ Deno.serve(async (req: Request) => {
 
       const invariant = contactInvariantError(mergeContactShape(current as Row, fields));
       if (invariant) return errorResponse("bad_request", invariant, corsHeaders);
+
+      // Coordonnées fournies → cohérence de la paire sur l'état fusionné ;
+      // sinon, adresse modifiée → re-géocodage BAN. En cas d'échec, les
+      // coordonnées sont remises à null : des coordonnées périmées
+      // rattacheraient l'usager au quartier de son ancienne adresse.
+      if ("address_lat" in fields || "address_lon" in fields) {
+        const mergedLat = "address_lat" in fields ? fields.address_lat : (current as Row).address_lat;
+        const mergedLon = "address_lon" in fields ? fields.address_lon : (current as Row).address_lon;
+        const pairErr = coordinatesPairError(mergedLat ?? null, mergedLon ?? null);
+        if (pairErr) return errorResponse("bad_request", pairErr, corsHeaders);
+      } else if (addressTouched(fields)) {
+        const geocodeQuery = buildGeocodeQuery(mergedAddress(current as Row, fields));
+        const position = geocodeQuery ? await geocodeAddress(geocodeQuery) : null;
+        fields.address_lat = position?.lat ?? null;
+        fields.address_lon = position?.lon ?? null;
+      }
+      if (typeof fields.quartier_id === "string" && !(await checkQuartierId(admin, orgId, fields.quartier_id))) {
+        return errorResponse(
+          "bad_request",
+          "quartier_id inconnu pour cette organisation (voir /v1/quartiers de l'API référentiel).",
+          corsHeaders,
+        );
+      }
 
       if (roleIds && !(await checkRoleIds(admin, orgId, roleIds))) {
         return errorResponse(

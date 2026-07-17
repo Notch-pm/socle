@@ -1,11 +1,15 @@
 import { describe, expect, it } from "vitest";
 import {
   contactInvariantError,
+  coordinatesPairError,
   escapeIlikePattern,
   hasContactsScope,
   isUuid,
+  MATCH_DEFAULT_LIMIT,
   mergeContactShape,
+  normalizePhoneNumber,
   parseContactPayload,
+  parseMatchPayload,
   parsePagination,
   type ContactShape,
 } from "./validation.ts";
@@ -302,5 +306,155 @@ describe("helpers", () => {
 
   it("escapeIlikePattern neutralise % _ et \\", () => {
     expect(escapeIlikePattern("100%_a\\b")).toBe("100\\%\\_a\\\\b");
+  });
+});
+
+describe("parseContactPayload — coordonnées et quartier", () => {
+  it("accepte des coordonnées numériques valides ou nulles", () => {
+    const outcome = parseContactPayload(
+      { contact_type: "personne", civility: "madame", address_lat: 43.6766, address_lon: 4.6278 },
+      "create",
+    );
+    expect(outcome.ok).toBe(true);
+    if (outcome.ok) {
+      expect(outcome.value.fields.address_lat).toBe(43.6766);
+      expect(outcome.value.fields.address_lon).toBe(4.6278);
+    }
+    const cleared = parseContactPayload({ address_lat: null, address_lon: null }, "update");
+    expect(cleared.ok).toBe(true);
+    if (cleared.ok) {
+      expect(cleared.value.fields.address_lat).toBeNull();
+      expect(cleared.value.fields.address_lon).toBeNull();
+    }
+  });
+
+  it("refuse les coordonnées non numériques ou hors bornes", () => {
+    expectFail(parseContactPayload({ address_lat: "43.6" }, "update"), "address_lat");
+    expectFail(parseContactPayload({ address_lat: 91 }, "update"), "address_lat");
+    expectFail(parseContactPayload({ address_lon: -181 }, "update"), "address_lon");
+    expectFail(parseContactPayload({ address_lon: Number.NaN }, "update"), "address_lon");
+  });
+
+  it("quartier_id non nul = assignation manuelle (quartier_auto passe à false)", () => {
+    const outcome = parseContactPayload({ quartier_id: UUID_A }, "update");
+    expect(outcome.ok).toBe(true);
+    if (outcome.ok) {
+      expect(outcome.value.fields.quartier_id).toBe(UUID_A);
+      expect(outcome.value.fields.quartier_auto).toBe(false);
+    }
+  });
+
+  it("quartier_id null = retour à l'assignation automatique", () => {
+    const outcome = parseContactPayload({ quartier_id: null }, "update");
+    expect(outcome.ok).toBe(true);
+    if (outcome.ok) {
+      expect(outcome.value.fields.quartier_id).toBeNull();
+      expect(outcome.value.fields.quartier_auto).toBe(true);
+    }
+  });
+
+  it("refuse un quartier_id qui n'est pas un UUID", () => {
+    expectFail(parseContactPayload({ quartier_id: "centre-ville" }, "update"), "quartier_id");
+  });
+
+  it("quartier_auto n'est pas pilotable directement (clé inconnue)", () => {
+    expectFail(parseContactPayload({ quartier_auto: true }, "update"), "quartier_auto");
+  });
+});
+
+describe("coordinatesPairError", () => {
+  it("exige les deux coordonnées, ou aucune", () => {
+    expect(coordinatesPairError(43.6, 4.6)).toBeNull();
+    expect(coordinatesPairError(null, null)).toBeNull();
+    expect(coordinatesPairError(43.6, null)).toContain("vont ensemble");
+    expect(coordinatesPairError(null, 4.6)).toContain("vont ensemble");
+  });
+});
+
+function expectMatchFail(outcome: ReturnType<typeof parseMatchPayload>, fragment: string) {
+  expect(outcome.ok).toBe(false);
+  if (!outcome.ok) expect(outcome.message).toContain(fragment);
+}
+
+describe("normalizePhoneNumber", () => {
+  it("réduit les formats français équivalents aux mêmes chiffres significatifs", () => {
+    expect(normalizePhoneNumber("+33 6 12 34 56 78")).toBe("612345678");
+    expect(normalizePhoneNumber("0033612345678")).toBe("612345678");
+    expect(normalizePhoneNumber("06 12 34 56 78")).toBe("612345678");
+    expect(normalizePhoneNumber("06.12.34.56.78")).toBe("612345678");
+    expect(normalizePhoneNumber("04-90-12-34-56")).toBe("490123456");
+  });
+
+  it("laisse les numéros non français en chiffres bruts", () => {
+    expect(normalizePhoneNumber("+41 22 345 67 89")).toBe("41223456789");
+  });
+
+  it("renvoie null quand il n'y a aucun chiffre", () => {
+    expect(normalizePhoneNumber("")).toBeNull();
+    expect(normalizePhoneNumber("abc")).toBeNull();
+  });
+});
+
+describe("parseMatchPayload", () => {
+  it("normalise une identité partielle et applique les défauts", () => {
+    const outcome = parseMatchPayload({
+      first_name: " Jean ",
+      last_name: "Dupont",
+      email: "jean.dupont@example.fr",
+      phones: ["+33 6 12 34 56 78", "06 12 34 56 78", "n/a"],
+      siret: "123 456 789 01234",
+    });
+    expect(outcome.ok).toBe(true);
+    if (outcome.ok) {
+      expect(outcome.value).toMatchObject({
+        first_name: "Jean",
+        last_name: "Dupont",
+        email: "jean.dupont@example.fr",
+        phones: ["612345678"], // normalisés et dédoublonnés, entrée sans chiffre ignorée
+        siret: "12345678901234",
+        status: "active", // défaut : les fiches archivées ne sont pas proposées
+        exclude_ids: [],
+        limit: MATCH_DEFAULT_LIMIT,
+      });
+    }
+  });
+
+  it("rejette les clés inconnues et les corps non-objets", () => {
+    expectMatchFail(parseMatchPayload({ nom: "Dupont" }), "Champ inconnu : nom");
+    expectMatchFail(parseMatchPayload(null), "objet JSON");
+    expectMatchFail(parseMatchPayload([]), "objet JSON");
+  });
+
+  it("exige au moins un critère exploitable (un prénom seul ne suffit pas)", () => {
+    expectMatchFail(parseMatchPayload({}), "Au moins un critère");
+    expectMatchFail(parseMatchPayload({ first_name: "Jean" }), "Au moins un critère");
+    // birth_date est un critère recevable (mais ne rapprochera rien seule).
+    expect(parseMatchPayload({ birth_date: "1980-05-12" }).ok).toBe(true);
+  });
+
+  it("valide contact_type, status, birth_date, exclude_ids et limit", () => {
+    expectMatchFail(parseMatchPayload({ email: "a@b.fr", contact_type: "autre" }), "contact_type");
+    expectMatchFail(parseMatchPayload({ email: "a@b.fr", status: "obsolete" }), "status");
+    expectMatchFail(parseMatchPayload({ birth_date: "12/05/1980" }), "birth_date");
+    expectMatchFail(parseMatchPayload({ email: "a@b.fr", exclude_ids: ["pas-un-uuid"] }), "exclude_ids");
+    expectMatchFail(parseMatchPayload({ email: "a@b.fr", limit: 0 }), "limit");
+    expectMatchFail(parseMatchPayload({ email: "a@b.fr", limit: 21 }), "limit");
+    expectMatchFail(parseMatchPayload({ phones: "0612345678" }), "phones");
+  });
+
+  it("status null = tous les statuts (demande explicite d'inclure les archivés)", () => {
+    const outcome = parseMatchPayload({ email: "a@b.fr", status: null });
+    expect(outcome.ok).toBe(true);
+    if (outcome.ok) expect(outcome.value.status).toBeNull();
+  });
+
+  it("dédoublonne exclude_ids et accepte une identité de structure", () => {
+    const outcome = parseMatchPayload({
+      contact_type: "entreprise",
+      legal_name: "Boulangerie du Parc",
+      exclude_ids: [UUID_A, UUID_A, UUID_B],
+    });
+    expect(outcome.ok).toBe(true);
+    if (outcome.ok) expect(outcome.value.exclude_ids).toEqual([UUID_A, UUID_B]);
   });
 });

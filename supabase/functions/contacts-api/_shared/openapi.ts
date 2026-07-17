@@ -63,6 +63,24 @@ export function buildOpenApiDocument(serverUrl: string): Record<string, unknown>
         "existant quand ils sont fournis (les omettre = ne rien toucher). `contact_type` est",
         "immuable. Le statut se change via `/archive` et `/restore`.",
         "",
+        "## Adresse, géocodage et quartier",
+        "Quand l'adresse change (`address_line1`, `postal_code`, `city`) sans que",
+        "`address_lat`/`address_lon` soient fournies, l'adresse est **géocodée côté serveur**",
+        "(Base Adresse Nationale, best-effort : en cas d'échec les coordonnées sont nulles).",
+        "Un consommateur qui géocode lui-même (ex. autocomplétion d'adresse) peut fournir",
+        "directement les coordonnées. L'usager est ensuite **rattaché automatiquement** au",
+        "quartier contenant ses coordonnées (`quartier_id`, catalogue exposé par",
+        "`GET /v1/quartiers` de l'API référentiel). Fournir `quartier_id` force un rattachement",
+        "**manuel** (protégé des recalculs, `quartier_auto: false`) ; fournir `quartier_id: null`",
+        "rétablit l'assignation **automatique**.",
+        "",
+        "## Rapprochement d'identités (détection de doublons)",
+        "`POST /v1/contacts/match` prend une **identité partielle** et renvoie les fiches",
+        "existantes qui lui ressemblent, classées par pertinence — pour proposer une reprise",
+        "de fiche plutôt qu'une re-création au moment de la saisie. **Lecture seule** malgré",
+        "le POST (aucune fiche créée ni modifiée). Voir la description de l'endpoint pour",
+        "les motifs (`reasons`) et le score.",
+        "",
         "## Erreurs",
         "Toute erreur renvoie `{ \"error\": { \"code\": \"...\", \"message\": \"...\" } }` :",
         "`400` (payload invalide), `401` (clé absente/invalide/révoquée/expirée), `403` (scope",
@@ -119,6 +137,16 @@ export function buildOpenApiDocument(serverUrl: string): Record<string, unknown>
               schema: { type: "string" },
             },
             {
+              name: "phone",
+              in: "query",
+              required: false,
+              description:
+                "Numéro de téléphone, format libre (`+33 6 12 34 56 78`, `06.12.34.56.78`…) : " +
+                "comparé sur les **chiffres significatifs** (indicatif France et 0 initial " +
+                "retirés) au mobile **et** au fixe.",
+              schema: { type: "string" },
+            },
+            {
               name: "source",
               in: "query",
               required: false,
@@ -130,6 +158,15 @@ export function buildOpenApiDocument(serverUrl: string): Record<string, unknown>
               in: "query",
               required: false,
               description: "Avec `source` : identifiant de l'usager dans ce système tiers.",
+              schema: { type: "string" },
+            },
+            {
+              name: "quartier_id",
+              in: "query",
+              required: false,
+              description:
+                "Filtre sur le quartier de rattachement (UUID — voir `GET /v1/quartiers` de " +
+                "l'API référentiel). La valeur littérale `null` renvoie les usagers **sans** quartier.",
               schema: { type: "string" },
             },
             {
@@ -172,6 +209,58 @@ export function buildOpenApiDocument(serverUrl: string): Record<string, unknown>
           responses: {
             "201": CONTACT_RESPONSE,
             ...errorResponses("400", "401", "403", "409", "500"),
+          },
+        },
+      },
+      "/v1/contacts/match": {
+        post: {
+          tags: ["Usagers"],
+          summary: "Rapprocher une identité partielle (détection de doublons)",
+          description: [
+            "Renvoie les fiches existantes qui **ressemblent** à l'identité fournie, classées",
+            "par score décroissant — à afficher à l'agent au moment de la saisie pour proposer",
+            "une **reprise de fiche** plutôt qu'une re-création. **Lecture seule** malgré le",
+            "POST : aucune fiche n'est créée ni modifiée.",
+            "",
+            "Tous les champs sont optionnels, mais **au moins un critère** est requis (email,",
+            "phones, siret, last_name, usage_name, legal_name ou birth_date — un prénom seul",
+            "ne rapproche rien). Par défaut, seules les fiches **actives** sont proposées",
+            "(`status: null` pour inclure les archivées).",
+            "",
+            "### Motifs (`reasons`)",
+            "- `email` : égalité exacte, insensible à la casse ;",
+            "- `phone` : égalité sur les **chiffres significatifs** (indicatif France et 0",
+            "  initial retirés), chaque numéro fourni comparé au mobile **et** au fixe ;",
+            "- `siret` : égalité sur les chiffres seuls ;",
+            "- `name_exact` : nom complet identique après normalisation (sans accents, sans",
+            "  ponctuation, casse repliée) — noms de naissance **et** d'usage comparés des",
+            "  deux côtés ;",
+            "- `name_similar` : similarité trigram ≥ 0,5 sur le nom complet normalisé, avec",
+            "  garde-fou sur le prénom (un homonyme de nom de famille seul — « Marie Dupont »",
+            "  pour « Jean Dupont » — n'est **pas** proposé) ;",
+            "- `birth_date` : jamais suffisant seul, renforce un autre motif.",
+            "",
+            "### Score (classement uniquement)",
+            "`email` +100 · `phone` +80 · `siret` +120 · `name_exact` +60 · `name_similar`",
+            "+arrondi(40 × similarité) · `birth_date` +20. Le barème peut évoluer : ne comparer",
+            "les scores qu'au **sein d'une même réponse**, jamais à un seuil absolu.",
+          ].join("\n"),
+          requestBody: {
+            required: true,
+            content: {
+              "application/json": { schema: { $ref: "#/components/schemas/ContactMatchRequest" } },
+            },
+          },
+          responses: {
+            "200": {
+              description: "Candidats au rapprochement, du plus probable au moins probable.",
+              content: {
+                "application/json": {
+                  schema: { type: "array", items: { $ref: "#/components/schemas/ContactMatch" } },
+                },
+              },
+            },
+            ...errorResponses("400", "401", "403", "500"),
           },
         },
       },
@@ -391,6 +480,25 @@ export function buildOpenApiDocument(serverUrl: string): Record<string, unknown>
             postal_code: { type: ["string", "null"] },
             city: { type: ["string", "null"] },
             country: { type: "string", default: "France" },
+            address_lat: {
+              type: ["number", "null"],
+              description: "Latitude WGS 84 de l'adresse (géocodage BAN ou fournie à l'écriture).",
+            },
+            address_lon: {
+              type: ["number", "null"],
+              description: "Longitude WGS 84 de l'adresse.",
+            },
+            quartier_id: {
+              type: ["string", "null"],
+              format: "uuid",
+              description:
+                "Quartier de rattachement (voir `GET /v1/quartiers` de l'API référentiel).",
+            },
+            quartier_auto: {
+              type: "boolean",
+              description:
+                "true = rattachement automatique d'après l'adresse ; false = forcé manuellement.",
+            },
             preferred_channel: { type: ["string", "null"], enum: ["email", "telephone", "courrier", null] },
             consent_email: { type: "boolean" },
             consent_sms: { type: "boolean" },
@@ -444,6 +552,20 @@ export function buildOpenApiDocument(serverUrl: string): Record<string, unknown>
             postal_code: { type: ["string", "null"] },
             city: { type: ["string", "null"] },
             country: { type: "string", default: "France" },
+            address_lat: {
+              type: ["number", "null"],
+              description:
+                "Latitude WGS 84 — à fournir avec `address_lon` si le consommateur géocode " +
+                "lui-même ; sinon, omettre : l'adresse est géocodée côté serveur (BAN).",
+            },
+            address_lon: { type: ["number", "null"], description: "Longitude WGS 84." },
+            quartier_id: {
+              type: ["string", "null"],
+              format: "uuid",
+              description:
+                "Rattachement **manuel** à un quartier (protégé des recalculs). Omettre pour " +
+                "l'assignation automatique d'après l'adresse ; `null` rétablit l'automatique.",
+            },
             preferred_channel: { type: ["string", "null"], enum: ["email", "telephone", "courrier", null] },
             consent_email: { type: "boolean", default: false },
             consent_sms: { type: "boolean", default: false },
@@ -485,6 +607,21 @@ export function buildOpenApiDocument(serverUrl: string): Record<string, unknown>
             postal_code: { type: ["string", "null"] },
             city: { type: ["string", "null"] },
             country: { type: "string" },
+            address_lat: {
+              type: ["number", "null"],
+              description:
+                "Latitude WGS 84 — à fournir avec `address_lon` si le consommateur géocode " +
+                "lui-même. Si l'adresse change sans coordonnées fournies, elle est re-géocodée " +
+                "côté serveur (BAN).",
+            },
+            address_lon: { type: ["number", "null"], description: "Longitude WGS 84." },
+            quartier_id: {
+              type: ["string", "null"],
+              format: "uuid",
+              description:
+                "Rattachement **manuel** à un quartier (protégé des recalculs). `null` rétablit " +
+                "l'assignation automatique d'après l'adresse (recalcul immédiat).",
+            },
             preferred_channel: { type: ["string", "null"], enum: ["email", "telephone", "courrier", null] },
             consent_email: { type: "boolean" },
             consent_sms: { type: "boolean" },
@@ -497,6 +634,70 @@ export function buildOpenApiDocument(serverUrl: string): Record<string, unknown>
             relations: {
               type: "array",
               items: { $ref: "#/components/schemas/ContactRelationInput" },
+            },
+          },
+        },
+        ContactMatchRequest: {
+          type: "object",
+          description:
+            "Identité partielle à rapprocher. Tous les champs sont optionnels, mais au moins " +
+            "un critère est requis (un prénom seul ne suffit pas).",
+          properties: {
+            contact_type: {
+              type: ["string", "null"],
+              enum: ["personne", "entreprise", "association", "administration", null],
+              description: "Restreint les candidats à ce type, s'il est connu.",
+            },
+            first_name: { type: ["string", "null"] },
+            last_name: { type: ["string", "null"], description: "Nom de naissance." },
+            usage_name: { type: ["string", "null"], description: "Nom d'usage." },
+            legal_name: { type: ["string", "null"], description: "Raison sociale." },
+            siret: { type: ["string", "null"], description: "Comparé sur les chiffres seuls." },
+            birth_date: {
+              type: ["string", "null"],
+              format: "date",
+              description: "Renfort de score uniquement : jamais suffisante seule.",
+            },
+            email: { type: ["string", "null"] },
+            phones: {
+              type: "array",
+              items: { type: "string" },
+              maxItems: 10,
+              description:
+                "Numéros au format libre, normalisés côté serveur (chiffres significatifs).",
+            },
+            status: {
+              type: ["string", "null"],
+              enum: ["active", "archived", null],
+              default: "active",
+              description: "Défaut : `active` (les fiches archivées ne sont pas proposées). `null` = tous.",
+            },
+            exclude_ids: {
+              type: "array",
+              items: { type: "string", format: "uuid" },
+              description: "Fiches à ignorer (ex. la fiche en cours d'édition).",
+            },
+            limit: { type: "integer", minimum: 1, maximum: 20, default: 5 },
+          },
+        },
+        ContactMatch: {
+          type: "object",
+          description:
+            "Candidat au rapprochement : la fiche complète (même sérialiseur que " +
+            "`GET /v1/contacts`), le score de classement et les motifs.",
+          required: ["contact", "score", "reasons"],
+          properties: {
+            contact: { $ref: "#/components/schemas/Contact" },
+            score: {
+              type: "integer",
+              description: "Score de classement — à ne comparer qu'au sein d'une même réponse.",
+            },
+            reasons: {
+              type: "array",
+              items: {
+                type: "string",
+                enum: ["email", "phone", "siret", "name_exact", "name_similar", "birth_date"],
+              },
             },
           },
         },
