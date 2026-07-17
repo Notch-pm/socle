@@ -20,7 +20,7 @@ application élu, etc. Socle est le socle de paramétrage commun à tous ces pro
 
 ## Stack
 
-- **Vite 5** + **React 18** + **TypeScript** (strict)
+- **Vite 8** (rolldown) + **React 18** + **TypeScript** (strict)
 - **React Router 6** (routing), **TanStack Query 5** (données serveur)
 - **Supabase** (Postgres + Auth + RLS) via `@supabase/supabase-js`
 - **Tailwind CSS 3** + primitives **Radix UI** (composants maison façon shadcn dans `src/components/ui`)
