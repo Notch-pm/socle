@@ -157,14 +157,30 @@ Deno.serve(async (req: Request) => {
       // ignoré
     }
 
-    // --- Périmètre (sous-arbre de l'organisation de la clé) ---
-    const { data: subtree, error: subtreeError } = await admin.rpc("org_subtree_ids", {
-      root: apiKey.organization_id,
-    });
-    if (subtreeError) {
-      return errorResponse("internal_error", "Impossible de calculer le périmètre.", corsHeaders);
+    // --- Périmètre : sous-arbre de l'organisation de la clé. Une clé
+    // PLATEFORME (organization_id NULL — liaison unique Socle↔Clara) voit
+    // toutes les organisations, toutes racines confondues. ---
+    let scopeIds: string[];
+    let parentById: Map<string, string | null> = new Map();
+    if (apiKey.organization_id === null) {
+      const { data: allOrgs, error: allOrgsError } = await admin
+        .from("organizations")
+        .select("id, parent_id");
+      if (allOrgsError) {
+        return errorResponse("internal_error", "Impossible de calculer le périmètre.", corsHeaders);
+      }
+      const rows = (allOrgs ?? []) as Array<{ id: string; parent_id: string | null }>;
+      scopeIds = rows.map((r) => r.id);
+      parentById = new Map(rows.map((r) => [r.id, r.parent_id]));
+    } else {
+      const { data: subtree, error: subtreeError } = await admin.rpc("org_subtree_ids", {
+        root: apiKey.organization_id,
+      });
+      if (subtreeError) {
+        return errorResponse("internal_error", "Impossible de calculer le périmètre.", corsHeaders);
+      }
+      scopeIds = Array.isArray(subtree) ? subtree : [];
     }
-    const scopeIds: string[] = Array.isArray(subtree) ? subtree : [];
     const inScope = (id: string | null | undefined) => id != null && scopeIds.includes(id);
 
     const url = new URL(req.url);
@@ -291,9 +307,31 @@ Deno.serve(async (req: Request) => {
       }
       // Géométries via la RPC (cast ST_AsGeoJSON côté serveur — `geom` est du
       // binaire PostGIS). Les quartiers n'existent que sur les organisations
-      // principales : celle de la clé couvre tout le périmètre.
+      // principales : clé liée → celle de la clé couvre le périmètre ; clé
+      // plateforme → l'organisation visée arrive en paramètre `organization_id`
+      // (sa racine est utilisée).
+      let quartiersOrgId: string | null = apiKey.organization_id;
+      if (quartiersOrgId === null) {
+        const requested = url.searchParams.get("organization_id");
+        if (!requested || !isUuid(requested) || !inScope(requested)) {
+          return errorResponse(
+            "bad_request",
+            "Clé plateforme : paramètre organization_id requis pour les géométries de quartiers.",
+            corsHeaders,
+          );
+        }
+        let current = requested;
+        const seen = new Set<string>([current]);
+        for (;;) {
+          const parent = parentById.get(current) ?? null;
+          if (!parent || seen.has(parent)) break;
+          seen.add(parent);
+          current = parent;
+        }
+        quartiersOrgId = current;
+      }
       const { data: geo, error: geoErr } = await admin.rpc("list_quartiers_geojson", {
-        p_org_id: apiKey.organization_id,
+        p_org_id: quartiersOrgId,
       });
       if (geoErr) throw geoErr;
       const geometryById = new Map(

@@ -9,10 +9,13 @@
  * `verify_jwt = false` — l'auth est portée ici.
  *
  * Isolation : la fonction écrit avec la **service role** (hors RLS) mais borne
- * chaque requête à l'organisation de la clé. Les contacts étant rattachés à
- * une organisation **racine** (trigger DB) et la clé aussi, le périmètre est
- * l'égalité stricte `organization_id = clé.organization_id` — pas de sous-arbre.
- * C'est LE point où l'isolation vit → vérifié bout en bout.
+ * chaque requête à une organisation **racine** (les contacts y sont rattachés
+ * par trigger DB) — pas de sous-arbre. Clé **liée** : égalité stricte
+ * `organization_id = clé.organization_id`. Clé **plateforme**
+ * (`organization_id` NULL — liaison unique Socle↔Clara, multi-tenant des deux
+ * côtés) : la racine servie est celle de l'organisation portée par l'en-tête
+ * `X-Organization-Id` (requis). C'est LE point où l'isolation vit → vérifié
+ * bout en bout.
  *
  * La logique pure (validation, sérialiseurs, erreurs, OpenAPI) vit dans
  * `_shared/` (sans dépendance Deno) : testée par vitest et déployée avec la
@@ -35,7 +38,9 @@ import {
   parseContactPayload,
   parseMatchPayload,
   parsePagination,
+  resolveRootOrgId,
   type ExternalRefInput,
+  type OrgParentRow,
   type RelationInput,
 } from "./_shared/validation.ts";
 import {
@@ -52,7 +57,8 @@ const FUNCTION_NAME = "contacts-api";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
-  "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
+  "Access-Control-Allow-Headers":
+    "authorization, x-client-info, apikey, content-type, x-organization-id",
   "Access-Control-Allow-Methods": "GET, POST, PATCH, OPTIONS",
 };
 
@@ -469,7 +475,32 @@ Deno.serve(async (req: Request) => {
         corsHeaders,
       );
     }
-    const orgId: string = apiKey.organization_id;
+    // Périmètre : une clé LIÉE borne à son organisation (racine). Une clé
+    // PLATEFORME (organization_id NULL — liaison unique Socle↔Clara) sert le
+    // référentiel de la RACINE de l'organisation visée, portée par l'en-tête
+    // X-Organization-Id.
+    let orgId: string;
+    if (apiKey.organization_id !== null) {
+      orgId = apiKey.organization_id;
+    } else {
+      const requested = req.headers.get("x-organization-id")?.trim() ?? "";
+      if (!isUuid(requested)) {
+        return errorResponse(
+          "bad_request",
+          "Clé plateforme : en-tête X-Organization-Id requis (uuid d'une organisation du référentiel).",
+          corsHeaders,
+        );
+      }
+      const { data: orgRows, error: orgRowsError } = await admin
+        .from("organizations")
+        .select("id, parent_id");
+      if (orgRowsError) throw orgRowsError;
+      const rootId = resolveRootOrgId((orgRows ?? []) as OrgParentRow[], requested);
+      if (!rootId) {
+        return errorResponse("not_found", "Organisation introuvable.", corsHeaders);
+      }
+      orgId = rootId;
+    }
 
     // Trace best-effort (n'interrompt pas la requête en cas d'échec).
     try {

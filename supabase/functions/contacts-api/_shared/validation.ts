@@ -628,3 +628,32 @@ export function parseMatchPayload(body: unknown): MatchParseOutcome {
 
   return { ok: true, value };
 }
+
+// ── Clé plateforme : résolution de la racine d'une organisation ─────────────
+
+/** Ligne minimale d'organisation pour la remontée à la racine. */
+export interface OrgParentRow {
+  id: string;
+  parent_id: string | null;
+}
+
+/**
+ * Racine (organisation principale) d'une organisation, par remontée des
+ * parent_id. Les contacts vivent au niveau racine : c'est elle qui borne le
+ * référentiel servi à une clé **plateforme** (`api_keys.organization_id`
+ * NULL), l'organisation visée arrivant dans l'en-tête `X-Organization-Id`.
+ * Protégé contre les cycles ; null si l'organisation est absente.
+ */
+export function resolveRootOrgId(rows: OrgParentRow[], orgId: string): string | null {
+  const byId = new Map(rows.map((r) => [r.id, r]));
+  let current = byId.get(orgId);
+  if (!current) return null;
+  const seen = new Set<string>([current.id]);
+  while (current.parent_id) {
+    const parent = byId.get(current.parent_id);
+    if (!parent || seen.has(parent.id)) break;
+    seen.add(parent.id);
+    current = parent;
+  }
+  return current.id;
+}

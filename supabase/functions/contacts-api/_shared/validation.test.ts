@@ -11,6 +11,7 @@ import {
   parseContactPayload,
   parseMatchPayload,
   parsePagination,
+  resolveRootOrgId,
   type ContactShape,
 } from "./validation.ts";
 
@@ -456,5 +457,36 @@ describe("parseMatchPayload", () => {
     });
     expect(outcome.ok).toBe(true);
     if (outcome.ok) expect(outcome.value.exclude_ids).toEqual([UUID_A, UUID_B]);
+  });
+});
+
+describe("resolveRootOrgId", () => {
+  const rows = [
+    { id: "accm", parent_id: null },
+    { id: "mairie", parent_id: "accm" },
+    { id: "service", parent_id: "mairie" },
+    { id: "test-root", parent_id: null },
+  ];
+
+  it("remonte à la racine depuis une sous-organisation", () => {
+    expect(resolveRootOrgId(rows, "service")).toBe("accm");
+    expect(resolveRootOrgId(rows, "mairie")).toBe("accm");
+  });
+
+  it("une racine est sa propre racine — deux racines coexistent", () => {
+    expect(resolveRootOrgId(rows, "accm")).toBe("accm");
+    expect(resolveRootOrgId(rows, "test-root")).toBe("test-root");
+  });
+
+  it("organisation absente → null", () => {
+    expect(resolveRootOrgId(rows, "inconnu")).toBeNull();
+  });
+
+  it("résiste aux cycles de parent_id", () => {
+    const cyclic = [
+      { id: "x", parent_id: "y" },
+      { id: "y", parent_id: "x" },
+    ];
+    expect(["x", "y"]).toContain(resolveRootOrgId(cyclic, "x"));
   });
 });
