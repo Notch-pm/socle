@@ -1,6 +1,6 @@
 import * as React from "react";
 import { useParams, useNavigate } from "react-router-dom";
-import { ArrowLeft, Settings2, Network, Users as UsersIcon, ListChecks, FileCheck2, Mail, KeyRound, type LucideIcon } from "lucide-react";
+import { ArrowLeft, Settings2, Network, Users as UsersIcon, ListChecks, FileCheck2, MapPin, Mail, KeyRound, type LucideIcon } from "lucide-react";
 import { Card, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { EmptyState } from "@/components/shared/EmptyState";
@@ -12,6 +12,7 @@ import { ApiKeysSection } from "@/features/superadmin/organizations/sections/Api
 import { UsersManagementPage } from "@/features/users/UsersManagementPage";
 import { ProceduresListPanel } from "@/features/procedures/ProceduresListPanel";
 import { DocumentTypesManager } from "@/features/document-types/DocumentTypesManager";
+import { QuartiersManager } from "@/features/quartiers/QuartiersManager";
 
 type Section =
   | "menu"
@@ -20,6 +21,7 @@ type Section =
   | "utilisateurs"
   | "demarches"
   | "types-pieces"
+  | "quartiers"
   | "smtp"
   | "api";
 
@@ -29,6 +31,7 @@ const SECTIONS: { key: Section; title: string; description: string; icon: Lucide
   { key: "utilisateurs", title: "Utilisateurs", description: "Membres et rôles de cette organisation", icon: UsersIcon },
   { key: "demarches", title: "Catalogue de démarches", description: "Démarches de l'organisation principale", icon: ListChecks },
   { key: "types-pieces", title: "Types de pièce justificative", description: "Pièces demandées dans les démarches", icon: FileCheck2 },
+  { key: "quartiers", title: "Quartiers", description: "Découpage du territoire pour rattacher les usagers", icon: MapPin },
   { key: "smtp", title: "Emails (SMTP)", description: "Serveur SMTP utilisé pour les emails de cette organisation", icon: Mail },
   { key: "api", title: "API publique", description: "Clés d'accès en lecture seule (organisations, démarches, catégories)", icon: KeyRound },
 ];
@@ -40,6 +43,7 @@ const SECTION_LABELS: Record<Section, string> = {
   utilisateurs: "Utilisateurs",
   demarches: "Catalogue de démarches",
   "types-pieces": "Types de pièce justificative",
+  quartiers: "Quartiers",
   smtp: "Emails (SMTP)",
   api: "API publique",
 };
@@ -109,6 +113,12 @@ export function OrgSettingsPage() {
             <DocumentTypesManager organizationId={organization.id} />
           ) : (
             <EmptyState message="Les types de pièce se paramètrent au niveau de l'organisation principale (racine)." />
+          ))}
+        {activeSection === "quartiers" &&
+          (organization.parent_id === null ? (
+            <QuartiersManager organizationId={organization.id} />
+          ) : (
+            <EmptyState message="Les quartiers se paramètrent au niveau de l'organisation principale (racine)." />
           ))}
         {activeSection === "smtp" && <SmtpSettingsSection organizationId={organization.id} />}
         {activeSection === "api" &&

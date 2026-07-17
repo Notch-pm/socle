@@ -75,6 +75,18 @@ export interface DocumentTypeDto {
   created_at: string | null;
 }
 
+/** Quartier : polygone du découpage du territoire d'une organisation principale. */
+export interface QuartierDto {
+  id: string;
+  organization_id: string;
+  name: string;
+  color: string | null;
+  /** Géométrie GeoJSON (MultiPolygon, WGS 84) — présente seulement si `geometry=true`. */
+  geometry?: unknown;
+  created_at: string | null;
+  updated_at: string | null;
+}
+
 /** Réponse de génération d'URL signée pour un document privé. */
 export interface SignedUrlDto {
   url: string;

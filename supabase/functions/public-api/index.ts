@@ -20,6 +20,7 @@ import {
   serializeDocumentType,
   serializeOrganization,
   serializeProcedure,
+  serializeQuartier,
 } from "./_shared/serializers.ts";
 import { buildOrganizationTree, isUuid } from "./_shared/scope.ts";
 import { errorResponse, jsonResponse } from "./_shared/errors.ts";
@@ -274,6 +275,35 @@ Deno.serve(async (req: Request) => {
         .order("name", { ascending: true });
       if (error) throw error;
       return jsonResponse(200, (data ?? []).map(serializeDocumentType), corsHeaders);
+    }
+
+    // --- /v1/quartiers ---
+    if (segments[0] === "v1" && segments[1] === "quartiers" && segments.length === 2) {
+      const { data, error } = await admin
+        .from("quartiers")
+        .select("*")
+        .in("organization_id", scopeIds)
+        .order("name", { ascending: true });
+      if (error) throw error;
+      const rows = (data ?? []) as Array<Record<string, unknown>>;
+      if (url.searchParams.get("geometry") !== "true") {
+        return jsonResponse(200, rows.map((r) => serializeQuartier(r)), corsHeaders);
+      }
+      // Géométries via la RPC (cast ST_AsGeoJSON côté serveur — `geom` est du
+      // binaire PostGIS). Les quartiers n'existent que sur les organisations
+      // principales : celle de la clé couvre tout le périmètre.
+      const { data: geo, error: geoErr } = await admin.rpc("list_quartiers_geojson", {
+        p_org_id: apiKey.organization_id,
+      });
+      if (geoErr) throw geoErr;
+      const geometryById = new Map(
+        ((geo ?? []) as Array<{ id: string; geojson: unknown }>).map((g) => [String(g.id), g.geojson]),
+      );
+      return jsonResponse(
+        200,
+        rows.map((r) => serializeQuartier(r, geometryById.get(String(r.id)) ?? null)),
+        corsHeaders,
+      );
     }
 
     // --- /v1/documents/signed-url ---

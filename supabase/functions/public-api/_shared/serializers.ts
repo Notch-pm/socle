@@ -10,6 +10,7 @@ import type {
   OrganizationDto,
   OrganizationProcedureDto,
   ProcedureDto,
+  QuartierDto,
 } from "./dto.ts";
 
 /** Ligne DB brute, structure inconnue à la compilation. */
@@ -87,6 +88,24 @@ export function serializeOrganizationProcedure(row: Row): OrganizationProcedureD
     custom_order: nullableNum(row.custom_order),
     metadata: row.metadata ?? null,
   };
+}
+
+/**
+ * La colonne `geom` (binaire PostGIS) n'est **jamais** exposée telle quelle :
+ * la géométrie n'est incluse que si elle est fournie explicitement (GeoJSON de
+ * la RPC `list_quartiers_geojson`), quand le consommateur la demande.
+ */
+export function serializeQuartier(row: Row, geometry?: unknown): QuartierDto {
+  const dto: QuartierDto = {
+    id: str(row.id),
+    organization_id: str(row.organization_id),
+    name: str(row.name),
+    color: nullableStr(row.color),
+    created_at: nullableStr(row.created_at),
+    updated_at: nullableStr(row.updated_at),
+  };
+  if (geometry !== undefined) dto.geometry = geometry;
+  return dto;
 }
 
 export function serializeDocumentType(row: Row): DocumentTypeDto {

@@ -13,6 +13,7 @@ import { OrganizationsPage } from "@/features/organizations/OrganizationsPage";
 import { OrganizationEditorPage } from "@/features/organizations/OrganizationEditorPage";
 import { ProceduresPage } from "@/features/procedures/ProceduresPage";
 import { ProcedureEditorPage } from "@/features/procedures/ProcedureEditorPage";
+import { QuartiersPage } from "@/features/quartiers/QuartiersPage";
 import { UtilisateursPage } from "@/pages/UtilisateursPage";
 import { SuperAdminDashboardPage } from "@/features/superadmin/SuperAdminDashboardPage";
 import { OrganizationsAdminPage } from "@/features/superadmin/organizations/OrganizationsAdminPage";
@@ -61,6 +62,7 @@ export function App() {
               <Route path="demarches/:procId" element={<ProcedureEditorPage variant="admin" />} />
               <Route path="categories" element={<CategoriesPage />} />
               <Route path="types-pieces" element={<DocumentTypesPage />} />
+              <Route path="quartiers" element={<QuartiersPage />} />
               <Route path="utilisateurs" element={<UtilisateursPage />} />
             </Route>
           </Route>

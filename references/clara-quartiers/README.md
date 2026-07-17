@@ -28,11 +28,24 @@ ils ne sont ni buildés ni maintenus.
 
 ## Cadrage du portage (phase 2)
 
-1. **Modèle Socle** : `latitude`/`longitude` sur `contacts` (géocodage BAN au
-   create/patch quand l'adresse change), table `quartiers` par org racine,
-   `quartier_id`/`quartier_auto` sur `contacts` + rattachement automatique.
-2. **API** : CRUD/import des quartiers (scope `contacts`), `quartier_id` dans la
-   réponse `Contact`, filtre `quartier_id` sur `GET /v1/contacts`, stats par quartier.
-3. **UI Socle** : paramétrage des quartiers (import GeoJSON, carte).
-4. **Clara** : filtre quartier sur la page Contacts + stats via l'API, sans
+État au 2026-07-17 : **étapes 1, 2 et 3 livrées côté Socle** — migrations
+`quartiers_referentiel` + `assign_contact_quartier_recompute_on_null`,
+`src/features/quartiers/`, endpoints déployés ; voir les features « Quartiers »,
+« API publique » et « API usagers » de CLAUDE.md. Colonnes nommées
+`address_lat`/`address_lon` (préfixe des champs d'adresse de `contacts`).
+Reste l'étape 4 (Clara).
+
+1. ✅ **Modèle Socle** : `address_lat`/`address_lon` sur `contacts`, table
+   `quartiers` par org racine, `quartier_id`/`quartier_auto` sur `contacts`
+   + rattachement automatique (trigger `assign_contact_quartier`).
+2. ✅ **API** : lecture des quartiers via `GET /v1/quartiers` de **public-api**
+   (option `geometry=true` → GeoJSON) ; dans **contacts-api** : `quartier_id`/
+   `quartier_auto`/`address_lat`/`address_lon` dans la réponse `Contact` et en
+   écriture, filtre `quartier_id` sur `GET /v1/contacts`, **géocodage BAN au
+   create/patch** quand l'adresse change. Divergences du cadrage initial : pas
+   de CRUD/import des quartiers par API (paramétrage = UI Socle) ; stats par
+   quartier non exposées (RPC `stats_contacts_by_quartier` disponible au besoin).
+3. ✅ **UI Socle** : paramétrage des quartiers (import GeoJSON, carte) —
+   `/quartiers` (admin) + section de `OrgSettingsPage` (superadmin).
+4. ⬜ **Clara** : filtre quartier sur la page Contacts + stats via l'API, sans
    stockage local.

@@ -34,8 +34,8 @@ export function buildOpenApiDocument(serverUrl: string): Record<string, unknown>
         "API **en lecture seule** exposant le référentiel central de la gamme : les",
         "**organisations** (et sous-organisations) avec l'intégralité de leur configuration,",
         "les **démarches** (descriptif + formulaire + informations demandeur + base de",
-        "connaissances), les **catégories** (libellé + icône) et les **types de pièce",
-        "justificative**.",
+        "connaissances), les **catégories** (libellé + icône), les **types de pièce",
+        "justificative** et les **quartiers** (découpage du territoire en polygones).",
         "",
         "Ces données sont la **source de vérité** consommée en aval par les autres",
         "applications de la gamme (Ariane, Clara, …) et, potentiellement, par des",
@@ -70,6 +70,12 @@ export function buildOpenApiDocument(serverUrl: string): Record<string, unknown>
       {
         name: "Types de pièce",
         description: "Types de pièce justificative référencés par les champs PJ.",
+      },
+      {
+        name: "Quartiers",
+        description:
+          "Découpage du territoire de l'organisation principale en quartiers (polygones). " +
+          "Les usagers y sont rattachés automatiquement selon leur adresse (voir l'API usagers).",
       },
       { name: "Documents", description: "Accès temporaire aux documents privés." },
     ],
@@ -244,6 +250,38 @@ export function buildOpenApiDocument(serverUrl: string): Record<string, unknown>
               content: {
                 "application/json": {
                   schema: { type: "array", items: { $ref: "#/components/schemas/DocumentType" } },
+                },
+              },
+            },
+            ...errorResponses("401", "500"),
+          },
+        },
+      },
+      "/v1/quartiers": {
+        get: {
+          tags: ["Quartiers"],
+          summary: "Lister les quartiers",
+          description:
+            "Quartiers de l'organisation principale du périmètre, triés par nom. Par défaut " +
+            "**sans géométrie** ; `geometry=true` ajoute le polygone de chaque quartier en " +
+            "**GeoJSON** (MultiPolygon, WGS 84 — directement affichable sur une carte). " +
+            "Le rattachement des usagers à un quartier est porté par l'API usagers " +
+            "(`quartier_id` sur les fiches).",
+          parameters: [
+            {
+              name: "geometry",
+              in: "query",
+              required: false,
+              description: "Si `true`, inclut la géométrie GeoJSON de chaque quartier.",
+              schema: { type: "boolean", default: false },
+            },
+          ],
+          responses: {
+            "200": {
+              description: "Liste des quartiers.",
+              content: {
+                "application/json": {
+                  schema: { type: "array", items: { $ref: "#/components/schemas/Quartier" } },
                 },
               },
             },
@@ -642,6 +680,44 @@ export function buildOpenApiDocument(serverUrl: string): Record<string, unknown>
             organization_id: "d5227d25-f327-493a-a9a2-278397531e33",
             name: "Justificatif de domicile",
             created_at: "2026-02-01T08:30:00Z",
+          },
+        },
+        Quartier: {
+          type: "object",
+          description:
+            "Quartier : polygone du découpage du territoire de l'organisation principale.",
+          properties: {
+            id: { type: "string", format: "uuid" },
+            organization_id: {
+              type: "string",
+              format: "uuid",
+              description: "Organisation principale propriétaire du découpage.",
+            },
+            name: { type: "string", description: "Nom, unique par organisation." },
+            color: {
+              type: ["string", "null"],
+              description: "Couleur d'affichage (chaîne CSS, ex. \"hsl(152 83% 42%)\").",
+            },
+            geometry: {
+              type: "object",
+              description:
+                "Géométrie **GeoJSON** (MultiPolygon, WGS 84). Présente seulement si " +
+                "`geometry=true` ; `null` si la géométrie n'a pas pu être produite.",
+              properties: {
+                type: { type: "string", enum: ["MultiPolygon"] },
+                coordinates: { type: "array", items: {} },
+              },
+            },
+            created_at: { type: ["string", "null"], format: "date-time" },
+            updated_at: { type: ["string", "null"], format: "date-time" },
+          },
+          example: {
+            id: "e4f5a6b7-0000-0000-0000-000000000003",
+            organization_id: "d5227d25-f327-493a-a9a2-278397531e33",
+            name: "Centre-ville",
+            color: "hsl(152 83% 42%)",
+            created_at: "2026-07-17T09:00:00Z",
+            updated_at: "2026-07-17T09:00:00Z",
           },
         },
         SignedUrl: {

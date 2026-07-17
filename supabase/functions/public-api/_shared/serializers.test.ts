@@ -5,6 +5,7 @@ import {
   serializeOrganization,
   serializeOrganizationProcedure,
   serializeProcedure,
+  serializeQuartier,
 } from "./serializers.ts";
 
 describe("serializers — whitelist stricte (aucune fuite)", () => {
@@ -106,6 +107,39 @@ describe("serializers — whitelist stricte (aucune fuite)", () => {
       metadata: null,
     });
     expect(dto.is_enabled).toBe(false);
+  });
+
+  it("quartier : n'expose jamais la colonne geom (binaire PostGIS)", () => {
+    const row = {
+      id: "q1",
+      organization_id: "org-1",
+      name: "Centre-ville",
+      color: "hsl(152 83% 42%)",
+      geom: "0106000020E61000...", // binaire — ne doit JAMAIS ressortir
+      created_by: "user-1", // interne — non exposé
+      created_at: "2026-07-17T09:00:00Z",
+      updated_at: "2026-07-17T09:00:00Z",
+    };
+    const dto = serializeQuartier(row);
+    expect(dto).toEqual({
+      id: "q1",
+      organization_id: "org-1",
+      name: "Centre-ville",
+      color: "hsl(152 83% 42%)",
+      created_at: "2026-07-17T09:00:00Z",
+      updated_at: "2026-07-17T09:00:00Z",
+    });
+    expect(dto).not.toHaveProperty("geom");
+    expect(dto).not.toHaveProperty("created_by");
+    expect(dto).not.toHaveProperty("geometry");
+  });
+
+  it("quartier : inclut la géométrie GeoJSON quand elle est fournie (y compris null)", () => {
+    const geojson = { type: "MultiPolygon", coordinates: [] };
+    const withGeometry = serializeQuartier({ id: "q1", organization_id: "o", name: "N" }, geojson);
+    expect(withGeometry.geometry).toBe(geojson);
+    const withNull = serializeQuartier({ id: "q1", organization_id: "o", name: "N" }, null);
+    expect(withNull).toHaveProperty("geometry", null);
   });
 
   it("type de pièce : champs simples", () => {

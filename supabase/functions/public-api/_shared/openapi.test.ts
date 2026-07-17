@@ -27,6 +27,7 @@ describe("buildOpenApiDocument", () => {
         "/v1/procedures",
         "/v1/procedures/{id}",
         "/v1/document-types",
+        "/v1/quartiers",
         "/v1/documents/signed-url",
       ]),
     );
@@ -52,6 +53,7 @@ describe("buildOpenApiDocument", () => {
         "FormSchema",
         "KnowledgeBase",
         "DocumentType",
+        "Quartier",
         "SignedUrl",
         "Error",
       ]),
