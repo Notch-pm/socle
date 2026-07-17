@@ -35,6 +35,12 @@ npm run lint     # tsc -b (typecheck du projet, pas d'ESLint)
 npm test         # vitest run (unitaires + composants) ; npm run test:watch en veille
 ```
 
+Prérequis : **Node ≥ 22** (exigé par `@supabase/supabase-js`) ; en pratique **Node 24 / npm 11**,
+qui génère `package-lock.json` (npm 10 le juge désynchronisé → `npm ci` échoue). Un hook husky
+pre-commit rejoue `lint` + `test` ; la CI GitHub Actions (`.github/workflows/ci.yml`) fait de
+même sous Node 24 à chaque push sur `main` et chaque PR. ⚠️ Ne pas redescendre vite en < 6
+(vitest 4 l'exige en peer — c'est ce qui avait cassé la CI une semaine en juillet 2026).
+
 ## Environnement
 
 `.env.local` à la racine (non versionné) :
