@@ -27,7 +27,7 @@ export type Database = {
           key_prefix: string
           last_used_at: string | null
           name: string
-          organization_id: string
+          organization_id: string | null
           revoked_at: string | null
           scopes: string[]
         }
@@ -40,7 +40,7 @@ export type Database = {
           key_prefix: string
           last_used_at?: string | null
           name: string
-          organization_id: string
+          organization_id?: string | null
           revoked_at?: string | null
           scopes?: string[]
         }
@@ -53,7 +53,7 @@ export type Database = {
           key_prefix?: string
           last_used_at?: string | null
           name?: string
-          organization_id?: string
+          organization_id?: string | null
           revoked_at?: string | null
           scopes?: string[]
         }
@@ -781,7 +781,7 @@ export type Database = {
         Returns: string
       }
       create_quartiers_batch: {
-        Args: { p_items: Json; p_org_id: string }
+        Args: { p_items: Json; p_org_id: string; p_replace?: boolean }
         Returns: {
           quartier_id: string
           quartier_name: string
@@ -838,6 +838,10 @@ export type Database = {
         Returns: string
       }
       recalculate_contact_quartiers: {
+        Args: { p_org_id: string }
+        Returns: undefined
+      }
+      reset_orphan_manual_quartiers: {
         Args: { p_org_id: string }
         Returns: undefined
       }
