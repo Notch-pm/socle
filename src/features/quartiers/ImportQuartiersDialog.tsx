@@ -6,9 +6,19 @@ import {
   DialogTitle,
   DialogDescription,
 } from "@/components/ui/dialog";
+import {
+  AlertDialog,
+  AlertDialogContent,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogCancel,
+  AlertDialogAction,
+} from "@/components/ui/alert-dialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { useImportQuartiers } from "@/features/quartiers/useQuartiers";
+import { useImportQuartiers, useQuartiers } from "@/features/quartiers/useQuartiers";
 import {
   extractFeatures,
   prepareImportRows,
@@ -50,6 +60,9 @@ export { ColorSwatches };
  * Import de quartiers depuis un fichier GeoJSON : détection des polygones,
  * ajustement nom/couleur par ligne, envoi en un lot atomique (RPC
  * `create_quartiers_batch`) suivi du recalcul des assignations.
+ *
+ * L'import **remplace** le découpage existant : le fichier fait foi. La
+ * suppression et la création se font dans la même transaction côté serveur.
  */
 export function ImportQuartiersDialog({
   open,
@@ -62,7 +75,10 @@ export function ImportQuartiersDialog({
 }) {
   const [rows, setRows] = React.useState<ParsedQuartierRow[] | null>(null);
   const [fileError, setFileError] = React.useState<string | null>(null);
+  const [confirmOpen, setConfirmOpen] = React.useState(false);
   const importQuartiers = useImportQuartiers(organizationId);
+  const { data: existing } = useQuartiers(organizationId);
+  const existingCount = existing?.length ?? 0;
 
   function handleFile(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0];
@@ -88,12 +104,14 @@ export function ImportQuartiersDialog({
     if (!next) {
       setRows(null);
       setFileError(null);
+      setConfirmOpen(false);
       importQuartiers.reset();
     }
   }
 
   function handleImport() {
     if (!rows) return;
+    setConfirmOpen(false);
     importQuartiers.mutate(
       rows.map((r) => ({ name: r.name, color: r.color, geometry: r.geometry })),
       { onSuccess: () => handleOpenChange(false) },
@@ -110,6 +128,7 @@ export function ImportQuartiersDialog({
           <DialogDescription>
             Fichier .geojson contenant un ou plusieurs polygones (FeatureCollection, Feature ou
             géométrie) — par exemple un export QGIS ou un jeu de données ouvertes de la commune.
+            Le fichier fait foi : il <strong>remplace</strong> le découpage actuel.
           </DialogDescription>
         </DialogHeader>
 
@@ -126,8 +145,16 @@ export function ImportQuartiersDialog({
           <div className="flex flex-col gap-4">
             <p className="text-sm text-muted-foreground">
               {rows.length} polygone(s) détecté(s). Ajustez le nom et la couleur de chaque quartier
-              avant l'import. Les noms déjà pris seront suffixés automatiquement.
+              avant l'import. Les doublons de nom au sein du fichier seront suffixés
+              automatiquement.
             </p>
+
+            {existingCount > 0 && (
+              <p className="rounded-lg border border-destructive/30 bg-destructive/5 px-4 py-2 text-sm text-destructive">
+                Les {existingCount} quartier(s) actuels seront supprimés et remplacés par ce
+                fichier. Les usagers seront rattachés au nouveau découpage.
+              </p>
+            )}
             <div className="flex flex-col gap-2">
               {rows.map((row, i) => (
                 <div key={i} className="flex items-center gap-3">
@@ -157,13 +184,36 @@ export function ImportQuartiersDialog({
             )}
             <Button
               className="w-full"
-              onClick={handleImport}
+              onClick={() => (existingCount > 0 ? setConfirmOpen(true) : handleImport())}
               disabled={importQuartiers.isPending || invalidRow}
             >
-              {importQuartiers.isPending ? "Import…" : `Importer ${rows.length} quartier(s)`}
+              {importQuartiers.isPending
+                ? "Import…"
+                : existingCount > 0
+                  ? `Remplacer le découpage par ${rows.length} quartier(s)`
+                  : `Importer ${rows.length} quartier(s)`}
             </Button>
           </div>
         )}
+
+        <AlertDialog open={confirmOpen} onOpenChange={setConfirmOpen}>
+          <AlertDialogContent>
+            <AlertDialogHeader>
+              <AlertDialogTitle>
+                Remplacer les {existingCount} quartier(s) existants ?
+              </AlertDialogTitle>
+              <AlertDialogDescription>
+                Le découpage actuel sera supprimé et remplacé par les {rows?.length ?? 0} quartier(s)
+                du fichier. Les usagers ne sont pas supprimés : ils sont rattachés au nouveau
+                découpage. Cette action est irréversible.
+              </AlertDialogDescription>
+            </AlertDialogHeader>
+            <AlertDialogFooter>
+              <AlertDialogCancel>Annuler</AlertDialogCancel>
+              <AlertDialogAction onClick={handleImport}>Remplacer</AlertDialogAction>
+            </AlertDialogFooter>
+          </AlertDialogContent>
+        </AlertDialog>
       </DialogContent>
     </Dialog>
   );

@@ -93,6 +93,12 @@ export interface QuartierImportResult {
  * élément échoue, tout le lot est annulé). Les collisions de nom sont
  * dédoublonnées côté serveur ; le nom réellement utilisé est renvoyé. Le
  * recalcul des assignations de contacts est enchaîné après l'import.
+ *
+ * L'import **remplace** le découpage existant (`p_replace`) : les quartiers de
+ * l'organisation sont supprimés dans la **même transaction** que la création des
+ * nouveaux — un import qui échoue ne laisse donc jamais l'organisation sans
+ * découpage. Les usagers rattachés manuellement à un quartier disparu repassent
+ * en rattachement automatique (sinon le recalcul les ignorerait à jamais).
  */
 export function useImportQuartiers(organizationId: string) {
   const queryClient = useQueryClient();
@@ -105,6 +111,7 @@ export function useImportQuartiers(organizationId: string) {
           color: i.color,
           geometry: i.geometry,
         })) as unknown as Json,
+        p_replace: true,
       });
       if (error) throw error;
       const { error: recalcError } = await supabase.rpc("recalculate_contact_quartiers", {
