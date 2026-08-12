@@ -45,8 +45,15 @@ export function buildOpenApiDocument(serverUrl: string): Record<string, unknown>
         "Chaque appel doit porter une **clé API** dans l'en-tête",
         "`Authorization: Bearer <clé>`. Les clés sont **destinées à un usage serveur-à-serveur**",
         "(ne pas les exposer dans un navigateur). Une clé est délivrée par un super",
-        "administrateur Socle et **rattachée à une organisation principale** : elle ne donne",
-        "accès qu'à **cette organisation et à toute sa descendance** (isolation multi-tenant).",
+        "administrateur Socle et est soit **rattachée à une organisation principale** — elle ne",
+        "donne accès qu'à **cette organisation et à toute sa descendance** (isolation",
+        "multi-tenant) —, soit une **clé plateforme** (`organization_id` nul, liaison unique",
+        "Socle↔Clara) dont le périmètre couvre **toutes** les organisations, toutes racines",
+        "confondues. Ce second cas exige un paramètre supplémentaire pour les géométries de",
+        "quartiers — voir `GET /v1/quartiers`.",
+        "",
+        "La clé doit en outre porter le scope **`read`** : une clé qui ne l'a pas (par exemple",
+        "limitée aux usagers) reçoit une réponse **403**.",
         "",
         "## Formats",
         "Réponses en **JSON** (`application/json`, UTF-8). Les dates sont au format ISO 8601.",
@@ -275,6 +282,22 @@ export function buildOpenApiDocument(serverUrl: string): Record<string, unknown>
               description: "Si `true`, inclut la géométrie GeoJSON de chaque quartier.",
               schema: { type: "boolean", default: false },
             },
+            {
+              name: "organization_id",
+              in: "query",
+              required: false,
+              description:
+                "Organisation visée (UUID), **requis avec `geometry=true` pour une clé " +
+                "plateforme uniquement** (le découpage en quartiers n'existe qu'au niveau " +
+                "d'une organisation principale, et une clé plateforme n'en a pas une seule) : " +
+                "l'organisation est résolue vers sa racine, qui détermine le découpage renvoyé. " +
+                "Absent, mal formé, ou hors du périmètre de la clé → `400` (à la différence des " +
+                "autres endpoints, ce n'est pas un `404` : on ne fait pas la différence entre " +
+                "« inconnu » et « hors périmètre » sur ce paramètre). Une clé rattachée à une " +
+                "organisation ignore ce paramètre (son périmètre est déjà fixé) ; il n'a d'effet " +
+                "que sur les géométries, jamais sur la liste des quartiers elle-même.",
+              schema: { type: "string", format: "uuid" },
+            },
           ],
           responses: {
             "200": {
@@ -285,7 +308,7 @@ export function buildOpenApiDocument(serverUrl: string): Record<string, unknown>
                 },
               },
             },
-            ...errorResponses("401", "500"),
+            ...errorResponses("400", "401", "500"),
           },
         },
       },

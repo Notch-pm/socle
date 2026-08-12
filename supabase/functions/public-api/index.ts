@@ -135,7 +135,7 @@ Deno.serve(async (req: Request) => {
     const keyHash = await sha256Hex(token);
     const { data: apiKey } = await admin
       .from("api_keys")
-      .select("id, organization_id, revoked_at, expires_at")
+      .select("id, organization_id, revoked_at, expires_at, scopes")
       .eq("key_hash", keyHash)
       .maybeSingle();
 
@@ -145,6 +145,13 @@ Deno.serve(async (req: Request) => {
       (apiKey.expires_at !== null && new Date(apiKey.expires_at).getTime() < Date.now())
     ) {
       return errorResponse("unauthorized", "Clé API invalide, révoquée ou expirée.", corsHeaders);
+    }
+    if (!Array.isArray(apiKey.scopes) || !apiKey.scopes.includes("read")) {
+      return errorResponse(
+        "forbidden",
+        "Cette clé ne porte pas le scope « read » requis pour le référentiel.",
+        corsHeaders,
+      );
     }
 
     // Trace best-effort (n'interrompt pas la requête en cas d'échec).

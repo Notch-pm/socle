@@ -59,4 +59,24 @@ describe("buildOpenApiDocument", () => {
       ]),
     );
   });
+
+  it("mentionne le scope read requis dans le narratif d'authentification", () => {
+    expect(doc.info.description).toMatch(/scope \*\*`read`\*\*/);
+    expect(doc.info.description).toMatch(/403/);
+  });
+
+  it("documente le paramètre organization_id de /v1/quartiers (clé plateforme + geometry)", () => {
+    const params = doc.paths["/v1/quartiers"].get.parameters.map((p: { name: string }) => p.name);
+    expect(params).toEqual(expect.arrayContaining(["geometry", "organization_id"]));
+    const orgIdParam = doc.paths["/v1/quartiers"].get.parameters.find(
+      (p: { name: string }) => p.name === "organization_id",
+    );
+    expect(orgIdParam).toMatchObject({
+      in: "query",
+      required: false,
+      schema: { type: "string", format: "uuid" },
+    });
+    expect(orgIdParam.description).toMatch(/plateforme/);
+    expect(doc.paths["/v1/quartiers"].get.responses).toHaveProperty("400");
+  });
 });
