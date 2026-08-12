@@ -115,6 +115,14 @@ function writeErrorResponse(err: unknown): Response {
   return errorResponse("internal_error", "Erreur interne du serveur.", corsHeaders);
 }
 
+/**
+ * Colonnes à lire pour sérialiser une fiche : toutes celles de `contacts` plus
+ * le quartier **résolu** (nom + couleur), afin que le consommateur puisse
+ * l'afficher sans second appel. À utiliser partout où le résultat part dans
+ * `serializeContact` — un simple `select("*")` laisserait `quartier` à `null`.
+ */
+const CONTACT_SELECT = "*, quartier:quartiers(id, name, color)";
+
 /** Rôles (triés par nom) et références externes d'un lot de contacts. */
 async function loadRolesAndRefs(
   admin: AdminClient,
@@ -207,7 +215,7 @@ async function loadRelations(
 async function fetchContactDto(admin: AdminClient, orgId: string, id: string) {
   const { data, error } = await admin
     .from("contacts")
-    .select("*")
+    .select(CONTACT_SELECT)
     .eq("id", id)
     .eq("organization_id", orgId)
     .maybeSingle();
@@ -576,7 +584,7 @@ Deno.serve(async (req: Request) => {
           if (idFilter.length === 0) return jsonResponse(200, [], corsHeaders);
         }
 
-        let query = admin.from("contacts").select("*").eq("organization_id", orgId);
+        let query = admin.from("contacts").select(CONTACT_SELECT).eq("organization_id", orgId);
         if (type !== null) query = query.eq("contact_type", type);
         if (status !== null) query = query.eq("status", status);
         if (quartierId === "null") query = query.is("quartier_id", null);
@@ -750,7 +758,7 @@ Deno.serve(async (req: Request) => {
       const ids = candidates.map((c) => c.contact_id);
       const { data: contactRows, error: rowsErr } = await admin
         .from("contacts")
-        .select("*")
+        .select(CONTACT_SELECT)
         .eq("organization_id", orgId)
         .in("id", ids);
       if (rowsErr) throw rowsErr;

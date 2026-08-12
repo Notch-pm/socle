@@ -97,4 +97,25 @@ describe("openapi (contacts-api)", () => {
     expect(doc.components.schemas.ContactCreate.properties).not.toHaveProperty("quartier_auto");
     expect(doc.components.schemas.ContactUpdate.properties).not.toHaveProperty("quartier_auto");
   });
+
+  it("déclare l'en-tête X-Organization-Id (clé plateforme) et le référence sur tous les endpoints", () => {
+    const header = doc.components.parameters.XOrganizationId;
+    expect(header).toMatchObject({
+      name: "X-Organization-Id",
+      in: "header",
+      required: false,
+      schema: { type: "string", format: "uuid" },
+    });
+    expect(header.description).toMatch(/plateforme/);
+
+    for (const [pathKey, operations] of Object.entries(doc.paths) as [string, Record<string, any>][]) {
+      for (const [method, operation] of Object.entries(operations)) {
+        const params = (operation as { parameters?: Array<{ $ref?: string }> }).parameters ?? [];
+        expect(
+          params.some((p) => p.$ref === "#/components/parameters/XOrganizationId"),
+          `${method.toUpperCase()} ${pathKey} doit référencer XOrganizationId`,
+        ).toBe(true);
+      }
+    }
+  });
 });

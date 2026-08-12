@@ -31,6 +31,9 @@ const ID_PARAM = {
   schema: { type: "string", format: "uuid" },
 };
 
+/** Référence vers le paramètre d'en-tête réutilisable `XOrganizationId` (clé plateforme). */
+const X_ORGANIZATION_ID_PARAM = { $ref: "#/components/parameters/XOrganizationId" };
+
 export function buildOpenApiDocument(serverUrl: string): Record<string, unknown> {
   return {
     openapi: "3.1.0",
@@ -50,8 +53,12 @@ export function buildOpenApiDocument(serverUrl: string): Record<string, unknown>
         "Chaque appel doit porter une **clé API** dans l'en-tête `Authorization: Bearer <clé>`.",
         "Les clés sont **destinées à un usage serveur-à-serveur** et doivent porter le scope",
         "**`contacts`** (une clé de lecture du référentiel général ne suffit pas : les usagers",
-        "sont des données personnelles). Une clé est rattachée à une **organisation principale**",
-        "et ne donne accès qu'aux usagers de cette organisation (isolation multi-tenant).",
+        "sont des données personnelles). Il existe deux types de clé : une clé **rattachée** à",
+        "une **organisation principale**, qui ne donne accès qu'aux usagers de cette",
+        "organisation (isolation multi-tenant) ; ou une clé **plateforme** (liaison unique",
+        "Socle↔Clara), sans organisation propre, dont le périmètre dépend de l'en-tête",
+        "**`X-Organization-Id`** fourni à chaque appel — voir ce paramètre, réutilisé par tous",
+        "les endpoints `/v1/*`.",
         "",
         "## Données sensibles",
         "`internal_notes` est une note **réservée aux agents** : un consommateur qui sert des",
@@ -73,6 +80,10 @@ export function buildOpenApiDocument(serverUrl: string): Record<string, unknown>
         "`GET /v1/quartiers` de l'API référentiel). Fournir `quartier_id` force un rattachement",
         "**manuel** (protégé des recalculs, `quartier_auto: false`) ; fournir `quartier_id: null`",
         "rétablit l'assignation **automatique**.",
+        "",
+        "En lecture, la fiche porte aussi l'objet **`quartier`** (`id`, `name`, `color`) : le",
+        "quartier déjà résolu, pour l'afficher sans second appel — `GET /v1/quartiers` sert à",
+        "lister le catalogue ou récupérer les géométries, pas à traduire un identifiant.",
         "",
         "## Rapprochement d'identités (détection de doublons)",
         "`POST /v1/contacts/match` prend une **identité partielle** et renvoie les fiches",
@@ -106,6 +117,7 @@ export function buildOpenApiDocument(serverUrl: string): Record<string, unknown>
             "Filtres cumulables ; `source` + `external_id` permettent de retrouver un usager " +
             "par son identifiant dans un logiciel tiers.",
           parameters: [
+            X_ORGANIZATION_ID_PARAM,
             {
               name: "type",
               in: "query",
@@ -193,7 +205,7 @@ export function buildOpenApiDocument(serverUrl: string): Record<string, unknown>
                 },
               },
             },
-            ...errorResponses("400", "401", "403", "500"),
+            ...errorResponses("400", "401", "403", "404", "500"),
           },
         },
         post: {
@@ -202,13 +214,14 @@ export function buildOpenApiDocument(serverUrl: string): Record<string, unknown>
           description:
             "Crée une fiche usager. `contact_type` gouverne les champs obligatoires : la " +
             "**civilité** pour une personne physique, la **raison sociale** pour une structure.",
+          parameters: [X_ORGANIZATION_ID_PARAM],
           requestBody: {
             required: true,
             content: { "application/json": { schema: { $ref: "#/components/schemas/ContactCreate" } } },
           },
           responses: {
             "201": CONTACT_RESPONSE,
-            ...errorResponses("400", "401", "403", "409", "500"),
+            ...errorResponses("400", "401", "403", "404", "409", "500"),
           },
         },
       },
@@ -245,6 +258,7 @@ export function buildOpenApiDocument(serverUrl: string): Record<string, unknown>
             "+arrondi(40 × similarité) · `birth_date` +20. Le barème peut évoluer : ne comparer",
             "les scores qu'au **sein d'une même réponse**, jamais à un seuil absolu.",
           ].join("\n"),
+          parameters: [X_ORGANIZATION_ID_PARAM],
           requestBody: {
             required: true,
             content: {
@@ -260,7 +274,7 @@ export function buildOpenApiDocument(serverUrl: string): Record<string, unknown>
                 },
               },
             },
-            ...errorResponses("400", "401", "403", "500"),
+            ...errorResponses("400", "401", "403", "404", "500"),
           },
         },
       },
@@ -268,7 +282,7 @@ export function buildOpenApiDocument(serverUrl: string): Record<string, unknown>
         get: {
           tags: ["Usagers"],
           summary: "Consulter un usager",
-          parameters: [ID_PARAM],
+          parameters: [ID_PARAM, X_ORGANIZATION_ID_PARAM],
           responses: {
             "200": CONTACT_RESPONSE,
             ...errorResponses("400", "401", "403", "404", "500"),
@@ -280,7 +294,7 @@ export function buildOpenApiDocument(serverUrl: string): Record<string, unknown>
           description:
             "Modification **partielle** : seuls les champs fournis sont modifiés. `role_ids` et " +
             "`external_references`, s'ils sont fournis, **remplacent** l'ensemble existant.",
-          parameters: [ID_PARAM],
+          parameters: [ID_PARAM, X_ORGANIZATION_ID_PARAM],
           requestBody: {
             required: true,
             content: { "application/json": { schema: { $ref: "#/components/schemas/ContactUpdate" } } },
@@ -298,7 +312,7 @@ export function buildOpenApiDocument(serverUrl: string): Record<string, unknown>
           description:
             "Passe la fiche au statut `archived`. La fiche reste consultable et référençable ; " +
             "l'opération est réversible via `/restore`. Idempotent.",
-          parameters: [ID_PARAM],
+          parameters: [ID_PARAM, X_ORGANIZATION_ID_PARAM],
           responses: {
             "200": CONTACT_RESPONSE,
             ...errorResponses("400", "401", "403", "404", "500"),
@@ -310,7 +324,7 @@ export function buildOpenApiDocument(serverUrl: string): Record<string, unknown>
           tags: ["Usagers"],
           summary: "Réactiver un usager archivé",
           description: "Repasse la fiche au statut `active`. Idempotent.",
-          parameters: [ID_PARAM],
+          parameters: [ID_PARAM, X_ORGANIZATION_ID_PARAM],
           responses: {
             "200": CONTACT_RESPONSE,
             ...errorResponses("400", "401", "403", "404", "500"),
@@ -324,6 +338,7 @@ export function buildOpenApiDocument(serverUrl: string): Record<string, unknown>
           description:
             "Catalogue des rôles de l'organisation (Habitant, Élu, Agent…). Les identifiants " +
             "renvoyés alimentent `role_ids` à la création/modification d'un usager.",
+          parameters: [X_ORGANIZATION_ID_PARAM],
           responses: {
             "200": {
               description: "Liste des rôles.",
@@ -333,7 +348,7 @@ export function buildOpenApiDocument(serverUrl: string): Record<string, unknown>
                 },
               },
             },
-            ...errorResponses("401", "403", "500"),
+            ...errorResponses("400", "401", "403", "404", "500"),
           },
         },
       },
@@ -345,6 +360,22 @@ export function buildOpenApiDocument(serverUrl: string): Record<string, unknown>
           scheme: "bearer",
           description:
             "Clé API délivrée par un super administrateur Socle, portant le scope `contacts`.",
+        },
+      },
+      parameters: {
+        XOrganizationId: {
+          name: "X-Organization-Id",
+          in: "header",
+          required: false,
+          description:
+            "Organisation visée (UUID), **requise uniquement pour une clé plateforme** " +
+            "(`organization_id` NULL, liaison unique Socle↔Clara) : chaque appel doit alors " +
+            "porter cet en-tête, faute de quoi la requête est rejetée en `400`. L'organisation " +
+            "peut être une sous-organisation ; elle est automatiquement résolue vers son " +
+            "**organisation principale**, qui borne le référentiel servi. Une organisation " +
+            "inconnue renvoie `404`. Une clé **rattachée** à une organisation ignore cet " +
+            "en-tête (son périmètre est déjà fixé).",
+          schema: { type: "string", format: "uuid" },
         },
       },
       responses: {
@@ -493,6 +524,19 @@ export function buildOpenApiDocument(serverUrl: string): Record<string, unknown>
               format: "uuid",
               description:
                 "Quartier de rattachement (voir `GET /v1/quartiers` de l'API référentiel).",
+            },
+            quartier: {
+              type: ["object", "null"],
+              description:
+                "Quartier **résolu** (nom + couleur), de quoi l'afficher sans résoudre " +
+                "`quartier_id` contre `GET /v1/quartiers` — dont les réponses portent les " +
+                "géométries. `null` si le contact n'est rattaché à aucun quartier.",
+              properties: {
+                id: { type: "string", format: "uuid" },
+                name: { type: "string" },
+                color: { type: ["string", "null"], description: "Couleur d'affichage (hex)." },
+              },
+              required: ["id", "name", "color"],
             },
             quartier_auto: {
               type: "boolean",

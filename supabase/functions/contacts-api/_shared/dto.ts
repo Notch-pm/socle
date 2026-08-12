@@ -24,6 +24,18 @@ export interface ContactExternalReferenceDto {
   updated_at: string | null;
 }
 
+/**
+ * Quartier de rattachement, référence courte embarquée dans la fiche : de quoi
+ * l'**afficher** (nom, pastille de couleur) sans que le consommateur ait à
+ * résoudre l'UUID contre `GET /v1/quartiers` de l'API référentiel — dont les
+ * réponses portent les géométries, hors de proportion pour un simple libellé.
+ */
+export interface ContactQuartierDto {
+  id: string;
+  name: string;
+  color: string | null;
+}
+
 /** L'autre bout d'une relation entre contacts (référence courte). */
 export interface ContactRelationPeerDto {
   id: string;
@@ -68,6 +80,8 @@ export interface ContactDto {
   address_lon: number | null;
   /** Quartier de rattachement (voir /v1/quartiers de l'API référentiel). */
   quartier_id: string | null;
+  /** Quartier résolu (nom + couleur) — `null` si aucun rattachement. */
+  quartier: ContactQuartierDto | null;
   /** true = rattachement automatique d'après l'adresse ; false = forcé manuellement. */
   quartier_auto: boolean;
   preferred_channel: string | null;

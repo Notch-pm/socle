@@ -75,6 +75,33 @@ describe("serializeContact", () => {
     expect(located.quartier_id).toBe("q-1");
     expect(located.quartier_auto).toBe(true);
   });
+
+  it("résout le quartier pré-joint (nom + couleur), sans la géométrie", () => {
+    const dto = serializeContact(
+      {
+        ...row,
+        quartier_id: "q-1",
+        quartier_auto: true,
+        quartier: { id: "q-1", name: "Trinquetaille", color: "#0acf83", geom: "0106000020E6100000" },
+      },
+      [],
+      [],
+    );
+    expect(dto.quartier).toEqual({ id: "q-1", name: "Trinquetaille", color: "#0acf83" });
+    // La géométrie PostGIS ne doit jamais franchir la frontière du DTO.
+    expect(JSON.stringify(dto)).not.toContain("0106000020E6100000");
+  });
+
+  it("quartier absent de la ligne ou sans couleur", () => {
+    // Jointure non demandée / contact non rattaché → null (pas d'objet vide).
+    expect(serializeContact(row, [], []).quartier).toBeNull();
+    const noColor = serializeContact(
+      { ...row, quartier_id: "q-2", quartier: { id: "q-2", name: "Griffeuille", color: null } },
+      [],
+      [],
+    );
+    expect(noColor.quartier).toEqual({ id: "q-2", name: "Griffeuille", color: null });
+  });
 });
 
 describe("serializeContactRole", () => {

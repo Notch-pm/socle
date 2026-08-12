@@ -7,6 +7,7 @@
 import type {
   ContactDto,
   ContactExternalReferenceDto,
+  ContactQuartierDto,
   ContactRelationDto,
   ContactRoleDto,
   ContactRoleRefDto,
@@ -29,6 +30,17 @@ function nullableNum(value: unknown): number | null {
 
 export function serializeContactRoleRef(row: Row): ContactRoleRefDto {
   return { id: str(row.id), name: str(row.name) };
+}
+
+/**
+ * Quartier pré-joint sur la ligne contact (embed PostGREST
+ * `quartier:quartiers(id, name, color)`). `null` si le contact n'est rattaché à
+ * aucun quartier **ou** si l'appelant n'a pas demandé la jointure — les trois
+ * requêtes qui alimentent `serializeContact` doivent donc l'inclure.
+ * La géométrie n'est jamais embarquée : `geom` est du binaire PostGIS.
+ */
+export function serializeContactQuartier(row: Row): ContactQuartierDto {
+  return { id: str(row.id), name: str(row.name), color: nullableStr(row.color) };
 }
 
 export function serializeExternalReference(row: Row): ContactExternalReferenceDto {
@@ -86,6 +98,7 @@ export function serializeContact(
     address_lat: nullableNum(row.address_lat),
     address_lon: nullableNum(row.address_lon),
     quartier_id: nullableStr(row.quartier_id),
+    quartier: row.quartier ? serializeContactQuartier(row.quartier as Row) : null,
     quartier_auto: Boolean(row.quartier_auto),
     preferred_channel: nullableStr(row.preferred_channel),
     consent_email: Boolean(row.consent_email),
