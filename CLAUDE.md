@@ -18,6 +18,21 @@ L'ensemble de la gamme vise une **suite cohérente de gestion de la relation usa
 collectivités : gestion des demandes usagers, gestion de courrier, gestion de guichet,
 application élu, etc. Socle est le socle de paramétrage commun à tous ces produits.
 
+## Documentation
+
+Porte d'entrée : `README.md` (racine). Corpus dans `docs/` : `architecture.md` (frontières,
+zones, sécurité, décisions), `data-model.md` (tables, RLS, triggers, RPC, storage),
+`integration.md` (guide des équipes consommatrices), `api-changelog.md` (journal du contrat
+public, append-only), `operations.md` (runbook), `roadmap.md` (évolutions souhaitées).
+**Règle de propriété unique** : la liste des endpoints vit dans les OpenAPI
+(`supabase/functions/*/_shared/openapi.ts`, publiés sur `/api-doc` et `/api-doc-usagers`), le
+schéma détaillé dans `docs/data-model.md` — les autres docs renvoient sans dupliquer ; CLAUDE.md
+garde les invariants, pièges (⚠️) et pointeurs de code. ⚠️ Toute PR qui touche une **surface de
+contrat** (`supabase/functions/*/_shared/{dto,serializers,openapi}.ts`,
+`src/features/procedures/{formSchema,requesterFields,knowledgeBase}.ts`) ajoute une entrée datée
+à `docs/api-changelog.md` ; une doc périmée par une PR se met à jour **dans cette PR**.
+`docs/archive/` = instantanés historiques non maintenus.
+
 ## Stack
 
 - **Vite 8** (rolldown) + **React 18** + **TypeScript** (strict)
@@ -59,9 +74,11 @@ Projet Supabase : `qhrokbkyxgcvkbpmbmna`.
 
 1. **App par organisation** (`AppShell`, routes protégées par `ProtectedRoute`) — pour les
    utilisateurs et **administrateurs d'organisation**. Routes : `/`, `/organisations`,
-   `/demarches`, `/categories`, `/utilisateurs`.
+   `/demarches`, `/categories`, `/types-pieces`, `/quartiers`, `/utilisateurs`.
 2. **Zone super admin** (`SuperAdminLayout`, protégée par `SuperAdminRoute`) — routes
    `/superadmin/*`. Réservée à `global_role = 'super_admin'`.
+3. **Routes publiques** (hors shell) : `/login`, `/mot-de-passe-oublie`, `/activer-compte`,
+   `/reinitialiser-mot-de-passe`, et les docs d'API `/api-doc` + `/api-doc-usagers`.
 
 ⚠️ Un **super_admin est redirigé** de l'app normale vers `/superadmin` (`ProtectedRoute`).
 Il n'utilise donc jamais les pages de l'app par organisation ; il a ses propres écrans.
@@ -111,13 +128,15 @@ exécutables par `authenticated` : le RLS les évalue avec les droits de l'appel
 - `categories`, `procedures`, `organization_procedures` (catalogue de démarches).
 - `smtp_settings` (SMTP par organisation).
 - `api_keys` (clés d'API rattachées à une racine, ou **clé plateforme** — `organization_id` NULL, périmètre global, liaison unique avec Clara — voir feature).
-- `contacts`, `contact_roles`, `contact_role_assignments`, `contact_external_references`
-  (référentiel des usagers — voir feature).
+- `contacts`, `contact_roles`, `contact_role_assignments`, `contact_external_references`,
+  `contact_relations` (référentiel des usagers — voir feature).
 - `quartiers` (découpage du territoire par racine, polygones PostGIS — voir feature).
 
 Types TS générés dans `src/types/database.types.ts` — **ne pas éditer à la main**,
 régénérer depuis le schéma live (Supabase MCP `generate_typescript_types` / CLI).
-Les migrations passent par `apply_migration` (Supabase MCP) ou la CLI.
+Les migrations passent par `apply_migration` (Supabase MCP) ou la CLI ; l'historique appliqué
+est **versionné dans `supabase/migrations/`** (rapatrié le 2026-08-12) — toute nouvelle
+migration doit y avoir son fichier miroir `{version}_{nom}.sql`.
 
 ## Feature : hiérarchie d'organisations
 
@@ -138,10 +157,19 @@ Les migrations passent par `apply_migration` (Supabase MCP) ou la CLI.
 - `src/features/organizations/` — UI **partagée** : `OrganizationTree` (arbre récursif),
   `OrganizationsManager` (conteneur CRUD + dialogues), `OrganizationsPage` (route admin).
 - `src/features/superadmin/organizations/` — hooks (`useOrganizationsAdmin.ts` : requêtes,
-  mutations, `buildOrgTree`, `MAX_ORG_DEPTH`), `OrganizationFormDialog`, page superadmin,
-  et `OrgSettingsPage` (paramétrage par org : infos, sous-orgs, utilisateurs, SMTP…).
-- Le même `OrganizationsManager` sert les deux zones : `canManageRoots=false` côté admin,
-  `canManageRoots` + `onConfigure` côté superadmin.
+  mutations, `buildOrgTree`, `MAX_ORG_DEPTH`), `OrganizationFormDialog`, et `OrgSettingsPage`
+  (page d'une org : arborescence + cartes de paramétrage — infos, utilisateurs, SMTP…).
+- Le même `OrganizationsManager` sert les deux zones : `canManageRoots=false` côté admin ;
+  `canManageRoots` + `rootOrganizationId` (arbre **borné au sous-arbre** de l'org) + `onConfigure`
+  côté superadmin, en accueil d'`OrgSettingsPage`.
+- **Menu latéral superadmin** (`SuperAdminSidebar`) : chaque **organisation principale** (racine
+  stricte, `parent_id` null) est une entrée de sous-menu sous « Organisations » (libellé **non
+  cliquable**), triée par nom (helper pur `sortedRootOrganizations` dans `orgTree.ts`, testé) →
+  mène à son `OrgSettingsPage`, dont l'accueil affiche l'**arbre du sous-arbre** (racine +
+  sous-organisations). Les racines sont les **clients** : aucune vue ne fond tous les clients
+  dans un même arbre (`/superadmin/organisations` **n'existe plus**, redirection vers
+  `/superadmin`). La création d'une racine se fait par le bouton icône « + » de la ligne
+  « Organisations » (même `OrganizationFormDialog`).
 
 ### Édition d'organisation en pleine page (app par organisation)
 
@@ -307,7 +335,8 @@ avec **`verify_jwt = false`** (l'auth est portée par la fonction, pas par la pa
 
 - **Authentification = clé API** en `Authorization: Bearer <clé>`. Table `api_keys` (secret **haché
   SHA-256** dans `key_hash`, jamais en clair ; `key_prefix` affiché pour repérage ; `expires_at`,
-  `revoked_at`, `last_used_at`). Une clé est **rattachée à une organisation principale (racine)** —
+  `revoked_at`, `last_used_at`). Le scope **`read`** est requis (403 sinon — vérifié depuis le
+  2026-08-12). Une clé est **rattachée à une organisation principale (racine)** —
   trigger `enforce_api_key_root_org` (calqué sur `enforce_procedure_root_org`) — ou **plateforme**
   (`organization_id` NULL, autorisé depuis le 2026-07-17) : périmètre = **toutes** les organisations,
   toutes racines confondues — c'est la liaison unique avec Clara (une clé, deux plateformes
@@ -316,8 +345,9 @@ avec **`verify_jwt = false`** (l'auth est portée par la fonction, pas par la pa
   les clés par racine, une clé plateforme n'y apparaît pas).
 - **Isolation** : la fonction lit avec la **service role** (hors RLS) mais **restreint chaque requête
   au sous-arbre** de l'org de la clé, via `public.org_subtree_ids(root uuid) returns uuid[]`
-  (récursif, `SECURITY INVOKER`, `EXECUTE` révoqué de `anon`/`authenticated`, accordé à
-  `service_role`). C'est LE point où vit l'isolation → couvert par tests + vérif bout en bout.
+  (récursif, `SECURITY INVOKER`, `EXECUTE` réservé à `service_role` — révoqué de
+  `anon`/`authenticated` le 2026-08-12, migration `org_subtree_ids_revoke_execute`).
+  C'est LE point où vit l'isolation → couvert par tests + vérif bout en bout.
 - **Endpoints** (préfixe `/v1`) : `organizations` (+`/{id}`, filtres `status`, `tree=true`),
   `categories`, `procedures` (+`/{id}`, filtres `category_id`, `type`, `enabled_for`),
   `document-types`, `quartiers` (option `geometry=true` → polygones **GeoJSON** via la RPC
@@ -376,6 +406,15 @@ strict** : un contact est rattaché à une **organisation principale (racine)** 
   `logiciel_population`…). `organization_id` **dénormalisée par trigger**
   (`sync_contact_external_ref_org`) pour porter l'unicité `(org, source, external_id)` ; unique
   aussi `(contact_id, source)`.
+- **`contact_relations`** : relations **dirigées** contact→contact (« X est *rôle* de Y »),
+  typées par un rôle du catalogue : `contact_id`, `related_contact_id`, `role_id` (FK
+  `contact_roles` **sans ON DELETE** — un rôle utilisé dans une relation bloque sa suppression),
+  unique `(contact_id, related_contact_id, role_id)`, CHECK anti-auto-relation. Trigger
+  `sync_contact_relation_org` (SECURITY DEFINER) : dénormalise `organization_id` depuis le
+  contact porteur, impose la même racine (deux contacts + rôle) et **interdit de cibler une
+  personne physique** (cible = entreprise/association/administration uniquement). RLS : SELECT
+  `has_org_access` ; écriture via `contacts-api` seulement (payload `relations`, remplacement
+  d'ensemble) ; la fiche expose `relations` (sortantes) et `reverse_relations` (entrantes).
 - **RLS** : SELECT `has_org_access(organization_id)` partout (assignments via `EXISTS` sur le
   contact) ; écriture seulement `contact_roles` (`is_org_admin`). Les 4 fonctions trigger sont
   `SECURITY DEFINER` avec **`EXECUTE` révoqué** de `anon`/`authenticated` (advisor).
@@ -396,7 +435,9 @@ est portée par la fonction). Permet de **consulter, créer, modifier, archiver*
 **aucune suppression** (pas de DELETE, méthode → 405).
 
 - **Auth = clé `api_keys`** (Bearer, SHA-256) comme `public-api`, **mais scope `contacts` requis**
-  (colonne `scopes` ; les clés `read` → 403 : les usagers sont des données personnelles). Les
+  (colonne `scopes` ; les clés `read` → 403 : les usagers sont des données personnelles).
+  Depuis le 2026-08-12, `public-api` vérifie symétriquement le scope `read` — l'asymétrie
+  historique (toute clé valide lisait le référentiel) est corrigée et déployée. Les
   scopes se choisissent à la création de clé (`ApiKeyFormDialog`, switches « Référentiel
   (lecture) » / « Usagers (lecture + écriture) ») et s'affichent en badges (`ApiKeysSection`).
 - **Isolation** : service role (hors RLS) mais chaque requête bornée à une organisation **racine**
@@ -443,12 +484,19 @@ est portée par la fonction). Permet de **consulter, créer, modifier, archiver*
   `address_lat`/`address_lon` directement (paire exigée sur l'état fusionné). `quartier_id`
   dans le payload = rattachement **manuel** (`quartier_auto` passe à false, vérif d'appartenance
   à l'org → 400) ; `quartier_id: null` = retour à l'**auto** (recalcul immédiat par le trigger).
-  La fiche expose `address_lat`, `address_lon`, `quartier_id`, `quartier_auto`.
+  La fiche expose `address_lat`, `address_lon`, `quartier_id`, `quartier_auto`, plus (2026-07-18)
+  l'objet **`quartier`** (`id`, `name`, `color`) — le quartier **résolu**, pour que le consommateur
+  l'affiche sans second appel (`GET /v1/quartiers` porte les géométries : hors de proportion pour
+  un libellé). Il vient d'un embed PostgREST `quartier:quartiers(id, name, color)` centralisé dans
+  la constante **`CONTACT_SELECT`** : ⚠️ toute nouvelle requête dont le résultat part dans
+  `serializeContact` doit l'utiliser — un `select("*")` laisserait `quartier` à `null` sans erreur.
+  (Le `select("*")` du PATCH est volontairement resté nu : il sert au merge, pas à la sérialisation.)
 - **Payloads** : whitelist stricte des clés (clé inconnue → 400), chaînes normalisées (trim,
   `""`→`null`), invariants par type vérifiés sur l'**état fusionné** au PATCH (messages français ;
-  les CHECK DB restent le garde-fou). `role_ids` / `external_references` fournis **remplacent**
-  l'ensemble (omis = intouchés ; remplacement par différence/upsert, pas de delete-all). Création :
-  compensation (delete) si rôles/refs échouent après l'insert. Erreurs `{error:{code,message}}`
+  les CHECK DB restent le garde-fou). `role_ids` / `external_references` / `relations` fournis
+  **remplacent** l'ensemble (omis = intouchés ; remplacement par différence/upsert, pas de
+  delete-all). Relations : pas d'auto-relation, cible jamais une personne physique. Création :
+  compensation (delete) si rôles/refs/relations échouent après l'insert. Erreurs `{error:{code,message}}`
   + **409 `conflict`** (SIRET dupliqué, réf externe prise — mappage des contraintes 23505).
 - ⚠️ `internal_notes` **est exposée** (API serveur-à-serveur pour les apps agents) : un
   consommateur servant des usagers finaux ne doit jamais la retransmettre — documenté dans l'OpenAPI.
@@ -465,9 +513,10 @@ Portage de la fonctionnalité quartiers de Clara (instantané dans `references/c
 décidé quand Clara a délégué ses usagers au Socle. **Multi-tenant strict** : un quartier est
 rattaché à une **organisation principale (racine)** — trigger `enforce_quartier_root_org` (motif
 habituel). Livré : modèle DB + UI Socle + **exposition API** (catalogue dans `public-api`,
-géocodage/rattachement dans `contacts-api` — voir les deux features API). Reste : la
-consommation côté Clara (filtre + stats via l'API) ; les **stats par quartier** ne sont pas
-encore exposées par l'API (RPC `stats_contacts_by_quartier` disponible).
+géocodage/rattachement dans `contacts-api` — voir les deux features API). Clara **affiche** le
+quartier depuis le 2026-07-18 (objet `quartier` résolu dans la fiche contact). Reste : le
+**filtre** par quartier côté Clara, et les **stats par quartier**, pas encore exposées par
+l'API (RPC `stats_contacts_by_quartier` disponible).
 
 - **`quartiers`** : `name` (unique par org, insensible à la casse — index
   `quartiers_org_name_unique`), `color`, `geom geometry(MultiPolygon, 4326)` (**PostGIS**,
@@ -475,6 +524,13 @@ encore exposées par l'API (RPC `stats_contacts_by_quartier` disponible).
   **import GeoJSON uniquement** (`ST_MakeValid` répare les polygones auto-intersectants).
   RLS : SELECT `has_org_access` · écriture (ALL) `is_org_admin` — table modifiable côté
   client, comme `contact_roles`.
+- ⚠️ **L'import GeoJSON remplace le découpage** (depuis le 2026-07-18) : le fichier fait foi,
+  les quartiers de l'organisation sont **supprimés puis recréés dans la même transaction**
+  (paramètre `p_replace` de `create_quartiers_batch`) — un import qui échoue ne laisse donc
+  jamais l'organisation sans découpage, et les noms ne se retrouvent plus suffixés « (2) » par
+  collision avec l'ancien jeu (seuls les doublons **internes au fichier** le sont). Remplacer
+  par un lot **vide** est refusé (ce serait une suppression, qui a son propre bouton). L'UI
+  avertit et fait confirmer par `AlertDialog` quand des quartiers existent.
 - **`contacts`** : + `address_lat`/`address_lon` (géocodage BAN prévu en phase API),
   `quartier_id` (FK `ON DELETE SET NULL`), `quartier_auto` (passe à false quand une valeur est
   forcée manuellement, pour la protéger du recalcul de masse). **Rattachement automatique par
@@ -491,7 +547,11 @@ encore exposées par l'API (RPC `stats_contacts_by_quartier` disponible).
   illisible par Leaflet sinon), `stats_contacts_by_quartier` (+ ligne « Sans quartier »),
   `contacts_outside_quartiers` (géolocalisés hors de tout polygone),
   `recalculate_contact_quartiers` (**SECURITY DEFINER** — les contacts n'ont aucune policy
-  d'écriture client ; garde interne `is_org_admin(p_org_id)` ou service_role).
+  d'écriture client ; garde interne `is_org_admin(p_org_id)` ou service_role),
+  `reset_orphan_manual_quartiers` (même motif SECURITY DEFINER + garde) : après un import en
+  remplacement, un usager rattaché **manuellement** à un quartier disparu (`quartier_id` mis à
+  NULL par la FK, `quartier_auto = false`) serait **ignoré à jamais** par le recalcul — on le
+  repasse donc en automatique. Appelée depuis `create_quartiers_batch` en mode remplacement.
 - **UI** : carte **Leaflet** (deps `leaflet` + `react-leaflet@4` — la v5 exige React 19) via le
   composant partagé `QuartiersManager` : carte cadrée sur l'emprise, liste avec nombre d'usagers
   par quartier, import GeoJSON (noms devinés depuis les propriétés, couleurs cyclées), édition
@@ -503,7 +563,8 @@ encore exposées par l'API (RPC `stats_contacts_by_quartier` disponible).
   le recalcul), `quartiersGeojson.ts` (logique pure **testée** : extraction des polygones d'un
   GeoJSON quelconque, noms devinés/dédoublonnés, palette, `readableTextColor`), `QuartiersMap`,
   `ImportQuartiersDialog`, `QuartierEditDialog`, `QuartiersManager`, `QuartiersPage`.
-- Migrations : `quartiers_referentiel`, `assign_contact_quartier_recompute_on_null`. Vérifié de
+- Migrations : `quartiers_referentiel`, `assign_contact_quartier_recompute_on_null`,
+  `quartiers_import_remplacement`. Vérifié de
   bout en bout (2026-07-17) : test SQL transactionnel annulé (assignation auto, dédoublonnage,
   invariants tenant/racine), parcours navigateur complet (import → stats → recalcul → renommage →
   suppression), et parcours API réel (géocodage BAN d'une adresse → quartier assigné, filtre,

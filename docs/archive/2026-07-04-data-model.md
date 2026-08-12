@@ -1,3 +1,7 @@
+> ⚠️ **Instantané historique (2026-07-04) — non maintenu.** Ce document est archivé tel quel :
+> plusieurs de ses affirmations sont devenues fausses (modèle de droits, catalogue de démarches,
+> écrans). L'état actuel est décrit dans [README.md](../../README.md) et [docs/](../).
+
 # SOCLE — Modèle de données (Documentation technique)
 
 > **Statut** : Documentation d'analyse du schéma existant.

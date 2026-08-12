@@ -6,3 +6,4 @@ dist-ssr
 .env*.local
 *.tsbuildinfo
 supabase/.temp/
+.playwright-mcp/

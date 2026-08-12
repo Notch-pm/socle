@@ -1,0 +1,260 @@
+# Architecture — Socle
+
+> **Public** : développeuses et développeurs (humains et agents IA) travaillant sur Socle ·
+> **Question traitée** : comment le système est-il construit, et pourquoi · **Dernière mise à
+> jour** : 2026-08-12
+
+Ce document explique les frontières du système et les décisions qui les justifient. Il ne liste
+ni les tables (→ [`./data-model.md`](./data-model.md)), ni les endpoints (→ les OpenAPI, publiées
+sur `/api-doc` et `/api-doc-usagers`), ni les règles de contribution (→ [`../CLAUDE.md`](../CLAUDE.md)).
+
+## 1. Vue système
+
+Trois grandes zones, une seule base de données :
+
+```
+┌──────────────────────────┐          ┌───────────────────────────────────┐
+│ SPA React (Vite/TS)       │          │ Consommateurs de la gamme            │
+│ src/App.tsx — 2 zones UI  │          │ Ariane · Clara · Iris · portail…      │
+└─────────────┬──────────────┘          └───────────────────┬──────────────────┘
+              │ supabase-js                                  │ Authorization: Bearer
+              │ JWT utilisateur                               │ <clé api_keys>
+              ▼                                               ▼
+┌──────────────────────────┐          ┌───────────────────────────────────┐
+│ PostgREST + Auth           │          │ Edge Functions Deno                   │
+│ (Supabase)                 │          │ public-api      (lecture seule)       │
+│ RLS = frontière unique     │          │ contacts-api    (lecture/écriture)    │
+└─────────────┬──────────────┘          │ verify_jwt=false, auth portée par le  │
+              │ requêtes filtrées par    │ code de la fonction                    │
+              │ le rôle de l'appelant    └───────────────────┬──────────────────┘
+              │                                               │ service role (hors RLS)
+              │                                               │ périmètre reconstruit en
+              │                                               │ code (`org_subtree_ids`)
+              ▼                                               ▼
+┌────────────────────────────────────────────────────────────────────────────┐
+│ Postgres (schéma public) — organizations, procedures, contacts, quartiers…  │
+└──────────────────────────────────────┬───────────────────────────────────────┘
+                                       ▼
+                       Storage privé — bucket `procedure-documents`
+                       (RLS `storage.objects`, même motif que les tables)
+```
+
+Trois autres Edge Functions ne sont **pas** des APIs de gamme, uniquement des besoins internes à
+l'UI Socle ou à Supabase Auth : `send-test-email` et `invite-user` (JWT utilisateur +
+`is_org_admin`), `auth-email-hook` (webhook Supabase Auth, signature Standard Webhooks). Détail
+des cinq fonctions → [`./operations.md`](./operations.md).
+
+## 2. Principe fondateur : la sécurité vit dans le RLS
+
+**Les droits ne sont jamais appliqués côté client.** Le SPA appelle PostgREST avec le JWT de
+l'utilisateur connecté ; c'est le Row Level Security de Postgres qui décide ce qui est lisible ou
+écrivable. L'UI ne fait que **refléter** ce que le RLS autorise (masquer un bouton n'est jamais
+une mesure de sécurité, seulement du confort).
+
+Quatre fonctions helper, toutes `SECURITY DEFINER`, portent cette logique :
+
+- `is_super_admin()` — l'utilisateur courant est super admin (accès plateforme total).
+- `is_org_admin(org_id)` — admin **direct** de cette organisation (ou super admin).
+- `has_org_access(org_id)` — membre de cette organisation (ou super admin).
+- `is_admin_of_self_or_ancestor(org_id)` — admin de l'organisation **ou de n'importe quel
+  ancêtre** (remonte `parent_id`).
+
+Elles doivent rester `SECURITY DEFINER` : en `SECURITY INVOKER`, elles créeraient une récursion
+infinie (une policy sur `users` qui appelle une fonction qui relit `users`…). Le détail du motif
+anti-récursion, des GRANT/REVOKE et du catalogue complet des policies vit dans
+[`./data-model.md`](./data-model.md) — il n'est pas dupliqué ici.
+
+**Deux niveaux de rôle**, à ne pas confondre :
+
+- `users.global_role` — rôle **plateforme** (`super_admin` ou non). Gouverne l'accès à la zone
+  superadmin, rien d'autre.
+- `user_organizations.role` — rôle **par organisation** (notamment `admin`). Gouverne la gestion
+  d'une organisation et de son catalogue.
+
+**La hiérarchie propage les droits admin vers le bas** : un admin d'une organisation gère aussi
+toute sa descendance (`is_admin_of_self_or_ancestor`), pas seulement l'organisation exacte. Un
+super admin, lui, agit sur toute la plateforme et est seul à créer des organisations racines et à
+supprimer des sous-organisations (jamais une racine). Ce point a une histoire — voir le journal
+des décisions (§6) : le modèle initial ne propageait aucun droit vers les enfants.
+
+## 3. Zones applicatives & navigation
+
+Un seul `BrowserRouter`, un `AuthProvider` global, trois groupes de routes réels (`src/App.tsx`).
+Il n'y a **pas** de route catch-all `*` (constat en §7).
+
+### 3.1 Routes publiques (hors shell, sans garde)
+
+| Route | Composant |
+|---|---|
+| `/login` | `LoginPage` |
+| `/mot-de-passe-oublie` | `ForgotPasswordPage` |
+| `/activer-compte` | `SetPasswordPage` (flux `invite`) |
+| `/reinitialiser-mot-de-passe` | `SetPasswordPage` (flux `recovery`) |
+| `/api-doc` | `ApiDocsPage` — Redoc sur l'OpenAPI de `public-api` |
+| `/api-doc-usagers` | `ApiDocsPage api="contacts-api"` |
+
+### 3.2 Zone super admin — `SuperAdminRoute` › `SuperAdminLayout`
+
+| Route | Composant |
+|---|---|
+| `/superadmin` (index) | `SuperAdminDashboardPage` |
+| `/superadmin/organisations` | `<Navigate to="/superadmin" replace />` — redirection de compatibilité |
+| `/superadmin/organisations/:orgId` | `OrgSettingsPage` |
+| `/superadmin/organisations/:orgId/demarches/nouveau` | `ProcedureEditorPage variant="superadmin"` |
+| `/superadmin/organisations/:orgId/demarches/:procId` | idem |
+
+**Principe structurant : une organisation racine = un client = une entrée de menu = une
+`OrgSettingsPage`.** Aucune vue ne fond tous les clients de la plateforme dans un même arbre —
+c'est précisément ce que faisait l'ancienne `OrganizationsAdminPage` (supprimée). Le menu latéral
+(`SuperAdminSidebar`) liste les organisations principales (racines strictes, `parent_id` null)
+triées par nom sous une ligne « Organisations » non cliquable, avec un bouton icône « + » pour
+créer une nouvelle racine ; chaque entrée mène à l'`OrgSettingsPage` de son client, dont l'accueil
+affiche l'arbre borné à son propre sous-arbre. `/superadmin/organisations` n'a donc plus de
+raison d'exister en tant que vue : c'est une redirection.
+
+### 3.3 Zone app par organisation — `ProtectedRoute` › `AppShell`
+
+| Route | Composant |
+|---|---|
+| `/` (index) | `DashboardPage` (placeholder) |
+| `/organisations` | `OrganizationsPage` |
+| `/organisations/:orgId` | `OrganizationEditorPage` (page à onglets) |
+| `/demarches` | `ProceduresPage` |
+| `/demarches/nouveau` (`?org=<rootId>`) | `ProcedureEditorPage variant="admin"` |
+| `/demarches/:procId` (`?step=N`) | idem |
+| `/categories` | `CategoriesPage` |
+| `/types-pieces` | `DocumentTypesPage` |
+| `/quartiers` | `QuartiersPage` |
+| `/utilisateurs` | `UtilisateursPage` |
+
+### 3.4 Gardes (`src/components/layout/ProtectedRoute.tsx`)
+
+- **`ProtectedRoute`** : `loading` → écran de chargement ; pas de session → `/login` (avec
+  `state.from` pour revenir après connexion) ; `profile.global_role === "super_admin"` →
+  **redirigé vers `/superadmin`**. Un super admin ne voit donc jamais l'app par organisation ; il
+  a ses propres écrans.
+- **`SuperAdminRoute`** : pas de session → `/login` ; `global_role !== "super_admin"` → `/`.
+
+Le chargement du profil (`AuthProvider`) est **keyé sur l'id utilisateur, pas sur l'objet
+session** — supabase-js ré-émet un nouvel objet session à chaque retour d'onglet ; keyer dessus
+repasserait `loading` à `true` et démonterait toute la page en cours (perte de saisie). Détail et
+piège complet → [`../CLAUDE.md`](../CLAUDE.md) (section Authentification & rôles).
+
+## 4. Frontend
+
+### 4.1 Organisation par feature
+
+Alias d'import `@/` → `src/`. Le code métier vit sous `src/features/<domaine>/` (un hook
+`useX.ts`, des dialogues, des pages) ; les primitives UI génériques dans
+`src/components/ui/`, le layout dans `src/components/layout/`, le partagé transverse dans
+`src/components/shared/`. Neuf features aujourd'hui : `auth`, `organizations`, `superadmin`,
+`procedures`, `categories`, `document-types`, `quartiers`, `users`, `public-api-docs`. Il n'existe
+**pas** de feature `contacts` côté frontend : les contacts n'existent que via `contacts-api`, sans
+UI Socle pour l'instant (voir la feature « référentiel des usagers » de `CLAUDE.md`).
+
+### 4.2 Données serveur : TanStack Query
+
+Un hook par ressource, `queryKey` explicite, invalidation dans `onSuccess` — pas d'appel
+`supabase` direct dans les composants de page (deux exceptions ponctuelles assumées :
+`UtilisateursPage`, `SuperAdminDashboardPage`). `QueryClient` configuré avec `retry: 1` et
+`refetchOnWindowFocus: false` (`src/main.tsx`). Les requêtes dépendantes utilisent
+systématiquement `enabled: Boolean(x)`.
+
+### 4.3 Réutilisation entre les deux zones
+
+Le même composant sert l'app par organisation et la zone superadmin, paramétré par une prop
+`organizationId` (ou `rootOrganizationId`) plutôt que dupliqué : `OrganizationsManager`,
+`UsersManagementPage`, `SmtpSettingsSection`, `ProceduresListPanel`, `DocumentTypesManager`,
+`QuartiersManager`. Exception : `CategoriesPage` reste mono-zone (pas de section « Catégories »
+dans `OrgSettingsPage`).
+
+### 4.4 Design system
+
+Socle consomme le **Notch / Ariane Design System**, partagé avec Ariane et Clara. Les tokens sont
+repris dans `src/index.css` + `tailwind.config.ts` (primaire vert `hsl(153 90% 32%)`, secondaire
+beurre, sidebar forêt, `--radius: 0.875rem`, ombres douces `socle-sm/md/lg`). L'UI se construit
+avec les primitives maison façon shadcn sous `src/components/ui/` — à ce jour **9 primitives**
+(`alert-dialog`, `badge`, `button`, `card`, `dialog`, `field`, `input`, `label`, `switch`, sur
+Radix + `class-variance-authority` + `cn()`) et **2 composants partagés**
+(`src/components/shared/` : `EmptyState`, `PageHeader`). Le reste (Select générique, Skeleton,
+Toast, DataTable, TreeView générique…) reste à construire au fil des besoins. Divergence assumée
+avec le DS : police Socle = Inter, DS = Nunito Sans (non alignée volontairement pour l'instant).
+
+### 4.5 Logique métier en modules purs testés
+
+Les règles qui ne dépendent ni du DOM ni du réseau (constitution du schéma de formulaire,
+réordonnancement par glisser-déposer, moteur de conditions, formats de fichiers, parsing de la
+base de connaissances, arbre d'organisations, génération de clé API, GeoJSON des quartiers…)
+vivent dans des fichiers `.ts` sans effet de bord, testés par vitest indépendamment des
+composants. Cette séparation permet de tester le cœur métier sans monter de DOM. L'inventaire
+exhaustif par feature est maintenu dans [`../CLAUDE.md`](../CLAUDE.md) (une ligne « logique pure
+testée » par feature) plutôt que dupliqué ici.
+
+## 5. APIs & contrats publics
+
+Socle est le référentiel central de la gamme : les autres produits (Ariane, Clara, Iris, portail
+citoyen à terme) ne redéfinissent pas les organisations, démarches, quartiers ou usagers — ils les
+**consomment**. Cette consommation passe par deux Edge Functions Deno qui font autorité :
+`public-api` (référentiel, lecture seule) et `contacts-api` (usagers, lecture/écriture, scope de
+clé dédié). Les deux authentifient par clé API (`api_keys`, secret haché SHA-256, jamais en
+clair) et lisent avec la **service role** — donc **hors RLS** : le périmètre par organisation est
+alors reconstruit en code (`org_subtree_ids` pour `public-api`, égalité stricte sur la racine pour
+`contacts-api`), pas délégué à Postgres. Détail des tables, RPC et policies →
+[`./data-model.md`](./data-model.md).
+
+Trois garanties structurent ce contrat public :
+
+- **Sérialisation par whitelist stricte** (`_shared/serializers.ts` de chaque fonction) : aucune
+  colonne sensible ne peut fuir même sur un `select *` mal formé côté code.
+- **JSON possédés transmis tels quels** (`form_schema`, `requester_config`, `knowledge_base`,
+  `translations`, `metadata`) : Socle ne les valide pas au passage, il les doit à sa propre
+  logique de saisie (`src/features/procedures/*.ts`) qui en est la source de vérité.
+- **L'OpenAPI est la documentation de référence**, publiée en pages Redoc in-app (`/api-doc`,
+  `/api-doc-usagers`) plutôt que servie par la fonction elle-même (la passerelle Supabase force
+  les réponses HTML des Edge Functions en `text/plain` avec une CSP `sandbox`). Aucun document du
+  corpus ne réénumère les endpoints — c'est la propriété exclusive des OpenAPI.
+
+Garanties d'isolation, scopes, clé plateforme et politique de compatibilité pour les équipes
+consommatrices → [`./integration.md`](./integration.md).
+
+## 6. Journal des décisions
+
+| Date | Décision | Pourquoi |
+|---|---|---|
+| 2026-07-04 | Deux zones applicatives strictement séparées (app par organisation / superadmin), chacune avec son shell, ses routes et ses gardes. | Un super admin gère la plateforme entière, un admin d'organisation gère la sienne : deux parcours simples plutôt qu'une UI unique truffée de branchements conditionnels sur le rôle. |
+| Après le 2026-07-04 (date précise non tracée dans les rapports disponibles) | Propagation hiérarchique des droits admin (`is_admin_of_self_or_ancestor`) : un admin d'organisation gère aussi toute sa descendance, pas seulement l'organisation exacte. | Remplace un modèle plus strict, documenté comme tel dans l'ancien `ARCHITECTURE.md` du 2026-07-04 (aujourd'hui faux) : être admin d'un parent n'y donnait aucun droit sur les enfants — intenable dès qu'un admin doit configurer tout son sous-arbre. Étendue ensuite à `organization_procedures` par une migration dédiée (`org_procedures_rls_admin_subtree`). |
+| Non daté précisément ; en place au plus tard le 2026-07-11 (éditeur d'organisation à onglets, activation par organisation) | Motif « organisation principale (racine) » : chaque table de catalogue ou de référentiel (`procedures`, `document_types`, `api_keys`, `contacts`, `contact_roles`, `quartiers`) est rattachée par trigger à une organisation **racine**, jamais à une sous-organisation. | Isolation multi-tenant stricte entre clients : un même mécanisme (`enforce_*_root_org`), appliqué systématiquement à chaque nouvelle table, plutôt qu'une règle réinventée à chaque feature. |
+| 2026-07-16 | `public-api` (référentiel, lecture seule) et `contacts-api` (usagers, lecture/écriture) sont deux Edge Functions distinctes, avec des scopes de clé différents (`read` / `contacts`). | Les usagers sont des données personnelles : `public-api` reste contractuellement en lecture seule pour tous ses consommateurs, sans exception d'écriture à gérer dans son contrat. |
+| 2026-07-16 | Aucune policy RLS d'écriture sur `contacts` côté client : la table ne s'écrit que par la service role de `contacts-api`. | Centraliser le géocodage BAN, le rattachement de quartier et les invariants par type de contact dans un seul point d'entrée serveur, plutôt que de les redupliquer dans chaque client autorisé par RLS. |
+| 2026-07-17 | Clé API « plateforme » (`api_keys.organization_id` NULL) : périmètre = toutes les organisations, toutes racines confondues. | Liaison unique Socle↔Clara sans multiplier les clés par client ; nécessite l'en-tête `X-Organization-Id` côté `contacts-api` pour désigner la racine servie à chaque appel. |
+| 2026-07-18 | Un import GeoJSON de quartiers **remplace** tout le découpage existant d'une organisation (suppression + recréation transactionnelle), plutôt que de le fusionner. | Le fichier importé fait foi ; fusionner aurait pu laisser cohabiter d'anciennes zones obsolètes avec les nouvelles. Un import qui échoue ne laisse jamais l'organisation sans découpage (même transaction). |
+| 2026-08-12 (working tree, non commité) | La zone superadmin est réorganisée par client : une organisation racine = une entrée de menu = une `OrgSettingsPage` ; `/superadmin/organisations` devient une redirection de compatibilité. | Les racines *sont* les clients de la plateforme ; une vue qui fond tous les clients dans un même arbre ne correspond à aucun besoin réel et complique l'isolation visuelle des périmètres. |
+| 2026-08-12 | Refonte du corpus documentaire : un document = un public + une question (`README.md`, `CLAUDE.md`, `docs/architecture.md`, `docs/data-model.md`, `docs/integration.md`, `docs/operations.md`, `docs/api-changelog.md`, `docs/roadmap.md`) ; anciens `ARCHITECTURE.md` / `DATA_MODEL.md` / `UI_ARCHITECTURE.md` archivés sous `docs/archive/`. | Les trois anciens documents contredisaient l'état réel du système (notamment le modèle de droits) — une doc fausse est pire qu'une doc absente. |
+| 2026-08-12 | Durcissement du contrat de clés et traçabilité : `public-api` vérifie le scope `read` (403 sinon), `EXECUTE` d'`org_subtree_ids` réservé à `service_role`, historique des migrations rapatrié dans `supabase/migrations/`, baseline complète `supabase/schema.sql` générée (`db dump`), types TS régénérés ; les deux APIs redéployées. | Aligner le comportement réel sur le contrat documenté (le modèle de scopes n'était vérifié que par `contacts-api`), et redonner au repo la trace du schéma. |
+
+## 7. Risques acceptés & dette
+
+Constats factuels au 2026-08-12, à ne pas masquer :
+
+- **Mot de passe SMTP en clair** (`smtp_settings.password`) — et son écriture est désormais
+  ouverte à tout admin d'organisation (`is_org_admin`), pas seulement au super admin : la surface
+  s'est élargie sans chiffrement en contrepartie. `pgsodium` est disponible au catalogue Postgres
+  mais non installé.
+- **Pas de route 404** : `src/App.tsx` n'a pas de route catch-all `*` ; une URL inconnue rend un
+  écran vide.
+- **`darkMode: ["class"]` déclaré sans palette sombre** : `tailwind.config.ts` l'active, mais
+  aucun bloc `.dark` n'existe dans `src/index.css`. Le thème sombre n'est pas réellement supporté.
+- **Pas de sélecteur global d'« organisation courante »** : trois mécanismes concurrents
+  coexistent — `useMyOrganizationId` (première appartenance, dans `UtilisateursPage`), un
+  `<select>` local via `useWritableRootOrganizations` (`ProceduresPage`, `QuartiersPage`), et un
+  sélecteur intégré au formulaire (`CategoryFormDialog`, `DocumentTypeFormDialog`). C'est le point
+  ouvert le plus structurant côté frontend.
+- **`npm run lint` = `tsc -b` seul** : il n'y a ni ESLint ni Prettier configurés dans le projet.
+
+## 8. Voir aussi
+
+- [`./data-model.md`](./data-model.md) — tables, contraintes, triggers, RLS, RPC, extensions, storage.
+- [`./integration.md`](./integration.md) — guide consommateurs (Ariane/Clara/Iris) : clés, scopes, garanties, compatibilité.
+- [`./operations.md`](./operations.md) — déploiement, secrets, migrations, advisors, CI.
+- [`../CLAUDE.md`](../CLAUDE.md) — règles de développement, invariants, pièges, pointeurs de code.
+- [`../README.md`](../README.md) — porte d'entrée du projet.
