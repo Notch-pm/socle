@@ -1,6 +1,4 @@
 import * as React from "react";
-import { Plus } from "lucide-react";
-import { Button } from "@/components/ui/button";
 import { EmptyState } from "@/components/shared/EmptyState";
 import {
   AlertDialog,
@@ -20,6 +18,7 @@ import {
   useSetOrganizationStatus,
   buildOrgTree,
   collectDescendantIds,
+  collectDescendantIdsFlat,
   type OrgNode,
 } from "@/features/superadmin/organizations/useOrganizationsAdmin";
 import {
@@ -29,14 +28,17 @@ import {
 import { OrganizationTree } from "@/features/organizations/OrganizationTree";
 
 export function OrganizationsManager({
-  /** Super admin may create root organizations and delete sub-organizations. */
+  /** Super admin may delete sub-organizations. */
   canManageRoots,
+  /** Restrict the tree to this organization and its descendants (super admin org page). */
+  rootOrganizationId,
   /** Navigate to the org-settings area (super admin only). */
   onConfigure,
   /** When provided, editing opens a full-page editor instead of the inline dialog. */
   onEditOrganization,
 }: {
   canManageRoots: boolean;
+  rootOrganizationId?: string;
   onConfigure?: (node: OrgNode) => void;
   onEditOrganization?: (node: OrgNode) => void;
 }) {
@@ -46,7 +48,15 @@ export function OrganizationsManager({
   const deleteOrg = useDeleteOrganization();
   const setStatus = useSetOrganizationStatus();
 
-  const tree = React.useMemo(() => buildOrgTree(orgs ?? []), [orgs]);
+  const tree = React.useMemo(() => {
+    const all = orgs ?? [];
+    if (!rootOrganizationId) return buildOrgTree(all);
+    const scope = new Set([
+      rootOrganizationId,
+      ...collectDescendantIdsFlat(all, rootOrganizationId),
+    ]);
+    return buildOrgTree(all.filter((o) => scope.has(o.id)));
+  }, [orgs, rootOrganizationId]);
 
   const [formOpen, setFormOpen] = React.useState(false);
   const [editing, setEditing] = React.useState<OrgNode | null>(null);
@@ -55,12 +65,6 @@ export function OrganizationsManager({
   const [obsoleting, setObsoleting] = React.useState<OrgNode | null>(null);
 
   const excludeIds = editing ? collectDescendantIds(editing) : [];
-
-  function openCreateRoot() {
-    setEditing(null);
-    setParentForNew(null);
-    setFormOpen(true);
-  }
 
   function openAddChild(node: OrgNode) {
     setEditing(null);
@@ -114,15 +118,6 @@ export function OrganizationsManager({
 
   return (
     <div className="flex flex-col gap-4">
-      {canManageRoots ? (
-        <div className="flex justify-end">
-          <Button onClick={openCreateRoot}>
-            <Plus />
-            Nouvelle organisation
-          </Button>
-        </div>
-      ) : null}
-
       {mutationError ? (
         <p className="rounded-lg border border-destructive/30 bg-destructive/5 px-4 py-2 text-sm text-destructive">
           {(mutationError as Error).message}
@@ -141,7 +136,7 @@ export function OrganizationsManager({
         <EmptyState
           message={
             canManageRoots
-              ? "Aucune organisation. Créez une organisation racine pour commencer."
+              ? "Aucune organisation. Créez une organisation racine via le bouton « + » du menu latéral."
               : "Aucune organisation rattachée à votre compte."
           }
         />

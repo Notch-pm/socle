@@ -1,4 +1,4 @@
-import { BrowserRouter, Routes, Route } from "react-router-dom";
+import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
 import { AuthProvider } from "@/features/auth/AuthProvider";
 import { ProtectedRoute, SuperAdminRoute } from "@/components/layout/ProtectedRoute";
 import { AppShell } from "@/components/layout/AppShell";
@@ -16,7 +16,6 @@ import { ProcedureEditorPage } from "@/features/procedures/ProcedureEditorPage";
 import { QuartiersPage } from "@/features/quartiers/QuartiersPage";
 import { UtilisateursPage } from "@/pages/UtilisateursPage";
 import { SuperAdminDashboardPage } from "@/features/superadmin/SuperAdminDashboardPage";
-import { OrganizationsAdminPage } from "@/features/superadmin/organizations/OrganizationsAdminPage";
 import { OrgSettingsPage } from "@/features/superadmin/organizations/OrgSettingsPage";
 import { ApiDocsPage } from "@/features/public-api-docs/ApiDocsPage";
 
@@ -38,7 +37,11 @@ export function App() {
           <Route element={<SuperAdminRoute />}>
             <Route element={<SuperAdminLayout />}>
               <Route path="/superadmin" index element={<SuperAdminDashboardPage />} />
-              <Route path="/superadmin/organisations" element={<OrganizationsAdminPage />} />
+              {/* La vue d'ensemble n'existe plus : chaque organisation principale a sa page. */}
+              <Route
+                path="/superadmin/organisations"
+                element={<Navigate to="/superadmin" replace />}
+              />
               <Route path="/superadmin/organisations/:orgId" element={<OrgSettingsPage />} />
               <Route
                 path="/superadmin/organisations/:orgId/demarches/nouveau"

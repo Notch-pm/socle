@@ -40,6 +40,19 @@ export function buildOrgTree(orgs: Organization[]): OrgNode[] {
   return roots;
 }
 
+/**
+ * Organisations principales (racines strictes : `parent_id` null) triées par nom.
+ * Contrairement à `buildOrgTree`, un orphelin dont le parent est hors périmètre
+ * n'est PAS promu racine — seules les vraies racines (les « clients ») sont gardées.
+ */
+export function sortedRootOrganizations<T extends Pick<Organization, "name" | "parent_id">>(
+  orgs: T[],
+): T[] {
+  return orgs
+    .filter((o) => o.parent_id === null)
+    .sort((a, b) => a.name.localeCompare(b.name));
+}
+
 /** All ids strictly below `node` — used to forbid re-parenting an org under its own descendant. */
 export function collectDescendantIds(node: OrgNode): string[] {
   const ids: string[] = [];

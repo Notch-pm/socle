@@ -4,6 +4,7 @@ import {
   collectDescendantIds,
   collectDescendantIdsFlat,
   findRootAncestor,
+  sortedRootOrganizations,
   type Organization,
   type OrgNode,
 } from "./orgTree";
@@ -135,6 +136,26 @@ describe("collectDescendantIdsFlat", () => {
   it("renvoie une liste vide pour une feuille ou un id inconnu", () => {
     expect(collectDescendantIdsFlat(flat, "a1")).toEqual([]);
     expect(collectDescendantIdsFlat(flat, "absent")).toEqual([]);
+  });
+});
+
+describe("sortedRootOrganizations", () => {
+  it("ne garde que les racines strictes (parent_id null), triées par nom (locale FR)", () => {
+    const result = sortedRootOrganizations([
+      org("z", "Zeta"),
+      org("child", "Enfant", "z"),
+      org("e", "Étoile"), // accent : un tri ASCII la placerait après « Zeta »
+      org("a", "Alpha"),
+      org("orphan", "Orphelin", "hors-perimetre"),
+    ]);
+
+    expect(result.map((o) => o.id)).toEqual(["a", "e", "z"]);
+  });
+
+  it("ne mute pas la liste d'entrée", () => {
+    const input = [org("b", "Beta"), org("a", "Alpha")];
+    sortedRootOrganizations(input);
+    expect(input.map((o) => o.id)).toEqual(["b", "a"]);
   });
 });
 

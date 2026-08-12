@@ -11,6 +11,7 @@ export {
   collectDescendantIds,
   collectDescendantIdsFlat,
   findRootAncestor,
+  sortedRootOrganizations,
 } from "./orgTree";
 export type { Organization, OrgStatus, OrgNode } from "./orgTree";
 
