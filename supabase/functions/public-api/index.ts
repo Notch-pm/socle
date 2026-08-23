@@ -21,6 +21,7 @@ import {
   serializeOrganization,
   serializeProcedure,
   serializeQuartier,
+  serializeSmtpSettings,
 } from "./_shared/serializers.ts";
 import { buildOrganizationTree, isUuid } from "./_shared/scope.ts";
 import { errorResponse, jsonResponse } from "./_shared/errors.ts";
@@ -219,6 +220,45 @@ Deno.serve(async (req: Request) => {
         if (error) throw error;
         if (!data) return errorResponse("not_found", "Organisation introuvable.", corsHeaders);
         return jsonResponse(200, serializeOrganization(data), corsHeaders);
+      }
+      // --- /v1/organizations/{id}/smtp ---
+      // SEUL endpoint de cette API qui sert un secret (mot de passe du relais
+      // de la collectivité). Deux gardes cumulatives, dans cet ordre :
+      //   1. scope `smtp` explicite sur la clé — le scope `read` du référentiel
+      //      NE suffit pas : une clé partenaire ne devient pas lectrice
+      //      d'identifiants parce qu'elle lit les démarches ;
+      //   2. organisation dans le périmètre de la clé (hors périmètre = 404,
+      //      on ne révèle pas son existence) — `scopeIds` ne contient que des
+      //      organisations existantes, la garde couvre donc aussi l'inconnu.
+      // La réponse est le relais **applicable** à l'organisation demandée : le
+      // sien, ou celui de l'ancêtre le plus proche dont elle hérite (héritage
+      // Socle du 2026-08-23) ; `source_organization_id` dit lequel, pour que le
+      // consommateur n'ait pas à remonter l'arbre. Une sous-organisation répond
+      // donc 200 là où elle répondait 404 auparavant.
+      if (segments.length === 4 && segments[3] === "smtp") {
+        const id = segments[2];
+        if (!isUuid(id)) {
+          return errorResponse("bad_request", "Identifiant d'organisation invalide.", corsHeaders);
+        }
+        if (!Array.isArray(apiKey.scopes) || !apiKey.scopes.includes("smtp")) {
+          return errorResponse(
+            "forbidden",
+            "Cette clé ne porte pas le scope « smtp » requis pour le serveur d'envoi.",
+            corsHeaders,
+          );
+        }
+        if (!inScope(id)) {
+          return errorResponse("not_found", "Organisation introuvable.", corsHeaders);
+        }
+        // Résolution de l'héritage en base (`resolve_smtp_settings`, EXECUTE
+        // réservé au service role) : une seule implémentation pour l'API, les
+        // envois de mails du Socle et l'interface.
+        const { data: smtpRows, error: smtpError } = await admin.rpc("resolve_smtp_settings", {
+          p_org_id: id,
+        });
+        if (smtpError) throw smtpError;
+        const smtp = Array.isArray(smtpRows) ? smtpRows[0] : smtpRows;
+        return jsonResponse(200, serializeSmtpSettings(id, smtp ?? null), corsHeaders);
       }
     }
 

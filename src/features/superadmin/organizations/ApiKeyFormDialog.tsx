@@ -1,5 +1,5 @@
 import * as React from "react";
-import { Copy, Check, KeyRound, TriangleAlert } from "lucide-react";
+import { Copy, Check, KeyRound, TriangleAlert, Globe } from "lucide-react";
 import {
   Dialog,
   DialogContent,
@@ -12,7 +12,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Field } from "@/components/ui/field";
 import { Switch } from "@/components/ui/switch";
-import { useCreateApiKey } from "@/features/superadmin/organizations/useApiKeys";
+import { useCreateApiKey, type ApiKeyOwner } from "@/features/superadmin/organizations/useApiKeys";
 
 /** Accès attribuables à une clé (colonne `api_keys.scopes`). */
 const SCOPE_OPTIONS = [
@@ -26,29 +26,46 @@ const SCOPE_OPTIONS = [
     label: "Usagers (lecture + écriture)",
     description: "Référentiel des usagers (données personnelles) — API contacts-api.",
   },
+  {
+    scope: "smtp",
+    label: "Serveur d'envoi (identifiants)",
+    description:
+      "Relais SMTP de l'organisation principale, mot de passe compris — à ne cocher que pour "
+      + "une application de la gamme qui expédie les mails de la collectivité (Iris…).",
+  },
 ] as const;
+
+/** Libellé de la case d'assentiment exigée pour créer une clé plateforme. */
+export const PLATFORM_ACK_LABEL =
+  "Je comprends que cette clé donne accès à toutes les organisations de la plateforme.";
 
 /**
  * Création d'une clé API. Deux temps : (1) formulaire (nom + accès + expiration
  * facultative) ; (2) révélation **unique** du secret (copiable), qui ne sera
  * plus jamais affiché.
+ *
+ * `owner = null` crée une **clé plateforme** (périmètre = toutes les
+ * organisations) : le dialogue l'annonce explicitement et exige une case
+ * d'assentiment avant de permettre la création.
  */
 export function ApiKeyFormDialog({
   open,
   onOpenChange,
-  organizationId,
+  owner,
   createdBy,
 }: {
   open: boolean;
   onOpenChange: (open: boolean) => void;
-  organizationId: string;
+  owner: ApiKeyOwner;
   createdBy: string | null | undefined;
 }) {
-  const createKey = useCreateApiKey(organizationId, createdBy);
+  const isPlatform = owner === null;
+  const createKey = useCreateApiKey(owner, createdBy);
 
   const [name, setName] = React.useState("");
   const [expiresAt, setExpiresAt] = React.useState("");
   const [scopes, setScopes] = React.useState<string[]>(["read"]);
+  const [acknowledged, setAcknowledged] = React.useState(false);
   const [secret, setSecret] = React.useState<string | null>(null);
   const [copied, setCopied] = React.useState(false);
 
@@ -58,6 +75,7 @@ export function ApiKeyFormDialog({
       setName("");
       setExpiresAt("");
       setScopes(["read"]);
+      setAcknowledged(false);
       setSecret(null);
       setCopied(false);
       createKey.reset();
@@ -65,7 +83,11 @@ export function ApiKeyFormDialog({
   }, [open]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const trimmed = name.trim();
-  const canSubmit = trimmed.length > 0 && scopes.length > 0 && !createKey.isPending;
+  const canSubmit =
+    trimmed.length > 0 &&
+    scopes.length > 0 &&
+    !createKey.isPending &&
+    (!isPlatform || acknowledged);
 
   function toggleScope(scope: string, enabled: boolean) {
     setScopes((prev) => (enabled ? [...prev, scope] : prev.filter((s) => s !== scope)));
@@ -93,19 +115,28 @@ export function ApiKeyFormDialog({
     }
   }
 
+  let title: string;
+  let description: string;
+  if (secret) {
+    title = isPlatform ? "Clé plateforme créée" : "Clé API créée";
+    description = "Copiez cette clé maintenant : elle ne sera plus jamais affichée.";
+  } else if (isPlatform) {
+    title = "Nouvelle clé plateforme";
+    description = "Génère une clé d'accès aux API dont le périmètre est la plateforme entière.";
+  } else {
+    title = "Nouvelle clé API";
+    description = "Génère une clé d'accès aux API pour cette organisation et sa descendance.";
+  }
+
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent>
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
-            <KeyRound className="size-5" />
-            {secret ? "Clé API créée" : "Nouvelle clé API"}
+            {isPlatform ? <Globe className="size-5" /> : <KeyRound className="size-5" />}
+            {title}
           </DialogTitle>
-          <DialogDescription>
-            {secret
-              ? "Copiez cette clé maintenant : elle ne sera plus jamais affichée."
-              : "Génère une clé d'accès aux API pour cette organisation et sa descendance."}
-          </DialogDescription>
+          <DialogDescription>{description}</DialogDescription>
         </DialogHeader>
 
         {secret ? (
@@ -131,6 +162,21 @@ export function ApiKeyFormDialog({
           </div>
         ) : (
           <form onSubmit={handleSubmit} className="flex flex-col gap-4">
+            {isPlatform ? (
+              <div
+                role="alert"
+                className="flex items-start gap-2 rounded-lg border border-destructive/40 bg-destructive/10 p-3 text-sm text-destructive"
+              >
+                <TriangleAlert className="mt-0.5 size-4 shrink-0" />
+                <p>
+                  <strong>Périmètre global.</strong> Cette clé lira{" "}
+                  <strong>toutes les organisations</strong> de la plateforme, tous clients
+                  confondus — et, avec l'accès « Usagers », tous leurs référentiels d'usagers.
+                  Réservez-la à une application de la gamme elle-même multi-tenant ; pour un
+                  partenaire ou un client, créez la clé depuis la page de son organisation.
+                </p>
+              </div>
+            ) : null}
             <Field label="Nom" htmlFor="api-key-name">
               <Input
                 id="api-key-name"
@@ -138,7 +184,7 @@ export function ApiKeyFormDialog({
                 autoFocus
                 value={name}
                 onChange={(e) => setName(e.target.value)}
-                placeholder="Ex. Clara — production"
+                placeholder={isPlatform ? "Ex. Clara — plateforme" : "Ex. Clara — production"}
               />
             </Field>
             <fieldset className="flex flex-col gap-2">
@@ -171,6 +217,16 @@ export function ApiKeyFormDialog({
                 onChange={(e) => setExpiresAt(e.target.value)}
               />
             </Field>
+            {isPlatform ? (
+              <label className="flex cursor-pointer items-start justify-between gap-3 rounded-lg border border-destructive/40 p-3">
+                <span className="text-sm font-medium">{PLATFORM_ACK_LABEL}</span>
+                <Switch
+                  checked={acknowledged}
+                  onCheckedChange={setAcknowledged}
+                  aria-label={PLATFORM_ACK_LABEL}
+                />
+              </label>
+            ) : null}
             {createKey.isError ? (
               <p className="text-sm text-destructive">{(createKey.error as Error).message}</p>
             ) : null}
@@ -179,7 +235,11 @@ export function ApiKeyFormDialog({
                 Annuler
               </Button>
               <Button type="submit" disabled={!canSubmit}>
-                {createKey.isPending ? "Création…" : "Créer la clé"}
+                {createKey.isPending
+                  ? "Création…"
+                  : isPlatform
+                    ? "Créer la clé plateforme"
+                    : "Créer la clé"}
               </Button>
             </DialogFooter>
           </form>

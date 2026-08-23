@@ -12,6 +12,25 @@ export interface SmtpForm {
   from_email: string;
   from_name: string;
   use_tls: boolean;
+  /** true = ligne inerte, l'organisation utilise le relais de son parent. */
+  inherit_parent: boolean;
+}
+
+/**
+ * Relais dont **hérite** une organisation, c'est-à-dire celui qui s'applique à
+ * son parent (RPC `parent_smtp_settings`). Aperçu **sans mot de passe** : un
+ * admin de sous-organisation n'a pas à lire le secret de sa principale.
+ */
+export interface ParentSmtpSettings {
+  source_organization_id: string;
+  source_organization_name: string;
+  configured: boolean;
+  host: string;
+  port: number;
+  username: string;
+  from_email: string;
+  from_name: string;
+  use_tls: boolean;
 }
 
 const key = (orgId: string) => ["smtp-settings", orgId] as const;
@@ -31,6 +50,21 @@ export function useSmtpSettings(orgId: string) {
   });
 }
 
+/** Aucun parent (organisation principale) ⇒ requête inutile, `null` renvoyé. */
+export function useParentSmtpSettings(orgId: string, hasParent: boolean) {
+  return useQuery({
+    queryKey: [...key(orgId), "parent"] as const,
+    enabled: hasParent,
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .rpc("parent_smtp_settings", { p_org_id: orgId })
+        .maybeSingle();
+      if (error) throw error;
+      return data as ParentSmtpSettings | null;
+    },
+  });
+}
+
 export function useSaveSmtpSettings(orgId: string, existingId: string | undefined) {
   const queryClient = useQueryClient();
   return useMutation({
@@ -45,7 +79,9 @@ export function useSaveSmtpSettings(orgId: string, existingId: string | undefine
         if (error) throw error;
       }
     },
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: key(orgId) }),
+    // Invalidation de TOUTES les organisations : le relais d'un parent est celui
+    // de sa descendance non spécifique, l'aperçu des enfants change avec lui.
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ["smtp-settings"] }),
   });
 }
 

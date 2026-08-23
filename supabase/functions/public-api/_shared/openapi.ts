@@ -29,7 +29,7 @@ export function buildOpenApiDocument(serverUrl: string): Record<string, unknown>
     openapi: "3.1.0",
     info: {
       title: "API Socle — Référentiel de la gamme",
-      version: "1.0.0",
+      version: "1.2.0",
       description: [
         "API **en lecture seule** exposant le référentiel central de la gamme : les",
         "**organisations** (et sous-organisations) avec l'intégralité de leur configuration,",
@@ -54,6 +54,11 @@ export function buildOpenApiDocument(serverUrl: string): Record<string, unknown>
         "",
         "La clé doit en outre porter le scope **`read`** : une clé qui ne l'a pas (par exemple",
         "limitée aux usagers) reçoit une réponse **403**.",
+        "",
+        "Le **serveur d'envoi** (`GET /v1/organizations/{id}/smtp`) exige un scope supplémentaire,",
+        "**`smtp`**, à demander explicitement à la création de la clé : c'est la seule ressource",
+        "de cette API qui sert des **identifiants** (mot de passe du relais de la collectivité).",
+        "Elle est servie pour toute organisation du périmètre de la clé, héritage résolu.",
         "",
         "## Formats",
         "Réponses en **JSON** (`application/json`, UTF-8). Les dates sont au format ISO 8601.",
@@ -83,6 +88,12 @@ export function buildOpenApiDocument(serverUrl: string): Record<string, unknown>
         description:
           "Découpage du territoire de l'organisation principale en quartiers (polygones). " +
           "Les usagers y sont rattachés automatiquement selon leur adresse (voir l'API usagers).",
+      },
+      {
+        name: "Messagerie",
+        description:
+          "Serveur d'envoi (SMTP) de l'organisation principale, consommé par les applications " +
+          "de la gamme qui expédient les mails de la collectivité. Scope `smtp` requis.",
       },
       { name: "Documents", description: "Accès temporaire aux documents privés." },
     ],
@@ -150,6 +161,50 @@ export function buildOpenApiDocument(serverUrl: string): Record<string, unknown>
               },
             },
             ...errorResponses("400", "401", "404", "500"),
+          },
+        },
+      },
+      "/v1/organizations/{id}/smtp": {
+        get: {
+          tags: ["Messagerie"],
+          summary: "Serveur d'envoi (SMTP) applicable à une organisation",
+          description: [
+            "Identifiants du relais de messagerie **applicable à l'organisation demandée**, pour",
+            "qu'une application de la gamme expédie les mails de la collectivité depuis son",
+            "propre domaine. **Seule ressource de cette API qui sert un secret** — d'où deux",
+            "gardes cumulatives :",
+            "",
+            "- la clé porte le scope **`smtp`** (sinon `403`) ;",
+            "- l'organisation est dans le **périmètre** de la clé (sinon `404`).",
+            "",
+            "**Héritage** : le relais se définit d'ordinaire sur l'organisation principale et vaut",
+            "pour toute sa descendance ; une sous-organisation peut néanmoins en avoir un propre.",
+            "La réponse est donc **résolue** — celui de l'organisation, ou celui de l'ancêtre le",
+            "plus proche dont elle hérite — et `source_organization_id` indique laquelle des deux",
+            "le porte. Interroger une sous-organisation est légitime et suffit : aucun besoin de",
+            "remonter l'arbre soi-même.",
+            "",
+            "Aucun relais défini (ou configuration incomplète : hôte ou adresse d'expédition",
+            "manquants) ⇒ **200** avec `configured: false` et tous les champs nuls. Le",
+            "consommateur retombe alors sur son propre repli — il ne tente pas d'expédier.",
+          ].join("\n"),
+          parameters: [
+            {
+              name: "id",
+              in: "path",
+              required: true,
+              description: "Identifiant UUID de l'organisation (principale ou sous-organisation).",
+              schema: { type: "string", format: "uuid" },
+            },
+          ],
+          responses: {
+            "200": {
+              description: "Le serveur d'envoi, ou l'absence de configuration.",
+              content: {
+                "application/json": { schema: { $ref: "#/components/schemas/SmtpSettings" } },
+              },
+            },
+            ...errorResponses("400", "401", "403", "404", "500"),
           },
         },
       },
@@ -434,6 +489,64 @@ export function buildOpenApiDocument(serverUrl: string): Record<string, unknown>
             email_sender_name: null,
             metadata: null,
             created_at: "2026-01-15T09:00:00Z",
+          },
+        },
+        SmtpSettings: {
+          type: "object",
+          description:
+            "Serveur d'envoi applicable à une organisation, héritage résolu. " +
+            "`configured: false` ⇒ aucun relais exploitable n'est défini, ni ici ni au-dessus, " +
+            "et tous les autres champs sont nuls.",
+          required: ["organization_id", "configured"],
+          properties: {
+            organization_id: {
+              type: "string",
+              format: "uuid",
+              description: "Organisation demandée.",
+            },
+            source_organization_id: {
+              type: ["string", "null"],
+              format: "uuid",
+              description:
+                "Organisation qui porte réellement ce relais : celle demandée, ou l'ancêtre " +
+                "dont elle hérite. Nulle si `configured: false`.",
+            },
+            configured: {
+              type: "boolean",
+              description: "Un relais exploitable est défini (hôte ET adresse d'expédition).",
+            },
+            host: { type: ["string", "null"], description: "Hôte SMTP." },
+            port: {
+              type: ["integer", "null"],
+              description: "Port SMTP (587 par défaut ; 465 = TLS implicite).",
+            },
+            username: {
+              type: ["string", "null"],
+              description: "Identifiant SMTP, nul si le relais n'authentifie pas.",
+            },
+            password: {
+              type: ["string", "null"],
+              description:
+                "Mot de passe SMTP, **en clair** : à ranger côté consommateur dans un coffre " +
+                "(Vault, secret d'exécution), jamais dans une colonne lisible ni un bundle client.",
+            },
+            from_email: { type: ["string", "null"], format: "email" },
+            from_name: { type: ["string", "null"] },
+            use_tls: { type: ["boolean", "null"] },
+            updated_at: { type: ["string", "null"], format: "date-time" },
+          },
+          example: {
+            organization_id: "d5227d25-f327-493a-a9a2-278397531e33",
+            source_organization_id: "d5227d25-f327-493a-a9a2-278397531e33",
+            configured: true,
+            host: "smtp.accm.fr",
+            port: 587,
+            username: "notifications@accm.fr",
+            password: "•••••",
+            from_email: "ne-pas-repondre@accm.fr",
+            from_name: "ACCM",
+            use_tls: true,
+            updated_at: "2026-08-20T10:00:00Z",
           },
         },
         OrganizationTreeNode: {

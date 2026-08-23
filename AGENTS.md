@@ -26,7 +26,7 @@ zones, sécurité, décisions), `data-model.md` (tables, RLS, triggers, RPC, sto
 public, append-only), `operations.md` (runbook), `roadmap.md` (évolutions souhaitées).
 **Règle de propriété unique** : la liste des endpoints vit dans les OpenAPI
 (`supabase/functions/*/_shared/openapi.ts`, publiés sur `/api-doc` et `/api-doc-usagers`), le
-schéma détaillé dans `docs/data-model.md` — les autres docs renvoient sans dupliquer ; CLAUDE.md
+schéma détaillé dans `docs/data-model.md` — les autres docs renvoient sans dupliquer ; AGENTS.md
 garde les invariants, pièges (⚠️) et pointeurs de code. ⚠️ Toute PR qui touche une **surface de
 contrat** (`supabase/functions/*/_shared/{dto,serializers,openapi}.ts`,
 `src/features/procedures/{formSchema,requesterFields,knowledgeBase}.ts`) ajoute une entrée datée

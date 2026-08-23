@@ -46,6 +46,7 @@ Une clé porte un ou plusieurs scopes :
 |---|---|---|
 | `read` | Référentiel (`public-api`) | Vérifié depuis le 2026-08-12 — une clé sans ce scope reçoit **403** sur tout endpoint authentifié de `public-api`. |
 | `contacts` | Usagers (`contacts-api`) | Vérifié — une clé sans ce scope reçoit **403** sur tout appel à `contacts-api` (données personnelles). |
+| `smtp` | Serveur d'envoi (`GET /v1/organizations/{id}/smtp`) | Vérifié — **seule ressource qui sert un secret** (mot de passe du relais). Le scope `read` ne suffit pas : à demander explicitement. La réponse est le relais **applicable** à l'organisation (le sien, ou celui dont elle hérite) ; `source_organization_id` dit lequel. |
 
 ## Modèle mental des périmètres
 
@@ -145,7 +146,7 @@ consommateur :
 
 ## Checklist d'intégration
 
-- [ ] Clé obtenue auprès d'un super admin Socle, avec le bon scope (`read` et/ou `contacts`)
+- [ ] Clé obtenue auprès d'un super admin Socle, avec le bon scope (`read`, `contacts`, `smtp`)
 - [ ] Secret stocké côté serveur uniquement, jamais exposé à un client public
 - [ ] En-tête `Authorization: Bearer <clé>` sur chaque appel
 - [ ] Clé plateforme sur `contacts-api` : en-tête `X-Organization-Id` envoyé systématiquement

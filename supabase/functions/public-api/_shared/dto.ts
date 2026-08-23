@@ -92,3 +92,33 @@ export interface SignedUrlDto {
   url: string;
   expires_at: string;
 }
+
+/**
+ * Serveur d'envoi (SMTP) d'une organisation **principale**.
+ *
+ * ⚠️ **Seule donnée sensible servie par cette API**, et exception assumée à la
+ * règle « aucune colonne sensible n'est exposée » : les applications de la
+ * gamme (Iris…) expédient les mails de la collectivité **par son propre
+ * relais**, et n'ont aucun autre moyen d'en obtenir les identifiants — le
+ * Socle est la source de vérité, il ne peut pas se contenter de les garder.
+ * L'accès est gardé trois fois côté `index.ts` : scope **`smtp`** explicite sur
+ * la clé, organisation dans le périmètre de la clé, et **racine uniquement**.
+ *
+ * `configured = false` ⇒ aucun relais n'est défini (ou il est incomplet) :
+ * tous les autres champs sont nuls, et le consommateur doit retomber sur son
+ * propre repli plutôt que d'expédier avec une configuration bancale.
+ */
+export interface SmtpSettingsDto {
+  organization_id: string;
+  /** Organisation qui porte réellement le relais (elle-même, ou l'ancêtre dont elle hérite). */
+  source_organization_id: string | null;
+  configured: boolean;
+  host: string | null;
+  port: number | null;
+  username: string | null;
+  password: string | null;
+  from_email: string | null;
+  from_name: string | null;
+  use_tls: boolean | null;
+  updated_at: string | null;
+}

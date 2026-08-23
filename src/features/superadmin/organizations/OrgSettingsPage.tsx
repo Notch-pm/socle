@@ -120,7 +120,12 @@ export function OrgSettingsPage() {
           ) : (
             <EmptyState message="Les quartiers se paramètrent au niveau de l'organisation principale (racine)." />
           ))}
-        {activeSection === "smtp" && <SmtpSettingsSection organizationId={organization.id} />}
+        {activeSection === "smtp" && (
+          <SmtpSettingsSection
+            organizationId={organization.id}
+            parentOrganizationId={organization.parent_id}
+          />
+        )}
         {activeSection === "api" &&
           (organization.parent_id === null ? (
             <ApiKeysSection organizationId={organization.id} />

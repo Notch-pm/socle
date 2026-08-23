@@ -11,6 +11,7 @@ import type {
   OrganizationProcedureDto,
   ProcedureDto,
   QuartierDto,
+  SmtpSettingsDto,
 } from "./dto.ts";
 
 /** Ligne DB brute, structure inconnue à la compilation. */
@@ -114,5 +115,61 @@ export function serializeDocumentType(row: Row): DocumentTypeDto {
     organization_id: str(row.organization_id),
     name: str(row.name),
     created_at: nullableStr(row.created_at),
+  };
+}
+
+/** Chaîne non vide après élagage, `null` sinon (les colonnes SMTP sont `not null default ''`). */
+function nonEmpty(value: unknown): string | null {
+  if (typeof value !== "string") return null;
+  const trimmed = value.trim();
+  return trimmed === "" ? null : trimmed;
+}
+
+/**
+ * Serveur d'envoi applicable à une organisation — whitelist stricte, **mot de
+ * passe compris** : c'est la seule sortie sensible de l'API, et elle n'est
+ * atteignable qu'avec le scope `smtp` (voir `index.ts` et `dto.ts`).
+ *
+ * `organizationId` est l'organisation **demandée** ; `row` la ligne **résolue**
+ * (la sienne, ou celle de l'ancêtre dont elle hérite) → `source_organization_id`
+ * dit laquelle des deux porte le relais.
+ *
+ * Une ligne dont l'hôte ou l'adresse d'expédition manque est traitée comme
+ * **absente** (`configured: false`) : les colonnes Socle valent `''` par
+ * défaut, une configuration à moitié saisie ne doit pas se transmettre en aval
+ * comme un relais utilisable. Le mot de passe n'est jamais élagué (une espace
+ * peut en faire partie) — seulement testé non vide.
+ */
+export function serializeSmtpSettings(organizationId: string, row: Row | null): SmtpSettingsDto {
+  const host = nonEmpty(row?.host);
+  const fromEmail = nonEmpty(row?.from_email);
+  if (!row || host === null || fromEmail === null) {
+    return {
+      organization_id: organizationId,
+      source_organization_id: null,
+      configured: false,
+      host: null,
+      port: null,
+      username: null,
+      password: null,
+      from_email: null,
+      from_name: null,
+      use_tls: null,
+      updated_at: null,
+    };
+  }
+  const port = nullableNum(row.port);
+  return {
+    organization_id: organizationId,
+    source_organization_id: nullableStr(row.organization_id) ?? organizationId,
+    configured: true,
+    host,
+    port: port !== null && Number.isInteger(port) && port >= 1 && port <= 65535 ? port : 587,
+    username: nonEmpty(row.username),
+    password: typeof row.password === "string" && row.password !== "" ? row.password : null,
+    from_email: fromEmail.toLowerCase(),
+    from_name: nonEmpty(row.from_name),
+    use_tls: row.use_tls !== false,
+    updated_at: nullableStr(row.updated_at),
   };
 }

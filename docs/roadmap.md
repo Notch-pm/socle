@@ -16,9 +16,9 @@ existe réellement aujourd'hui : [architecture.md](./architecture.md),
 - **Filtre `email`** (égalité exacte insensible à la casse) sur `GET /v1/contacts` — 2026-07-16.
 - **Recherche par téléphone** (filtre `phone`, normalisé, mobile + fixe) et **rapprochement
   d'identités** (`POST /v1/contacts/match` : email, téléphone, SIRET, noms exacts/similaires via
-  pg_trgm, date de naissance en renfort ; candidats scorés avec `reasons`) — 2026-07-17. Un
-  consommateur qui maintenait un scoring de doublons local peut le remplacer par un appel unique
-  à `/match`.
+  pg_trgm, date de naissance en renfort ; candidats scorés avec `reasons`) — 2026-07-17.
+  **Adopté par Clara le jour même** : son scoring local ne fait plus que construire le payload
+  de `/match`.
 - **Quartiers et géocodage** — 2026-07-17, complétés 2026-07-18. Détail dans la section
   [Quartiers](#quartiers) ci-dessous.
 

@@ -42,3 +42,23 @@ export async function generateApiKey(): Promise<GeneratedApiKey> {
   const hash = await sha256Hex(secret);
   return { secret, prefix: secret.slice(0, DISPLAY_PREFIX_LENGTH), hash };
 }
+
+/** État d'une clé : révoquée l'emporte sur expirée, qui l'emporte sur active. */
+export type ApiKeyStatus = "active" | "revoked" | "expired";
+
+export interface ApiKeyLifecycle {
+  revoked_at: string | null;
+  expires_at: string | null;
+}
+
+/** État d'une clé à l'instant `now` (injectable pour les tests). */
+export function apiKeyStatus(key: ApiKeyLifecycle, now: Date = new Date()): ApiKeyStatus {
+  if (key.revoked_at) return "revoked";
+  if (key.expires_at && new Date(key.expires_at).getTime() < now.getTime()) return "expired";
+  return "active";
+}
+
+/** Nombre de clés encore utilisables (ni révoquées, ni expirées). */
+export function countActiveApiKeys(keys: ApiKeyLifecycle[], now: Date = new Date()): number {
+  return keys.filter((key) => apiKeyStatus(key, now) === "active").length;
+}

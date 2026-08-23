@@ -98,6 +98,7 @@ Il n'y a **pas** de route catch-all `*` (constat en §7).
 | Route | Composant |
 |---|---|
 | `/superadmin` (index) | `SuperAdminDashboardPage` |
+| `/superadmin/cles-plateforme` | `PlatformApiKeysPage` — clés API **plateforme** (`organization_id` NULL, périmètre global) |
 | `/superadmin/organisations` | `<Navigate to="/superadmin" replace />` — redirection de compatibilité |
 | `/superadmin/organisations/:orgId` | `OrgSettingsPage` |
 | `/superadmin/organisations/:orgId/demarches/nouveau` | `ProcedureEditorPage variant="superadmin"` |
@@ -111,6 +112,13 @@ triées par nom sous une ligne « Organisations » non cliquable, avec un bouton
 créer une nouvelle racine ; chaque entrée mène à l'`OrgSettingsPage` de son client, dont l'accueil
 affiche l'arbre borné à son propre sous-arbre. `/superadmin/organisations` n'a donc plus de
 raison d'exister en tant que vue : c'est une redirection.
+
+Seule exception à « tout est rangé sous un client » : les **clés API plateforme** (périmètre =
+toutes les organisations) n'appartiennent à aucune racine. Elles ont leur propre entrée de menu
+« Clés plateforme » et leur page (`PlatformApiKeysPage`, depuis le 2026-08-20), qui réutilise la
+liste et le dialogue des clés d'organisation (`ApiKeysList`, `ApiKeyFormDialog`) avec un
+avertissement et une case d'assentiment explicites à la création. Le tableau de bord affiche le
+nombre de clés plateforme actives.
 
 ### 3.3 Zone app par organisation — `ProtectedRoute` › `AppShell`
 
@@ -231,6 +239,7 @@ consommatrices → [`./integration.md`](./integration.md).
 | 2026-08-12 (working tree, non commité) | La zone superadmin est réorganisée par client : une organisation racine = une entrée de menu = une `OrgSettingsPage` ; `/superadmin/organisations` devient une redirection de compatibilité. | Les racines *sont* les clients de la plateforme ; une vue qui fond tous les clients dans un même arbre ne correspond à aucun besoin réel et complique l'isolation visuelle des périmètres. |
 | 2026-08-12 | Refonte du corpus documentaire : un document = un public + une question (`README.md`, `CLAUDE.md`, `docs/architecture.md`, `docs/data-model.md`, `docs/integration.md`, `docs/operations.md`, `docs/api-changelog.md`, `docs/roadmap.md`) ; anciens `ARCHITECTURE.md` / `DATA_MODEL.md` / `UI_ARCHITECTURE.md` archivés sous `docs/archive/`. | Les trois anciens documents contredisaient l'état réel du système (notamment le modèle de droits) — une doc fausse est pire qu'une doc absente. |
 | 2026-08-12 | Durcissement du contrat de clés et traçabilité : `public-api` vérifie le scope `read` (403 sinon), `EXECUTE` d'`org_subtree_ids` réservé à `service_role`, historique des migrations rapatrié dans `supabase/migrations/`, baseline complète `supabase/schema.sql` générée (`db dump`), types TS régénérés ; les deux APIs redéployées. | Aligner le comportement réel sur le contrat documenté (le modèle de scopes n'était vérifié que par `contacts-api`), et redonner au repo la trace du schéma. |
+| 2026-08-23 | Le serveur d'envoi (SMTP) **s'hérite** le long de la hiérarchie : une organisation utilise le relais de l'ancêtre le plus proche qui en a un propre, sauf si elle en déclare un elle-même (`smtp_settings.inherit_parent`). La résolution se fait **à la lecture** (`resolve_smtp_settings`), sans recopie dans les enfants. | Une collectivité paramètre son relais une fois, à la racine, et toutes ses entités en bénéficient — y compris quand elle le change ensuite. Recopier la configuration dans chaque enfant aurait créé autant de copies à resynchroniser (et à désynchroniser silencieusement). |
 
 ## 7. Risques acceptés & dette
 

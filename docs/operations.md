@@ -51,6 +51,13 @@ fichiers casse la fonction en production alors que les tests passent en local.
   dans la table `smtp_settings` (hôte, port, identifiant, mot de passe, expéditeur), saisis par un
   admin d'org depuis l'onglet « Emails (SMTP) ». `auth-email-hook` et `send-test-email` lisent
   cette table avec la service role.
+  **Depuis le 2026-08-23, ces identifiants sortent aussi du Socle** : `public-api` les sert sur
+  `GET /v1/organizations/{id}/smtp` aux clés portant le scope `smtp` (racine uniquement), pour
+  que les applications de la gamme expédient les mails de la collectivité par son relais sans
+  ressaisie — Iris en tient un miroir. Conséquence d'exploitation : **le relais d'une
+  collectivité se change ici, une seule fois**, et redescend en aval à leur synchronisation ;
+  et le scope `smtp` ne se coche que pour une application de la gamme, jamais pour un
+  partenaire.
 
 ## Base de données
 
@@ -66,9 +73,13 @@ fichiers casse la fonction en production alors que les tests passent en local.
   leur étant antérieur : la reconstruction depuis zéro passe par `schema.sql`. ⚠️ Le dump ne
   couvre pas le schéma `storage` : le bucket `procedure-documents` et ses 4 policies
   `storage.objects` ne vivent que dans la migration `procedure_documents_bucket_and_rls`.
+  ⚠️ Le dump date du 2026-08-12 : les trois migrations du 2026-08-23 (héritage SMTP) n'y sont
+  pas encore — elles ne vivent que dans `supabase/migrations/`. À régénérer au prochain
+  démarrage de Docker Desktop.
 - **Types TypeScript** : à régénérer après **toute** migration (`generate_typescript_types` MCP,
   ou CLI équivalente) dans `src/types/database.types.ts`. Ce fichier **ne s'édite jamais à la
-  main**. Dernière régénération : 2026-08-12 (a notamment rattrapé `api_keys.organization_id`
+  main**. Dernière régénération : 2026-08-23 (héritage SMTP : `smtp_settings.inherit_parent`,
+  RPC `resolve_smtp_settings` / `parent_smtp_settings`). Avant elle, 2026-08-12 (a rattrapé `api_keys.organization_id`
   nullable, introduit par la clé plateforme du 2026-07-17).
 - **Advisors** : lancer `get_advisors` (sécurité et performance) après tout changement de schéma
   — c'est ainsi qu'ont été détectées, par exemple, les fonctions trigger `SECURITY DEFINER`

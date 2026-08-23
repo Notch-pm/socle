@@ -651,6 +651,7 @@ export type Database = {
           from_name: string
           host: string
           id: string
+          inherit_parent: boolean
           organization_id: string
           password: string
           port: number
@@ -664,6 +665,7 @@ export type Database = {
           from_name?: string
           host?: string
           id?: string
+          inherit_parent?: boolean
           organization_id: string
           password?: string
           port?: number
@@ -677,6 +679,7 @@ export type Database = {
           from_name?: string
           host?: string
           id?: string
+          inherit_parent?: boolean
           organization_id?: string
           password?: string
           port?: number
@@ -833,6 +836,20 @@ export type Database = {
       normalize_name: { Args: { value: string }; Returns: string }
       normalize_phone: { Args: { raw: string }; Returns: string }
       org_subtree_ids: { Args: { root: string }; Returns: string[] }
+      parent_smtp_settings: {
+        Args: { p_org_id: string }
+        Returns: {
+          configured: boolean
+          from_email: string
+          from_name: string
+          host: string
+          port: number
+          source_organization_id: string
+          source_organization_name: string
+          use_tls: boolean
+          username: string
+        }[]
+      }
       quartier_for_point: {
         Args: { p_lat: number; p_lon: number; p_org_id: string }
         Returns: string
@@ -844,6 +861,29 @@ export type Database = {
       reset_orphan_manual_quartiers: {
         Args: { p_org_id: string }
         Returns: undefined
+      }
+      resolve_smtp_settings: {
+        Args: { p_org_id: string }
+        Returns: {
+          created_at: string
+          from_email: string
+          from_name: string
+          host: string
+          id: string
+          inherit_parent: boolean
+          organization_id: string
+          password: string
+          port: number
+          updated_at: string
+          use_tls: boolean
+          username: string
+        }[]
+        SetofOptions: {
+          from: "*"
+          to: "smtp_settings"
+          isOneToOne: false
+          isSetofReturn: true
+        }
       }
       stats_contacts_by_quartier: {
         Args: { p_org_id: string }

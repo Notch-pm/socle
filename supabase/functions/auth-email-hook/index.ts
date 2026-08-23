@@ -200,11 +200,13 @@ Deno.serve(async (req: Request) => {
       .single();
     const siteName = org?.name || "Edilumen";
 
-    const { data: smtp, error: smtpError } = await adminClient
-      .from("smtp_settings")
-      .select("*")
-      .eq("organization_id", orgId)
-      .single();
+    // Relais applicable : celui de l'organisation de l'utilisateur, ou celui de
+    // l'ancetre le plus proche dont elle herite (resolve_smtp_settings). Sans
+    // cette resolution, un membre d'une sous-organisation ne recevait rien.
+    const { data: smtpRows, error: smtpError } = await adminClient.rpc("resolve_smtp_settings", {
+      p_org_id: orgId,
+    });
+    const smtp = Array.isArray(smtpRows) ? smtpRows[0] : smtpRows;
 
     if (smtpError || !smtp) {
       console.error(`No SMTP settings for org ${orgId}`);

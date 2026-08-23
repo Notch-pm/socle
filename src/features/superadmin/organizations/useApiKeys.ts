@@ -4,6 +4,13 @@ import { generateApiKey } from "@/features/superadmin/organizations/apiKeys";
 
 const API_KEYS_KEY = ["api-keys"] as const;
 
+/**
+ * Propriétaire d'un jeu de clés : l'id d'une organisation **racine**, ou `null`
+ * pour les clés **plateforme** (`organization_id IS NULL` — périmètre = toutes
+ * les organisations, toutes racines confondues).
+ */
+export type ApiKeyOwner = string | null;
+
 /** Vue liste d'une clé — **jamais** le hachage (`key_hash`) ni le secret. */
 export interface ApiKeyListItem {
   id: string;
@@ -16,16 +23,21 @@ export interface ApiKeyListItem {
   created_at: string;
 }
 
-/** Clés API d'une organisation (racine). Réservé au super admin (RLS). */
-export function useApiKeys(organizationId: string) {
+/**
+ * Clés API d'une organisation racine, ou clés plateforme (`owner = null`).
+ * Réservé au super admin (RLS).
+ */
+export function useApiKeys(owner: ApiKeyOwner) {
   return useQuery({
-    queryKey: [...API_KEYS_KEY, organizationId],
+    queryKey: [...API_KEYS_KEY, owner ?? "platform"],
     queryFn: async (): Promise<ApiKeyListItem[]> => {
-      const { data, error } = await supabase
+      const base = supabase
         .from("api_keys")
-        .select("id, name, key_prefix, scopes, last_used_at, expires_at, revoked_at, created_at")
-        .eq("organization_id", organizationId)
-        .order("created_at", { ascending: false });
+        .select("id, name, key_prefix, scopes, last_used_at, expires_at, revoked_at, created_at");
+      // Une clé plateforme n'a pas d'organisation : `eq(null)` ne matcherait rien,
+      // il faut `IS NULL`.
+      const scoped = owner === null ? base.is("organization_id", null) : base.eq("organization_id", owner);
+      const { data, error } = await scoped.order("created_at", { ascending: false });
       if (error) throw error;
       return data ?? [];
     },
@@ -35,9 +47,10 @@ export function useApiKeys(organizationId: string) {
 /**
  * Crée une clé : génère le secret + le hachage dans le navigateur, n'insère que
  * le hachage, et **renvoie le secret en clair une seule fois** (à afficher puis
- * oublier). `createdBy` = id de l'utilisateur courant (`profile.id`).
+ * oublier). `owner = null` crée une **clé plateforme**. `createdBy` = id de
+ * l'utilisateur courant (`profile.id`).
  */
-export function useCreateApiKey(organizationId: string, createdBy: string | null | undefined) {
+export function useCreateApiKey(owner: ApiKeyOwner, createdBy: string | null | undefined) {
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: async (input: {
@@ -47,7 +60,7 @@ export function useCreateApiKey(organizationId: string, createdBy: string | null
     }): Promise<string> => {
       const generated = await generateApiKey();
       const { error } = await supabase.from("api_keys").insert({
-        organization_id: organizationId,
+        organization_id: owner,
         name: input.name,
         key_prefix: generated.prefix,
         key_hash: generated.hash,

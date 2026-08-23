@@ -199,11 +199,13 @@ Deno.serve(async (req: Request) => {
 
     if (isNewUser) {
       try {
-        const { data: smtp, error: smtpError } = await adminClient
-          .from("smtp_settings")
-          .select("*")
-          .eq("organization_id", organization_id)
-          .single();
+        // Relais applicable : celui de l'organisation, ou celui de l'ancetre le
+        // plus proche dont elle herite (resolve_smtp_settings, service role).
+        const { data: smtpRows, error: smtpError } = await adminClient.rpc(
+          "resolve_smtp_settings",
+          { p_org_id: organization_id },
+        );
+        const smtp = Array.isArray(smtpRows) ? smtpRows[0] : smtpRows;
 
         if (smtpError || !smtp) {
           throw new Error("Configuration SMTP introuvable pour cette organisation.");

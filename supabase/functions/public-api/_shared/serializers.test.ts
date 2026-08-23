@@ -6,6 +6,7 @@ import {
   serializeOrganizationProcedure,
   serializeProcedure,
   serializeQuartier,
+  serializeSmtpSettings,
 } from "./serializers.ts";
 
 describe("serializers — whitelist stricte (aucune fuite)", () => {
@@ -155,5 +156,96 @@ describe("serializers — whitelist stricte (aucune fuite)", () => {
       name: "Justificatif",
       created_at: null,
     });
+  });
+});
+
+describe("serializeSmtpSettings — la seule sortie sensible, bornée au strict nécessaire", () => {
+  const row = {
+    id: "smtp-1",
+    organization_id: "org-1",
+    host: " smtp.accm.fr ",
+    port: 465,
+    username: "iris@accm.fr",
+    password: "  secret avec espaces  ",
+    from_email: "Ne-Pas-Repondre@ACCM.fr",
+    from_name: "ACCM",
+    use_tls: true,
+    created_at: "2026-08-01T10:00:00Z",
+    updated_at: "2026-08-20T10:00:00Z",
+    // Colonnes parasites : elles ne doivent pas ressortir.
+    imap_password: "fuite",
+  };
+
+  it("n'expose que les champs du contrat", () => {
+    expect(Object.keys(serializeSmtpSettings("org-1", row)).sort()).toEqual([
+      "configured",
+      "from_email",
+      "from_name",
+      "host",
+      "organization_id",
+      "password",
+      "port",
+      "source_organization_id",
+      "updated_at",
+      "use_tls",
+      "username",
+    ]);
+  });
+
+  it("normalise : hôte élagué, adresse en minuscules, mot de passe intact", () => {
+    const dto = serializeSmtpSettings("org-1", row);
+    expect(dto.configured).toBe(true);
+    expect(dto.host).toBe("smtp.accm.fr");
+    expect(dto.from_email).toBe("ne-pas-repondre@accm.fr");
+    // Une espace peut faire partie d'un mot de passe : jamais d'élagage ici.
+    expect(dto.password).toBe("  secret avec espaces  ");
+    expect(dto.port).toBe(465);
+  });
+
+  it("ligne absente ⇒ configured:false et tous les champs nuls", () => {
+    const dto = serializeSmtpSettings("org-1", null);
+    expect(dto).toEqual({
+      organization_id: "org-1",
+      source_organization_id: null,
+      configured: false,
+      host: null,
+      port: null,
+      username: null,
+      password: null,
+      from_email: null,
+      from_name: null,
+      use_tls: null,
+      updated_at: null,
+    });
+  });
+
+  it("configuration incomplète (colonnes '' par défaut) ⇒ traitée comme absente", () => {
+    expect(serializeSmtpSettings("org-1", { ...row, host: "   " }).configured).toBe(false);
+    expect(serializeSmtpSettings("org-1", { ...row, from_email: "" }).configured).toBe(false);
+  });
+
+  it("valeurs par défaut prudentes : port 587, TLS actif sauf refus explicite", () => {
+    expect(serializeSmtpSettings("org-1", { ...row, port: null }).port).toBe(587);
+    expect(serializeSmtpSettings("org-1", { ...row, port: 70000 }).port).toBe(587);
+    expect(serializeSmtpSettings("org-1", { ...row, use_tls: null }).use_tls).toBe(true);
+    expect(serializeSmtpSettings("org-1", { ...row, use_tls: false }).use_tls).toBe(false);
+  });
+
+  it("mot de passe vide ⇒ null (relais sans authentification), pas une chaîne vide", () => {
+    expect(serializeSmtpSettings("org-1", { ...row, password: "" }).password).toBeNull();
+    expect(serializeSmtpSettings("org-1", { ...row, username: "  " }).username).toBeNull();
+  });
+
+  it("héritage : la source est la ligne résolue, l'organisation demandée reste celle du chemin", () => {
+    // Sous-organisation qui hérite : la ligne vient de sa principale.
+    const dto = serializeSmtpSettings("sous-org-9", row);
+    expect(dto.organization_id).toBe("sous-org-9");
+    expect(dto.source_organization_id).toBe("org-1");
+    // Relais propre : les deux coïncident.
+    expect(serializeSmtpSettings("org-1", row).source_organization_id).toBe("org-1");
+    // Ligne sans colonne organization_id : on retombe sur l'organisation demandée.
+    const orphan = { ...row } as Record<string, unknown>;
+    delete orphan.organization_id;
+    expect(serializeSmtpSettings("org-1", orphan).source_organization_id).toBe("org-1");
   });
 });

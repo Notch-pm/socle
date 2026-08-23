@@ -11,11 +11,12 @@ import { OrganizationProceduresTab } from "@/features/organizations/Organization
 
 type TabKey = "infos" | "demarches" | "smtp";
 
-/** `rootOnly` : onglet réservé à l'organisation principale (racine). */
-const TABS: { key: TabKey; label: string; icon: LucideIcon; rootOnly?: boolean }[] = [
+const TABS: { key: TabKey; label: string; icon: LucideIcon }[] = [
   { key: "infos", label: "Informations de base", icon: Settings2 },
   { key: "demarches", label: "Démarches", icon: ListChecks },
-  { key: "smtp", label: "Emails (SMTP)", icon: Mail, rootOnly: true },
+  // Onglet visible sur TOUTE organisation depuis l'héritage du relais : une
+  // sous-organisation y choisit entre la configuration de son parent et la sienne.
+  { key: "smtp", label: "Emails (SMTP)", icon: Mail },
 ];
 
 /** Édition d'une organisation en pleine page, organisée en onglets (app par organisation). */
@@ -41,10 +42,7 @@ export function OrganizationEditorPage() {
     );
   }
 
-  // L'onglet SMTP n'existe qu'au niveau de l'organisation principale (racine).
-  const isRoot = organization.parent_id === null;
-  const visibleTabs = TABS.filter((tab) => !tab.rootOnly || isRoot);
-  const activeTab = visibleTabs.some((tab) => tab.key === requestedTab) ? requestedTab : "infos";
+  const activeTab = TABS.some((tab) => tab.key === requestedTab) ? requestedTab : "infos";
 
   return (
     <div className="flex flex-col gap-6 p-6">
@@ -65,7 +63,7 @@ export function OrganizationEditorPage() {
 
       <div className="border-b border-border">
         <nav className="flex gap-1" role="tablist" aria-label="Sections de l'organisation">
-          {visibleTabs.map((tab) => {
+          {TABS.map((tab) => {
             const active = activeTab === tab.key;
             return (
               <button
@@ -95,7 +93,12 @@ export function OrganizationEditorPage() {
         {activeTab === "demarches" && (
           <OrganizationProceduresTab organizationId={organization.id} />
         )}
-        {activeTab === "smtp" && <SmtpSettingsSection organizationId={organization.id} />}
+        {activeTab === "smtp" && (
+          <SmtpSettingsSection
+            organizationId={organization.id}
+            parentOrganizationId={organization.parent_id}
+          />
+        )}
       </div>
     </div>
   );

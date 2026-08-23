@@ -23,6 +23,7 @@ describe("buildOpenApiDocument", () => {
       expect.arrayContaining([
         "/v1/organizations",
         "/v1/organizations/{id}",
+        "/v1/organizations/{id}/smtp",
         "/v1/categories",
         "/v1/procedures",
         "/v1/procedures/{id}",
@@ -34,6 +35,19 @@ describe("buildOpenApiDocument", () => {
     for (const path of paths) {
       expect(Object.keys(doc.paths[path])).toEqual(["get"]);
     }
+  });
+
+  it("documente le serveur d'envoi : scope smtp, 403 et 404 possibles", () => {
+    const smtp = doc.paths["/v1/organizations/{id}/smtp"].get;
+    expect(smtp.tags).toEqual(["Messagerie"]);
+    expect(smtp.responses).toHaveProperty("403");
+    expect(smtp.responses).toHaveProperty("404");
+    expect(doc.info.description).toContain("`smtp`");
+    // Le mot de passe est servi en clair : le contrat doit le dire.
+    expect(doc.components.schemas.SmtpSettings.properties.password.description).toContain("clair");
+    // Héritage : la réponse dit quelle organisation porte réellement le relais.
+    expect(doc.components.schemas.SmtpSettings.properties.source_organization_id).toBeDefined();
+    expect(smtp.description).toContain("Héritage");
   });
 
   it("documente les erreurs 401 sur les listes et 400/404 sur les accès par id", () => {

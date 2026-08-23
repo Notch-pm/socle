@@ -264,9 +264,23 @@ d'écriture** : INSERT/UPDATE/DELETE impossibles côté client, réservés au se
 
 - `organization_id` NOT NULL **UNIQUE** FK CASCADE (relation 1-1) ; `host`/`username`/`password`/
   `from_email`/`from_name` NOT NULL défaut `''` ; `port` défaut 587 ; `use_tls` défaut true ;
-  `created_at`/`updated_at` timestamptz + trigger `set_updated_at`.
-- **RLS** : lecture et écriture (ALL) `is_org_admin(organization_id)` — l'écriture n'est plus
-  réservée au super admin (migration `smtp_settings_org_admin_write`).
+  `inherit_parent` bool défaut false ; `created_at`/`updated_at` timestamptz + trigger
+  `set_updated_at`.
+- **Héritage le long de la hiérarchie** (2026-08-23) : une organisation utilise le relais de
+  l'**ancêtre le plus proche (elle comprise) qui a une configuration propre**, c'est-à-dire une
+  ligne avec `inherit_parent = false`. Une sous-organisation a donc une configuration propre
+  seulement si elle l'a explicitement demandée ; sinon (aucune ligne, ou ligne
+  `inherit_parent = true`) elle suit son parent — **modifier le relais d'un parent modifie de
+  facto celui de toute sa descendance non spécifique**, sans recopie ni resynchronisation.
+  Une ligne « héritante » **conserve ses valeurs** (retour en arrière possible, motif
+  `organizations.email_sender_override`) ; elle est simplement inerte.
+- Trigger `enforce_smtp_no_inherit_on_root` : une organisation **principale** ne peut pas porter
+  `inherit_parent = true` (personne au-dessus d'elle).
+- **RLS** : lecture et écriture (ALL) `is_admin_of_self_or_ancestor(organization_id)` — élargi le
+  2026-08-23 depuis `is_org_admin` (migration `smtp_settings_org_admin_write` puis
+  `smtp_settings_heritage_parent`) : un admin règle l'héritage sur **tout son sous-arbre**, motif
+  `organizations` / `organization_procedures`. Un admin de sous-organisation ne lit toujours pas
+  la ligne de son parent (l'aperçu passe par `parent_smtp_settings`, sans mot de passe).
 - ⚠️ `password` stocké **en clair** ; `pgsodium` est disponible au catalogue Postgres mais
   **non installé** sur le projet.
 
@@ -281,8 +295,10 @@ d'écriture** : INSERT/UPDATE/DELETE impossibles côté client, réservés au se
   convention applicative, pas un CHECK), `last_used_at`/`expires_at`/`revoked_at`/`created_at`
   timestamptz, `created_by` FK `users(id)` **sans `ON DELETE`** (bloque la suppression d'un
   utilisateur ayant créé une clé).
-- **RLS** : une seule policy `ALL is_super_admin()` — gestion réservée au super admin (l'UI liste
-  les clés par racine ; une clé plateforme n'y apparaît pas, cf. [../CLAUDE.md](../CLAUDE.md)).
+- **RLS** : une seule policy `ALL is_super_admin()` — gestion réservée au super admin. Côté UI,
+  les clés d'une racine se gèrent depuis sa page (`OrgSettingsPage`, section « API publique ») et
+  les clés plateforme (`organization_id IS NULL`) depuis `/superadmin/cles-plateforme`, cf.
+  [architecture.md](./architecture.md).
 
 ---
 
@@ -308,6 +324,21 @@ chaque requête de `public-api` au sous-arbre de l'organisation de la clé appel
 `org_subtree_ids_revoke_execute`) : l'ACL historique accordait aussi `anon`/`authenticated` —
 sans impact réel (`SECURITY INVOKER` ⇒ RLS de l'appelant) — elle suit désormais le motif des
 fonctions trigger.
+
+### RPC serveur d'envoi (SMTP)
+
+- `resolve_smtp_settings(p_org_id) → SETOF smtp_settings` — SQL `STABLE`, **`SECURITY INVOKER`**,
+  CTE ascendante sur `parent_id` (garde 20 niveaux) : renvoie 0 ou 1 ligne, celle de l'ancêtre le
+  plus proche (soi compris) dont `inherit_parent = false`. **Seule implémentation de l'héritage**,
+  partagée par `public-api` (`GET /v1/organizations/{id}/smtp`) et les trois fonctions d'envoi
+  (`send-test-email`, `invite-user`, `auth-email-hook`). Elle sert le **mot de passe** : `EXECUTE`
+  **réservé à `service_role`** (motif `org_subtree_ids`).
+- `parent_smtp_settings(p_org_id) → TABLE(source_organization_id, source_organization_name,
+  configured, host, port, username, from_email, from_name, use_tls)` — `SECURITY DEFINER`, garde
+  interne `is_admin_of_self_or_ancestor(p_org_id)`, EXECUTE `authenticated` + `service_role`.
+  Aperçu de ce dont une organisation **hérite** (résolution démarrée à son parent), **sans le mot
+  de passe** : l'admin d'une sous-organisation doit voir la configuration qui s'applique chez lui
+  sans obtenir le secret de sa principale. Renvoie 0 ligne sur une racine.
 
 ### `match_contacts(...)` — rapprochement d'identités
 
@@ -352,7 +383,8 @@ car `contacts` n'a aucune policy d'écriture client :
 `/rest/v1/rpc/…`) : `handle_new_user`, `enforce_procedure_root_org`,
 `enforce_document_type_root_org`, `enforce_api_key_root_org`, `enforce_contact_root_org`,
 `enforce_contact_role_root_org`, `enforce_contact_role_same_org`, `enforce_quartier_root_org`,
-`assign_contact_quartier`, `sync_contact_external_ref_org`, `sync_contact_relation_org`.
+`assign_contact_quartier`, `sync_contact_external_ref_org`, `sync_contact_relation_org`,
+`enforce_smtp_no_inherit_on_root`.
 
 **Exceptions au motif** : `enforce_org_depth` et `set_updated_at` sont `SECURITY INVOKER`, EXECUTE
 ouvert à `PUBLIC` — pas de lecture de table protégée, pas besoin de contourner le RLS.
@@ -397,7 +429,8 @@ Leur structure n'est **pas** décrite ici (propriété du code applicatif et de 
 
 La sérialisation des deux Edge Functions applique une **whitelist stricte** : aucune colonne
 sensible ne peut fuir sur un `select *`. Colonnes explicitement **non exposées** : `is_active_global`,
-`api_keys.key_hash`, les colonnes de `smtp_settings`, la géométrie binaire `quartiers.geom`.
+`api_keys.key_hash`, la géométrie binaire `quartiers.geom`. Les colonnes de `smtp_settings` ne
+sortent que par `GET /v1/organizations/{id}/smtp` (scope `smtp`, cf. Points de vigilance).
 Exception assumée : `contacts.internal_notes` **est** exposée par `contacts-api` (API
 serveur-à-serveur pour les apps agents) malgré le commentaire SQL de la colonne — documentée dans
 l'OpenAPI de `contacts-api`, voir Points de vigilance.

@@ -39,8 +39,9 @@ Deno.serve(async (req: Request) => {
     const anonKey = Deno.env.get("SUPABASE_ANON_KEY")!;
     const serviceRoleKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
 
-    // Reuse is_org_admin() as the caller, same as invite-user — one place
-    // for the authorization rule, not duplicated here.
+    // Autorisation evaluee comme l'appelant : is_admin_of_self_or_ancestor(),
+    // pour qu'un admin d'organisation principale puisse tester le relais d'une
+    // de ses sous-organisations (meme regle que le RLS de smtp_settings).
     const callerClient = createClient(supabaseUrl, anonKey, {
       global: { headers: { Authorization: authHeader } },
     });
@@ -51,7 +52,9 @@ Deno.serve(async (req: Request) => {
         headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
     }
-    const { data: allowed } = await callerClient.rpc("is_org_admin", { org_id: organization_id });
+    const { data: allowed } = await callerClient.rpc("is_admin_of_self_or_ancestor", {
+      org_id: organization_id,
+    });
     if (!allowed) {
       return new Response(JSON.stringify({ error: "Accès refusé" }), {
         status: 403,
@@ -61,11 +64,13 @@ Deno.serve(async (req: Request) => {
 
     const adminClient = createClient(supabaseUrl, serviceRoleKey);
 
-    const { data: smtp, error: smtpError } = await adminClient
-      .from("smtp_settings")
-      .select("*")
-      .eq("organization_id", organization_id)
-      .single();
+    // Relais applicable : celui de l'organisation, ou celui de l'ancetre le plus
+    // proche dont elle herite. La resolution vit en base (resolve_smtp_settings,
+    // EXECUTE reserve au service role) pour ne pas etre reecrite par function.
+    const { data: smtpRows, error: smtpError } = await adminClient.rpc("resolve_smtp_settings", {
+      p_org_id: organization_id,
+    });
+    const smtp = Array.isArray(smtpRows) ? smtpRows[0] : smtpRows;
 
     if (smtpError || !smtp) {
       return new Response(JSON.stringify({ error: "Configuration SMTP introuvable pour cette organisation" }), {
