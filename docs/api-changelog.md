@@ -15,6 +15,88 @@ Format d'une entrée : `## AAAA-MM-JJ — <api> — ajout|correctif|rupture`
 
 ## 2026-08-29 — ai-api — ajout
 
+**Le guichet apprend à lire les documents, et à rendre du JSON.** Deux évolutions **additives**
+appelées par la bascule de Clara, dont l'analyse de courrier repose sur l'OCR de pièces jointes
+scannées et sur une extraction structurée — deux besoins que la v1 du guichet ne couvrait pas.
+
+- `POST /v1/ocr` — extrait le texte d'un PDF scanné ou d'une image, **au même plafond, au même
+  compteur et dans le même journal** que les complétions (`resource_type = 'ocr'`, prévu au
+  schéma depuis l'origine : aucune migration). Réponse : `{ text, pages, page_count, usage,
+  quota, provider, event_id }`.
+
+  ⚠️ **Le document ne transite pas par le Socle.** L'appelant fournit une **URL https signée et
+  de courte durée** que le fournisseur va chercher lui-même. La promesse de passe-plat est donc
+  plus forte ici que sur les complétions : l'octet du document ne traverse jamais le Socle.
+  Refusés : tout schéma autre que `https`, les identifiants dans le lien, un lien de plus de
+  4096 caractères, et `include_image_base64` — celui-là parce qu'il ferait transiter les
+  illustrations du document par le Socle.
+
+  ⚠️ **Le plafond est en jetons, l'OCR se facture à la page.** La réservation part du
+  `page_count_hint` (1200 jetons par page, délibérément haut) ; le **règlement retient le texte
+  réellement extrait**. Une page blanche ne coûte donc presque rien, et sous-déclarer les pages
+  ne fait rien gagner. Au-delà de **100 pages** annoncées : `400 payload_too_large` — le plafond
+  mensuel ne borne pas le coût d'un appel unique.
+
+- `POST /v1/completions` accepte désormais **`response_format: "json"`** — contrainte de sortie
+  pour un appelant qui **parse** au lieu d'afficher. Sans lui, une application qui a besoin de
+  structure n'avait que deux issues : supplier dans son prompt et retenter sur échec (donc payer
+  deux fois le même appel), ou réclamer `tools` — la porte qu'on tient fermée. La valeur est un
+  **alias du Socle** ; la forme du fournisseur (`{ type: "json_object" }`) reste refusée, comme
+  `model` et `agent_id`.
+
+  ⚠️ Le mot « json » doit figurer dans `system` ou dans un message : exigence du mode JSON du
+  fournisseur, **vérifiée par le Socle avant toute dépense** plutôt que découverte chez le
+  fournisseur — sans quoi l'appelant recevrait `502 ai_unavailable` pour une erreur de payload,
+  et chercherait longtemps.
+
+  ⚠️ Le JSON rendu est **valide, pas conforme** : aucun schéma n'est imposé au modèle. Le
+  consommateur revalide `answer` contre ses propres règles. Ce n'est pas un manque du guichet,
+  c'est la frontière : le Socle décide du coût, l'application décide du sens.
+
+**Ce qui n'a pas changé** : `tools`/`tool_choice`, `stream`, `temperature`, `model`, `agent_id`,
+`consumer` et `organization_id` restent refusés, pour les raisons déjà écrites. L'ajout de
+`response_format` ne les rouvre pas — un paramètre est refusé quand il déplace une **décision**
+vers l'appelant, pas quand il décrit la **forme** de ce qu'il attend.
+
+---
+
+## 2026-08-29 — ai-api — ajout
+
+**Garde-fou de cadence.** Un plafond mensuel dit *combien*, jamais *à quelle vitesse* : une
+boucle accidentelle chez un consommateur consommerait le budget d'un mois en quelques minutes,
+et le refus n'arriverait qu'une fois l'argent dépensé. Le rythme est donc borné **par agent
+(`actor_id`) et par NATURE d'appel** — un échange conversationnel suit une cadence humaine, un
+lot d'OCR une cadence machine :
+
+| Nature | Par agent | Sans agent identifié |
+|---|---|---|
+| Conversationnel (`/v1/completions`) | 20 / minute | 120 / minute |
+| Lot (`/v1/ocr`) | 60 / minute | 360 / minute |
+
+Les deux natures ont des compteurs **séparés** : un lot de documents ne consomme pas le budget
+de questions du même agent. Un type d'appel inconnu retombe sur le seuil conversationnel, le
+plus strict — sur un garde-fou de coût, l'inconnu se bride.
+
+- Nouveau code d'erreur **`ai_rate_limited`**, en `429` comme `ai_quota_exceeded` mais
+  **distinct** : le crédit est **intact**, seul le rythme est en cause. Le geste attendu n'est
+  pas de demander un relèvement, mais d'attendre — d'où l'en-tête **`Retry-After`** (secondes
+  jusqu'à la fenêtre suivante), que le refus de plafond ne porte pas.
+- La réponse ne contient **pas** de bloc `quota` : il n'aurait rien à y dire, et le remplir
+  laisserait croire que le budget est en cause.
+- ⚠️ **Le compteur retient les TENTATIVES, refus de plafond compris.** Un consommateur déjà
+  refusé pour crédit épuisé et qui continuerait d'appeler finit donc par être freiné. C'est
+  voulu : sans cela, le garde-fou serait inopérant précisément dans le cas où il sert.
+- Le seuil **n'est pas réglable** par collectivité : c'est un garde-fou, pas un paramètre
+  commercial.
+
+**Ce qui ne change pas** : aucune modification du corps de requête, aucun champ ajouté ou
+retiré, et le contrat des réponses `200` est identique. Un consommateur qui ne dépasse pas la
+cadence ne voit aucune différence. OpenAPI en **1.1.0**.
+
+---
+
+## 2026-08-29 — ai-api — ajout
+
 **Nouvelle API : le guichet IA du Socle.** La clé du fournisseur LLM et la comptabilité des
 jetons quittent les applications pour vivre ici. Contrat rendu sur `/api-doc-ia`, OpenAPI
 `1.0.0` sur `/openapi.json`.

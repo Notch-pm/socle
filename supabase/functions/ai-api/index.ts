@@ -28,13 +28,28 @@
  * Rien d'autre. Un test lit ce fichier pour le vérifier.
  *
  * ⚠️ CHAÎNE DE DÉLAIS : Mistral 55 s < Socle 60 s < consommateur 75 s.
+ *
+ * DEUX DÉPENSES, UNE SEULE PORTE. `POST /v1/completions` fait parler le
+ * modèle ; `POST /v1/ocr` fait lire un document scanné. Elles n'ont ni la même
+ * unité chez le fournisseur (jetons d'un côté, pages de l'autre) ni la même
+ * forme d'entrée, mais elles passent par la MÊME réservation, le même
+ * compteur et le même plafond — sans quoi une collectivité aurait deux
+ * crédits, et l'éditeur deux totaux à additionner à la main. La conversion
+ * pages → jetons vit dans `_shared/ocr.ts`, à un seul endroit.
  */
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 
-import { errorResponse, jsonResponse } from "./_shared/errors.ts";
+import { errorBody, errorResponse, jsonResponse } from "./_shared/errors.ts";
 import { buildOpenApiDocument } from "./_shared/openapi.ts";
-import { callProvider, PROVIDER_NAME } from "./_shared/provider.ts";
-import { nextRenewalIso, periodKey, quotaExceededMessage } from "./_shared/quota.ts";
+import { callProvider, callProviderOcr, PROVIDER_NAME } from "./_shared/provider.ts";
+import { parseOcrPayload, reservationForOcr, tokensForOcrText } from "./_shared/ocr.ts";
+import {
+  nextRenewalIso,
+  periodKey,
+  quotaExceededMessage,
+  rateLimitedMessage,
+  secondsUntilNextMinute,
+} from "./_shared/quota.ts";
 import {
   clampOutput,
   estimateInput,
@@ -96,6 +111,61 @@ function agentIdForAlias(alias: string | null): string | null {
   return Deno.env.get(`MISTRAL_AGENT_${suffix}`) ?? null;
 }
 
+/**
+ * Ce que renvoie la RPC de réservation, dans les deux cas de refus comme dans
+ * le cas passant. Nommé une fois : les deux routes payantes le lisent.
+ */
+interface Reservation {
+  event_id: string | null;
+  allowed: boolean;
+  reason: string | null;
+  limit_tokens: number | null;
+  used_tokens: number | null;
+  reserved_tokens: number | null;
+  usage_period: string | null;
+  renews_at: string | null;
+}
+
+/**
+ * ⚠️ DEUX REFUS DISTINCTS, ET LA DISTINCTION COMPTE POUR QUI LA REÇOIT.
+ * Le plafond dit « votre crédit est épuisé » — le geste est de demander un
+ * relèvement, et il n'y a rien à réessayer avant le mois prochain. La cadence
+ * dit « vous allez trop vite » — le crédit est intact, il suffit d'attendre le
+ * prochain top de minute. Les confondre enverrait un appelant freiné réclamer
+ * un budget dont il dispose déjà.
+ *
+ * Les deux fabriques vivent ici parce que `/v1/completions` et `/v1/ocr`
+ * doivent refuser AVEC LES MÊMES MOTS : deux formulations pour un même refus
+ * obligeraient chaque consommateur à reconnaître deux formes.
+ */
+function rateLimitedResponse(now: Date, headers: Record<string, string>): Response {
+  return jsonResponse(429, errorBody("ai_rate_limited", rateLimitedMessage()), {
+    ...headers,
+    // Secondes jusqu'à la fenêtre suivante, jamais 0 : `Retry-After: 0`
+    // inviterait à réessayer immédiatement, exactement ce qu'on freine.
+    "Retry-After": String(secondsUntilNextMinute(now)),
+  });
+}
+
+function quotaExceededResponse(
+  reserved: Reservation | null | undefined,
+  now: Date,
+  headers: Record<string, string>,
+): Response {
+  const renews = reserved?.renews_at ?? nextRenewalIso(now);
+  return jsonResponse(429, {
+    error: { code: "ai_quota_exceeded", message: quotaExceededMessage(renews) },
+    quota: {
+      unlimited: false,
+      limit: reserved?.limit_tokens ?? null,
+      used_tokens: reserved?.used_tokens ?? null,
+      reserved_tokens: reserved?.reserved_tokens ?? null,
+      period: reserved?.usage_period ?? periodKey(now),
+      renews_at: renews,
+    },
+  }, headers);
+}
+
 Deno.serve(async (req: Request) => {
   if (req.method === "OPTIONS") {
     return new Response("ok", { headers: corsHeaders });
@@ -108,7 +178,9 @@ Deno.serve(async (req: Request) => {
     return jsonResponse(200, {
       name: "API IA Socle — guichet du fournisseur LLM",
       description:
-        "Appels au modèle pour les applications de la gamme, décomptés du plafond de la collectivité. Le Socle ne conserve ni le prompt ni la réponse.",
+        "Appels au modèle et lecture de documents scannés pour les applications de la gamme, " +
+        "décomptés du même plafond de la collectivité. Le Socle ne conserve ni le prompt, " +
+        "ni la réponse, ni le document.",
       openapi: `${serverUrl}/openapi.json`,
     }, corsHeaders);
   }
@@ -297,21 +369,18 @@ Deno.serve(async (req: Request) => {
         console.error(`${FUNCTION_NAME}: reserve_ai_usage en échec`, reserveError.message);
         return errorResponse("internal_error", "Erreur interne du serveur.", corsHeaders);
       }
-      const reserved = Array.isArray(reservation) ? reservation[0] : reservation;
-      if (!reserved?.allowed) {
-        const renews = reserved?.renews_at ?? nextRenewalIso(now);
-        return jsonResponse(429, {
-          error: { code: "ai_quota_exceeded", message: quotaExceededMessage(renews) },
-          quota: {
-            unlimited: false,
-            limit: reserved?.limit_tokens ?? null,
-            used_tokens: reserved?.used_tokens ?? null,
-            reserved_tokens: reserved?.reserved_tokens ?? null,
-            period: reserved?.usage_period ?? periodKey(now),
-            renews_at: renews,
-          },
-        }, corsHeaders);
+      const reserved = (Array.isArray(reservation) ? reservation[0] : reservation) as
+        | Reservation
+        | null;
+
+      if (!reserved?.allowed && reserved?.reason === "rate_limited") {
+        console.warn(
+          `${FUNCTION_NAME}: cadence dépassée — org=${orgId} consumer=${consumer} ` +
+            `actor=${request.actorId ?? "-"}`,
+        );
+        return rateLimitedResponse(now, corsHeaders);
       }
+      if (!reserved?.allowed) return quotaExceededResponse(reserved, now, corsHeaders);
 
       // --- L'appel, dans un module qui ne sait rien écrire ------------------
       const result = await callProvider({
@@ -320,6 +389,7 @@ Deno.serve(async (req: Request) => {
         system: request.system,
         messages: request.messages,
         maxTokens: request.maxOutput,
+        responseFormat: request.responseFormat,
       });
 
       if (!result.ok) {
@@ -370,6 +440,133 @@ Deno.serve(async (req: Request) => {
           unlimited: limit === null,
           limit,
           used_tokens: usedAfter,
+          period: reserved.usage_period,
+          renews_at: reserved.renews_at,
+        },
+      }, corsHeaders);
+    }
+
+    // ======================================================================
+    // POST /v1/ocr — la lecture d'un document scanné
+    //
+    // Même porte, même compteur, même plafond que les complétions : ce qui
+    // change est l'unité chez le fournisseur (des pages, pas des jetons) et le
+    // fait que le Socle NE VOIT PAS LE DOCUMENT — il transmet une URL signée
+    // que le fournisseur va chercher. Le passe-plat est donc plus fort ici
+    // qu'ailleurs : l'octet ne traverse pas le Socle.
+    // ======================================================================
+    if (segments[1] === "ocr" && segments.length === 2) {
+      if (req.method !== "POST") {
+        return errorResponse("method_not_allowed", "Seule la méthode POST est autorisée ici.", corsHeaders);
+      }
+
+      const providerKey = Deno.env.get("MISTRAL_API_KEY");
+      if (!providerKey) {
+        return errorResponse(
+          "not_configured",
+          "La lecture de documents n'est pas configurée sur cette plateforme.",
+          corsHeaders,
+        );
+      }
+
+      const raw = await req.json().catch(() => null);
+      const parsed = parseOcrPayload(raw);
+      if (!parsed.ok) {
+        return errorResponse(parsed.code, parsed.message, corsHeaders);
+      }
+      const request = parsed.value;
+      const estimate = reservationForOcr(request.pageHint);
+
+      const { data: reservation, error: reserveError } = await admin.rpc("reserve_ai_usage", {
+        p_org_id: orgId,
+        p_provider: PROVIDER_NAME,
+        p_resource_type: "ocr",
+        p_estimated_tokens: estimate,
+        p_consumer: consumer,
+        p_api_key_id: apiKey.id,
+        p_feature: request.feature,
+        p_external_ref_kind: request.referenceKind,
+        p_external_ref_id: request.referenceId,
+        p_external_actor_id: request.actorId,
+      });
+      if (reserveError) {
+        console.error(`${FUNCTION_NAME}: reserve_ai_usage (ocr) en échec`, reserveError.message);
+        return errorResponse("internal_error", "Erreur interne du serveur.", corsHeaders);
+      }
+      const reserved = (Array.isArray(reservation) ? reservation[0] : reservation) as
+        | Reservation
+        | null;
+
+      if (!reserved?.allowed && reserved?.reason === "rate_limited") {
+        console.warn(
+          `${FUNCTION_NAME}: cadence dépassée (ocr) — org=${orgId} consumer=${consumer} ` +
+            `actor=${request.actorId ?? "-"}`,
+        );
+        return rateLimitedResponse(now, corsHeaders);
+      }
+      if (!reserved?.allowed) return quotaExceededResponse(reserved, now, corsHeaders);
+
+      const result = await callProviderOcr({
+        apiKey: providerKey,
+        documentType: request.documentType,
+        url: request.url,
+      });
+
+      if (!result.ok) {
+        // Le détail vient du FOURNISSEUR, neutralisé s'il contenait l'URL
+        // signée. Jamais relayé à l'appelant.
+        console.error(
+          `${FUNCTION_NAME}: fournisseur OCR en échec — event=${reserved.event_id} org=${orgId} ` +
+            `consumer=${consumer} kind=${result.kind} status=${result.status ?? "-"} ${result.detail}`,
+        );
+        await admin.rpc("settle_ai_usage", {
+          p_event_id: reserved.event_id, p_actual_tokens: null, p_status: "failed",
+        });
+        return errorResponse(
+          "ai_unavailable",
+          "La lecture de documents est momentanément indisponible — réessayez dans un instant.",
+          corsHeaders,
+        );
+      }
+
+      // Le texte fait foi pour le règlement, pas le nombre de pages : une page
+      // blanche est facturée par le fournisseur et ne vaut rien à la
+      // collectivité (voir `tokensForOcrText`).
+      const text = result.pages.map((page) => page.markdown).join("\n\n---\n\n").trim();
+      const actualTokens = tokensForOcrText(text);
+
+      const { error: settleError } = await admin.rpc("settle_ai_usage", {
+        p_event_id: reserved.event_id,
+        p_actual_tokens: actualTokens,
+        p_status: "completed",
+      });
+      if (settleError) {
+        // Le texte EST là : un règlement raté ne doit pas le faire disparaître.
+        console.error(
+          `${FUNCTION_NAME}: settle_ai_usage (ocr) en échec — event=${reserved.event_id}`,
+          settleError.message,
+        );
+      }
+
+      const limit = reserved.limit_tokens ?? null;
+      return jsonResponse(200, {
+        text,
+        pages: result.pages,
+        page_count: result.pages.length,
+        provider: PROVIDER_NAME,
+        event_id: reserved.event_id,
+        usage: {
+          pages_processed: result.pagesProcessed,
+          total_tokens: actualTokens,
+          // Toujours vrai pour l'OCR : le fournisseur facture des pages, la
+          // conversion en jetons est la nôtre. Le dire évite qu'un lecteur
+          // prenne ce nombre pour une mesure du fournisseur.
+          estimated: true,
+        },
+        quota: {
+          unlimited: limit === null,
+          limit,
+          used_tokens: limit === null ? null : (reserved.used_tokens ?? 0) + actualTokens,
           period: reserved.usage_period,
           renews_at: reserved.renews_at,
         },

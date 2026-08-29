@@ -105,3 +105,67 @@ describe("l'imputation ne vient jamais du corps de la requête", () => {
     expect(index).not.toMatch(/p_org_id:\s*(raw|request)\./);
   });
 });
+
+describe("l'OCR ne conserve ni le document ni le texte extrait", () => {
+  // ⚠️ LA GARANTIE EST PLUS FORTE ICI QUE SUR LES COMPLÉTIONS, et c'est la
+  // raison d'être de l'URL signée : l'octet du document ne traverse pas le
+  // Socle du tout. Le jour où quelqu'un remplacerait l'URL par un envoi en
+  // base64 « pour simplifier », il ferait entrer le document dans cette
+  // fonction — donc dans ses journaux possibles — et perdrait la seule
+  // garantie qui ne repose sur personne.
+  it("le Socle ne télécharge jamais le document lui-même", () => {
+    expect(index).toContain("callProviderOcr");
+    // Un seul `fetch` légitime existe dans cette fonction : celui du
+    // fournisseur, et il vit dans provider.ts. Aucun ici.
+    expect(index).not.toMatch(/\bfetch\s*\(/);
+    expect(index).not.toContain("include_image_base64");
+  });
+
+  it("aucun journal ne mentionne l'URL signée ni le texte extrait", () => {
+    const calls = index.match(/console\.[a-z]+\([\s\S]*?\);/g) ?? [];
+    expect(calls.length).toBeGreaterThan(0);
+    for (const call of calls) {
+      for (const forbidden of ["request.url", "result.pages", "page.markdown", "${text}"]) {
+        expect(call).not.toContain(forbidden);
+      }
+    }
+  });
+
+  // Le texte extrait est la seule chose qui sort — vers l'appelant, dans la
+  // réponse HTTP. Il n'est jamais écrit, et le journal ne peut pas le porter :
+  // seule la RPC écrit, avec un nombre de jetons pour toute trace.
+  it("le texte extrait ne franchit aucune écriture", () => {
+    expect(index).not.toMatch(/from\(["']ai_usage_events["']\)[\s\S]{0,80}\.(insert|update|upsert)/);
+    expect(index).toMatch(/p_actual_tokens:\s*actualTokens/);
+  });
+
+  it("le module d'appel OCR est le même module isolé", () => {
+    expect(provider).toContain("/v1/ocr");
+    expect(provider).not.toContain("createClient");
+    expect(provider).not.toMatch(/console\./);
+  });
+
+  it("l'erreur brute du fournisseur n'est pas relayée non plus ici", () => {
+    expect(index).toContain("La lecture de documents est momentanément indisponible");
+    expect(index).not.toMatch(/errorResponse\(\s*"ai_unavailable",\s*result\.detail/);
+  });
+});
+
+describe("les deux routes payantes passent par la même porte", () => {
+  // ⚠️ UN SEUL CRÉDIT PAR COLLECTIVITÉ. Le jour où l'OCR aurait sa propre
+  // réservation, sa propre table ou son propre plafond, une collectivité
+  // aurait deux budgets à surveiller pour une seule facture — et l'éditeur
+  // deux totaux à additionner à la main.
+  it("l'OCR réserve et solde avec les mêmes RPC que les complétions", () => {
+    expect(index.match(/reserve_ai_usage/g)?.length).toBeGreaterThanOrEqual(2);
+    expect(index.match(/settle_ai_usage/g)?.length).toBeGreaterThanOrEqual(3);
+    expect(index).toMatch(/p_resource_type:\s*"ocr"/);
+  });
+
+  // Les deux refus doivent se dire avec les mêmes mots : deux formulations
+  // obligeraient chaque consommateur à reconnaître deux formes.
+  it("les deux refus sont fabriqués au même endroit", () => {
+    expect(index.match(/rateLimitedResponse\(/g)?.length).toBeGreaterThanOrEqual(3);
+    expect(index.match(/quotaExceededResponse\(/g)?.length).toBeGreaterThanOrEqual(3);
+  });
+});

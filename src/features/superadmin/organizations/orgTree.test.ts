@@ -5,6 +5,7 @@ import {
   collectDescendantIdsFlat,
   findRootAncestor,
   sortedRootOrganizations,
+  visibleRootOrganizations,
   type Organization,
   type OrgNode,
 } from "./orgTree";
@@ -186,5 +187,28 @@ describe("findRootAncestor", () => {
 
   it("renvoie undefined pour un id absent", () => {
     expect(findRootAncestor(flat, "absent")).toBeUndefined();
+  });
+});
+
+describe("visibleRootOrganizations", () => {
+  it("garde les racines strictes, triées par nom", () => {
+    const flat = [org("b", "Bravo"), org("a", "Alpha"), org("c", "Charlie", "a")];
+    expect(visibleRootOrganizations(flat).map((o) => o.id)).toEqual(["a", "b"]);
+  });
+
+  it("promeut l'org dont le parent est hors périmètre RLS", () => {
+    // Le cas du membre d'une sous-organisation : sa racine ne lui est pas
+    // visible, l'en-tête doit tout de même porter une identité.
+    const partial = [org("sous", "Sous-organisation", "racine-invisible")];
+    expect(visibleRootOrganizations(partial).map((o) => o.id)).toEqual(["sous"]);
+  });
+
+  it("n'a pas de sommet quand rien n'est visible", () => {
+    expect(visibleRootOrganizations([])).toEqual([]);
+  });
+
+  it("ne promeut pas un enfant dont le parent EST visible", () => {
+    const flat = [org("racine", "Racine"), org("enfant", "Enfant", "racine")];
+    expect(visibleRootOrganizations(flat).map((o) => o.id)).toEqual(["racine"]);
   });
 });

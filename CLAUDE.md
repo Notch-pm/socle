@@ -603,9 +603,26 @@ dossier, et n'a pas à le savoir — il ne compose aucun prompt.
   visibles : un membre ordinaire y lirait un « 0 jeton » faux, produit par le RLS). Côté
   superadmin : `SuperAdminAiUsagePage` + `aiUsageAll.ts` (pur, testé) et
   `organizations/sections/AiUsageSection.tsx` (la part qui écrit).
-- ⚠️ **Aucun garde-fou de DÉBIT** : un plafond mensuel n'est pas un rate-limit, et une boucle
-  folle brûlerait le mois en quelques minutes. Risque assumé, parade connue (une seconde ligne de
-  compteur à période horaire), à la feuille de route.
+- **Garde-fou de DÉBIT** (`ai_usage_rate`, 2026-08-29) — un plafond mensuel n'est pas un
+  rate-limit : il dit *combien*, jamais *à quelle vitesse*, et une boucle brûlerait le mois en
+  quelques minutes. `reserve_ai_usage` a donc **deux portes** : la cadence **puis** le plafond.
+  Les seuils dépendent de la NATURE de l'appel — conversationnel 20/minute par agent (120 sans
+  agent), lot d'OCR 60 (360) : un humain qui lit 150 mots entre deux questions n'a pas le
+  rythme d'une machine qui enchaîne des documents. Les deux natures ont des compteurs
+  **SÉPARÉS** (`bucket` dans la clé) : sans quoi un lot de courrier mangerait le budget de
+  questions du même agent. La nature vient de `p_resource_type`, **dérivé côté serveur** —
+  un appelant ne peut pas se déclarer « lot ». Type inconnu ⇒ seuil conversationnel, le plus
+  strict. Refus = `429 ai_rate_limited`
+  + `Retry-After` — distinct du plafond, parce que le crédit est intact et que le geste attendu
+  est d'attendre, pas de demander un relèvement.
+  ⚠️ **Le compteur retient les TENTATIVES, refus de plafond compris** : sans cela, une boucle
+  déjà refusée pour crédit épuisé ne serait jamais coupée — c'est-à-dire précisément dans le cas
+  où le garde-fou sert. C'est aussi ce qui permet de le vérifier **sans dépenser un jeton**.
+  ⚠️ La porte de cadence passe **avant** celle du plafond : elle doit couvrir les collectivités
+  **sans plafond**, qui sortent par un `return` anticipé.
+  ⚠️ Le seuil **n'est pas réglable** (décision PO) : un garde-fou de sécurité n'est pas un
+  paramètre commercial, et le rendre négociable, c'est le voir négocié le jour où il gêne — or
+  il ne gêne que les boucles.
 
 ## Feature : quartiers (découpage du territoire)
 
@@ -675,10 +692,27 @@ l'API (RPC `stats_contacts_by_quartier` disponible).
 
 Socle consomme le **Notch / Ariane Design System** (projet Claude Design, partagé avec Ariane et
 Clara). Les tokens sont déjà repris dans `src/index.css` + `tailwind.config.ts` (primaire vert
-`hsl(153 90% 32%)`, secondaire beurre, sidebar forêt, radius 14px, ombres douces). Construire l'UI
+`hsl(153 90% 32%)`, secondaire beurre, radius 14px, ombres douces). Construire l'UI
 avec les primitives `src/components/ui/*` (Button, Input, Field, Card, Badge, Dialog, AlertDialog)
 et les classes de tokens — ce sont les « briques » du DS. Divergence connue : police Socle = Inter,
 DS = Nunito Sans (non alignée volontairement pour l'instant).
+
+### Shell de l'app par organisation (le même que dans la gamme)
+
+- **Rail latéral vert** (`Sidebar.tsx`) : `bg-primary`, états sur `primary-foreground/10|20`.
+  ⚠️ **Pas** les jetons `--sidebar-*` (charbon-forêt) : ils existent dans `index.css` à
+  l'identique d'Iris et de Clara, qui ne s'en servent pas non plus pour le rail. Le rail est le
+  repère qu'un agent retrouve d'une application à l'autre — le faire diverger serait la seule
+  chose qu'il remarquerait en changeant d'outil.
+- **En-tête** (`Header.tsx`) : wordmark Edilumen · mention **« Socle »** (le produit dans
+  l'entreprise) · séparateur · **identité de l'organisation principale** (logo si `logo_url`,
+  traité comme un wordmark — hauteur fixe, largeur libre : les logos de collectivité sont des
+  bandeaux — puis nom) · menu utilisateur. Motif repris du shell d'Iris/Clara.
+  L'organisation affichée vient de `visibleRootOrganizations` (pur, testé) : le sommet de la
+  forêt **visible**, pas la racine stricte — un membre d'une sous-organisation ne voit pas sa
+  racine (`has_org_access` exige l'appartenance directe) et resterait sans repère. Le Socle
+  n'ayant **pas** de bascule de tenant (chaque écran a son sélecteur), plusieurs sommets
+  s'affichent « premier nom + `+N` » avec la liste en `title`.
 
 ## Conventions
 

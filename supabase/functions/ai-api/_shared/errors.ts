@@ -1,6 +1,6 @@
 /**
  * Enveloppe d'erreur de `ai-api` — même forme que `public-api` et
- * `contacts-api` (`{ "error": { "code", "message" } }`), avec quatre codes que
+ * `contacts-api` (`{ "error": { "code", "message" } }`), avec cinq codes que
  * la gamme n'avait encore jamais eu besoin d'exprimer.
  *
  * `Response` est un standard web disponible en Deno comme en Node (vitest) :
@@ -19,6 +19,12 @@ export interface ApiErrorBody {
  *    fois. Le plafond mensuel ne borne pas le coût d'UN appel ; celui-ci si.
  *  • `ai_quota_exceeded` — le plafond de la collectivité est atteint. 429 et
  *    non 403 : ce n'est pas un droit qui manque, c'est un crédit.
+ *  • `ai_rate_limited` — trop d'appels en peu de temps. 429 lui aussi, mais
+ *    DISTINCT du précédent, et la distinction est utile à qui la reçoit : le
+ *    crédit est intact, c'est le rythme qui ne l'est pas. Le geste attendu
+ *    n'est pas de demander un relèvement, mais d'attendre — d'où l'en-tête
+ *    `Retry-After`, que le refus de plafond ne porte pas (lui, il faut
+ *    attendre le mois prochain).
  *  • `ai_unavailable` — le fournisseur n'a pas répondu. 502 : la faute est en
  *    amont, pas chez l'appelant. Son erreur brute n'est JAMAIS relayée.
  *  • `not_configured` — la plateforme n'a pas de clé fournisseur. 503 : c'est
@@ -32,6 +38,7 @@ export const ERROR_CODES = {
   not_found: 404,
   method_not_allowed: 405,
   ai_quota_exceeded: 429,
+  ai_rate_limited: 429,
   internal_error: 500,
   ai_unavailable: 502,
   not_configured: 503,

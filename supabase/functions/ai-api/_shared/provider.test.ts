@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from "vitest";
-import { callProvider, sanitizeDetail } from "./provider.ts";
+import { callProvider, callProviderOcr, sanitizeDetail } from "./provider.ts";
 
 const input = {
   apiKey: "sk-test",
@@ -7,6 +7,7 @@ const input = {
   system: "Tu es l'assistant d'instruction d'Iris, destiné aux agents.",
   messages: [{ role: "user", content: "Quelles pièces dois-je exiger pour un acte de naissance ?" }],
   maxTokens: 900,
+  responseFormat: null as "json" | null,
 };
 
 function jsonResponse(status: number, body: unknown): Response {
@@ -144,5 +145,130 @@ describe("callProvider", () => {
     const r = await callProvider(input, fetchImpl);
     expect(r.ok).toBe(true);
     if (r.ok) expect(r.totalTokens).toBeNull();
+  });
+});
+
+describe("callProvider — mode JSON", () => {
+  async function payloadFor(responseFormat: "json" | null) {
+    let body: any = null;
+    const fetchImpl = vi.fn(async (_u: string, init: any) => {
+      body = JSON.parse(init.body);
+      return jsonResponse(200, { choices: [{ message: { content: '{"a":1}' } }] });
+    }) as unknown as typeof fetch;
+    await callProvider({ ...input, responseFormat }, fetchImpl);
+    return body;
+  }
+
+  // ⚠️ CETTE LIGNE EST LA SEULE DU DÉPÔT QUI CONNAÎT `json_object`. Le
+  // consommateur passe l'alias « json » du Socle ; si le fournisseur renomme
+  // son mode demain, c'est ici — et nulle part ailleurs — que ça se voit.
+  it("traduit l'alias « json » en la forme du fournisseur", async () => {
+    expect(await payloadFor("json")).toMatchObject({ response_format: { type: "json_object" } });
+  });
+
+  it("n'envoie rien quand l'appelant n'a rien demandé", async () => {
+    expect(await payloadFor(null)).not.toHaveProperty("response_format");
+  });
+
+  it("s'applique aussi à un appel d'agent", async () => {
+    let body: any = null;
+    const fetchImpl = vi.fn(async (_u: string, init: any) => {
+      body = JSON.parse(init.body);
+      return jsonResponse(200, { choices: [{ message: { content: "{}" } }] });
+    }) as unknown as typeof fetch;
+    await callProvider({ ...input, agentId: "ag_123", responseFormat: "json" }, fetchImpl);
+    expect(body.agent_id).toBe("ag_123");
+    expect(body.response_format).toEqual({ type: "json_object" });
+  });
+});
+
+describe("callProviderOcr", () => {
+  const ocrInput = {
+    apiKey: "sk-test",
+    documentType: "document_url" as const,
+    url: "https://exemple.test/storage/sign/doc.pdf?token=abc",
+  };
+
+  it("rend les pages, dans l'ordre, avec le décompte du fournisseur", async () => {
+    const fetchImpl = vi.fn(async () => jsonResponse(200, {
+      pages: [
+        { index: 0, markdown: "# Page une" },
+        { index: 1, markdown: "Page deux" },
+      ],
+      usage_info: { pages_processed: 2 },
+    })) as unknown as typeof fetch;
+
+    const r = await callProviderOcr(ocrInput, fetchImpl);
+    expect(r.ok).toBe(true);
+    if (r.ok) {
+      expect(r.pages).toEqual([
+        { index: 0, markdown: "# Page une" },
+        { index: 1, markdown: "Page deux" },
+      ]);
+      expect(r.pagesProcessed).toBe(2);
+    }
+  });
+
+  // ⚠️ Sans cette option, le fournisseur renvoie chaque illustration encodée
+  // dans la réponse : des mégaoctets d'image traverseraient le Socle.
+  it("n'accepte jamais les images encodées dans la réponse", async () => {
+    let body: any = null;
+    const fetchImpl = vi.fn(async (u: string, init: any) => {
+      body = JSON.parse(init.body);
+      expect(u).toBe("https://api.mistral.ai/v1/ocr");
+      return jsonResponse(200, { pages: [] });
+    }) as unknown as typeof fetch;
+    await callProviderOcr(ocrInput, fetchImpl);
+    expect(body.include_image_base64).toBe(false);
+  });
+
+  it("distingue une image d'un document paginé", async () => {
+    let body: any = null;
+    const fetchImpl = vi.fn(async (_u: string, init: any) => {
+      body = JSON.parse(init.body);
+      return jsonResponse(200, { pages: [] });
+    }) as unknown as typeof fetch;
+    await callProviderOcr({ ...ocrInput, documentType: "image_url" }, fetchImpl);
+    expect(body.document).toEqual({ type: "image_url", image_url: ocrInput.url });
+  });
+
+  // Un scan illisible rend zéro page. Ce n'est PAS une panne : renvoyer une
+  // erreur enverrait l'appelant réessayer en boucle sur un document vide.
+  it("un document sans texte n'est pas une erreur", async () => {
+    const fetchImpl = vi.fn(async () => jsonResponse(200, { pages: [] })) as unknown as typeof fetch;
+    const r = await callProviderOcr(ocrInput, fetchImpl);
+    expect(r.ok).toBe(true);
+    if (r.ok) expect(r.pages).toEqual([]);
+  });
+
+  it("une réponse sans tableau de pages est une erreur", async () => {
+    const fetchImpl = vi.fn(async () => jsonResponse(200, { detail: "?" })) as unknown as typeof fetch;
+    const r = await callProviderOcr(ocrInput, fetchImpl);
+    expect(r.ok).toBe(false);
+    if (!r.ok) expect(r.kind).toBe("empty");
+  });
+
+  // ⚠️ L'URL SIGNÉE EST UN DROIT D'ACCÈS AU DOCUMENT. Si le fournisseur nous
+  // la renvoie en écho dans son message d'erreur, elle ne doit pas atterrir
+  // dans un journal du Socle.
+  it("écarte un message d'erreur qui contient l'URL signée", async () => {
+    const fetchImpl = vi.fn(async () =>
+      new Response(`could not fetch document at ${ocrInput.url}`, { status: 422 })
+    ) as unknown as typeof fetch;
+    const r = await callProviderOcr(ocrInput, fetchImpl);
+    expect(r.ok).toBe(false);
+    if (!r.ok) {
+      expect(r.detail).toBe("[réponse du fournisseur écartée : elle contenait la requête]");
+      expect(r.detail).not.toContain("token=abc");
+    }
+  });
+
+  it("pas de réponse du fournisseur ⇒ échec réseau", async () => {
+    const fetchImpl = vi.fn(async () => {
+      throw new Error("timeout");
+    }) as unknown as typeof fetch;
+    const r = await callProviderOcr(ocrInput, fetchImpl);
+    expect(r.ok).toBe(false);
+    if (!r.ok) expect(r.kind).toBe("network");
   });
 });

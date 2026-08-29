@@ -38,7 +38,7 @@ export function buildOpenApiDocument(serverUrl: string): Record<string, unknown>
     openapi: "3.1.0",
     info: {
       title: "API IA Socle — guichet du fournisseur LLM",
-      version: "1.0.0",
+      version: "1.1.0",
       description: [
         "Le Socle détient la clé du fournisseur LLM et **compte ce qu'elle dépense** pour",
         "toute la gamme. Les applications (Iris, Clara…) n'appellent plus le fournisseur :",
@@ -57,6 +57,25 @@ export function buildOpenApiDocument(serverUrl: string): Record<string, unknown>
         "**journal**, jamais le compteur ni le plafond — c'est ce qui permet de répondre à",
         "« combien me coûte cette collectivité ? » ET à « qui a dépensé ? ».",
         "Aucun plafond configuré ⇒ consommation illimitée (déploiement progressif).",
+        "",
+        "## Un garde-fou de cadence, distinct du plafond",
+        "Un plafond mensuel dit *combien*, jamais *à quelle vitesse* : une boucle accidentelle",
+        "consommerait le budget d'un mois en quelques minutes. Indépendamment du crédit, un",
+        "appelant est donc freiné au-delà d'un certain rythme, **par agent (`actor_id`) et par",
+        "NATURE d'appel** — un échange conversationnel suit une cadence humaine, un lot d'OCR",
+        "une cadence machine :",
+        "",
+        "| Nature | Par agent | Sans agent identifié |",
+        "|---|---|---|",
+        "| Conversationnel (`/v1/completions`) | 20 / minute | 120 / minute |",
+        "| Lot (`/v1/ocr`) | 60 / minute | 360 / minute |",
+        "",
+        "Les deux natures ont des compteurs **SÉPARÉS** : un lot de documents ne consomme pas",
+        "le budget de questions du même agent. Le refus est",
+        "un `429` de code `ai_rate_limited`, avec un en-tête `Retry-After` : **le crédit est",
+        "intact**, seul le rythme est en cause. Le compteur retient les **tentatives**, refus",
+        "de plafond compris — sans quoi une boucle déjà refusée continuerait de marteler.",
+        "Le seuil n'est pas réglable : c'est un garde-fou, pas un paramètre commercial.",
         "",
         "## Authentification",
         "Clé API en `Authorization: Bearer <clé>`, **usage serveur-à-serveur uniquement**",
@@ -110,6 +129,51 @@ export function buildOpenApiDocument(serverUrl: string): Record<string, unknown>
               content: {
                 "application/json": { schema: { $ref: "#/components/schemas/CompletionResponse" } },
               },
+            },
+            ...errorResponses("400", "401", "403", "404", "429", "500", "502", "503"),
+          },
+        },
+      },
+      "/v1/ocr": {
+        post: {
+          summary: "Lire un document scanné",
+          description: [
+            "Extrait le texte d'un PDF scanné ou d'une image, **au même plafond et dans le même",
+            "journal** que les complétions : une collectivité a un crédit, pas deux.",
+            "",
+            "⚠️ **Le document ne transite pas par le Socle.** L'appelant fournit une **URL signée",
+            "et de courte durée** que le fournisseur va chercher lui-même. Émettez-la juste avant",
+            "l'appel, avec la durée de vie la plus courte que votre stockage permette.",
+            "",
+            "⚠️ **Le plafond est en jetons, l'OCR se facture à la page.** La réservation part du",
+            "`page_count_hint` ; le règlement retient le **texte réellement extrait**. Une page",
+            "blanche ne coûte donc presque rien, et sous-déclarer les pages ne fait rien gagner.",
+            "",
+            "N'appelez cette route que pour ce qui l'exige : un PDF avec couche texte, un DOCX,",
+            "un ODT ou un TXT s'extraient chez vous, sans IA et sans crédit.",
+          ].join("\n"),
+          requestBody: {
+            required: true,
+            content: {
+              "application/json": {
+                schema: { $ref: "#/components/schemas/OcrRequest" },
+                example: {
+                  feature: "analyse-courrier",
+                  document: {
+                    type: "document_url",
+                    url: "https://…/storage/v1/object/sign/…?token=…",
+                  },
+                  page_count_hint: 3,
+                  reference: { kind: "courier", id: "3f6a…" },
+                  actor_id: "9c21…",
+                },
+              },
+            },
+          },
+          responses: {
+            "200": {
+              description: "Texte extrait, avec la consommation et l'état du plafond.",
+              content: { "application/json": { schema: { $ref: "#/components/schemas/OcrResponse" } } },
             },
             ...errorResponses("400", "401", "403", "404", "429", "500", "502", "503"),
           },
@@ -195,6 +259,20 @@ export function buildOpenApiDocument(serverUrl: string): Record<string, unknown>
               type: "integer",
               description: "**Indication** seulement : le Socle recalcule et retient le maximum des deux.",
             },
+            response_format: {
+              type: ["string", "null"],
+              enum: ["json", null],
+              description: [
+                "`\"json\"` contraint la sortie à du JSON **syntaxiquement valide** — pour un appelant",
+                "qui parse au lieu d'afficher. Alias du Socle : la forme du fournisseur n'est jamais nommée ici.",
+                "",
+                "⚠️ Le mot « json » doit figurer dans `system` ou dans un message (exigence du mode JSON",
+                "du fournisseur) — décrivez-y la structure attendue. À défaut : **400**, avant toute dépense.",
+                "",
+                "⚠️ Le JSON rendu est **valide, pas conforme** : aucun schéma n'est imposé au modèle.",
+                "Revalidez `answer` contre vos propres règles — c'est votre affaire, pas celle du Socle.",
+              ].join("\n"),
+            },
             reference: {
               type: ["object", "null"],
               description: "Référence OPAQUE vers l'objet de l'appelant (demande, courrier). Sans signification pour le Socle.",
@@ -216,6 +294,78 @@ export function buildOpenApiDocument(serverUrl: string): Record<string, unknown>
                 completion_tokens: { type: ["integer", "null"] },
                 total_tokens: { type: ["integer", "null"] },
                 estimated: { type: "boolean", description: "Vrai si le fournisseur n'a pas rendu de décompte." },
+              },
+            },
+            quota: { $ref: "#/components/schemas/QuotaState" },
+          },
+        },
+        OcrRequest: {
+          type: "object",
+          required: ["document"],
+          properties: {
+            feature: {
+              type: ["string", "null"],
+              description: "Libellé déclaratif, pour le détail du journal. N'influe pas sur l'imputation.",
+            },
+            document: {
+              type: "object",
+              required: ["type", "url"],
+              properties: {
+                type: {
+                  type: "string",
+                  enum: ["document_url", "image_url"],
+                  description: "`document_url` pour un PDF, `image_url` pour une image.",
+                },
+                url: {
+                  type: "string",
+                  format: "uri",
+                  description: [
+                    "URL **https** signée et courte. Refusés : tout autre schéma, les identifiants",
+                    "dans le lien (`https://user:pass@…`), et au-delà de 4096 caractères.",
+                  ].join(" "),
+                },
+              },
+            },
+            page_count_hint: {
+              type: "integer",
+              minimum: 1,
+              maximum: 100,
+              description: [
+                "**Indication** servant à réserver, jamais à facturer. 1 par défaut.",
+                "Au-delà de 100 : **400 `payload_too_large`** — scindez le document.",
+              ].join(" "),
+            },
+            reference: {
+              type: ["object", "null"],
+              description: "Référence OPAQUE vers l'objet de l'appelant. Sans signification pour le Socle.",
+              properties: { kind: { type: "string" }, id: { type: "string", format: "uuid" } },
+            },
+            actor_id: { type: ["string", "null"], format: "uuid", description: "Identifiant opaque de l'agent appelant." },
+          },
+        },
+        OcrResponse: {
+          type: "object",
+          properties: {
+            text: {
+              type: "string",
+              description: "Markdown de toutes les pages, jointes par `\n\n---\n\n`. Vide si le document ne porte aucun texte — ce n'est pas une erreur.",
+            },
+            pages: {
+              type: "array",
+              items: {
+                type: "object",
+                properties: { index: { type: "integer" }, markdown: { type: "string" } },
+              },
+            },
+            page_count: { type: "integer" },
+            provider: { type: "string", examples: ["mistral"] },
+            event_id: { type: "string", format: "uuid" },
+            usage: {
+              type: "object",
+              properties: {
+                pages_processed: { type: ["integer", "null"], description: "Pages facturées par le fournisseur, quand il le dit." },
+                total_tokens: { type: "integer", description: "Jetons décomptés du plafond, dérivés du texte extrait." },
+                estimated: { type: "boolean", description: "Toujours vrai : le fournisseur facture des pages, la conversion en jetons est celle du Socle." },
               },
             },
             quota: { $ref: "#/components/schemas/QuotaState" },
@@ -262,7 +412,13 @@ export function buildOpenApiDocument(serverUrl: string): Record<string, unknown>
         Unauthorized: errorResponse("Clé API manquante, invalide, révoquée ou expirée."),
         Forbidden: errorResponse("Clé sans scope `ai`, ou non rattachée à une application consommatrice."),
         NotFound: errorResponse("Organisation ou endpoint introuvable."),
-        QuotaExceeded: errorResponse("Plafond mensuel atteint. **Le fournisseur n'a pas été appelé.** Le message nomme la date de renouvellement."),
+        QuotaExceeded: errorResponse(
+          "**Deux refus partagent ce statut, et le `code` les distingue.** " +
+            "`ai_quota_exceeded` : le plafond mensuel de la collectivité est atteint — le message nomme la date " +
+            "de renouvellement, et il n'y a rien à réessayer avant. " +
+            "`ai_rate_limited` : trop d'appels en peu de temps — le crédit est **intact**, l'en-tête `Retry-After` " +
+            "donne les secondes à attendre. Dans les deux cas, **le fournisseur n'a pas été appelé** et rien n'a été consommé.",
+        ),
         InternalError: errorResponse("Erreur interne du serveur."),
         ProviderUnavailable: errorResponse("Le fournisseur n'a pas répondu. Son erreur n'est jamais relayée. **Rien n'a été consommé.**"),
         NotConfigured: errorResponse("Aucune clé fournisseur n'est configurée sur cette plateforme."),

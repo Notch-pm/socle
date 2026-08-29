@@ -1,5 +1,12 @@
 import { describe, expect, it } from "vitest";
-import { nextRenewalIso, periodKey, quotaExceededMessage, renewalLabel } from "./quota.ts";
+import {
+  nextRenewalIso,
+  periodKey,
+  quotaExceededMessage,
+  rateLimitedMessage,
+  renewalLabel,
+  secondsUntilNextMinute,
+} from "./quota.ts";
 import {
   clampOutput,
   DEFAULT_OUTPUT_TOKENS,
@@ -111,5 +118,46 @@ describe("clampOutput", () => {
     expect(clampOutput(-10)).toBe(DEFAULT_OUTPUT_TOKENS);
     expect(clampOutput("beaucoup")).toBe(DEFAULT_OUTPUT_TOKENS);
     expect(clampOutput(NaN)).toBe(DEFAULT_OUTPUT_TOKENS);
+  });
+});
+
+describe("secondsUntilNextMinute", () => {
+  it("compte jusqu'au prochain top de minute", () => {
+    expect(secondsUntilNextMinute(new Date("2026-08-29T10:00:00.000Z"))).toBe(60);
+    expect(secondsUntilNextMinute(new Date("2026-08-29T10:00:15.000Z"))).toBe(45);
+    expect(secondsUntilNextMinute(new Date("2026-08-29T10:00:30.500Z"))).toBe(30);
+  });
+
+  // `Retry-After: 0` inviterait à réessayer tout de suite — exactement le
+  // comportement qu'on freine.
+  it("ne rend jamais 0, même à la toute fin de la fenêtre", () => {
+    expect(secondsUntilNextMinute(new Date("2026-08-29T10:00:59.000Z"))).toBe(1);
+    expect(secondsUntilNextMinute(new Date("2026-08-29T10:00:59.999Z"))).toBe(1);
+  });
+
+  it("reste dans la borne d'une fenêtre d'une minute", () => {
+    for (let s = 0; s < 60; s++) {
+      const v = secondsUntilNextMinute(new Date(Date.UTC(2026, 7, 29, 10, 0, s)));
+      expect(v).toBeGreaterThanOrEqual(1);
+      expect(v).toBeLessThanOrEqual(60);
+    }
+  });
+});
+
+describe("rateLimitedMessage", () => {
+  // Le crédit n'est PAS en cause : parler de plafond enverrait l'appelant
+  // demander un relèvement dont il n'a pas besoin.
+  it("parle de cadence, jamais de plafond ni de crédit", () => {
+    const m = rateLimitedMessage();
+    expect(m).toContain("peu de temps");
+    expect(m).not.toMatch(/plafond|crédit|renouvel/i);
+  });
+
+  // ⚠️ Les deux routes refusent avec les MÊMES mots. La première version disait
+  // « questions à l'assistant » : faux pour /v1/ocr, où l'appelant lit un
+  // document et n'a sollicité aucun assistant. Cette assertion garde la porte
+  // fermée pour les routes à venir.
+  it("ne nomme aucune route en particulier", () => {
+    expect(rateLimitedMessage()).not.toMatch(/assistant|question|document|courrier/i);
   });
 });
