@@ -72,6 +72,25 @@ fichiers casse la fonction en production alors que les tests passent en local.
   fonctionne, il n'est simplement pas piloté depuis la console. C'est ce qui permet de changer
   d'agent ou de modèle **sans toucher une seule application**.
 
+  **Alias en service** (le nom du secret se déduit de l'alias : majuscules, tirets en
+  soulignés) :
+
+  | Alias | Secret | Consommateur | Usage |
+  |---|---|---|---|
+  | `assistant-instruction` | `MISTRAL_AGENT_ASSISTANT_INSTRUCTION` | Iris | Assistant d'instruction des demandes |
+  | `extraction-courrier` | `MISTRAL_AGENT_EXTRACTION_COURRIER` | Clara | Analyse de courrier, extraction structurée, préremplissage de démarche |
+  | `redaction-reponse` | `MISTRAL_AGENT_REDACTION_REPONSE` | Clara | Brouillon de réponse à un courrier |
+
+  ⚠️ **« Optionnel » ne veut pas dire « sans conséquence », et l'écart entre consommateurs
+  mérite d'être connu.** Pour un assistant conversationnel (Iris), le repli sur le modèle par
+  défaut change le ton, pas la fonction. Pour les **extractions structurées de Clara**, l'agent
+  historique portait le comportement d'extraction : le repli dégrade la qualité des champs
+  proposés **silencieusement** — aucune erreur, aucun journal, juste des suggestions moins
+  bonnes. Clara s'en protège en composant des prompts système autosuffisants (elle ne peut pas
+  savoir si son alias résout), mais renseigner ces deux secrets à la bascule reste le bon geste.
+  L'identifiant de l'agent d'extraction historique de Clara est récupérable dans son dépôt,
+  avant la bascule du 2026-08-29.
+
 ## Base de données
 
 - **Migrations** : appliquées via l'outil MCP `apply_migration`, ou la CLI `supabase`
