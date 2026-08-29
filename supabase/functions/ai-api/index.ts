@@ -532,11 +532,7 @@ Deno.serve(async (req: Request) => {
       // Le texte fait foi pour le règlement, pas le nombre de pages : une page
       // blanche est facturée par le fournisseur et ne vaut rien à la
       // collectivité (voir `tokensForOcrText`).
-      const text = result.pages.map((page) => page.markdown).join("
-
----
-
-").trim();
+      const text = result.pages.map((page) => page.markdown).join("\n\n---\n\n").trim();
       const actualTokens = tokensForOcrText(text);
 
       const { error: settleError } = await admin.rpc("settle_ai_usage", {
