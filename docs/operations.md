@@ -93,10 +93,20 @@ fichiers casse la fonction en production alors que les tests passent en local.
 
   **État au 2026-08-29** : les deux secrets de Clara sont renseignés, et la bascule est
   vérifiée — ses appels sont passés de `resource_type = 'chat'` à `'agent'` dans
-  `ai_usage_events` dès que les secrets ont été posés. `MISTRAL_AGENT_ASSISTANT_INSTRUCTION`
-  (Iris) reste **absent** : ses appels sont journalisés en `'chat'`, donc servis par le modèle
-  par défaut. Pour un assistant conversationnel c'est tenable (cf. ci-dessus), mais c'est un
-  choix par défaut, pas une décision — il vaut d'être tranché explicitement.
+  `ai_usage_events` dès que les secrets ont été posés.
+
+  `MISTRAL_AGENT_ASSISTANT_INSTRUCTION` (Iris) est **absent, et c'est normal — ne le cherchez
+  pas.** Contrairement à Clara, Iris n'a **jamais** eu d'agent : aucun identifiant dans son
+  historique git, aucun secret `MISTRAL_*` dans son projet, et il compose son propre prompt
+  système (`_shared/ai/prompt.ts`, `buildAssistantPrompt`, ~190 lignes) en appelant
+  `chat/completions`. Son `resource_type = 'chat'` n'est donc pas une dégradation due à la
+  bascule : c'est l'état dans lequel il a toujours tourné. Rien à restaurer.
+
+  En créer un reste possible, et c'est une décision **produit** : le seul gain serait de régler
+  le ton de l'assistant depuis la console Mistral sans redéployer. Le coût est réel — le
+  comportement vivrait à deux endroits, le prompt composé par Iris et celui de l'agent, qui se
+  superposeraient. À faire le jour où le besoin existe, pas avant : poser le secret suffira,
+  aucune application ne bougera.
 
   ⚠️ **Cette colonne `resource_type` est le seul témoin de la résolution d'alias.** Un
   identifiant erroné se voit (`failed` + 502) ; un identifiant absent, non. Après tout
