@@ -18,8 +18,20 @@
  *  • `stream` — le décompte exige la réponse complète : le `usage` n'arrive
  *    que dans le dernier événement SSE, et une déconnexion laisserait une
  *    réservation posée jusqu'au balayage.
- *  • `temperature`, `top_p`, `response_format` — additifs plus tard si un
- *    consommateur le justifie ; les refuser maintenant ne coûte rien.
+ *  • `temperature`, `top_p` — additifs plus tard si un consommateur le
+ *    justifie ; les refuser maintenant ne coûte rien.
+ *
+ * ⚠️ `response_format` A CHANGÉ DE CAMP le 2026-08-29 (évolution additive) et
+ * la nuance est celle qui gouverne toute cette liste : un paramètre est refusé
+ * quand il déplace une DÉCISION vers l'appelant, pas quand il décrit la FORME
+ * de ce qu'il attend. `temperature` achète du comportement de modèle ;
+ * `response_format: "json"` dit seulement « je vais parser, pas afficher ».
+ * Sans lui, un consommateur qui a besoin de structure n'a que deux issues :
+ * supplier dans son prompt et retenter sur échec — donc PAYER DEUX FOIS le
+ * même appel — ou réclamer `tools`, la porte qu'on tient fermée. La valeur est
+ * un ALIAS du Socle (« json »), jamais la forme du fournisseur : la traduction
+ * vit dans `provider.ts`, et le jour où le fournisseur change de nom pour son
+ * mode JSON, aucune application ne bouge.
  *  • `role: "system"` dans `messages` — le prompt système a son propre champ,
  *    pour que le Socle sache le compter à part et qu'il n'y ait qu'une forme
  *    canonique.
@@ -65,6 +77,14 @@ export function resolveRootOrgId(rows: OrgParentRow[], orgId: string): string | 
 
 export type ChatRole = "user" | "assistant";
 
+/**
+ * Formats de sortie du Socle. Un seul aujourd'hui, et c'est délibérément un
+ * ALIAS et non la forme du fournisseur (`{ type: "json_object" }`) : le
+ * consommateur ne nomme jamais les choses du fournisseur, ici pas plus
+ * qu'avec `agent`.
+ */
+export type ResponseFormat = "json";
+
 export interface ChatMessage {
   role: ChatRole;
   content: string;
@@ -80,6 +100,8 @@ export interface CompletionRequest {
   maxOutput: number;
   /** Estimation de l'appelant — INDICATION seulement (voir tokens.ts). */
   hint: number | null;
+  /** `"json"` ⇒ sortie contrainte en JSON syntaxiquement valide. */
+  responseFormat: ResponseFormat | null;
   referenceKind: string | null;
   referenceId: string | null;
   actorId: string | null;
@@ -90,7 +112,7 @@ export type ParseResult =
   | { ok: false; code: "bad_request"; message: string };
 
 const ALLOWED_KEYS = new Set([
-  "feature", "agent", "system", "messages",
+  "feature", "agent", "system", "messages", "response_format",
   "max_output_tokens", "estimated_tokens", "reference", "actor_id",
 ]);
 
@@ -103,7 +125,6 @@ const PROVIDER_KEYS: Record<string, string> = {
   stream: "Le streaming n'est pas disponible : le décompte exige la réponse complète.",
   temperature: "Paramètre d'échantillonnage non accepté : le Socle fixe le comportement.",
   top_p: "Paramètre d'échantillonnage non accepté : le Socle fixe le comportement.",
-  response_format: "Paramètre non accepté.",
   consumer: "L'imputation vient de la clé API, jamais du corps de la requête.",
   organization_id: "L'organisation vient de la clé API ou de l'en-tête X-Organization-Id.",
 };
@@ -118,6 +139,17 @@ function text(value: unknown): string {
 
 function fail(message: string): ParseResult {
   return { ok: false, code: "bad_request", message };
+}
+
+/**
+ * Le mot « json », n'importe où dans ce que l'appelant a composé. Recherche
+ * volontairement GROSSIÈRE (insensible à la casse, sous-chaîne) : elle
+ * reproduit le contrôle du fournisseur, qui n'est pas plus fin. Être plus
+ * strict ici refuserait des prompts que le fournisseur accepte.
+ */
+function mentionsJson(system: string, messages: ChatMessage[]): boolean {
+  if (/json/i.test(system)) return true;
+  return messages.some((m) => /json/i.test(m.content));
 }
 
 const MAX_MESSAGES = 24;
@@ -189,6 +221,31 @@ export function parseCompletionPayload(raw: unknown, clampOutput: (v: unknown) =
     ? Math.max(0, Math.floor(raw.estimated_tokens))
     : null;
 
+  let responseFormat: ResponseFormat | null = null;
+  if (raw.response_format !== undefined && raw.response_format !== null) {
+    if (raw.response_format !== "json") {
+      return fail(
+        '« response_format » : seule la valeur « json » est acceptée (alias du Socle).',
+      );
+    }
+    // ⚠️ LE MODE JSON DU FOURNISSEUR EXIGE LE MOT DANS LE PROMPT, et le refus
+    // est vérifié ICI plutôt que découvert là-bas. Sans ce contrôle, l'appel
+    // franchirait la réservation, se ferait refuser par le fournisseur, et
+    // l'appelant recevrait « l'assistant est momentanément indisponible » —
+    // une phrase qui l'enverrait attendre alors que son payload est en cause.
+    // La réservation serait soldée en `failed`, donc non facturée : ce qu'on
+    // évite n'est pas une dépense, c'est une heure de débogage sur un message
+    // qui ment.
+    if (!mentionsJson(system, messages)) {
+      return fail(
+        '« response_format: "json" » exige que le mot « json » figure dans « system » ' +
+          "ou dans un message : le mode JSON du fournisseur le requiert. " +
+          "Décrivez-y la structure attendue.",
+      );
+    }
+    responseFormat = "json";
+  }
+
   return {
     ok: true,
     value: {
@@ -198,6 +255,7 @@ export function parseCompletionPayload(raw: unknown, clampOutput: (v: unknown) =
       messages,
       maxOutput: clampOutput(raw.max_output_tokens),
       hint,
+      responseFormat,
       referenceKind,
       referenceId,
       actorId: isUuid(actorId) ? actorId : null,

@@ -53,6 +53,26 @@ export function sortedRootOrganizations<T extends Pick<Organization, "name" | "p
     .sort((a, b) => a.name.localeCompare(b.name));
 }
 
+/**
+ * Sommets de la forêt VISIBLE : les organisations dont le parent est `null`
+ * **ou hors périmètre RLS**. C'est l'« organisation principale » du point de vue
+ * de l'utilisateur courant — celle dont l'en-tête porte l'identité.
+ *
+ * ⚠️ Ne pas confondre avec `sortedRootOrganizations`, qui ne garde que les
+ * racines STRICTES : un membre d'une sous-organisation ne voit pas sa racine
+ * (le RLS `has_org_access` exige l'appartenance directe), et un en-tête qui
+ * n'afficherait alors rien laisserait l'utilisateur sans repère. On montre le
+ * plus haut ancêtre qu'il puisse voir, même exigence que `findRootAncestor`.
+ */
+export function visibleRootOrganizations<
+  T extends Pick<Organization, "id" | "name" | "parent_id">,
+>(orgs: T[]): T[] {
+  const visible = new Set(orgs.map((o) => o.id));
+  return orgs
+    .filter((o) => o.parent_id === null || !visible.has(o.parent_id))
+    .sort((a, b) => a.name.localeCompare(b.name));
+}
+
 /** All ids strictly below `node` — used to forbid re-parenting an org under its own descendant. */
 export function collectDescendantIds(node: OrgNode): string[] {
   const ids: string[] = [];

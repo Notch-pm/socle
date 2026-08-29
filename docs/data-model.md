@@ -333,8 +333,23 @@ comptabilité ont été centralisées ici (2026-08-29).
   passe-plat : un test épingle l'ensemble exact des 17 colonnes, si bien qu'une future colonne
   `prompt`/`content`/`answer` le casse.
 
-**Cycle réserver → appeler → solder.** `reserve_ai_usage` fait **UN `UPDATE` conditionnel** :
-zéro ligne affectée ⇒ refus, et le fournisseur n'est jamais appelé. C'est la porte de
+- **`ai_usage_rate`** (2026-08-29) — le garde-fou de **DÉBIT**, que le plafond ne couvre pas :
+  il dit *combien*, jamais *à quelle vitesse*, et une boucle accidentelle consommerait un mois
+  en quelques minutes. Clé primaire composite `(organization_id, subject_kind, subject,
+  window_start)`, `attempts int` ; pas de colonne `id` — la recherche EST la clé et ces lignes
+  sont éphémères, un uuid de substitution serait un second index à tenir sur le chemin chaud de
+  chaque appel. Purgée par `purge_ai_usage_rate`, enchaînée au job cron existant.
+  ⚠️ **Elle compte les TENTATIVES, pas les appels aboutis** : une boucle que le plafond refuse
+  déjà continue de marteler, et un compteur de succès ne la couperait jamais.
+
+**Cycle réserver → appeler → solder, et DEUX portes avant lui.** `reserve_ai_usage` vérifie
+d'abord la **cadence** (20 appels/minute/agent, 120 pour un appelant sans agent — seuils **en
+dur**, un garde-fou n'étant pas un paramètre commercial), puis le **plafond**. Chacune est
+**UN `UPDATE` conditionnel** : zéro ligne affectée ⇒ refus, et le fournisseur n'est jamais
+appelé. ⚠️ La porte de cadence passe **en premier**, pour trois raisons : elle doit compter les
+tentatives y compris refusées ; rien n'est encore incrémenté quand elle refuse, donc il n'y a
+aucun retour en arrière à écrire ; et elle doit protéger les collectivités **sans plafond**, qui
+sortent de la fonction par un `return` anticipé et échapperaient à toute garde placée après. C'est la porte de
 concurrence — un verrou de ligne Postgres en READ COMMITTED, pas un `select` suivi d'un `update`.
 `settle_ai_usage` corrige ensuite avec la consommation réelle ; un échec ne consomme rien.
 `release_stale_ai_reservations` (cron, 15 min) rattrape les réservations orphelines.

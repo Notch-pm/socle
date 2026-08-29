@@ -40,7 +40,11 @@
 
   --radius: 0.875rem;
 
-  /* Sidebar rail — always dark forest, independent of light/dark theme */
+  /* Jetons `--sidebar-*` du design system Notch/Ariane, conservés à
+     l'identique d'Iris et de Clara. ⚠️ Le RAIL de navigation ne les utilise
+     PAS : comme dans les deux autres applications, il est peint en
+     `bg-primary` (voir `components/layout/Sidebar.tsx`). Ces jetons restent
+     alignés sur le DS pour ne pas diverger d'un projet à l'autre. */
   --sidebar-background: 160 15% 11%;
   --sidebar-foreground: 0 0% 95%;
   --sidebar-hover: 0 0% 100% / 0.08;

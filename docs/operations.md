@@ -107,7 +107,7 @@ d'application — il faut aller lire `cron.job_run_details`.
 
 | Job | Fréquence | Rôle |
 |---|---|---|
-| `release-stale-ai-reservations` | toutes les 15 min | Libère les réservations de jetons orphelines — un appel dont le règlement n'est jamais arrivé (processus tué, réseau coupé). |
+| `release-stale-ai-reservations` | toutes les 5 min | **Deux gestes.** (1) Libère les réservations de jetons orphelines — un appel dont le règlement n'est jamais arrivé (processus tué, réseau coupé). (2) Purge les fenêtres du garde-fou de débit de plus d'une heure. |
 
 Sans lui, une réservation orpheline mord définitivement sur le plafond du mois : la collectivité
 paierait un appel qui n'a jamais eu lieu, et personne ne saurait pourquoi son crédit fond.

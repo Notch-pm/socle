@@ -172,3 +172,73 @@ describe("isUuid", () => {
     expect(isUuid(null)).toBe(false);
   });
 });
+
+describe("parseCompletionPayload — response_format", () => {
+  // Le prompt de référence contient déjà le mot : c'est le cas normal, celui
+  // d'un appelant qui décrit la structure qu'il attend.
+  const jsonBase = {
+    system: "Réponds en JSON avec les clés summary et intents.",
+    messages: [{ role: "user", content: "Analyse ce courrier." }],
+  };
+
+  it("accepte l'alias « json »", () => {
+    const r = parse({ ...jsonBase, response_format: "json" });
+    expect(r.ok).toBe(true);
+    if (r.ok) expect(r.value.responseFormat).toBe("json");
+  });
+
+  it("absent ou null ⇒ aucune contrainte", () => {
+    for (const raw of [jsonBase, { ...jsonBase, response_format: null }]) {
+      const r = parse(raw);
+      expect(r.ok).toBe(true);
+      if (r.ok) expect(r.value.responseFormat).toBe(null);
+    }
+  });
+
+  // ⚠️ L'APPELANT NE NOMME JAMAIS LES CHOSES DU FOURNISSEUR : la forme
+  // `{ type: "json_object" }` est refusée ici comme `model` ou `agent_id`.
+  it("refuse la forme du fournisseur", () => {
+    const r = parse({ ...jsonBase, response_format: { type: "json_object" } });
+    expect(r.ok).toBe(false);
+    if (!r.ok) expect(r.message).toContain("seule la valeur « json »");
+  });
+
+  it("refuse une valeur inconnue", () => {
+    expect(parse({ ...jsonBase, response_format: "yaml" }).ok).toBe(false);
+  });
+
+  // ⚠️ LE PIÈGE QUE CE CONTRÔLE EXISTE POUR ATTRAPER : sans le mot « json »
+  // dans le prompt, le fournisseur refuse. Le découvrir chez lui vaudrait à
+  // l'appelant un « assistant momentanément indisponible » — une phrase qui
+  // l'enverrait attendre alors que son payload est en cause.
+  it("refuse quand le mot « json » ne figure nulle part", () => {
+    const r = parse({
+      system: "Tu es l'assistant.",
+      messages: [{ role: "user", content: "Analyse ce courrier." }],
+      response_format: "json",
+    });
+    expect(r.ok).toBe(false);
+    if (!r.ok) expect(r.message).toContain("le mot « json »");
+  });
+
+  it("le mot suffit dans un message, pas seulement dans le prompt système", () => {
+    expect(parse({
+      system: "Tu es l'assistant.",
+      messages: [{ role: "user", content: "Rends un objet json." }],
+      response_format: "json",
+    }).ok).toBe(true);
+  });
+
+  it("la casse est indifférente", () => {
+    expect(parse({ ...jsonBase, system: "Réponds en Json.", response_format: "json" }).ok).toBe(true);
+  });
+
+  // Le contrôle ne s'applique QU'AU mode demandé : un prompt ordinaire n'a
+  // aucune raison de parler de json.
+  it("un appel sans mode JSON n'a pas à mentionner json", () => {
+    expect(parse({
+      system: "Tu es l'assistant.",
+      messages: [{ role: "user", content: "Bonjour." }],
+    }).ok).toBe(true);
+  });
+});

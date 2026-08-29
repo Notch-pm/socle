@@ -20,9 +20,12 @@
 --   5. 🆕 L'APPLICATION DISCRIMINE LE JOURNAL, JAMAIS LE COMPTEUR — deux
 --      consommateurs, un seul compteur, deux lignes de journal imputées.
 --      C'est LA règle du modèle centralisé.
---   6. 🆕 LE SCHÉMA EST LA PREUVE DU PASSE-PLAT — l'ensemble des colonnes
+--   6. LE SCHÉMA EST LA PREUVE DU PASSE-PLAT — l'ensemble des colonnes
 --      d'`ai_usage_events` est épinglé : une future colonne `prompt`,
 --      `content` ou `answer` casse ce test au lieu de passer inaperçue.
+--   7. 🆕 LE GARDE-FOU DE DÉBIT COMPTE LES TENTATIVES, PAS LES SUCCÈS — c'est
+--      la règle qui coupe une boucle que le plafond refuse déjà (R3), et c'est
+--      elle qui permet de vérifier la porte SANS dépenser un jeton.
 --
 -- ⚠️ Chaque refus vérifie le MESSAGE de l'erreur, jamais `exception when
 -- others then null` : sinon un « permission denied » passe pour un refus
@@ -47,6 +50,15 @@ declare
   v_prev   text := to_char((now() at time zone 'utc') - interval '1 month', 'YYYY-MM');
   r record;
   v_int int; v_big bigint; v_big2 bigint; v_bool boolean; v_text text; v_arr text[];
+  -- Garde-fou de débit (2026-08-29)
+  org_r uuid;   -- collectivité avec un plafond confortable
+  org_n uuid;   -- collectivité SANS plafond — celle qui n'a aucune borne
+  org_x uuid;   -- collectivité dont le plafond est déjà épuisé
+  a_1 uuid := gen_random_uuid();
+  a_2 uuid := gen_random_uuid();
+  a_3 uuid := gen_random_uuid();
+  v_i int;
+  v_win timestamptz := date_trunc('minute', now());
 begin
   -- ==========================================================================
   -- MISE EN PLACE
@@ -256,6 +268,133 @@ begin
   perform public.settle_ai_usage(r.event_id, 100, 'completed');
 
   -- ==========================================================================
+  -- R. LE GARDE-FOU DE DÉBIT 🆕 (2026-08-29)
+  --
+  -- Le plafond mensuel dit COMBIEN, jamais À QUELLE VITESSE. Ces assertions
+  -- portent la porte qui manquait, et surtout la décision qui la structure :
+  -- elle compte les TENTATIVES.
+  -- ==========================================================================
+  insert into public.organizations (name, parent_id) values ('Collectivité R', null) returning id into org_r;
+  insert into public.organizations (name, parent_id) values ('Collectivité N', null) returning id into org_n;
+  insert into public.organizations (name, parent_id) values ('Collectivité X', null) returning id into org_x;
+  insert into public.ai_usage_quotas (organization_id, provider, monthly_limit_tokens)
+       values (org_r, '__global__', 1000000),
+              (org_x, '__global__', 1);
+
+  -- R1. Vingt tentatives d'un agent passent ; la vingt-et-unième est coupée.
+  for v_i in 1..20 loop
+    select * into r from public.reserve_ai_usage(org_r, 'mistral', 'chat', 10, 'iris', key_iris, null, null, null, a_1);
+    if not r.allowed then
+      v_fail := v_fail || format('R1a: tentative %s refusee (%s)', v_i, r.reason); end if;
+  end loop;
+  select * into r from public.reserve_ai_usage(org_r, 'mistral', 'chat', 10, 'iris', key_iris, null, null, null, a_1);
+  if r.allowed or r.reason is distinct from 'rate_limited' then
+    v_fail := v_fail || format('R1b: la 21e tentative est passee (allowed=%s, %s)', r.allowed, r.reason); end if;
+
+  -- R2. Un refus de cadence ne laisse AUCUNE ligne de journal, et ne parle pas
+  -- du crédit : remplir les compteurs laisserait croire que le plafond est en
+  -- cause, alors que le crédit est intact.
+  if r.event_id is not null then
+    v_fail := v_fail || 'R2a: un refus de cadence a laisse une ligne de journal'::text; end if;
+  if r.limit_tokens is not null or r.used_tokens is not null or r.reserved_tokens is not null then
+    v_fail := v_fail || 'R2b: un refus de cadence a rempli les compteurs de jetons'::text; end if;
+  select count(*) into v_int from public.ai_usage_events
+   where organization_id = org_r and external_actor_id = a_1;
+  if v_int <> 20 then
+    v_fail := v_fail || format('R2c: %s lignes de journal pour 20 appels acceptes', v_int); end if;
+
+  -- R3. ⚠️ L'ASSERTION QUI PORTE TOUT : un refus de PLAFOND compte quand même
+  -- comme tentative. Sans elle, une boucle que le plafond refuse martèlerait
+  -- jusqu'à la fin du mois sans jamais être coupée — et le garde-fou serait
+  -- inutile précisément là où il sert.
+  for v_i in 1..5 loop
+    select * into r from public.reserve_ai_usage(org_x, 'mistral', 'chat', 10, 'iris', key_iris, null, null, null, a_3);
+    if r.allowed or r.reason is distinct from 'quota_exceeded' then
+      v_fail := v_fail || format('R3a: appel %s non refuse par le plafond (%s)', v_i, r.reason); end if;
+  end loop;
+  select attempts into v_int from public.ai_usage_rate
+   where organization_id = org_x and subject_kind = 'actor' and subject = a_3::text and window_start = v_win;
+  if v_int is distinct from 5 then
+    v_fail := v_fail || format('R3b: %s tentatives comptees pour 5 refus de plafond, attendu 5', v_int); end if;
+
+  -- R4. Un autre agent de la MÊME collectivité n'est pas affecté : la porte est
+  -- par agent, pas par collectivité.
+  select * into r from public.reserve_ai_usage(org_r, 'mistral', 'chat', 10, 'iris', key_iris, null, null, null, a_2);
+  if not r.allowed then
+    v_fail := v_fail || format('R4: un autre agent est bloque par le quota d''un premier (%s)', r.reason); end if;
+
+  -- R5. Le MÊME agent dans une autre collectivité n'est pas affecté.
+  select * into r from public.reserve_ai_usage(org_n, 'mistral', 'chat', 10, 'iris', key_iris, null, null, null, a_1);
+  if not r.allowed or r.reason is distinct from 'no_quota_configured' then
+    v_fail := v_fail || format('R5: le compteur de debit fuit entre collectivites (%s)', r.reason); end if;
+
+  -- R6. ⚠️ LA PORTE S'APPLIQUE À UNE COLLECTIVITÉ SANS PLAFOND. Ce sont
+  -- justement celles qui n'ont aucune borne aujourd'hui, et le `return`
+  -- anticipé « aucun plafond ⇒ illimité » les ferait échapper à toute garde
+  -- placée plus bas dans la fonction.
+  insert into public.ai_usage_rate (organization_id, subject_kind, subject, window_start, attempts)
+       values (org_n, 'actor', a_2::text, v_win, 20);
+  select * into r from public.reserve_ai_usage(org_n, 'mistral', 'chat', 10, 'iris', key_iris, null, null, null, a_2);
+  if r.allowed or r.reason is distinct from 'rate_limited' then
+    v_fail := v_fail || format('R6: une collectivite sans plafond echappe au debit (%s)', r.reason); end if;
+
+  -- R7. Sans identifiant d'agent, la porte bascule sur l'APPLICATION, avec sa
+  -- limite propre (plus haute : elle couvre alors toute une collectivité).
+  select attempts into v_int from public.ai_usage_rate
+   where organization_id = org_x and subject_kind = 'consumer' and subject = 'iris' and window_start = v_win;
+  if v_int is not null then
+    v_fail := v_fail || 'R7a: un appel AVEC agent a aussi compte sur l''application'::text; end if;
+  insert into public.ai_usage_rate (organization_id, subject_kind, subject, window_start, attempts)
+       values (org_x, 'consumer', 'iris', v_win, 120);
+  select * into r from public.reserve_ai_usage(org_x, 'mistral', 'chat', 10, 'iris', key_iris);
+  if r.allowed or r.reason is distinct from 'rate_limited' then
+    v_fail := v_fail || format('R7b: le filet par application ne coupe pas (%s)', r.reason); end if;
+
+  -- R8. Une fenêtre écoulée ne pèse pas sur la fenêtre courante : le passage à
+  -- la minute suivante crée une ligne neuve, sans reset destructif.
+  insert into public.ai_usage_rate (organization_id, subject_kind, subject, window_start, attempts)
+       values (org_r, 'actor', a_2::text, v_win - interval '5 minutes', 20);
+  select * into r from public.reserve_ai_usage(org_r, 'mistral', 'chat', 10, 'iris', key_iris, null, null, null, a_2);
+  if not r.allowed then
+    v_fail := v_fail || format('R8: une fenetre passee bloque la fenetre courante (%s)', r.reason); end if;
+
+  -- R9. La purge retire ce qui est HORS RÉTENTION, et rien d'autre.
+  --
+  -- ⚠️ « Écoulée » ne veut pas dire « purgeable » : la fenêtre de R8, vieille de
+  -- 5 minutes, doit SURVIVRE à une rétention d'une heure. La première écriture
+  -- de ce test l'attendait supprimée — c'était l'assertion qui avait tort, pas
+  -- la purge. Une rétention qui ne garderait que la minute courante ferait
+  -- perdre toute mémoire du débit au premier passage du balayage.
+  insert into public.ai_usage_rate (organization_id, subject_kind, subject, window_start, attempts)
+       values (org_r, 'actor', gen_random_uuid()::text, v_win - interval '3 hours', 7);
+  select public.purge_ai_usage_rate(60) into v_int;
+  if v_int <> 1 then
+    v_fail := v_fail || format('R9a: la purge a retire %s fenetre(s), attendu 1 (la seule hors retention)', v_int); end if;
+  select count(*) into v_int from public.ai_usage_rate where window_start = v_win;
+  if v_int = 0 then
+    v_fail := v_fail || 'R9b: la purge a emporte la fenetre courante'::text; end if;
+  select count(*) into v_int from public.ai_usage_rate
+   where window_start = v_win - interval '5 minutes';
+  if v_int <> 1 then
+    v_fail := v_fail || 'R9c: la purge a emporte une fenetre encore dans la retention'::text; end if;
+  select count(*) into v_int from public.ai_usage_rate
+   where window_start < now() - interval '60 minutes';
+  if v_int <> 0 then
+    v_fail := v_fail || format('R9d: %s fenetre(s) hors retention subsistent', v_int); end if;
+
+  -- R10. La table et la purge sont fermées aux clients : la RPC est l'unique
+  -- porte, comme pour les trois autres tables.
+  select has_table_privilege('authenticated', 'public.ai_usage_rate', 'insert') into v_bool;
+  if v_bool then v_fail := v_fail || 'R10a: authenticated a INSERT sur ai_usage_rate'::text; end if;
+  select has_function_privilege('authenticated', 'public.purge_ai_usage_rate(int)', 'execute') into v_bool;
+  if v_bool then v_fail := v_fail || 'R10b: authenticated peut purge_ai_usage_rate'::text; end if;
+  -- Le revoke ne doit pas emporter la LECTURE : sans elle, la policy super
+  -- admin ne servirait plus a rien et le diagnostic « pourquoi ai-je ete
+  -- freine ? » deviendrait impossible.
+  select has_table_privilege('authenticated', 'public.ai_usage_rate', 'select') into v_bool;
+  if not v_bool then v_fail := v_fail || 'R10c: authenticated a perdu le SELECT'::text; end if;
+
+  -- ==========================================================================
   -- E1. Étanchéité : le super admin voit tout, un utilisateur ordinaire rien
   -- ==========================================================================
   perform set_config('request.jwt.claims',
@@ -334,7 +473,7 @@ begin
 
   -- ==========================================================================
   if array_length(v_fail, 1) is null then
-    raise exception 'TOUS LES TESTS SONT PASSES (plafond IA, Socle) -- transaction annulee.';
+    raise exception 'TOUS LES TESTS SONT PASSES (plafond + debit IA, Socle) -- transaction annulee.';
   else
     raise exception 'ECHECS (%) : %', array_length(v_fail, 1), array_to_string(v_fail, ' · ');
   end if;

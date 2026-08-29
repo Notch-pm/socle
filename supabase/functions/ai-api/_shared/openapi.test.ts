@@ -8,7 +8,7 @@ describe("buildOpenApiDocument", () => {
   it("est un document OpenAPI 3.1 avec le serveur injecté", () => {
     expect(doc.openapi).toBe("3.1.0");
     expect(doc.servers[0].url).toBe("https://ex.supabase.co/functions/v1/ai-api");
-    expect(doc.info.version).toBe("1.0.0");
+    expect(doc.info.version).toBe("1.1.0");
   });
 
   it("déclare la sécurité par clé API bearer", () => {
@@ -18,10 +18,43 @@ describe("buildOpenApiDocument", () => {
     expect(doc.security).toEqual([{ bearerApiKey: [] }]);
   });
 
-  it("expose les deux endpoints, avec la bonne méthode", () => {
-    expect(Object.keys(doc.paths).sort()).toEqual(["/v1/completions", "/v1/usage"]);
+  it("expose les trois endpoints, avec la bonne méthode", () => {
+    expect(Object.keys(doc.paths).sort()).toEqual(["/v1/completions", "/v1/ocr", "/v1/usage"]);
     expect(Object.keys(doc.paths["/v1/completions"])).toEqual(["post"]);
+    expect(Object.keys(doc.paths["/v1/ocr"])).toEqual(["post"]);
     expect(Object.keys(doc.paths["/v1/usage"])).toEqual(["get"]);
+  });
+
+  // ⚠️ Les DEUX routes payantes doivent annoncer les mêmes refus. Une seule qui
+  // documenterait 429 laisserait croire à un consommateur que l'autre ne peut
+  // pas manquer de crédit — et il n'écrirait pas le seul cas qu'il doit traiter.
+  it("les deux routes payantes documentent les mêmes refus", () => {
+    for (const route of ["/v1/completions", "/v1/ocr"] as const) {
+      const codes = Object.keys(doc.paths[route].post.responses).sort();
+      expect(codes).toEqual(["200", "400", "401", "403", "404", "429", "500", "502", "503"]);
+    }
+    // La lecture, elle, ne dépense rien : ni 429 ni panne de fournisseur.
+    const usage = Object.keys(doc.paths["/v1/usage"].get.responses);
+    expect(usage).not.toContain("429");
+    expect(usage).not.toContain("502");
+  });
+
+  // Le document est le seul endroit où un consommateur apprend que l'octet du
+  // document ne traverse pas le Socle — la garantie la plus forte de l'API.
+  it("dit que l'OCR reçoit une URL signée, pas le document", () => {
+    const description = doc.paths["/v1/ocr"].post.description;
+    expect(description).toContain("URL signée");
+    expect(description).toContain("ne transite pas par le Socle");
+  });
+
+  // ⚠️ Piège réel du mode JSON : sans le mot dans le prompt, le fournisseur
+  // refuse. Le contrat doit le dire, sinon chaque consommateur le découvre en
+  // production.
+  it("dit ce que « response_format » exige, et ce qu'il ne garantit pas", () => {
+    const format = doc.components.schemas.CompletionRequest.properties.response_format;
+    expect(format.enum).toEqual(["json", null]);
+    expect(format.description).toContain("doit figurer dans `system`");
+    expect(format.description).toContain("valide, pas conforme");
   });
 
   // La documentation est l'endroit où les équipes consommatrices lisent ce qui

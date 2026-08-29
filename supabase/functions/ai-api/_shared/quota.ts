@@ -61,3 +61,29 @@ export function quotaExceededMessage(renewsAtIso: string): string {
   return "Le plafond d'utilisation de l'assistant IA est atteint pour ce mois. " +
     `Le crédit sera renouvelé le ${renewalLabel(renewsAtIso)}.`;
 }
+
+/**
+ * Secondes restantes jusqu'à la fenêtre de débit suivante — l'en-tête
+ * `Retry-After` d'un refus de cadence.
+ *
+ * La fenêtre est la MINUTE (voir `reserve_ai_usage`), donc le crédit de débit
+ * repart au prochain top. Renvoyer 60 en toutes circonstances ferait attendre
+ * un agent freiné à la 59ᵉ seconde une minute entière pour rien.
+ *
+ * Jamais 0 : `Retry-After: 0` invite à réessayer immédiatement, ce qui est
+ * exactement le comportement qu'on veut freiner. Le plancher est 1.
+ */
+export function secondsUntilNextMinute(now: Date): number {
+  const elapsed = now.getUTCSeconds() + now.getUTCMilliseconds() / 1000;
+  return Math.max(1, Math.ceil(60 - elapsed));
+}
+
+/**
+ * Le message d'un refus de CADENCE. Il ne parle pas du crédit : le budget est
+ * intact, c'est le rythme qui ne l'est pas — et le geste attendu de l'agent
+ * n'est pas de demander un relèvement, mais d'attendre quelques secondes.
+ */
+export function rateLimitedMessage(): string {
+  return "Trop de questions à l'assistant en peu de temps. " +
+    "Réessayez dans quelques secondes.";
+}

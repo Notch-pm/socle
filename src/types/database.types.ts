@@ -178,6 +178,38 @@ export type Database = {
           },
         ]
       }
+      ai_usage_rate: {
+        Row: {
+          attempts: number
+          organization_id: string
+          subject: string
+          subject_kind: string
+          window_start: string
+        }
+        Insert: {
+          attempts?: number
+          organization_id: string
+          subject: string
+          subject_kind: string
+          window_start: string
+        }
+        Update: {
+          attempts?: number
+          organization_id?: string
+          subject?: string
+          subject_kind?: string
+          window_start?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "ai_usage_rate_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       api_keys: {
         Row: {
           consumer: string | null
@@ -1034,6 +1066,10 @@ export type Database = {
       recalculate_contact_quartiers: {
         Args: { p_org_id: string }
         Returns: undefined
+      }
+      purge_ai_usage_rate: {
+        Args: { p_keep_minutes?: number }
+        Returns: number
       }
       release_stale_ai_reservations: {
         Args: { p_max_age_minutes?: number }
