@@ -313,7 +313,8 @@ begin
       v_fail := v_fail || format('R3a: appel %s non refuse par le plafond (%s)', v_i, r.reason); end if;
   end loop;
   select attempts into v_int from public.ai_usage_rate
-   where organization_id = org_x and subject_kind = 'actor' and subject = a_3::text and window_start = v_win;
+   where organization_id = org_x and subject_kind = 'actor' and subject = a_3::text
+     and bucket = 'chat' and window_start = v_win;
   if v_int is distinct from 5 then
     v_fail := v_fail || format('R3b: %s tentatives comptees pour 5 refus de plafond, attendu 5', v_int); end if;
 
@@ -332,8 +333,8 @@ begin
   -- justement celles qui n'ont aucune borne aujourd'hui, et le `return`
   -- anticipé « aucun plafond ⇒ illimité » les ferait échapper à toute garde
   -- placée plus bas dans la fonction.
-  insert into public.ai_usage_rate (organization_id, subject_kind, subject, window_start, attempts)
-       values (org_n, 'actor', a_2::text, v_win, 20);
+  insert into public.ai_usage_rate (organization_id, subject_kind, subject, bucket, window_start, attempts)
+       values (org_n, 'actor', a_2::text, 'chat', v_win, 20);
   select * into r from public.reserve_ai_usage(org_n, 'mistral', 'chat', 10, 'iris', key_iris, null, null, null, a_2);
   if r.allowed or r.reason is distinct from 'rate_limited' then
     v_fail := v_fail || format('R6: une collectivite sans plafond echappe au debit (%s)', r.reason); end if;
@@ -341,19 +342,20 @@ begin
   -- R7. Sans identifiant d'agent, la porte bascule sur l'APPLICATION, avec sa
   -- limite propre (plus haute : elle couvre alors toute une collectivité).
   select attempts into v_int from public.ai_usage_rate
-   where organization_id = org_x and subject_kind = 'consumer' and subject = 'iris' and window_start = v_win;
+   where organization_id = org_x and subject_kind = 'consumer' and subject = 'iris'
+     and bucket = 'chat' and window_start = v_win;
   if v_int is not null then
     v_fail := v_fail || 'R7a: un appel AVEC agent a aussi compte sur l''application'::text; end if;
-  insert into public.ai_usage_rate (organization_id, subject_kind, subject, window_start, attempts)
-       values (org_x, 'consumer', 'iris', v_win, 120);
+  insert into public.ai_usage_rate (organization_id, subject_kind, subject, bucket, window_start, attempts)
+       values (org_x, 'consumer', 'iris', 'chat', v_win, 120);
   select * into r from public.reserve_ai_usage(org_x, 'mistral', 'chat', 10, 'iris', key_iris);
   if r.allowed or r.reason is distinct from 'rate_limited' then
     v_fail := v_fail || format('R7b: le filet par application ne coupe pas (%s)', r.reason); end if;
 
   -- R8. Une fenêtre écoulée ne pèse pas sur la fenêtre courante : le passage à
   -- la minute suivante crée une ligne neuve, sans reset destructif.
-  insert into public.ai_usage_rate (organization_id, subject_kind, subject, window_start, attempts)
-       values (org_r, 'actor', a_2::text, v_win - interval '5 minutes', 20);
+  insert into public.ai_usage_rate (organization_id, subject_kind, subject, bucket, window_start, attempts)
+       values (org_r, 'actor', a_2::text, 'chat', v_win - interval '5 minutes', 20);
   select * into r from public.reserve_ai_usage(org_r, 'mistral', 'chat', 10, 'iris', key_iris, null, null, null, a_2);
   if not r.allowed then
     v_fail := v_fail || format('R8: une fenetre passee bloque la fenetre courante (%s)', r.reason); end if;
@@ -365,8 +367,8 @@ begin
   -- de ce test l'attendait supprimée — c'était l'assertion qui avait tort, pas
   -- la purge. Une rétention qui ne garderait que la minute courante ferait
   -- perdre toute mémoire du débit au premier passage du balayage.
-  insert into public.ai_usage_rate (organization_id, subject_kind, subject, window_start, attempts)
-       values (org_r, 'actor', gen_random_uuid()::text, v_win - interval '3 hours', 7);
+  insert into public.ai_usage_rate (organization_id, subject_kind, subject, bucket, window_start, attempts)
+       values (org_r, 'actor', gen_random_uuid()::text, 'chat', v_win - interval '3 hours', 7);
   select public.purge_ai_usage_rate(60) into v_int;
   if v_int <> 1 then
     v_fail := v_fail || format('R9a: la purge a retire %s fenetre(s), attendu 1 (la seule hors retention)', v_int); end if;
@@ -393,6 +395,47 @@ begin
   -- freine ? » deviendrait impossible.
   select has_table_privilege('authenticated', 'public.ai_usage_rate', 'select') into v_bool;
   if not v_bool then v_fail := v_fail || 'R10c: authenticated a perdu le SELECT'::text; end if;
+
+
+  -- R11 🆕. UN SEUIL PAR NATURE D'APPEL, ET DES SEAUX SÉPARÉS
+  --
+  -- Le seuil de 20 a été calibré sur un humain qui pose des questions. L'OCR
+  -- est du traitement de LOT : 20 documents/minute couperait un lot de courrier
+  -- légitime. Et différencier la limite sans séparer le compteur laisserait ce
+  -- lot manger le budget de QUESTIONS du même agent.
+  -- ==========================================================================
+  -- L'agent a_1 a déjà épuisé son seau conversationnel dans org_r (R1). Son
+  -- seau de LOT doit être intact : c'est toute la démonstration.
+  select * into r from public.reserve_ai_usage(org_r, 'mistral', 'ocr', 10, 'clara', key_iris, null, null, null, a_1);
+  if not r.allowed then
+    v_fail := v_fail || format('R11a: un lot est bloque par le seau conversationnel du meme agent (%s)', r.reason); end if;
+
+  -- Et le seuil du lot est bien le seuil HAUT : on l'amène à 59 tentatives.
+  update public.ai_usage_rate set attempts = 59
+   where organization_id = org_r and subject_kind = 'actor' and subject = a_1::text
+     and bucket = 'batch' and window_start = v_win;
+  select * into r from public.reserve_ai_usage(org_r, 'mistral', 'ocr', 10, 'clara', key_iris, null, null, null, a_1);
+  if not r.allowed then
+    v_fail := v_fail || format('R11b: la 60e tentative de lot est refusee (%s)', r.reason); end if;
+  select * into r from public.reserve_ai_usage(org_r, 'mistral', 'ocr', 10, 'clara', key_iris, null, null, null, a_1);
+  if r.allowed or r.reason is distinct from 'rate_limited' then
+    v_fail := v_fail || format('R11c: la 61e tentative de lot est passee (%s)', r.reason); end if;
+
+  -- Deux lignes distinctes pour le même agent, une par nature.
+  select count(*) into v_int from public.ai_usage_rate
+   where organization_id = org_r and subject_kind = 'actor' and subject = a_1::text
+     and window_start = v_win;
+  if v_int <> 2 then
+    v_fail := v_fail || format('R11d: %s seau(x) pour un agent, attendu 2 (chat et batch)', v_int); end if;
+
+  -- ⚠️ Un type INCONNU retombe sur le seuil conversationnel, le plus strict :
+  -- sur un garde-fou de coût, l'inconnu se bride, il ne se libère pas.
+  update public.ai_usage_rate set attempts = 20
+   where organization_id = org_r and subject_kind = 'actor' and subject = a_1::text
+     and bucket = 'chat' and window_start = v_win;
+  select * into r from public.reserve_ai_usage(org_r, 'mistral', 'nouveau-type', 10, 'clara', key_iris, null, null, null, a_1);
+  if r.allowed or r.reason is distinct from 'rate_limited' then
+    v_fail := v_fail || format('R11e: un type inconnu a obtenu le seuil de lot (%s)', r.reason); end if;
 
   -- ==========================================================================
   -- E1. Étanchéité : le super admin voit tout, un utilisateur ordinaire rien

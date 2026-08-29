@@ -79,11 +79,20 @@ export function secondsUntilNextMinute(now: Date): number {
 }
 
 /**
- * Le message d'un refus de CADENCE. Il ne parle pas du crédit : le budget est
- * intact, c'est le rythme qui ne l'est pas — et le geste attendu de l'agent
- * n'est pas de demander un relèvement, mais d'attendre quelques secondes.
+ * Le message d'un refus de CADENCE. Deux exigences, et la seconde a été apprise
+ * en cours de route :
+ *
+ *  1. Il ne parle pas du CRÉDIT : le budget est intact, c'est le rythme qui ne
+ *     l'est pas — et le geste attendu n'est pas de demander un relèvement, mais
+ *     d'attendre quelques secondes.
+ *  2. ⚠️ Il ne parle d'AUCUNE ROUTE en particulier. La première version disait
+ *     « trop de questions à l'assistant » : juste pour `/v1/completions`, faux
+ *     pour `/v1/ocr`, où un agent de Clara lisant un lot de courrier aurait reçu
+ *     un message parlant d'un assistant qu'il n'a pas sollicité. Les deux routes
+ *     refusent avec les mêmes mots (voir les fabriques d'`index.ts`) : ces mots
+ *     doivent donc valoir pour les deux, et pour celles qui viendront.
  */
 export function rateLimitedMessage(): string {
-  return "Trop de questions à l'assistant en peu de temps. " +
+  return "Trop d'appels à l'IA en peu de temps. " +
     "Réessayez dans quelques secondes.";
 }

@@ -114,9 +114,18 @@ elle **compose son prompt** et le confie à `ai-api`. Trois conséquences pour u
    *vérifiable*, pas une déclaration — mais elle porte sur la **persistance**, pas sur
    l'exposition : le contenu transite bel et bien, comme il transitait déjà vers le fournisseur.
 
-⚠️ **Un garde-fou de CADENCE, distinct du plafond.** Au-delà de **20 appels par minute et par
-agent** (`actor_id`) — ou 120 pour une application qui n'identifie aucun agent —, l'appel est
-refusé par un `429` de code **`ai_rate_limited`**, avec un en-tête `Retry-After`. Le crédit est
+⚠️ **Un garde-fou de CADENCE, distinct du plafond.** Le rythme est borné **par agent
+(`actor_id`) et par nature d'appel** — un échange conversationnel suit une cadence humaine, un
+lot d'OCR une cadence machine :
+
+| Nature | Par agent | Sans agent identifié |
+|---|---|---|
+| Conversationnel (`/v1/completions`) | 20 / minute | 120 / minute |
+| Lot (`/v1/ocr`) | 60 / minute | 360 / minute |
+
+Les deux natures ont des compteurs **séparés** : un lot de documents ne consomme pas le budget
+de questions du même agent. Au-delà, l'appel est refusé par un `429` de code
+**`ai_rate_limited`**, avec un en-tête `Retry-After`. Le crédit est
 intact : il n'y a rien à demander, seulement à attendre. Le compteur retient les **tentatives**,
 refus de plafond compris — un consommateur déjà refusé qui continue d'appeler finit donc freiné.
 Prévoyez un recul (*backoff*) qui respecte `Retry-After` plutôt qu'une relance immédiate.

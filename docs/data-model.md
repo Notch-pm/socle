@@ -336,15 +336,24 @@ comptabilité ont été centralisées ici (2026-08-29).
 - **`ai_usage_rate`** (2026-08-29) — le garde-fou de **DÉBIT**, que le plafond ne couvre pas :
   il dit *combien*, jamais *à quelle vitesse*, et une boucle accidentelle consommerait un mois
   en quelques minutes. Clé primaire composite `(organization_id, subject_kind, subject,
-  window_start)`, `attempts int` ; pas de colonne `id` — la recherche EST la clé et ces lignes
-  sont éphémères, un uuid de substitution serait un second index à tenir sur le chemin chaud de
-  chaque appel. Purgée par `purge_ai_usage_rate`, enchaînée au job cron existant.
+  **bucket**, window_start)`, `attempts int` ; pas de colonne `id` — la recherche EST la clé et
+  ces lignes sont éphémères, un uuid de substitution serait un second index à tenir sur le
+  chemin chaud de chaque appel. Purgée par `purge_ai_usage_rate`, enchaînée au job cron.
+  ⚠️ **`bucket` est DANS LA CLÉ, pas à côté** (`'chat'` | `'batch'`) : différencier le seuil
+  sans séparer le compteur laisserait un lot d'OCR manger le budget de QUESTIONS du même agent
+  — après vingt documents lus, sa question suivante serait refusée alors qu'il n'en a posé
+  aucune.
   ⚠️ **Elle compte les TENTATIVES, pas les appels aboutis** : une boucle que le plafond refuse
   déjà continue de marteler, et un compteur de succès ne la couperait jamais.
 
 **Cycle réserver → appeler → solder, et DEUX portes avant lui.** `reserve_ai_usage` vérifie
-d'abord la **cadence** (20 appels/minute/agent, 120 pour un appelant sans agent — seuils **en
-dur**, un garde-fou n'étant pas un paramètre commercial), puis le **plafond**. Chacune est
+d'abord la **cadence**, puis le **plafond**. Les seuils sont **en dur** (un garde-fou n'est pas
+un paramètre commercial) et dépendent de la NATURE de l'appel — conversationnel 20/minute par
+agent (120 sans agent), lot d'OCR 60 (360 sans agent) : un humain qui lit 150 mots entre deux
+questions n'a pas le rythme d'une machine qui enchaîne des documents.
+⚠️ La nature vient de `p_resource_type`, **dérivé côté serveur** par `ai-api` et jamais lu dans
+le corps de la requête : un appelant ne peut pas se déclarer « lot » pour obtenir la limite
+haute. Tout type inconnu retombe sur le seuil conversationnel, le plus strict. Chacune est
 **UN `UPDATE` conditionnel** : zéro ligne affectée ⇒ refus, et le fournisseur n'est jamais
 appelé. ⚠️ La porte de cadence passe **en premier**, pour trois raisons : elle doit compter les
 tentatives y compris refusées ; rien n'est encore incrémenté quand elle refuse, donc il n'y a

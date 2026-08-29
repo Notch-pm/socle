@@ -181,6 +181,7 @@ export type Database = {
       ai_usage_rate: {
         Row: {
           attempts: number
+          bucket: string
           organization_id: string
           subject: string
           subject_kind: string
@@ -188,6 +189,7 @@ export type Database = {
         }
         Insert: {
           attempts?: number
+          bucket?: string
           organization_id: string
           subject: string
           subject_kind: string
@@ -195,6 +197,7 @@ export type Database = {
         }
         Update: {
           attempts?: number
+          bucket?: string
           organization_id?: string
           subject?: string
           subject_kind?: string

@@ -145,11 +145,19 @@ describe("secondsUntilNextMinute", () => {
 });
 
 describe("rateLimitedMessage", () => {
-  // Le crédit n'est PAS en cause : parler de plafond enverrait l'agent
+  // Le crédit n'est PAS en cause : parler de plafond enverrait l'appelant
   // demander un relèvement dont il n'a pas besoin.
   it("parle de cadence, jamais de plafond ni de crédit", () => {
     const m = rateLimitedMessage();
     expect(m).toContain("peu de temps");
     expect(m).not.toMatch(/plafond|crédit|renouvel/i);
+  });
+
+  // ⚠️ Les deux routes refusent avec les MÊMES mots. La première version disait
+  // « questions à l'assistant » : faux pour /v1/ocr, où l'appelant lit un
+  // document et n'a sollicité aucun assistant. Cette assertion garde la porte
+  // fermée pour les routes à venir.
+  it("ne nomme aucune route en particulier", () => {
+    expect(rateLimitedMessage()).not.toMatch(/assistant|question|document|courrier/i);
   });
 });

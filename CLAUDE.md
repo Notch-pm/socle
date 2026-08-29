@@ -605,8 +605,14 @@ dossier, et n'a pas à le savoir — il ne compose aucun prompt.
   `organizations/sections/AiUsageSection.tsx` (la part qui écrit).
 - **Garde-fou de DÉBIT** (`ai_usage_rate`, 2026-08-29) — un plafond mensuel n'est pas un
   rate-limit : il dit *combien*, jamais *à quelle vitesse*, et une boucle brûlerait le mois en
-  quelques minutes. `reserve_ai_usage` a donc **deux portes** : la cadence (20 appels/minute et
-  par agent, 120 pour un appelant sans agent) **puis** le plafond. Refus = `429 ai_rate_limited`
+  quelques minutes. `reserve_ai_usage` a donc **deux portes** : la cadence **puis** le plafond.
+  Les seuils dépendent de la NATURE de l'appel — conversationnel 20/minute par agent (120 sans
+  agent), lot d'OCR 60 (360) : un humain qui lit 150 mots entre deux questions n'a pas le
+  rythme d'une machine qui enchaîne des documents. Les deux natures ont des compteurs
+  **SÉPARÉS** (`bucket` dans la clé) : sans quoi un lot de courrier mangerait le budget de
+  questions du même agent. La nature vient de `p_resource_type`, **dérivé côté serveur** —
+  un appelant ne peut pas se déclarer « lot ». Type inconnu ⇒ seuil conversationnel, le plus
+  strict. Refus = `429 ai_rate_limited`
   + `Retry-After` — distinct du plafond, parce que le crédit est intact et que le geste attendu
   est d'attendre, pas de demander un relèvement.
   ⚠️ **Le compteur retient les TENTATIVES, refus de plafond compris** : sans cela, une boucle

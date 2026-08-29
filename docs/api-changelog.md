@@ -64,9 +64,18 @@ vers l'appelant, pas quand il décrit la **forme** de ce qu'il attend.
 
 **Garde-fou de cadence.** Un plafond mensuel dit *combien*, jamais *à quelle vitesse* : une
 boucle accidentelle chez un consommateur consommerait le budget d'un mois en quelques minutes,
-et le refus n'arriverait qu'une fois l'argent dépensé. `POST /v1/completions` refuse désormais
-au-delà de **20 appels par minute et par agent** (`actor_id`) — ou 120 par minute pour une
-application qui n'identifie aucun agent.
+et le refus n'arriverait qu'une fois l'argent dépensé. Le rythme est donc borné **par agent
+(`actor_id`) et par NATURE d'appel** — un échange conversationnel suit une cadence humaine, un
+lot d'OCR une cadence machine :
+
+| Nature | Par agent | Sans agent identifié |
+|---|---|---|
+| Conversationnel (`/v1/completions`) | 20 / minute | 120 / minute |
+| Lot (`/v1/ocr`) | 60 / minute | 360 / minute |
+
+Les deux natures ont des compteurs **séparés** : un lot de documents ne consomme pas le budget
+de questions du même agent. Un type d'appel inconnu retombe sur le seuil conversationnel, le
+plus strict — sur un garde-fou de coût, l'inconnu se bride.
 
 - Nouveau code d'erreur **`ai_rate_limited`**, en `429` comme `ai_quota_exceeded` mais
   **distinct** : le crédit est **intact**, seul le rythme est en cause. Le geste attendu n'est
