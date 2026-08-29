@@ -91,6 +91,22 @@ fichiers casse la fonction en production alors que les tests passent en local.
   L'identifiant de l'agent d'extraction historique de Clara est récupérable dans son dépôt,
   avant la bascule du 2026-08-29.
 
+  **État au 2026-08-29** : les deux secrets de Clara sont renseignés, et la bascule est
+  vérifiée — ses appels sont passés de `resource_type = 'chat'` à `'agent'` dans
+  `ai_usage_events` dès que les secrets ont été posés. `MISTRAL_AGENT_ASSISTANT_INSTRUCTION`
+  (Iris) reste **absent** : ses appels sont journalisés en `'chat'`, donc servis par le modèle
+  par défaut. Pour un assistant conversationnel c'est tenable (cf. ci-dessus), mais c'est un
+  choix par défaut, pas une décision — il vaut d'être tranché explicitement.
+
+  ⚠️ **Cette colonne `resource_type` est le seul témoin de la résolution d'alias.** Un
+  identifiant erroné se voit (`failed` + 502) ; un identifiant absent, non. Après tout
+  changement de secret `MISTRAL_AGENT_*`, lire :
+
+  ```sql
+  SELECT consumer, feature, resource_type, status, created_at
+  FROM public.ai_usage_events ORDER BY created_at DESC LIMIT 10;
+  ```
+
 ## Base de données
 
 - **Migrations** : appliquées via l'outil MCP `apply_migration`, ou la CLI `supabase`
