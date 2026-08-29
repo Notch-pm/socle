@@ -33,7 +33,21 @@ const SCOPE_OPTIONS = [
       "Relais SMTP de l'organisation principale, mot de passe compris — à ne cocher que pour "
       + "une application de la gamme qui expédie les mails de la collectivité (Iris…).",
   },
+  {
+    scope: "ai",
+    label: "Assistant IA (jetons facturés)",
+    description:
+      "Appels au fournisseur LLM par le Socle, décomptés du plafond de la collectivité — "
+      + "à ne cocher que pour une application de la gamme (Iris, Clara…), jamais pour un "
+      + "partenaire. Exige de nommer l'application, pour que la dépense soit imputable.",
+  },
 ] as const;
+
+/** Scope dont la dépense est facturée : il exige une application imputable. */
+export const BILLED_SCOPE = "ai";
+
+export const CONSUMER_HINT =
+  "Une clé = une application. Partagée entre deux produits, la ventilation de la consommation s'effondre en un seul seau.";
 
 /** Libellé de la case d'assentiment exigée pour créer une clé plateforme. */
 export const PLATFORM_ACK_LABEL =
@@ -65,6 +79,7 @@ export function ApiKeyFormDialog({
   const [name, setName] = React.useState("");
   const [expiresAt, setExpiresAt] = React.useState("");
   const [scopes, setScopes] = React.useState<string[]>(["read"]);
+  const [consumer, setConsumer] = React.useState("");
   const [acknowledged, setAcknowledged] = React.useState(false);
   const [secret, setSecret] = React.useState<string | null>(null);
   const [copied, setCopied] = React.useState(false);
@@ -75,6 +90,7 @@ export function ApiKeyFormDialog({
       setName("");
       setExpiresAt("");
       setScopes(["read"]);
+      setConsumer("");
       setAcknowledged(false);
       setSecret(null);
       setCopied(false);
@@ -83,9 +99,15 @@ export function ApiKeyFormDialog({
   }, [open]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const trimmed = name.trim();
+  // Le scope facturé exige une application imputable : sans elle, `ai-api`
+  // refuserait la clé à l'usage (403). Autant le dire à la création.
+  const billed = scopes.includes(BILLED_SCOPE);
+  const consumerValue = consumer.trim().toLowerCase();
+  const consumerValid = /^[a-z][a-z0-9_-]{1,31}$/.test(consumerValue);
   const canSubmit =
     trimmed.length > 0 &&
     scopes.length > 0 &&
+    (!billed || consumerValid) &&
     !createKey.isPending &&
     (!isPlatform || acknowledged);
 
@@ -99,7 +121,7 @@ export function ApiKeyFormDialog({
     // Expiration : fin de journée locale de la date saisie, sinon pas d'expiration.
     const expiresIso = expiresAt ? new Date(`${expiresAt}T23:59:59`).toISOString() : null;
     createKey.mutate(
-      { name: trimmed, expiresAt: expiresIso, scopes },
+      { name: trimmed, expiresAt: expiresIso, scopes, consumer: billed ? consumerValue : null },
       { onSuccess: (createdSecret) => setSecret(createdSecret) },
     );
   }
@@ -209,6 +231,25 @@ export function ApiKeyFormDialog({
                 <p className="text-xs text-destructive">Sélectionnez au moins un accès.</p>
               ) : null}
             </fieldset>
+            {billed ? (
+              <Field label="Application imputable" htmlFor="api-key-consumer">
+                <Input
+                  id="api-key-consumer"
+                  value={consumer}
+                  onChange={(e) => setConsumer(e.target.value)}
+                  placeholder="iris"
+                  aria-describedby="api-key-consumer-hint"
+                />
+                <p id="api-key-consumer-hint" className="text-xs text-muted-foreground">
+                  {CONSUMER_HINT} Minuscules, chiffres, tiret ou souligné.
+                </p>
+                {consumer.trim() !== "" && !consumerValid ? (
+                  <p className="text-xs text-destructive">
+                    Identifiant invalide : 2 à 32 caractères, commençant par une lettre minuscule.
+                  </p>
+                ) : null}
+              </Field>
+            ) : null}
             <Field label="Expiration (facultatif)" htmlFor="api-key-expires">
               <Input
                 id="api-key-expires"

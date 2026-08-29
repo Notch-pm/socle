@@ -1,6 +1,3 @@
-// Generated from the live Supabase project (qhrokbkyxgcvkbpmbmna) schema.
-// Do not hand-edit — regenerate via the Supabase MCP/CLI when the schema changes.
-
 export type Json =
   | string
   | number
@@ -17,8 +14,173 @@ export type Database = {
   }
   public: {
     Tables: {
+      ai_usage_counters: {
+        Row: {
+          id: string
+          organization_id: string
+          period: string
+          provider: string
+          reserved_tokens: number
+          updated_at: string
+          used_tokens: number
+        }
+        Insert: {
+          id?: string
+          organization_id: string
+          period: string
+          provider?: string
+          reserved_tokens?: number
+          updated_at?: string
+          used_tokens?: number
+        }
+        Update: {
+          id?: string
+          organization_id?: string
+          period?: string
+          provider?: string
+          reserved_tokens?: number
+          updated_at?: string
+          used_tokens?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "ai_usage_counters_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      ai_usage_events: {
+        Row: {
+          actual_tokens: number | null
+          api_key_id: string | null
+          consumer: string
+          counter_provider: string | null
+          created_at: string
+          estimated_tokens: number
+          external_actor_id: string | null
+          external_ref_id: string | null
+          external_ref_kind: string | null
+          feature: string | null
+          id: string
+          organization_id: string
+          period: string
+          provider: string
+          resource_type: string
+          settled_at: string | null
+          status: string
+        }
+        Insert: {
+          actual_tokens?: number | null
+          api_key_id?: string | null
+          consumer: string
+          counter_provider?: string | null
+          created_at?: string
+          estimated_tokens: number
+          external_actor_id?: string | null
+          external_ref_id?: string | null
+          external_ref_kind?: string | null
+          feature?: string | null
+          id?: string
+          organization_id: string
+          period: string
+          provider: string
+          resource_type: string
+          settled_at?: string | null
+          status?: string
+        }
+        Update: {
+          actual_tokens?: number | null
+          api_key_id?: string | null
+          consumer?: string
+          counter_provider?: string | null
+          created_at?: string
+          estimated_tokens?: number
+          external_actor_id?: string | null
+          external_ref_id?: string | null
+          external_ref_kind?: string | null
+          feature?: string | null
+          id?: string
+          organization_id?: string
+          period?: string
+          provider?: string
+          resource_type?: string
+          settled_at?: string | null
+          status?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "ai_usage_events_api_key_id_fkey"
+            columns: ["api_key_id"]
+            isOneToOne: false
+            referencedRelation: "api_keys"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "ai_usage_events_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      ai_usage_quotas: {
+        Row: {
+          created_at: string
+          id: string
+          is_active: boolean
+          monthly_limit_tokens: number
+          organization_id: string
+          period_unit: string
+          provider: string
+          updated_at: string
+          updated_by: string | null
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          is_active?: boolean
+          monthly_limit_tokens: number
+          organization_id: string
+          period_unit?: string
+          provider?: string
+          updated_at?: string
+          updated_by?: string | null
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          is_active?: boolean
+          monthly_limit_tokens?: number
+          organization_id?: string
+          period_unit?: string
+          provider?: string
+          updated_at?: string
+          updated_by?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "ai_usage_quotas_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "ai_usage_quotas_updated_by_fkey"
+            columns: ["updated_by"]
+            isOneToOne: false
+            referencedRelation: "users"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       api_keys: {
         Row: {
+          consumer: string | null
           created_at: string
           created_by: string | null
           expires_at: string | null
@@ -32,6 +194,7 @@ export type Database = {
           scopes: string[]
         }
         Insert: {
+          consumer?: string | null
           created_at?: string
           created_by?: string | null
           expires_at?: string | null
@@ -45,6 +208,7 @@ export type Database = {
           scopes?: string[]
         }
         Update: {
+          consumer?: string | null
           created_at?: string
           created_by?: string | null
           expires_at?: string | null
@@ -765,6 +929,15 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
+      ai_usage_breakdown: {
+        Args: { p_org_id: string; p_period?: string }
+        Returns: {
+          calls: number
+          consumer: string
+          feature: string
+          tokens: number
+        }[]
+      }
       contacts_outside_quartiers: {
         Args: { p_org_id: string }
         Returns: {
@@ -789,6 +962,10 @@ export type Database = {
           quartier_id: string
           quartier_name: string
         }[]
+      }
+      delete_ai_usage_quota: {
+        Args: { p_org_id: string; p_provider?: string }
+        Returns: Json
       }
       has_org_access: { Args: { org_id: string }; Returns: boolean }
       immutable_unaccent: { Args: { value: string }; Returns: string }
@@ -858,6 +1035,34 @@ export type Database = {
         Args: { p_org_id: string }
         Returns: undefined
       }
+      release_stale_ai_reservations: {
+        Args: { p_max_age_minutes?: number }
+        Returns: number
+      }
+      reserve_ai_usage: {
+        Args: {
+          p_api_key_id?: string
+          p_consumer: string
+          p_estimated_tokens: number
+          p_external_actor_id?: string
+          p_external_ref_id?: string
+          p_external_ref_kind?: string
+          p_feature?: string
+          p_org_id: string
+          p_provider: string
+          p_resource_type: string
+        }
+        Returns: {
+          allowed: boolean
+          event_id: string
+          limit_tokens: number
+          reason: string
+          renews_at: string
+          reserved_tokens: number
+          usage_period: string
+          used_tokens: number
+        }[]
+      }
       reset_orphan_manual_quartiers: {
         Args: { p_org_id: string }
         Returns: undefined
@@ -884,6 +1089,19 @@ export type Database = {
           isOneToOne: false
           isSetofReturn: true
         }
+      }
+      set_ai_usage_quota: {
+        Args: {
+          p_is_active?: boolean
+          p_monthly_limit_tokens: number
+          p_org_id: string
+          p_provider?: string
+        }
+        Returns: Json
+      }
+      settle_ai_usage: {
+        Args: { p_actual_tokens: number; p_event_id: string; p_status: string }
+        Returns: undefined
       }
       stats_contacts_by_quartier: {
         Args: { p_org_id: string }

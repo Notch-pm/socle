@@ -1,6 +1,6 @@
 import * as React from "react";
 import { useParams, useNavigate } from "react-router-dom";
-import { ArrowLeft, Settings2, Users as UsersIcon, ListChecks, FileCheck2, MapPin, Mail, KeyRound, type LucideIcon } from "lucide-react";
+import { ArrowLeft, Settings2, Users as UsersIcon, ListChecks, FileCheck2, MapPin, Mail, KeyRound, Gauge, type LucideIcon } from "lucide-react";
 import { Card, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { EmptyState } from "@/components/shared/EmptyState";
@@ -9,6 +9,7 @@ import { GeneralInfoSection } from "@/features/superadmin/organizations/sections
 import { SmtpSettingsSection } from "@/features/superadmin/organizations/sections/SmtpSettingsSection";
 import { OrganizationsManager } from "@/features/organizations/OrganizationsManager";
 import { ApiKeysSection } from "@/features/superadmin/organizations/sections/ApiKeysSection";
+import { AiUsageSection } from "@/features/superadmin/organizations/sections/AiUsageSection";
 import { UsersManagementPage } from "@/features/users/UsersManagementPage";
 import { ProceduresListPanel } from "@/features/procedures/ProceduresListPanel";
 import { DocumentTypesManager } from "@/features/document-types/DocumentTypesManager";
@@ -22,7 +23,8 @@ type Section =
   | "types-pieces"
   | "quartiers"
   | "smtp"
-  | "api";
+  | "api"
+  | "ia";
 
 const SECTIONS: { key: Section; title: string; description: string; icon: LucideIcon }[] = [
   { key: "general", title: "Informations générales", description: "Nom, slug, type, organisation parente", icon: Settings2 },
@@ -32,6 +34,7 @@ const SECTIONS: { key: Section; title: string; description: string; icon: Lucide
   { key: "quartiers", title: "Quartiers", description: "Découpage du territoire pour rattacher les usagers", icon: MapPin },
   { key: "smtp", title: "Emails (SMTP)", description: "Serveur SMTP utilisé pour les emails de cette organisation", icon: Mail },
   { key: "api", title: "API publique", description: "Clés d'accès en lecture seule (organisations, démarches, catégories)", icon: KeyRound },
+  { key: "ia", title: "Assistant IA", description: "Plafond mensuel de jetons et consommation par application", icon: Gauge },
 ];
 
 const SECTION_LABELS: Record<Section, string> = {
@@ -43,6 +46,7 @@ const SECTION_LABELS: Record<Section, string> = {
   quartiers: "Quartiers",
   smtp: "Emails (SMTP)",
   api: "API publique",
+  ia: "Assistant IA",
 };
 
 export function OrgSettingsPage() {
@@ -131,6 +135,14 @@ export function OrgSettingsPage() {
             <ApiKeysSection organizationId={organization.id} />
           ) : (
             <EmptyState message="Les clés API se gèrent au niveau de l'organisation principale (racine)." />
+          ))}
+        {/* Un budget est une affaire de collectivité, pas de service : le
+            plafond se pose sur la racine, et le trigger le garde en base. */}
+        {activeSection === "ia" &&
+          (organization.parent_id === null ? (
+            <AiUsageSection organizationId={organization.id} />
+          ) : (
+            <EmptyState message="Le plafond IA se règle au niveau de l'organisation principale (racine)." />
           ))}
       </div>
     );

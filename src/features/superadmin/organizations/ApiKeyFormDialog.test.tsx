@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { render, screen, fireEvent } from "@testing-library/react";
-import { ApiKeyFormDialog, PLATFORM_ACK_LABEL } from "./ApiKeyFormDialog";
+import { ApiKeyFormDialog, CONSUMER_HINT, PLATFORM_ACK_LABEL } from "./ApiKeyFormDialog";
 
 // Mutation court-circuitée : on vérifie ce que le dialogue demande (propriétaire,
 // nom, scopes), pas l'insertion Supabase.
@@ -67,6 +67,7 @@ describe("ApiKeyFormDialog — clé rattachée à une organisation", () => {
       name: "Clara — production",
       expiresAt: null,
       scopes: ["read"],
+      consumer: null,
     });
   });
 });
@@ -94,6 +95,7 @@ describe("ApiKeyFormDialog — clé plateforme (owner = null)", () => {
       name: "Clara — plateforme",
       expiresAt: null,
       scopes: ["read"],
+      consumer: null,
     });
   });
 
@@ -105,5 +107,73 @@ describe("ApiKeyFormDialog — clé plateforme (owner = null)", () => {
     fireEvent.click(submitButton());
 
     expect(h.mutate.mock.calls[0][0].scopes).toEqual(["read", "contacts"]);
+  });
+});
+
+/**
+ * Le scope facturé exige une application imputable. Sans elle, `ai-api`
+ * refuserait la clé à l'usage (403 « n'est rattachée à aucune application
+ * consommatrice ») : autant le dire à la création plutôt qu'au premier appel.
+ */
+describe("ApiKeyFormDialog — scope IA et imputation", () => {
+  const enableAi = () => fireEvent.click(screen.getByLabelText("Assistant IA (jetons facturés)"));
+  const consumerInput = () => screen.getByLabelText("Application imputable") as HTMLInputElement;
+
+  it("ne demande l'application que si le scope IA est coché", () => {
+    renderDialog("org-1");
+    fillName("Iris");
+    expect(screen.queryByLabelText("Application imputable")).toBeNull();
+    enableAi();
+    expect(screen.getByLabelText("Application imputable")).toBeTruthy();
+    expect(screen.getByText(new RegExp(CONSUMER_HINT.slice(0, 30)))).toBeTruthy();
+  });
+
+  it("ferme le bouton tant que l'application n'est pas nommée", () => {
+    renderDialog("org-1");
+    fillName("Iris");
+    enableAi();
+    expect(submitButton().hasAttribute("disabled")).toBe(true);
+    fireEvent.change(consumerInput(), { target: { value: "iris" } });
+    expect(submitButton().hasAttribute("disabled")).toBe(false);
+  });
+
+  it("refuse un identifiant qui ne tiendrait pas la contrainte SQL", () => {
+    renderDialog("org-1");
+    fillName("Iris");
+    enableAi();
+    // « Iris » n'est PAS dans cette liste : la casse est normalisée avant
+    // validation (voir le cas suivant). Seul ce que la contrainte SQL
+    // refuserait vraiment est rejeté ici.
+    for (const invalide of ["1iris", "i", "iris pro", "iris!", "-iris"]) {
+      fireEvent.change(consumerInput(), { target: { value: invalide } });
+      expect(submitButton().hasAttribute("disabled")).toBe(true);
+    }
+    fireEvent.change(consumerInput(), { target: { value: "iris-prod" } });
+    expect(submitButton().hasAttribute("disabled")).toBe(false);
+  });
+
+  it("normalise en minuscules et transmet l'imputation", () => {
+    renderDialog("org-1");
+    fillName("Iris");
+    enableAi();
+    fireEvent.change(consumerInput(), { target: { value: "  IRIS  " } });
+    fireEvent.click(submitButton());
+
+    expect(h.mutate.mock.calls[0][0]).toMatchObject({
+      scopes: ["read", "ai"],
+      consumer: "iris",
+    });
+  });
+
+  // Décocher le scope ne doit pas laisser traîner une imputation fantôme.
+  it("n'envoie aucune imputation quand le scope IA est retiré", () => {
+    renderDialog("org-1");
+    fillName("Iris");
+    enableAi();
+    fireEvent.change(consumerInput(), { target: { value: "iris" } });
+    enableAi();
+    fireEvent.click(submitButton());
+
+    expect(h.mutate.mock.calls[0][0].consumer).toBeNull();
   });
 });

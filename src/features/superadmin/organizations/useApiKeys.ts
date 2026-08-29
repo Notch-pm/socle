@@ -57,6 +57,8 @@ export function useCreateApiKey(owner: ApiKeyOwner, createdBy: string | null | u
       name: string;
       expiresAt: string | null;
       scopes: string[];
+      /** Application imputable, exigée par le scope « ai ». Voir ApiKeyFormDialog. */
+      consumer: string | null;
     }): Promise<string> => {
       const generated = await generateApiKey();
       const { error } = await supabase.from("api_keys").insert({
@@ -66,6 +68,7 @@ export function useCreateApiKey(owner: ApiKeyOwner, createdBy: string | null | u
         key_hash: generated.hash,
         expires_at: input.expiresAt,
         scopes: input.scopes,
+        consumer: input.consumer,
         created_by: createdBy ?? null,
       });
       if (error) throw error;
