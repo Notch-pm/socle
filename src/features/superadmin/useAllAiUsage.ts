@@ -16,7 +16,7 @@
 
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/lib/supabase";
-import { currentPeriod } from "@/features/superadmin/organizations/aiQuota";
+import { currentPeriod } from "@/features/ai-usage/aiQuota";
 import { useAllOrganizations } from "@/features/superadmin/organizations/useOrganizationsAdmin";
 import { buildUsageRows, type CounterRow, type OrgUsage, type QuotaRow } from "./aiUsageAll";
 

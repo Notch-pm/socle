@@ -2,25 +2,27 @@
 
 > **Public** : équipes consommatrices (Ariane, Clara, Iris, partenaires) · **Question traitée** :
 > comment consommer les API de Socle correctement, sans rien casser lors d'une évolution ? ·
-> **Dernière mise à jour** : 2026-08-12
+> **Dernière mise à jour** : 2026-08-29
 
 Socle est le référentiel central de la gamme : organisations, démarches, types de pièce
-justificative, quartiers et usagers. Il expose deux API REST **versionnées** (`/v1`), en HTTPS,
+justificative, quartiers et usagers. Il expose trois API REST **versionnées** (`/v1`), en HTTPS,
 authentifiées par clé :
 
 | API | Rôle | URL de base |
 |---|---|---|
 | `public-api` | Lecture seule du référentiel (organisations, catégories, démarches, types de PJ, quartiers, URL signées de documents) | `{SUPABASE_URL}/functions/v1/public-api/…` |
 | `contacts-api` | Lecture/écriture des **usagers** — **aucune suppression** (`DELETE` → 405) | `{SUPABASE_URL}/functions/v1/contacts-api/…` |
+| `ai-api` | **Guichet IA** : le Socle détient la clé du fournisseur LLM, compte les jetons et refuse au-delà du plafond | `{SUPABASE_URL}/functions/v1/ai-api/…` |
 
 `{SUPABASE_URL}` = URL du projet Supabase de Socle.
 
 ⚠️ **Ce document ne liste pas les endpoints, paramètres ou schémas de réponse** — c'est la
 propriété exclusive des OpenAPI publiés par chaque fonction, consultables en HTML (Redoc) sur les
-deux routes **publiques** de l'app Socle :
+routes **publiques** de l'app Socle :
 
 - `/api-doc` — référentiel (`public-api`)
 - `/api-doc-usagers` — usagers (`contacts-api`)
+- `/api-doc-ia` — guichet IA (`ai-api`)
 
 ## Obtenir une clé
 
@@ -47,6 +49,7 @@ Une clé porte un ou plusieurs scopes :
 | `read` | Référentiel (`public-api`) | Vérifié depuis le 2026-08-12 — une clé sans ce scope reçoit **403** sur tout endpoint authentifié de `public-api`. |
 | `contacts` | Usagers (`contacts-api`) | Vérifié — une clé sans ce scope reçoit **403** sur tout appel à `contacts-api` (données personnelles). |
 | `smtp` | Serveur d'envoi (`GET /v1/organizations/{id}/smtp`) | Vérifié — **seule ressource qui sert un secret** (mot de passe du relais). Le scope `read` ne suffit pas : à demander explicitement. La réponse est le relais **applicable** à l'organisation (le sien, ou celui dont elle hérite) ; `source_organization_id` dit lequel. |
+| `ai` | Guichet IA (`ai-api`) | Vérifié depuis le 2026-08-29 — **scope facturé**, réservé aux applications de la gamme, jamais à un partenaire. La clé doit en outre porter une **application imputable** (« Application imputable » à la création) : sans elle, l'appel est refusé, parce qu'une dépense sans imputation ne peut être ni facturée ni expliquée. |
 
 ## Modèle mental des périmètres
 
@@ -94,6 +97,27 @@ Toutes les erreurs suivent la même enveloppe, messages en français :
 | 405 | `method_not_allowed` | Méthode non prévue (ex. `DELETE` sur `contacts-api`) |
 | 409 | `conflict` | Conflit d'unicité (SIRET, référence externe déjà prise) |
 | 500 | `internal_error` | Erreur serveur — à signaler |
+
+## Ce que le guichet IA voit, et ce qu'il ne garde pas
+
+Depuis le 2026-08-29, une application de la gamme n'appelle plus le fournisseur LLM elle-même :
+elle **compose son prompt** et le confie à `ai-api`. Trois conséquences pour un consommateur :
+
+1. **La clé du fournisseur ne vous est jamais distribuée.** Une application compromise ne la
+   compromet pas.
+2. **Le budget est celui de la COLLECTIVITÉ, pas le vôtre.** Toutes les applications de la gamme
+   puisent au même plafond mensuel ; le journal attribue la dépense à la vôtre, le compteur et le
+   plafond restent globaux. Un appel émis au nom d'une sous-organisation débite sa racine.
+3. **Le Socle voit le prompt ; il ne le garde pas.** Aucune colonne du journal ne peut porter un
+   prompt ou une réponse, l'appel fournisseur est isolé dans un module sans accès base ni
+   journalisation, et des tests interdisent toute trace du contenu. C'est une promesse
+   *vérifiable*, pas une déclaration — mais elle porte sur la **persistance**, pas sur
+   l'exposition : le contenu transite bel et bien, comme il transitait déjà vers le fournisseur.
+
+⚠️ **Chaîne de délais, à ne pas inverser** : le fournisseur expire à 55 s, le Socle à 60 s.
+Réglez le vôtre **au-dessus** de 60 s. Inversée, votre application abandonne des appels que le
+Socle termine et facture — et l'utilisateur, en réessayant, paie deux fois. Il n'y a pas de clé
+d'idempotence : elle exigerait de stocker la réponse, ce que le point 3 interdit.
 
 ## Données sensibles
 
@@ -150,7 +174,7 @@ consommateur :
 - [ ] Secret stocké côté serveur uniquement, jamais exposé à un client public
 - [ ] En-tête `Authorization: Bearer <clé>` sur chaque appel
 - [ ] Clé plateforme sur `contacts-api` : en-tête `X-Organization-Id` envoyé systématiquement
-- [ ] Schémas des endpoints relus sur `/api-doc` / `/api-doc-usagers` avant intégration
+- [ ] Schémas des endpoints relus sur `/api-doc` / `/api-doc-usagers` / `/api-doc-ia` avant intégration
 - [ ] Champs de réponse inconnus tolérés (pas de désérialisation stricte qui casserait sur ajout)
 - [ ] `internal_notes` jamais retransmise à un usager final
 - [ ] 404 traité comme « rien à afficher », pas comme une erreur technique à remonter
@@ -159,10 +183,16 @@ consommateur :
 ## Erreurs types
 
 - **401** — clé absente, révoquée ou expirée.
-- **403** — scope manquant (`contacts` requis sur `contacts-api`).
+- **403** — scope manquant (`contacts` requis sur `contacts-api`, `ai` sur `ai-api`), ou clé
+  sans application imputable sur `ai-api`.
 - **400** — en-tête `X-Organization-Id` manquant ou invalide (clé plateforme, `contacts-api`).
 - **404** — ressource hors du périmètre de la clé, ou inexistante.
 - **409** — conflit d'unicité (SIRET déjà utilisé, référence externe déjà prise).
+- **429** — plafond IA de la collectivité atteint (`ai-api`). Le message nomme la date de
+  renouvellement : **le relayer tel quel** plutôt que la recomposer, sans quoi deux calculs de
+  période finissent par diverger et le message ment.
+- **502** — fournisseur LLM muet (`ai-api`). Son erreur brute n'est jamais relayée.
+- **503** — plateforme sans fournisseur configuré (`ai-api`).
 
 ## Voir aussi
 

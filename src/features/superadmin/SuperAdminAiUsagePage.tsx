@@ -21,7 +21,7 @@ import {
   nextRenewalIso,
   renewalLabel,
   type QuotaTone,
-} from "@/features/superadmin/organizations/aiQuota";
+} from "@/features/ai-usage/aiQuota";
 import { usageTotals } from "./aiUsageAll";
 import { useAllAiUsage } from "./useAllAiUsage";
 

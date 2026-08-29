@@ -1,15 +1,54 @@
 # Journal des évolutions des API publiques
 
 > **Public** : équipes consommatrices (Ariane, Clara, Iris, partenaires) · **Question traitée** :
-> quand un contrat d'API a-t-il changé, et comment ? · **Dernière mise à jour** : 2026-08-23
+> quand un contrat d'API a-t-il changé, et comment ? · **Dernière mise à jour** : 2026-08-29
 
-Journal **append-only** : chaque évolution de la surface de contrat des deux API publiques
-(`public-api`, `contacts-api`) — endpoint, paramètre, champ de réponse, comportement
+Journal **append-only** : chaque évolution de la surface de contrat des API publiques
+(`public-api`, `contacts-api`, `ai-api`) — endpoint, paramètre, champ de réponse, comportement
 d'authentification — ajoute une entrée datée en tête de liste. Une entrée n'est jamais réécrite ;
 une correction s'ajoute sous une nouvelle date. Politique de compatibilité et obligations
 consommateur : [integration.md](./integration.md#politique-de-compatibilité-v1).
 
 Format d'une entrée : `## AAAA-MM-JJ — <api> — ajout|correctif|rupture`
+
+---
+
+## 2026-08-29 — ai-api — ajout
+
+**Nouvelle API : le guichet IA du Socle.** La clé du fournisseur LLM et la comptabilité des
+jetons quittent les applications pour vivre ici. Contrat rendu sur `/api-doc-ia`, OpenAPI
+`1.0.0` sur `/openapi.json`.
+
+- `POST /v1/completions` — l'appelant compose son prompt (`system` + `messages`) et le confie
+  au Socle, qui **réserve, appelle le fournisseur, puis solde** la consommation réelle. Réponse :
+  `{ answer, usage, quota, provider, event_id }`.
+- `GET /v1/usage?period=AAAA-MM` — plafond, consommation et ventilation par application.
+
+**Scope dédié `ai`**, réservé aux applications de la gamme : le scope `read` du référentiel ne
+suffit pas (même posture que `smtp`). La clé doit en outre porter une **application imputable**
+(`api_keys.consumer`) — sans elle, l'appel est refusé, parce qu'une dépense sans imputation ne
+peut être ni facturée ni expliquée.
+
+**Ce que l'appelant NE décide PAS**, et qui est refusé en `400` : `model` et `agent_id` (le
+Socle reste l'autorité sur le coût ; l'appelant passe un **alias** `agent`), `consumer` et
+`organization_id` (dérivés de la clé, jamais du corps), `tools`/`tool_choice`, `stream`,
+`temperature` et consorts, et `role: "system"` dans `messages` — le prompt système a son propre
+champ.
+
+**Le budget est celui de la COLLECTIVITÉ, pas de l'application.** Un appel émis au nom d'une
+sous-organisation débite sa racine, et toutes les applications de la gamme puisent au même
+plafond mensuel. Le **journal** attribue la dépense par application ; le compteur et le plafond
+restent globaux.
+
+**Promesse de passe-plat** : le Socle **ne conserve ni le prompt ni la réponse**. Aucune colonne
+du journal ne peut en porter (un test épingle l'ensemble exact des colonnes), l'appel fournisseur
+est isolé dans un module sans client base ni journalisation, et un test lit le source pour
+interdire toute trace du contenu. La limite, écrite : *le Socle voit le prompt ; il ne le garde
+pas.*
+
+**Erreurs propres à cette API** : `429 ai_quota_exceeded` (le message nomme la date de
+renouvellement), `502 ai_unavailable` (fournisseur muet — son erreur brute n'est jamais
+relayée), `503 not_configured` (plateforme sans fournisseur).
 
 ---
 

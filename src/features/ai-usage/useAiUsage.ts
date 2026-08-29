@@ -2,8 +2,11 @@
  * Plafond et consommation IA d'une collectivité — lecture et réglage.
  *
  * LECTURE : accès direct aux tables sous RLS (`ai_usage_quotas_select` /
- * `..._counters_select`, réservées au super admin) plus la RPC de ventilation.
- * C'est l'idiome natif du Socle — même posture que `useSmtpSettings`.
+ * `..._counters_select`, ouvertes à l'administrateur de la collectivité et au
+ * super admin) plus la RPC de ventilation, `SECURITY INVOKER` donc soumise aux
+ * mêmes policies. C'est l'idiome natif du Socle — même posture que
+ * `useSmtpSettings`. Les mêmes hooks servent donc les deux écrans, celui de
+ * l'éditeur et celui du client : un seul jeu de requêtes à faire évoluer.
  *
  * ÉCRITURE : `set_ai_usage_quota` / `delete_ai_usage_quota` sont l'UNIQUE
  * porte. Les trois tables n'ont aucune policy d'écriture cliente : le refus

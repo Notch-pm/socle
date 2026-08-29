@@ -295,10 +295,65 @@ d'écriture** : INSERT/UPDATE/DELETE impossibles côté client, réservés au se
   convention applicative, pas un CHECK), `last_used_at`/`expires_at`/`revoked_at`/`created_at`
   timestamptz, `created_by` FK `users(id)` **sans `ON DELETE`** (bloque la suppression d'un
   utilisateur ayant créé une clé).
+- `consumer text` NULLABLE, CHECK `~ '^[a-z][a-z0-9_-]{1,31}$'` (2026-08-29) — **l'application
+  imputable** d'un appel facturé. Elle vient de la CLÉ, jamais du corps de la requête : sans cela
+  n'importe quelle application pourrait faire porter sa dépense à une autre (doctrine « périmètre
+  dérivé de la clé »). `ai-api` refuse une clé de scope `ai` dont le `consumer` est nul — une
+  dépense sans imputation ne peut être ni facturée ni expliquée.
 - **RLS** : une seule policy `ALL is_super_admin()` — gestion réservée au super admin. Côté UI,
   les clés d'une racine se gèrent depuis sa page (`OrgSettingsPage`, section « API publique ») et
   les clés plateforme (`organization_id IS NULL`) depuis `/superadmin/cles-plateforme`, cf.
   [architecture.md](./architecture.md).
+
+
+### Plafond et journal d'utilisation IA
+
+Trois tables (`20260829100100`), portées depuis Iris quand la clé du fournisseur LLM et sa
+comptabilité ont été centralisées ici (2026-08-29).
+
+> **La phrase qui résume le modèle : l'application consommatrice discrimine le JOURNAL, jamais le
+> compteur, jamais le plafond.** Un budget est une affaire de collectivité ; savoir *qui* a
+> dépensé est une question d'explication, pas de comptage.
+
+- **`ai_usage_quotas`** — `organization_id` FK CASCADE, `provider text` NOT NULL,
+  `monthly_limit_tokens` bigint, `is_active` bool, UNIQUE `(organization_id, provider)`.
+  ⚠️ `provider` porte la sentinelle **`'__global__'`** et jamais NULL : deux NULL ne sont jamais
+  égaux pour un index UNIQUE, ce qui casserait `ON CONFLICT` — régression vécue chez Clara. Le
+  trigger `enforce_ai_usage_quota_root_org` impose une organisation **principale**.
+- **`ai_usage_counters`** — `(organization_id, provider, period)` UNIQUE, `used_tokens` et
+  `reserved_tokens` bigint. `period` = `to_char(now() at time zone 'utc', 'YYYY-MM')` : **tout
+  est en UTC**, sans quoi une date de renouvellement annoncée en heure locale mentirait d'un mois
+  entier deux heures par mois.
+- **`ai_usage_events`** — le journal : `consumer` NOT NULL (dénormalisé **depuis la clé**),
+  `api_key_id`, `feature` (déclaratif, étiqueté comme tel), `resource_type`, `status`,
+  `estimated_tokens`/`actual_tokens`, et des références **nues** vers l'extérieur —
+  `external_ref_kind`/`external_ref_id`/`external_actor_id`, uuid **sans FK**. Aucune FK ne
+  franchit une frontière de projet, et une cascade effacerait une consommation facturée.
+  ⚠️ **Aucune colonne ne peut porter un prompt ou une réponse**, et c'est la première preuve du
+  passe-plat : un test épingle l'ensemble exact des 17 colonnes, si bien qu'une future colonne
+  `prompt`/`content`/`answer` le casse.
+
+**Cycle réserver → appeler → solder.** `reserve_ai_usage` fait **UN `UPDATE` conditionnel** :
+zéro ligne affectée ⇒ refus, et le fournisseur n'est jamais appelé. C'est la porte de
+concurrence — un verrou de ligne Postgres en READ COMMITTED, pas un `select` suivi d'un `update`.
+`settle_ai_usage` corrige ensuite avec la consommation réelle ; un échec ne consomme rien.
+`release_stale_ai_reservations` (cron, 15 min) rattrape les réservations orphelines.
+
+**RLS** : `for select to authenticated using (public.is_admin_of_self_or_ancestor(organization_id))`
+sur les trois tables (`20260829110000`, élargi depuis `is_super_admin()` — la collectivité doit
+pouvoir lire sa propre consommation sans écrire à l'éditeur). Les lignes étant clés sur une
+**racine**, le prédicat coïncide avec « admin direct » : un admin de sous-organisation ne voit
+rien, le budget n'est pas son affaire. Le helper court-circuite le super admin, que la policy
+n'a donc pas à nommer.
+**Aucune policy d'écriture, aucune policy `service_role`** — les écrivains sont des RPC
+`SECURITY DEFINER`, hors RLS par construction. Les RPC de réglage (`set_ai_usage_quota`,
+`delete_ai_usage_quota`) sont gardées par `is_super_admin()`, fondée sur `auth.uid()` : ⚠️ ne
+jamais la remplacer par une garde fondée sur `current_user`, qui vaut toujours le propriétaire
+à l'intérieur d'une fonction `DEFINER`. ⚠️ **Ouvrir la lecture n'ouvre pas le réglage** : c'est
+tout l'équilibre de l'écran de consultation `/consommation-ia` — un plafond que son porteur
+pourrait lever ne serait pas un plafond.
+`ai_usage_breakdown` étant `SECURITY INVOKER`, elle suit ces policies sans changement : une
+implémentation, trois lecteurs (le service, l'éditeur, le client).
 
 ---
 

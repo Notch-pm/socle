@@ -8,14 +8,21 @@ import * as React from "react";
  * empêche un rendu HTML depuis la function. On charge donc Redoc ici et on le
  * pointe sur le contrat public `/openapi.json` (servi, lui, en JSON par la function).
  *
- * Routes **publiques** (`/api-doc`, `/api-doc-usagers`) : consultables sans
- * authentification, y compris par un partenaire externe. La prop `api` choisit
- * le contrat rendu (référentiel en lecture seule, ou API usagers).
+ * Routes **publiques** (`/api-doc`, `/api-doc-usagers`, `/api-doc-ia`) :
+ * consultables sans authentification, y compris par un partenaire externe. La
+ * prop `api` choisit le contrat rendu.
+ *
+ * ⚠️ `ai-api` est publiée ici comme les autres, et ce n'est pas une étourderie :
+ * un contrat n'est pas un secret, et c'est justement dans sa description que
+ * doit se lire la promesse de PASSE-PLAT — le Socle voit le prompt, il ne le
+ * garde pas. Le scope « ai » n'est pour autant ouvert qu'aux applications de
+ * la gamme : lire le contrat ne donne pas de clé pour l'appeler.
  */
 
 const SPEC_URLS = {
   "public-api": `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/public-api/openapi.json`,
   "contacts-api": `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/contacts-api/openapi.json`,
+  "ai-api": `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/ai-api/openapi.json`,
 } as const;
 const REDOC_SRC = "https://cdn.jsdelivr.net/npm/redoc@2.1.5/bundles/redoc.standalone.js";
 

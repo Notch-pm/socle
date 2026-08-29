@@ -18,7 +18,7 @@
  * Module PUR, testé.
  */
 
-import { quotaView, type QuotaView } from "@/features/superadmin/organizations/aiQuota";
+import { quotaView, type QuotaView } from "@/features/ai-usage/aiQuota";
 
 /** Sentinelle du plafond « tous fournisseurs confondus » (jumeau du SQL). */
 export const GLOBAL_PROVIDER = "__global__";

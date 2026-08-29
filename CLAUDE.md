@@ -25,7 +25,8 @@ zones, sécurité, décisions), `data-model.md` (tables, RLS, triggers, RPC, sto
 `integration.md` (guide des équipes consommatrices), `api-changelog.md` (journal du contrat
 public, append-only), `operations.md` (runbook), `roadmap.md` (évolutions souhaitées).
 **Règle de propriété unique** : la liste des endpoints vit dans les OpenAPI
-(`supabase/functions/*/_shared/openapi.ts`, publiés sur `/api-doc` et `/api-doc-usagers`), le
+(`supabase/functions/*/_shared/openapi.ts`, publiés sur `/api-doc`, `/api-doc-usagers` et
+`/api-doc-ia`), le
 schéma détaillé dans `docs/data-model.md` — les autres docs renvoient sans dupliquer ; CLAUDE.md
 garde les invariants, pièges (⚠️) et pointeurs de code. ⚠️ Toute PR qui touche une **surface de
 contrat** (`supabase/functions/*/_shared/{dto,serializers,openapi}.ts`,
@@ -74,7 +75,8 @@ Projet Supabase : `qhrokbkyxgcvkbpmbmna`.
 
 1. **App par organisation** (`AppShell`, routes protégées par `ProtectedRoute`) — pour les
    utilisateurs et **administrateurs d'organisation**. Routes : `/`, `/organisations`,
-   `/demarches`, `/categories`, `/types-pieces`, `/quartiers`, `/utilisateurs`.
+   `/demarches`, `/categories`, `/types-pieces`, `/quartiers`, `/utilisateurs`,
+   `/consommation-ia` (consultation seule).
 2. **Zone super admin** (`SuperAdminLayout`, protégée par `SuperAdminRoute`) — routes
    `/superadmin/*`. Réservée à `global_role = 'super_admin'`.
 3. **Routes publiques** (hors shell) : `/login`, `/mot-de-passe-oublie`, `/activer-compte`,
@@ -128,7 +130,8 @@ exécutables par `authenticated` : le RLS les évalue avec les droits de l'appel
 - `categories`, `procedures`, `organization_procedures` (catalogue de démarches).
 - `smtp_settings` (SMTP par organisation, **hérité du parent** sauf configuration propre —
   voir feature).
-- `api_keys` (clés d'API rattachées à une racine, ou **clé plateforme** — `organization_id` NULL, périmètre global, liaison unique avec Clara — voir feature).
+- `api_keys` (clés d'API rattachées à une racine, ou **clé plateforme** — `organization_id` NULL, périmètre global, liaison unique avec Clara — voir feature ; `consumer` = application imputable des appels facturés).
+- `ai_usage_quotas` / `ai_usage_counters` / `ai_usage_events` (plafond mensuel de jetons, compteur et journal — voir feature « guichet IA »).
 - `contacts`, `contact_roles`, `contact_role_assignments`, `contact_external_references`,
   `contact_relations` (référentiel des usagers — voir feature).
 - `quartiers` (découpage du territoire par racine, polygones PostGIS — voir feature).
@@ -538,6 +541,71 @@ est portée par la fonction). Permet de **consulter, créer, modifier, archiver*
 - Code : `supabase/functions/contacts-api/` — `index.ts` + `_shared/{dto,errors,validation,
   serializers,openapi}.ts` (logique pure **testée** par vitest, sans dépendance Deno, déployée avec
   la fonction). Le déploiement (`deploy_edge_function`) doit inclure `index.ts` + tout `_shared/*.ts`.
+
+## Feature : guichet IA (`ai-api`) — la clé du fournisseur et le décompte
+
+Troisième edge function, `{SUPABASE_URL}/functions/v1/ai-api/…`, `verify_jwt = false`. **Le
+Socle détient la clé du fournisseur LLM, compte les jetons et refuse au-delà du plafond** ; les
+applications de la gamme composent leur prompt et le lui confient (décision PO du 2026-08-29,
+première consommatrice : Iris).
+
+**La frontière tombe là : l'application décide CE QUI EST DIT, le Socle décide SI ÇA PEUT
+L'ÊTRE et CE QUE ÇA A COÛTÉ.** Le Socle ne sait pas ce qu'est une demande, un courrier ou un
+dossier, et n'a pas à le savoir — il ne compose aucun prompt.
+
+- **Pourquoi une troisième fonction** : `public-api` est contractuellement en lecture seule (sa
+  garde `req.method !== "GET"` *est* son contrat) ; `contacts-api` est la surface des données
+  personnelles, gardée par le scope `contacts`. Troisième domaine ⇒ troisième fonction ⇒
+  troisième scope, ce qui est déjà la décision de la maison.
+- **Auth** : clé `api_keys` + scope **`ai`** + **`api_keys.consumer` non nul**. L'imputation
+  vient de la CLÉ, jamais du corps — sans quoi une application ferait porter sa dépense à une
+  autre. Le périmètre suit `contacts-api` (`X-Organization-Id` + `resolveRootOrgId`) : le budget
+  étant celui d'une **collectivité**, l'appel d'une sous-organisation débite sa racine.
+- **Routes** : `POST /v1/completions` (l'appel), `GET /v1/usage?period=AAAA-MM` (plafond,
+  consommation, ventilation par application), `/` et `/openapi.json` publiques.
+- ⚠️ **Ce que l'appelant NE décide PAS** (400, message français) : `model` et `agent_id` — le
+  Socle reste l'**autorité sur le coût**, l'appelant passe un **alias** `agent` résolu en secret ;
+  `consumer` et `organization_id` (dérivés de la clé) ; `tools`/`tool_choice` (chaque outil est
+  un second chemin d'accès aux données, non audité) ; `stream` (le `usage` n'arrive qu'au dernier
+  événement SSE) ; `temperature` et consorts ; `role: "system"` dans `messages` — le prompt
+  système a son propre champ.
+- ⚠️ **PASSE-PLAT : le Socle voit le prompt, il ne le garde pas.** Ce n'est pas une déclaration
+  mais une propriété **vérifiable**, par ordre de force : (1) aucune colonne du journal ne peut
+  porter un contenu — un test épingle l'ensemble exact des 17 colonnes ; (2) les signatures de
+  RPC ne portent que des bigints, des uuid et deux énumérés ; (3) l'appel fournisseur est isolé
+  dans `_shared/provider.ts`, qui ne reçoit **ni client Supabase, ni logger** ; (4) un test **lit
+  le source** pour interdire tout `console.*` mentionnant le contenu et l'URL
+  `/v1/conversations`, qui stockerait le fil chez le fournisseur. La limite est écrite partout :
+  la promesse porte sur la **persistance**, pas sur l'exposition.
+- ⚠️ **Chaîne de délais, à ne pas inverser** : fournisseur 55 s < Socle 60 s < consommateur.
+  Inversée, le consommateur abandonne des appels que le Socle termine et **facture**. Il n'y a
+  pas de clé d'idempotence — elle exigerait de stocker la réponse, ce que le passe-plat interdit.
+- **Réserver → appeler → solder** dans une seule fonction, sans frontière réseau au milieu :
+  `reserve_ai_usage` fait UN `UPDATE` conditionnel (zéro ligne ⇒ refus **sans jamais appeler le
+  fournisseur**), `settle_ai_usage` corrige avec la consommation réelle. Un échec ne consomme
+  rien. Détail : [`docs/data-model.md`](docs/data-model.md) § « Plafond et journal d'utilisation IA ».
+- **Écrans** : `/superadmin/ia` (inter-clients : qui coûte quoi, qui n'est pas bordé — **lecture
+  seule**), Organisations › « Assistant IA » (plafond, consommation par application, 20
+  derniers appels — **le seul écran qui écrit**, par les RPC) et, dans l'app par organisation,
+  **`/consommation-ia`** (`AiUsagePage`, **consultation seule** pour l'admin de la collectivité).
+  Les sections d'`OrgSettingsPage` sont adressables (`?section=ia`), ce qui rend la table
+  inter-clients cliquable.
+- Les trois cartes (jauge, ventilation par application, derniers appels) sont **un seul
+  composant**, `src/features/ai-usage/AiUsageOverview.tsx`, qui **n'écrit rien** : la commande de
+  réglage lui est glissée par `action`, que seul l'écran superadmin fournit. Le client n'a donc
+  aucun chemin vers l'écriture dans l'arbre rendu (**testé**), et le serveur dit la même chose —
+  RLS en SELECT seul, garde `is_super_admin()` **dans** les RPC de réglage. ⚠️ Un plafond que son
+  porteur pourrait lever ne serait pas un plafond : ouvrir la **lecture** (migration
+  `ai_usage_lecture_admin`, `is_admin_of_self_or_ancestor`) n'ouvre pas le réglage.
+- Code : `src/features/ai-usage/` — `aiQuota.ts` (pur, **testé** : jauge, formats, période),
+  `useAiUsage.ts` (lecture + les deux mutations superadmin), `AiUsageOverview.tsx`,
+  `AiUsagePage.tsx`, `useAdminRootOrganizations.ts` (⚠️ racines **administrées**, pas simplement
+  visibles : un membre ordinaire y lirait un « 0 jeton » faux, produit par le RLS). Côté
+  superadmin : `SuperAdminAiUsagePage` + `aiUsageAll.ts` (pur, testé) et
+  `organizations/sections/AiUsageSection.tsx` (la part qui écrit).
+- ⚠️ **Aucun garde-fou de DÉBIT** : un plafond mensuel n'est pas un rate-limit, et une boucle
+  folle brûlerait le mois en quelques minutes. Risque assumé, parade connue (une seconde ligne de
+  compteur à période horaire), à la feuille de route.
 
 ## Feature : quartiers (découpage du territoire)
 

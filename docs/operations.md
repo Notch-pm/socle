@@ -21,7 +21,7 @@ Ce document est un runbook. Pour le « pourquoi » des choix, voir
 
 ## Edge functions
 
-Cinq fonctions Deno dans `supabase/functions/`. Il n'y a **pas de `supabase/config.toml`** dans
+Six fonctions Deno dans `supabase/functions/`. Il n'y a **pas de `supabase/config.toml`** dans
 ce repo : le déploiement passe par l'outil MCP `deploy_edge_function` (ou la CLI équivalente),
 avec un `verify_jwt` fixé par fonction au déploiement.
 
@@ -29,6 +29,7 @@ avec un `verify_jwt` fixé par fonction au déploiement.
 |---|---|---|
 | `public-api` | `false` | Auth par clé API (`Authorization: Bearer <clé>`), vérifiée dans le code de la fonction — pas un JWT Supabase |
 | `contacts-api` | `false` | Idem : clé API + scope `contacts`, portée par la fonction |
+| `ai-api` | `false` | Idem : clé API + scope `ai` + **application imputable**. Guichet du fournisseur LLM — la seule fonction qui appelle un tiers **payant** |
 | `auth-email-hook` | `false` | Appelée par Supabase Auth (hook « Send Email »), authentifiée par **signature Standard Webhooks** (`AUTH_HOOK_SECRET`), pas par JWT |
 | `invite-user` | `true` | Appelée depuis l'UI Socle avec le JWT de l'utilisateur connecté ; l'autorisation fine (`is_org_admin`) est vérifiée en plus, dans le code |
 | `send-test-email` | `true` | Idem : JWT utilisateur + `is_org_admin(organization_id)` |
@@ -58,6 +59,18 @@ fichiers casse la fonction en production alors que les tests passent en local.
   collectivité se change ici, une seule fois**, et redescend en aval à leur synchronisation ;
   et le scope `smtp` ne se coche que pour une application de la gamme, jamais pour un
   partenaire.
+- **`MISTRAL_API_KEY`** (2026-08-29) : la clé du fournisseur LLM, secret d'edge function de
+  `ai-api`. ⚠️ **Elle ne quitte JAMAIS le Socle** — c'est tout l'objet de la centralisation : une
+  application compromise ne compromet pas la clé. Ne pas la ranger dans le Vault ni dans une
+  table : un secret d'edge function est le bon endroit, et **`smtp_settings.password` est une
+  dette assumée, pas un modèle à imiter**. Absente, `ai-api` répond `503 not_configured` — après
+  l'authentification, pour qu'un appelant non authentifié n'apprenne pas si la plateforme est
+  équipée.
+- **`MISTRAL_AGENT_<ALIAS>`** (optionnel) : identifiant d'un agent Mistral créé en console, pour
+  l'alias correspondant (`assistant-instruction` → `MISTRAL_AGENT_ASSISTANT_INSTRUCTION`).
+  Absent, `ai-api` retombe sur `chat/completions` avec un modèle par défaut — le service
+  fonctionne, il n'est simplement pas piloté depuis la console. C'est ce qui permet de changer
+  d'agent ou de modèle **sans toucher une seule application**.
 
 ## Base de données
 
@@ -84,6 +97,27 @@ fichiers casse la fonction en production alors que les tests passent en local.
 - **Advisors** : lancer `get_advisors` (sécurité et performance) après tout changement de schéma
   — c'est ainsi qu'ont été détectées, par exemple, les fonctions trigger `SECURITY DEFINER`
   appelables via `/rest/v1/rpc/…` (`EXECUTE` révoqué depuis, cf. [data-model.md](./data-model.md)).
+
+### Tâches planifiées (`pg_cron`)
+
+⚠️ **Le Socle n'avait AUCUNE tâche planifiée avant le 2026-08-29** ; `pg_cron` a été installé
+avec le guichet IA. Une exploitation qui l'ignore ne le découvrira pas toute seule : **un cron en
+échec est parfaitement silencieux**. Rien n'alerte, rien ne remonte dans les journaux
+d'application — il faut aller lire `cron.job_run_details`.
+
+| Job | Fréquence | Rôle |
+|---|---|---|
+| `release-stale-ai-reservations` | toutes les 15 min | Libère les réservations de jetons orphelines — un appel dont le règlement n'est jamais arrivé (processus tué, réseau coupé). |
+
+Sans lui, une réservation orpheline mord définitivement sur le plafond du mois : la collectivité
+paierait un appel qui n'a jamais eu lieu, et personne ne saurait pourquoi son crédit fond.
+
+```sql
+-- Les 20 dernières exécutions, et leur statut.
+select j.jobname, d.status, d.start_time, d.return_message
+  from cron.job_run_details d join cron.job j on j.jobid = d.jobid
+ order by d.start_time desc limit 20;
+```
 
 ## Stockage
 

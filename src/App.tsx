@@ -14,6 +14,7 @@ import { OrganizationEditorPage } from "@/features/organizations/OrganizationEdi
 import { ProceduresPage } from "@/features/procedures/ProceduresPage";
 import { ProcedureEditorPage } from "@/features/procedures/ProcedureEditorPage";
 import { QuartiersPage } from "@/features/quartiers/QuartiersPage";
+import { AiUsagePage } from "@/features/ai-usage/AiUsagePage";
 import { UtilisateursPage } from "@/pages/UtilisateursPage";
 import { SuperAdminDashboardPage } from "@/features/superadmin/SuperAdminDashboardPage";
 import { OrgSettingsPage } from "@/features/superadmin/organizations/OrgSettingsPage";
@@ -34,6 +35,7 @@ export function App() {
           {/* Documentation publique des APIs (rendu Redoc des contrats OpenAPI) */}
           <Route path="/api-doc" element={<ApiDocsPage />} />
           <Route path="/api-doc-usagers" element={<ApiDocsPage api="contacts-api" />} />
+          <Route path="/api-doc-ia" element={<ApiDocsPage api="ai-api" />} />
 
           {/* Super admin — separate area, separate menu, only reachable by global_role = super_admin */}
           <Route element={<SuperAdminRoute />}>
@@ -71,6 +73,8 @@ export function App() {
               <Route path="types-pieces" element={<DocumentTypesPage />} />
               <Route path="quartiers" element={<QuartiersPage />} />
               <Route path="utilisateurs" element={<UtilisateursPage />} />
+              {/* Consultation seule — le plafond se règle côté superadmin. */}
+              <Route path="consommation-ia" element={<AiUsagePage />} />
             </Route>
           </Route>
         </Routes>
