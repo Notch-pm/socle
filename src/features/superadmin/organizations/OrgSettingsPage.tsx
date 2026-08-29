@@ -1,5 +1,5 @@
 import * as React from "react";
-import { useParams, useNavigate } from "react-router-dom";
+import { useParams, useNavigate, useSearchParams } from "react-router-dom";
 import { ArrowLeft, Settings2, Users as UsersIcon, ListChecks, FileCheck2, MapPin, Mail, KeyRound, Gauge, type LucideIcon } from "lucide-react";
 import { Card, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -37,6 +37,23 @@ const SECTIONS: { key: Section; title: string; description: string; icon: Lucide
   { key: "ia", title: "Assistant IA", description: "Plafond mensuel de jetons et consommation par application", icon: Gauge },
 ];
 
+/**
+ * La section active vit dans l'URL (`?section=ia`), pas dans un `useState`.
+ *
+ * Deux raisons, et la seconde n'est apparue qu'avec l'écran inter-clients :
+ *  • un réglage se partage et se met en signet (« la config SMTP d'ACCM ») ;
+ *  • la page « Assistant IA » de la plateforme renvoie ici, sur la bonne
+ *    section — sans quoi son lien déposerait l'éditeur devant un menu, à
+ *    recliquer ce qu'il venait de demander.
+ *
+ * Effet de bord bienvenu : changer d'organisation dans le rail navigue vers une
+ * URL SANS `section`, donc revient au menu. L'effet qui le faisait à la main
+ * (le composant reste monté d'une organisation à l'autre) n'a plus lieu d'être.
+ */
+const SECTION_KEYS = new Set<string>([
+  "general", "utilisateurs", "demarches", "types-pieces", "quartiers", "smtp", "api", "ia",
+]);
+
 const SECTION_LABELS: Record<Section, string> = {
   menu: "",
   general: "Informations générales",
@@ -52,14 +69,19 @@ const SECTION_LABELS: Record<Section, string> = {
 export function OrgSettingsPage() {
   const { orgId } = useParams<{ orgId: string }>();
   const navigate = useNavigate();
-  const [activeSection, setActiveSection] = React.useState<Section>("menu");
+  const [searchParams, setSearchParams] = useSearchParams();
   const { data: organization, isLoading } = useOrganization(orgId);
 
-  // La route est la même pour toutes les organisations : le composant reste monté
-  // quand on change d'org via le menu latéral, il faut donc revenir à l'accueil.
-  React.useEffect(() => {
-    setActiveSection("menu");
-  }, [orgId]);
+  const requested = searchParams.get("section") ?? "";
+  const activeSection: Section = SECTION_KEYS.has(requested) ? (requested as Section) : "menu";
+  const setActiveSection = React.useCallback(
+    (section: Section) => {
+      // `replace` : parcourir les réglages ne doit pas remplir l'historique de
+      // retours intermédiaires.
+      setSearchParams(section === "menu" ? {} : { section }, { replace: true });
+    },
+    [setSearchParams],
+  );
 
   if (isLoading) {
     return (

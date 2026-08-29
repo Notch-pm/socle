@@ -18,6 +18,7 @@ import { UtilisateursPage } from "@/pages/UtilisateursPage";
 import { SuperAdminDashboardPage } from "@/features/superadmin/SuperAdminDashboardPage";
 import { OrgSettingsPage } from "@/features/superadmin/organizations/OrgSettingsPage";
 import { PlatformApiKeysPage } from "@/features/superadmin/PlatformApiKeysPage";
+import { SuperAdminAiUsagePage } from "@/features/superadmin/SuperAdminAiUsagePage";
 import { ApiDocsPage } from "@/features/public-api-docs/ApiDocsPage";
 
 export function App() {
@@ -39,6 +40,7 @@ export function App() {
             <Route element={<SuperAdminLayout />}>
               <Route path="/superadmin" index element={<SuperAdminDashboardPage />} />
               <Route path="/superadmin/cles-plateforme" element={<PlatformApiKeysPage />} />
+              <Route path="/superadmin/ia" element={<SuperAdminAiUsagePage />} />
               {/* La vue d'ensemble n'existe plus : chaque organisation principale a sa page. */}
               <Route
                 path="/superadmin/organisations"
