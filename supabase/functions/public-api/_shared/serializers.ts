@@ -5,6 +5,7 @@
  * même si la requête ramène des colonnes en trop. Logique pure et testée.
  */
 import type {
+  BrandingDto,
   CategoryDto,
   DocumentTypeDto,
   OrganizationDto,
@@ -175,5 +176,39 @@ export function serializeSmtpSettings(organizationId: string, row: Row | null): 
     from_name: nonEmpty(row.from_name),
     use_tls: row.use_tls !== false,
     updated_at: nullableStr(row.updated_at),
+  };
+}
+
+/** `#RRGGBB` → `#rrggbb` ; tout le reste → `null`. */
+function hexColor(value: unknown): string | null {
+  const raw = nonEmpty(value);
+  if (raw === null) return null;
+  return /^#[0-9a-f]{6}$/i.test(raw) ? raw.toLowerCase() : null;
+}
+
+/**
+ * Charte graphique applicable, à partir d'une ligne de `resolve_branding`
+ * (héritage déjà résolu en base). `row` nul ⇒ charte vide et `configured:false`
+ * — jamais une erreur : une collectivité qui n'a rien rempli est un cas normal.
+ */
+export function serializeBranding(organizationId: string, row: Row | null): BrandingDto {
+  const sourceId = nullableStr(row?.source_organization_id);
+  const logoUrl = nonEmpty(row?.logo_url);
+  const logoWhiteUrl = nonEmpty(row?.logo_white_url);
+  const primaryColor = hexColor(row?.primary_color);
+  const secondaryColor = hexColor(row?.secondary_color);
+  const configured =
+    logoUrl !== null || logoWhiteUrl !== null || primaryColor !== null || secondaryColor !== null;
+
+  return {
+    organization_id: organizationId,
+    source_organization_id: sourceId,
+    // Une source absente n'est pas « héritée » : c'est l'absence de charte.
+    inherited: sourceId !== null && sourceId !== organizationId,
+    configured,
+    logo_url: logoUrl,
+    logo_white_url: logoWhiteUrl,
+    primary_color: primaryColor,
+    secondary_color: secondaryColor,
   };
 }

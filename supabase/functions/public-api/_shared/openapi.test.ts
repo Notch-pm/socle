@@ -24,6 +24,7 @@ describe("buildOpenApiDocument", () => {
         "/v1/organizations",
         "/v1/organizations/{id}",
         "/v1/organizations/{id}/smtp",
+        "/v1/organizations/{id}/branding",
         "/v1/categories",
         "/v1/procedures",
         "/v1/procedures/{id}",
@@ -121,5 +122,22 @@ describe("buildOpenApiDocument", () => {
     });
     expect(orgIdParam.description).toMatch(/plateforme/);
     expect(doc.paths["/v1/quartiers"].get.responses).toHaveProperty("400");
+  });
+
+  it("documente la charte graphique : héritage résolu, et le piège des colonnes brutes", () => {
+    const branding = doc.paths["/v1/organizations/{id}/branding"].get;
+    expect(branding.tags).toEqual(["Charte graphique"]);
+    // Scope `read` : contrairement au relais SMTP, rien ici n'est un secret.
+    expect(branding.responses).not.toHaveProperty("403");
+    expect(branding.responses).toHaveProperty("404");
+    // Le contrat doit dire que l'héritage est déjà fait…
+    expect(branding.description).toContain("héritage est déjà résolu");
+    // …et détourner explicitement de la reconstitution depuis la fiche organisation,
+    // où les colonnes d'une organisation qui hérite sont nulles.
+    expect(branding.description).toContain("Ne reconstituez pas");
+    const schema = doc.components.schemas.Branding;
+    expect(schema.properties.source_organization_id).toBeDefined();
+    expect(schema.properties.inherited).toBeDefined();
+    expect(schema.properties.configured).toBeDefined();
   });
 });

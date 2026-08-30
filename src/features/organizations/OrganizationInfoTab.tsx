@@ -34,7 +34,6 @@ function GeneralInfoForm({ organization }: { organization: Organization }) {
 
   const [name, setName] = React.useState(organization.name);
   const [parentId, setParentId] = React.useState(organization.parent_id ?? "");
-  const [logoUrl, setLogoUrl] = React.useState(organization.logo_url ?? "");
   const [address, setAddress] = React.useState(organization.address ?? "");
   const [phone, setPhone] = React.useState(organization.phone ?? "");
   const [email, setEmail] = React.useState(organization.email ?? "");
@@ -63,7 +62,6 @@ function GeneralInfoForm({ organization }: { organization: Organization }) {
       id: organization.id,
       name: name.trim(),
       parent_id: parentId || null,
-      logo_url: logoUrl.trim() || null,
       address: address.trim() || null,
       phone: phone.trim() || null,
       email: email.trim() || null,
@@ -100,16 +98,6 @@ function GeneralInfoForm({ organization }: { organization: Organization }) {
             </option>
           ))}
         </select>
-      </Field>
-
-      <Field label="Logo (URL)" htmlFor="oi-logo" hint="Adresse d'une image déjà hébergée">
-        <Input
-          id="oi-logo"
-          type="url"
-          value={logoUrl}
-          onChange={(e) => setLogoUrl(e.target.value)}
-          placeholder="https://…/logo.png"
-        />
       </Field>
 
       <Field label="Adresse complète" htmlFor="oi-address">

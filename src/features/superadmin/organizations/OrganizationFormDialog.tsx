@@ -16,7 +16,6 @@ export interface OrganizationFormValues {
   slug: string | null;
   type: string | null;
   parent_id: string | null;
-  logo_url: string | null;
   address: string | null;
   phone: string | null;
   email: string | null;
@@ -56,7 +55,6 @@ export function OrganizationFormDialog({
   const [slug, setSlug] = React.useState("");
   const [type, setType] = React.useState("");
   const [parentId, setParentId] = React.useState("");
-  const [logoUrl, setLogoUrl] = React.useState("");
   const [address, setAddress] = React.useState("");
   const [phone, setPhone] = React.useState("");
   const [email, setEmail] = React.useState("");
@@ -67,7 +65,6 @@ export function OrganizationFormDialog({
     setSlug(organization?.slug ?? "");
     setType(organization?.type ?? "");
     setParentId(organization?.parent_id ?? fixedParentId ?? "");
-    setLogoUrl(organization?.logo_url ?? "");
     setAddress(organization?.address ?? "");
     setPhone(organization?.phone ?? "");
     setEmail(organization?.email ?? "");
@@ -87,7 +84,6 @@ export function OrganizationFormDialog({
       slug: slug.trim() ? slugify(slug) : slugify(name),
       type: type.trim() || null,
       parent_id: parentId || null,
-      logo_url: logoUrl.trim() || null,
       address: address.trim() || null,
       phone: phone.trim() || null,
       email: email.trim() || null,
@@ -130,16 +126,6 @@ export function OrganizationFormDialog({
                 </option>
               ))}
             </select>
-          </Field>
-
-          <Field label="Logo (URL)" htmlFor="org-logo" hint="Adresse d'une image déjà hébergée">
-            <Input
-              id="org-logo"
-              type="url"
-              value={logoUrl}
-              onChange={(e) => setLogoUrl(e.target.value)}
-              placeholder="https://…/logo.png"
-            />
           </Field>
 
           <Field label="Adresse complète" htmlFor="org-address">

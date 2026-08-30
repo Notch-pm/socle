@@ -668,48 +668,60 @@ export type Database = {
       organizations: {
         Row: {
           address: string | null
+          branding_inherit_parent: boolean
           created_at: string | null
           email: string | null
           email_sender_name: string | null
           email_sender_override: boolean
           id: string
           logo_url: string | null
+          logo_white_url: string | null
           metadata: Json | null
           name: string
           parent_id: string | null
           phone: string | null
+          primary_color: string | null
+          secondary_color: string | null
           slug: string | null
           status: string
           type: string | null
         }
         Insert: {
           address?: string | null
+          branding_inherit_parent?: boolean
           created_at?: string | null
           email?: string | null
           email_sender_name?: string | null
           email_sender_override?: boolean
           id?: string
           logo_url?: string | null
+          logo_white_url?: string | null
           metadata?: Json | null
           name: string
           parent_id?: string | null
           phone?: string | null
+          primary_color?: string | null
+          secondary_color?: string | null
           slug?: string | null
           status?: string
           type?: string | null
         }
         Update: {
           address?: string | null
+          branding_inherit_parent?: boolean
           created_at?: string | null
           email?: string | null
           email_sender_name?: string | null
           email_sender_override?: boolean
           id?: string
           logo_url?: string | null
+          logo_white_url?: string | null
           metadata?: Json | null
           name?: string
           parent_id?: string | null
           phone?: string | null
+          primary_color?: string | null
+          secondary_color?: string | null
           slug?: string | null
           status?: string
           type?: string | null
@@ -1054,6 +1066,18 @@ export type Database = {
       normalize_name: { Args: { value: string }; Returns: string }
       normalize_phone: { Args: { raw: string }; Returns: string }
       org_subtree_ids: { Args: { root: string }; Returns: string[] }
+      parent_branding: {
+        Args: { p_org_id: string }
+        Returns: {
+          configured: boolean
+          logo_url: string
+          logo_white_url: string
+          primary_color: string
+          secondary_color: string
+          source_organization_id: string
+          source_organization_name: string
+        }[]
+      }
       parent_smtp_settings: {
         Args: { p_org_id: string }
         Returns: {
@@ -1111,6 +1135,16 @@ export type Database = {
       reset_orphan_manual_quartiers: {
         Args: { p_org_id: string }
         Returns: undefined
+      }
+      resolve_branding: {
+        Args: { p_org_id: string }
+        Returns: {
+          logo_url: string
+          logo_white_url: string
+          primary_color: string
+          secondary_color: string
+          source_organization_id: string
+        }[]
       }
       resolve_smtp_settings: {
         Args: { p_org_id: string }

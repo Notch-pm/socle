@@ -51,7 +51,10 @@ aucun endpoint, il décrit ce qui existe **en base**.
 | `parent_id` | uuid, self-FK **ON DELETE CASCADE** |
 | `name` | text NOT NULL |
 | `slug` | text nullable, **UNIQUE global** |
-| `type`, `logo_url`, `address`, `phone`, `email` | text nullable |
+| `type`, `address`, `phone`, `email` | text nullable |
+| `logo_url`, `logo_white_url` | text nullable — charte graphique (logo couleur, logo blanc) |
+| `primary_color`, `secondary_color` | text nullable, CHECK `organizations_branding_colors_hex` (`#rrggbb`, casse indifférente) |
+| `branding_inherit_parent` | bool NOT NULL défaut **true**, CHECK `organizations_branding_root_no_inherit` (false obligatoire sur une racine) |
 | `metadata` | jsonb, défaut `{}` |
 | `status` | text NOT NULL défaut `active`, CHECK `active`\|`obsolete` (réversible) |
 | `email_sender_override` | bool NOT NULL défaut false |
@@ -64,6 +67,13 @@ aucun endpoint, il décrit ce qui existe **en base**.
 - **RLS** : lecture `has_org_access(id) OR is_admin_of_self_or_ancestor(id)` · écriture INSERT
   `is_super_admin() OR (parent_id IS NOT NULL AND is_admin_of_self_or_ancestor(parent_id))`,
   UPDATE `is_admin_of_self_or_ancestor(id)`, DELETE `is_super_admin() AND parent_id IS NOT NULL`.
+- **Charte graphique héritée** (2026-08-30) : `branding_inherit_parent` = l'organisation utilise
+  la charte de l'ancêtre le plus proche (elle comprise) qui n'hérite pas — même règle que le
+  relais SMTP, même absence de recopie (résolution à la lecture, `resolve_branding`). Trigger
+  `enforce_branding_root_no_inherit` (BEFORE INSERT/UPDATE) : une racine est **corrigée** à `false`
+  au lieu d'être refusée — la colonne vaut `true` par défaut, aucun appelant créant une racine n'a
+  à le savoir. ⚠️ Les valeurs propres sont **conservées** quand l'organisation hérite (le
+  commutateur gouverne l'usage, pas la donnée — motif `email_sender_name`).
 - ⚠️ **`parent_id` en CASCADE, et tous les `organization_id` des autres tables également en
   CASCADE** : supprimer une organisation supprime récursivement tout son sous-arbre **et**
   l'intégralité de ses données (catégories, démarches, contacts, quartiers, clés API, SMTP…).
@@ -427,6 +437,22 @@ fonctions trigger.
   de passe** : l'admin d'une sous-organisation doit voir la configuration qui s'applique chez lui
   sans obtenir le secret de sa principale. Renvoie 0 ligne sur une racine.
 
+### RPC charte graphique
+
+Calquées trait pour trait sur les deux RPC SMTP ci-dessus.
+
+- `resolve_branding(p_org_id) → TABLE(source_organization_id, logo_url, logo_white_url,
+  primary_color, secondary_color)` — SQL `STABLE`, **`SECURITY INVOKER`**, CTE ascendante qui
+  s'arrête d'elle-même au premier ancêtre ne héritant pas (garde 20 niveaux). **Seule
+  implémentation de l'héritage.** EXECUTE **réservé à `service_role`** : elle traverse des
+  organisations que l'appelant n'a pas le droit de lire.
+- `parent_branding(p_org_id) → TABLE(source_organization_id, source_organization_name, configured,
+  logo_url, logo_white_url, primary_color, secondary_color)` — `SECURITY DEFINER`, garde interne
+  `is_admin_of_self_or_ancestor(p_org_id)`, EXECUTE `authenticated` + `service_role`. Aperçu de ce
+  dont une organisation **hérite** (résolution démarrée à son parent) : sans elle, l'admin d'une
+  sous-organisation choisirait d'hériter sans jamais voir de quoi. Renvoie 0 ligne sur une racine.
+  `configured` = au moins un des quatre éléments renseigné au-dessus.
+
 ### `match_contacts(...)` — rapprochement d'identités
 
 `match_contacts(p_org_id, p_contact_type, p_first_name, p_last_name, p_usage_name, p_legal_name,
@@ -471,7 +497,7 @@ car `contacts` n'a aucune policy d'écriture client :
 `enforce_document_type_root_org`, `enforce_api_key_root_org`, `enforce_contact_root_org`,
 `enforce_contact_role_root_org`, `enforce_contact_role_same_org`, `enforce_quartier_root_org`,
 `assign_contact_quartier`, `sync_contact_external_ref_org`, `sync_contact_relation_org`,
-`enforce_smtp_no_inherit_on_root`.
+`enforce_smtp_no_inherit_on_root`, `enforce_branding_root_no_inherit`.
 
 **Exceptions au motif** : `enforce_org_depth` et `set_updated_at` sont `SECURITY INVOKER`, EXECUTE
 ouvert à `PUBLIC` — pas de lecture de table protégée, pas besoin de contourner le RLS.

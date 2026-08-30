@@ -15,6 +15,37 @@ Format d'une entrée : `## AAAA-MM-JJ — <api> — ajout|correctif|rupture`
 
 ## 2026-08-30 — public-api — ajout
 
+**La charte graphique d'une collectivité est maintenant lisible, héritage résolu.** Nouvelle
+ressource `GET /v1/organizations/{id}/branding` : logo couleur, logo blanc, couleur
+principale, couleur secondaire — de quoi habiller une interface aux couleurs de l'organisation.
+Scope `read` (rien ici n'est un secret, contrairement au serveur d'envoi). Version du
+contrat : **1.5.0**.
+
+Ajout **additif** : aucune ressource existante ne change, `Organization.logo_url` reste
+servi tel quel.
+
+- **L'héritage est déjà appliqué.** Une charte se définit d'ordinaire sur l'organisation
+  principale et vaut pour toute sa descendance ; une sous-organisation peut en avoir une propre.
+  La réponse est celle qui **s'applique**, et `source_organization_id` dit qui la porte
+  (`inherited` le résume). Interroger une sous-organisation suffit — ne remontez pas
+  l'arbre vous-même.
+- ⚠️ **Ne reconstituez pas la charte depuis `GET /v1/organizations/{id}`.** Les colonnes
+  brutes d'une organisation qui hérite sont **nulles** : vous peindriez du vide au lieu des
+  couleurs de sa collectivité. C'est précisément pour éviter que chaque application réécrive
+  (différemment) la même remontée d'arbre que la ressource existe. Les trois colonnes ajoutées
+  côté Socle (`logo_white_url`, `primary_color`, `secondary_color`)
+  ne sont **pas** exposées sur `Organization`, et ne le seront pas.
+- `configured: false` ⇒ aucun élément défini nulle part au-dessus : retombez sur votre
+  habillage par défaut. Ce n'est pas une erreur, seulement une collectivité qui n'a pas encore
+  rempli sa charte — cas majoritaire aujourd'hui, la fonctionnalité datant de ce jour.
+- Couleurs servies en hexadécimal **minuscule** (`#rrggbb`) ou `null`. Une
+  valeur qui n'est pas une couleur valide est servie `null` plutôt que transmise.
+- Hors périmètre de la clé ⇒ `404`, comme partout ailleurs.
+
+---
+
+## 2026-08-30 — public-api — ajout
+
 **Une démarche dit maintenant si elle est finie.** Nouveau champ `status` sur `Procedure`
 (`brouillon` | `production`), colonne `procedures.status` alimentée par le commutateur
 « Production » de la liste des démarches. Version du contrat : **1.4.0**.

@@ -6,6 +6,7 @@ import {
   serializeOrganizationProcedure,
   serializeProcedure,
   serializeQuartier,
+  serializeBranding,
   serializeSmtpSettings,
 } from "./serializers.ts";
 
@@ -265,5 +266,95 @@ describe("serializeSmtpSettings — la seule sortie sensible, bornée au strict 
     const orphan = { ...row } as Record<string, unknown>;
     delete orphan.organization_id;
     expect(serializeSmtpSettings("org-1", orphan).source_organization_id).toBe("org-1");
+  });
+});
+
+describe("serializeBranding — la charte applicable, héritage déjà résolu", () => {
+  const row = {
+    source_organization_id: "org-racine",
+    logo_url: "  https://accm.fr/logo.png  ",
+    logo_white_url: "https://accm.fr/blanc.svg",
+    primary_color: "#1F8A5B",
+    secondary_color: "#FFD166",
+    // Colonnes parasites : la whitelist ne doit pas les laisser passer.
+    password: "hunter2",
+    key_hash: "deadbeef",
+  };
+
+  it("n'expose que les huit champs du contrat", () => {
+    expect(Object.keys(serializeBranding("org-enfant", row)).sort()).toEqual([
+      "configured",
+      "inherited",
+      "logo_url",
+      "logo_white_url",
+      "organization_id",
+      "primary_color",
+      "secondary_color",
+      "source_organization_id",
+    ]);
+  });
+
+  it("normalise les couleurs en minuscules et rogne les URL", () => {
+    const dto = serializeBranding("org-enfant", row);
+    expect(dto.primary_color).toBe("#1f8a5b");
+    expect(dto.secondary_color).toBe("#ffd166");
+    expect(dto.logo_url).toBe("https://accm.fr/logo.png");
+  });
+
+  it("dit que la charte est héritée quand la source n'est pas l'organisation demandée", () => {
+    expect(serializeBranding("org-enfant", row).inherited).toBe(true);
+    expect(serializeBranding("org-racine", row).inherited).toBe(false);
+  });
+
+  it("aucune charte nulle part ⇒ 200 vide et configured:false, jamais une erreur", () => {
+    const dto = serializeBranding("org-enfant", null);
+    expect(dto).toEqual({
+      organization_id: "org-enfant",
+      source_organization_id: null,
+      inherited: false,
+      configured: false,
+      logo_url: null,
+      logo_white_url: null,
+      primary_color: null,
+      secondary_color: null,
+    });
+  });
+
+  it("une source sans aucun élément n'est pas « configurée »", () => {
+    const dto = serializeBranding("org-enfant", {
+      source_organization_id: "org-racine",
+      logo_url: null,
+      logo_white_url: "   ",
+      primary_color: null,
+      secondary_color: null,
+    });
+    expect(dto.configured).toBe(false);
+    // …mais on sait toujours qui aurait dû la porter.
+    expect(dto.source_organization_id).toBe("org-racine");
+  });
+
+  it("un seul élément suffit à rendre la charte exploitable", () => {
+    expect(
+      serializeBranding("org-1", {
+        source_organization_id: "org-1",
+        logo_url: null,
+        logo_white_url: null,
+        primary_color: "#000000",
+        secondary_color: null,
+      }).configured,
+    ).toBe(true);
+  });
+
+  it("refuse ce qui n'est pas une couleur hexadécimale plutôt que de le transmettre", () => {
+    const dto = serializeBranding("org-1", {
+      source_organization_id: "org-1",
+      logo_url: null,
+      logo_white_url: null,
+      primary_color: "vert",
+      secondary_color: "#12345",
+    });
+    expect(dto.primary_color).toBeNull();
+    expect(dto.secondary_color).toBeNull();
+    expect(dto.configured).toBe(false);
   });
 });

@@ -30,7 +30,7 @@ export function buildOpenApiDocument(serverUrl: string): Record<string, unknown>
     openapi: "3.1.0",
     info: {
       title: "API Socle — Référentiel de la gamme",
-      version: "1.4.0",
+      version: "1.5.0",
       description: [
         "API **en lecture seule** exposant le référentiel central de la gamme : les",
         "**organisations** (et sous-organisations) avec l'intégralité de leur configuration,",
@@ -96,6 +96,12 @@ export function buildOpenApiDocument(serverUrl: string): Record<string, unknown>
         description:
           "Serveur d'envoi (SMTP) de l'organisation principale, consommé par les applications " +
           "de la gamme qui expédient les mails de la collectivité. Scope `smtp` requis.",
+      },
+      {
+        name: "Charte graphique",
+        description:
+          "Logos et couleurs de la collectivité, héritage déjà résolu — de quoi habiller " +
+          "une interface aux couleurs de l'organisation sans remonter sa hiérarchie.",
       },
       { name: "Documents", description: "Accès temporaire aux documents privés." },
     ],
@@ -207,6 +213,50 @@ export function buildOpenApiDocument(serverUrl: string): Record<string, unknown>
               },
             },
             ...errorResponses("400", "401", "403", "404", "500"),
+          },
+        },
+      },
+      "/v1/organizations/{id}/branding": {
+        get: {
+          tags: ["Charte graphique"],
+          summary: "Charte graphique applicable à une organisation",
+          description: [
+            "Logos et couleurs **applicables à l'organisation demandée** : de quoi présenter une",
+            "interface aux couleurs de la collectivité. Scope `read` — rien ici n'est un secret,",
+            "contrairement au serveur d'envoi.",
+            "",
+            "**L'héritage est déjà résolu.** Une charte se définit d'ordinaire sur l'organisation",
+            "principale et vaut pour toute sa descendance ; une sous-organisation peut néanmoins en",
+            "avoir une propre. La réponse est celle qui s'applique — la sienne, ou celle de",
+            "l'ancêtre le plus proche dont elle hérite — et `source_organization_id` dit laquelle",
+            "des deux la porte (`inherited` le résume). Interroger une sous-organisation est donc",
+            "légitime et suffit.",
+            "",
+            "⚠️ **Ne reconstituez pas cette charte depuis `GET /v1/organizations/{id}`.** Les",
+            "colonnes brutes d'une organisation qui hérite sont **nulles** : vous peindriez du vide",
+            "au lieu des couleurs de sa collectivité.",
+            "",
+            "Aucun élément défini nulle part au-dessus ⇒ **200** avec `configured: false` et les",
+            "quatre champs nuls : le consommateur retombe sur son habillage par défaut. Ce n'est",
+            "pas une erreur, seulement une collectivité qui n'a pas encore rempli sa charte.",
+          ].join("\n"),
+          parameters: [
+            {
+              name: "id",
+              in: "path",
+              required: true,
+              description: "Identifiant UUID de l'organisation (principale ou sous-organisation).",
+              schema: { type: "string", format: "uuid" },
+            },
+          ],
+          responses: {
+            "200": {
+              description: "La charte applicable, ou l'absence de charte.",
+              content: {
+                "application/json": { schema: { $ref: "#/components/schemas/Branding" } },
+              },
+            },
+            ...errorResponses("400", "401", "404", "500"),
           },
         },
       },
@@ -491,6 +541,55 @@ export function buildOpenApiDocument(serverUrl: string): Record<string, unknown>
             email_sender_name: null,
             metadata: null,
             created_at: "2026-01-15T09:00:00Z",
+          },
+        },
+        Branding: {
+          type: "object",
+          description:
+            "Charte graphique applicable, héritage résolu. `source_organization_id` dit qui la " +
+            "porte ; `configured: false` signifie qu'aucun élément n'est défini, ni ici ni " +
+            "au-dessus.",
+          properties: {
+            organization_id: { type: "string", format: "uuid" },
+            source_organization_id: {
+              type: ["string", "null"],
+              format: "uuid",
+              description: "Organisation qui porte la charte servie (elle-même, ou un ancêtre).",
+            },
+            inherited: {
+              type: "boolean",
+              description: "La charte vient d'un ancêtre, pas de l'organisation demandée.",
+            },
+            configured: {
+              type: "boolean",
+              description: "Au moins un des quatre éléments est défini.",
+            },
+            logo_url: { type: ["string", "null"], format: "uri", description: "Logo couleur." },
+            logo_white_url: {
+              type: ["string", "null"],
+              format: "uri",
+              description: "Logo blanc, pour les fonds sombres.",
+            },
+            primary_color: {
+              type: ["string", "null"],
+              pattern: "^#[0-9a-f]{6}$",
+              description: "Couleur principale, notation hexadécimale minuscule.",
+            },
+            secondary_color: {
+              type: ["string", "null"],
+              pattern: "^#[0-9a-f]{6}$",
+              description: "Couleur secondaire, notation hexadécimale minuscule.",
+            },
+          },
+          example: {
+            organization_id: "44b8ebdb-2e7b-4cfa-b4c7-51896b5ff606",
+            source_organization_id: "d5227d25-f327-493a-a9a2-278397531e33",
+            inherited: true,
+            configured: true,
+            logo_url: "https://exemple.fr/logo.png",
+            logo_white_url: "https://exemple.fr/logo-blanc.svg",
+            primary_color: "#1f8a5b",
+            secondary_color: "#ffd166",
           },
         },
         SmtpSettings: {

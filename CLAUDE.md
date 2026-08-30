@@ -150,8 +150,10 @@ migration doit y avoir son fichier miroir `{version}_{nom}.sql`.
   et à **supprimer** (uniquement des sous-organisations, jamais une racine).
 - **Admin d'organisation** : gère son org **et toute sa descendance** (créer/modifier/rendre
   obsolète), pas de suppression.
-- Champs : `name` (obligatoire), `logo_url`, `address`, `phone`, `email`, `status`
-  (`active` | `obsolete`, obsolescence **réversible**), + `slug`, `type` hérités.
+- Champs : `name` (obligatoire), `address`, `phone`, `email`, `status`
+  (`active` | `obsolete`, obsolescence **réversible**), + `slug`, `type` hérités. Les quatre
+  colonnes de **charte graphique** (`logo_url`, `logo_white_url`, `primary_color`,
+  `secondary_color`) + `branding_inherit_parent` ont leur propre onglet — voir feature ci-dessous.
 - RLS `organizations` : SELECT `has_org_access(id) OR is_admin_of_self_or_ancestor(id)` ·
   INSERT super_admin ou (parent défini ET admin d'un ancêtre) · UPDATE admin self/ancêtre ·
   DELETE `is_super_admin() AND parent_id IS NOT NULL`.
@@ -184,7 +186,8 @@ Côté **admin** (`/organisations`), l'action « éditer » ouvre une **page dé
 garde sa modale (`OrganizationsManager` reçoit `onEditOrganization` seulement côté admin).
 
 - **Onglet « Informations de base »** (`OrganizationInfoTab`) : formulaire complet
-  (nom, parent, logo, adresse, téléphone, courriel, type, slug) enregistré via
+  (nom, parent, adresse, téléphone, courriel, type, slug — ⚠️ **plus le logo**, parti dans
+  l'onglet « Charte graphique » le 2026-08-30) enregistré via
   `useUpdateOrganization` + liste des **sous-organisations** (bouton « Éditer » → même page pour
   l'enfant, « Ajouter » via `OrganizationFormDialog`). Inclut aussi, **pour toute organisation
   (sous-orgs comprises)**, un toggle **« Expéditeur spécifique pour les e-mails »** :
@@ -195,6 +198,31 @@ garde sa modale (`OrganizationsManager` reçoit `onEditOrganization` seulement c
   `send-test-email` applique ce nom quand `email_sender_override` est vrai. La colonne est
   consommée en aval (Ariane/Clara). Écriture couverte par le RLS UPDATE `organizations`
   (`is_admin_of_self_or_ancestor`).
+- **Onglet « Charte graphique »** (`BrandingSection`, visible sur **toute** organisation) :
+  `logo_url` (logo couleur), `logo_white_url` (logo blanc, fonds sombres), `primary_color`,
+  `secondary_color` (hexadécimal `#rrggbb`, CHECK en base ; la saisie normalise `#ABC` → `#aabbcc`
+  — deux écritures de la même couleur ne doivent pas se lire comme deux couleurs en aval). Le Socle
+  **enregistre et publie** : aucun habillage de l'app ne change, l'aval s'y adosse.
+  **Héritage** : sur une sous-organisation, un commutateur **« Utiliser la charte graphique de
+  l'organisme parent »** (`branding_inherit_parent`, **activé par défaut**) remplace le formulaire
+  par l'aperçu de la charte héritée (RPC `parent_branding`) ; le désactiver ouvre la saisie d'une
+  charte propre. Même motif que le relais SMTP : rien n'est recopié, la résolution se fait à la
+  lecture (`resolve_branding`, service_role). Écriture par le RLS UPDATE `organizations`
+  (`is_admin_of_self_or_ancestor`) — pas de table dédiée, ce sont des colonnes de l'organisation.
+  ⚠️ Une organisation qui hérite **garde ses valeurs propres** (le commutateur gouverne l'usage,
+  pas la donnée — motif `email_sender_name`) : le retour en arrière est toujours possible.
+  ⚠️ Une **racine n'hérite jamais** : le trigger `enforce_branding_root_no_inherit` la **corrige**
+  à `false` au lieu de refuser, la colonne valant `true` par défaut (sans quoi toute création de
+  racine échouerait). ⚠️ La migration a repassé en « charte propre » les sous-organisations qui
+  **portaient déjà un logo** : les basculer en héritage leur aurait silencieusement substitué
+  celui de leur parent.
+  Côté superadmin, la même section est une carte d'`OrgSettingsPage` (`?section=charte`).
+  Le logo a aussi disparu de l'`OrganizationFormDialog` (création/édition superadmin) : posé là,
+  il aurait été enregistré puis ignoré sur une sous-organisation qui hérite.
+  **En aval** : la charte est servie **résolue** par `GET /v1/organizations/{id}/branding`
+  (`public-api`, scope `read`, contrat 1.5.0 — voir feature « API publique »). ⚠️ Les trois
+  colonnes ajoutées ne sont **pas** exposées sur `OrganizationDto` et ne doivent pas l'être :
+  brutes, elles sont nulles sur une organisation qui hérite.
 - **Onglet « Démarches »** (`OrganizationProceduresTab`) : **activation par organisation**. Liste
   le catalogue de l'**organisation principale** (ancêtre racine, `findRootAncestor`) avec un
   `Switch` par démarche. L'activation est **opt-in** : une démarche est active ⇔ une liaison
@@ -225,7 +253,8 @@ garde sa modale (`OrganizationsManager` reçoit `onEditOrganization` seulement c
   (comme `invite-user` et `auth-email-hook`).
 - Code : `src/features/organizations/` — `OrganizationEditorPage`, `OrganizationInfoTab`,
   `OrganizationProceduresTab`, `useOrganizationProcedures.ts`, `organizationProcedures.ts` (pur,
-  testé). Helpers d'arbre purs `findRootAncestor` / `collectDescendantIdsFlat` dans `orgTree.ts`.
+  testé), `BrandingSection.tsx`, `useBranding.ts`, `branding.ts` (pur, testé : normalisation des
+  couleurs, forme de l'écriture, aperçu résolu). Helpers d'arbre purs `findRootAncestor` / `collectDescendantIdsFlat` dans `orgTree.ts`.
 
 ## Feature : paramétrage des démarches (`procedures`)
 
@@ -401,8 +430,10 @@ avec **`verify_jwt = false`** (l'auth est portée par la fonction, pas par la pa
   `document-types`, `quartiers` (option `geometry=true` → polygones **GeoJSON** via la RPC
   `list_quartiers_geojson` ; sans elle, aucune géométrie — la colonne `geom` binaire n'est
   jamais exposée), `documents/signed-url?path=` (URL signée temporaire, bucket privé
-  `procedure-documents`), `organizations/{id}/smtp` (**serveur d'envoi applicable** à
-  l'organisation, héritage résolu — cf. sérialisation ci-dessous). Docs : `openapi.json` (public) et `docs`
+  `procedure-documents`), `organizations/{id}/branding` (**charte graphique applicable**,
+  héritage résolu — logos et couleurs ; scope `read`), `organizations/{id}/smtp` (**serveur
+  d'envoi applicable** à l'organisation, héritage résolu — cf. sérialisation ci-dessous).
+  Docs : `openapi.json` (public) et `docs`
   (Redoc, cf. ci-dessous).
 - **Erreurs** : enveloppe `{ "error": { code, message } }` → `400`/`401`/`403`/`404`/`405`/`500`.
   Ressource hors périmètre = **404** (on ne révèle pas son existence).
@@ -738,7 +769,11 @@ DS = Nunito Sans (non alignée volontairement pour l'instant).
   bandeaux — puis nom) · menu utilisateur. Motif repris du shell d'Iris/Clara.
   L'organisation affichée vient de `visibleRootOrganizations` (pur, testé) : le sommet de la
   forêt **visible**, pas la racine stricte — un membre d'une sous-organisation ne voit pas sa
-  racine (`has_org_access` exige l'appartenance directe) et resterait sans repère. Le Socle
+  racine (`has_org_access` exige l'appartenance directe) et resterait sans repère.
+  ⚠️ L'en-tête lit `logo_url` **brut**, sans résoudre l'héritage de charte : un membre dont le
+  sommet visible est une sous-organisation qui **hérite** n'y voit aucun logo, alors que sa charte
+  en résout un. Écart connu, hérité d'avant la charte (il fallait un `logo_url` propre pour voir
+  quoi que ce soit) ; le combler demande un `resolve_branding` par sommet visible. Le Socle
   n'ayant **pas** de bascule de tenant (chaque écran a son sélecteur), plusieurs sommets
   s'affichent « premier nom + `+N` » avec la liste en `title`.
 

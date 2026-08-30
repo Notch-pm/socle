@@ -132,3 +132,39 @@ export interface SmtpSettingsDto {
   use_tls: boolean | null;
   updated_at: string | null;
 }
+
+/**
+ * Charte graphique **applicable** à une organisation : logos et couleurs, avec
+ * l'héritage **déjà résolu** (Socle du 2026-08-30).
+ *
+ * Pourquoi une ressource à part plutôt que quatre colonnes de plus sur
+ * `OrganizationDto` : une organisation qui hérite porte des colonnes **nulles**
+ * en propre. Servies brutes, elles feraient peindre du vide au consommateur
+ * alors que la charte de sa collectivité en résout une — et chaque application
+ * de la gamme réécrirait la même remontée d'arbre, en se trompant différemment.
+ * Ici la remontée est faite une fois, en base (`resolve_branding`).
+ *
+ * `source_organization_id` dit **qui porte** la charte servie, et `inherited`
+ * si ce n'est pas l'organisation demandée : de quoi afficher « charte héritée
+ * de la Ville de X » sans second appel.
+ *
+ * `configured = false` ⇒ aucun élément n'est défini nulle part au-dessus : le
+ * consommateur retombe sur son propre habillage par défaut. Ce n'est pas une
+ * erreur, c'est le cas d'une collectivité qui n'a pas encore rempli sa charte.
+ */
+export interface BrandingDto {
+  organization_id: string;
+  /** Organisation qui porte la charte servie (elle-même, ou l'ancêtre dont elle hérite). */
+  source_organization_id: string | null;
+  /** `true` quand la charte vient d'un ancêtre, pas de l'organisation demandée. */
+  inherited: boolean;
+  configured: boolean;
+  /** Logo couleur (URL). */
+  logo_url: string | null;
+  /** Logo blanc (URL), pour les fonds sombres. */
+  logo_white_url: string | null;
+  /** Couleur principale, `#rrggbb` minuscule. */
+  primary_color: string | null;
+  /** Couleur secondaire, `#rrggbb` minuscule. */
+  secondary_color: string | null;
+}

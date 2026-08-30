@@ -70,6 +70,12 @@ existe réellement aujourd'hui : [architecture.md](./architecture.md),
 - **`GET /v1/organization-procedures`** : le sérialiseur (`serializeOrganizationProcedure`,
   `OrganizationProcedureDto`) existe déjà dans `public-api` mais n'est branché sur aucun
   endpoint — à ne pas annoncer aux consommateurs tant qu'il n'est pas exposé.
+- **Exposition de la charte graphique par `public-api`** : **livré le 2026-08-30** —
+  `GET /v1/organizations/{id}/branding` sert la charte **résolue** (héritage appliqué)
+  avec `source_organization_id`, scope `read`, contrat 1.5.0. Les colonnes
+  brutes restent volontairement **hors** de `OrganizationDto` : une sous-organisation
+  qui hérite les a nulles, et le consommateur peindrait du vide au lieu de la charte de sa
+  collectivité.
 - **Publication du guide d'intégration hors du repo** : `docs/integration.md` est aujourd'hui
   interne au repo Socle ; à publier ailleurs (portail, section in-app) si les équipes
   Ariane/Clara/Iris n'y ont pas accès.

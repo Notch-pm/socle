@@ -16,6 +16,7 @@
  */
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import {
+  serializeBranding,
   serializeCategory,
   serializeDocumentType,
   serializeOrganization,
@@ -259,6 +260,33 @@ Deno.serve(async (req: Request) => {
         if (smtpError) throw smtpError;
         const smtp = Array.isArray(smtpRows) ? smtpRows[0] : smtpRows;
         return jsonResponse(200, serializeSmtpSettings(id, smtp ?? null), corsHeaders);
+      }
+      // --- /v1/organizations/{id}/branding ---
+      // Charte graphique **applicable** : celle de l'organisation, ou celle de
+      // l'ancêtre dont elle hérite (héritage Socle du 2026-08-30). Scope `read`
+      // suffit — contrairement à /smtp, rien ici n'est un secret : logos et
+      // couleurs sont faits pour être affichés.
+      //
+      // Pourquoi une route plutôt que quatre colonnes sur la fiche organisation :
+      // une sous-organisation qui hérite porte des colonnes **nulles** en propre.
+      // Servies brutes, le consommateur peindrait du vide au lieu de la charte de
+      // sa collectivité. La remontée d'arbre est faite une fois, en base
+      // (`resolve_branding`, EXECUTE réservé au service role), pas réécrite par
+      // chaque application de la gamme.
+      if (segments.length === 4 && segments[3] === "branding") {
+        const id = segments[2];
+        if (!isUuid(id)) {
+          return errorResponse("bad_request", "Identifiant d'organisation invalide.", corsHeaders);
+        }
+        if (!inScope(id)) {
+          return errorResponse("not_found", "Organisation introuvable.", corsHeaders);
+        }
+        const { data: brandingRows, error: brandingError } = await admin.rpc("resolve_branding", {
+          p_org_id: id,
+        });
+        if (brandingError) throw brandingError;
+        const branding = Array.isArray(brandingRows) ? brandingRows[0] : brandingRows;
+        return jsonResponse(200, serializeBranding(id, branding ?? null), corsHeaders);
       }
     }
 

@@ -1,6 +1,6 @@
 import * as React from "react";
 import { useParams, useNavigate } from "react-router-dom";
-import { ArrowLeft, ListChecks, Mail, Settings2, type LucideIcon } from "lucide-react";
+import { ArrowLeft, ListChecks, Mail, Palette, Settings2, type LucideIcon } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { EmptyState } from "@/components/shared/EmptyState";
 import { cn } from "@/lib/utils";
@@ -8,11 +8,15 @@ import { useOrganization } from "@/features/superadmin/organizations/useOrganiza
 import { SmtpSettingsSection } from "@/features/superadmin/organizations/sections/SmtpSettingsSection";
 import { OrganizationInfoTab } from "@/features/organizations/OrganizationInfoTab";
 import { OrganizationProceduresTab } from "@/features/organizations/OrganizationProceduresTab";
+import { BrandingSection } from "@/features/organizations/BrandingSection";
 
-type TabKey = "infos" | "demarches" | "smtp";
+type TabKey = "infos" | "charte" | "demarches" | "smtp";
 
 const TABS: { key: TabKey; label: string; icon: LucideIcon }[] = [
   { key: "infos", label: "Informations de base", icon: Settings2 },
+  // Comme le relais SMTP, la charte se règle sur TOUTE organisation : une
+  // sous-organisation y choisit entre celle de son parent et la sienne.
+  { key: "charte", label: "Charte graphique", icon: Palette },
   { key: "demarches", label: "Démarches", icon: ListChecks },
   // Onglet visible sur TOUTE organisation depuis l'héritage du relais : une
   // sous-organisation y choisit entre la configuration de son parent et la sienne.
@@ -90,6 +94,7 @@ export function OrganizationEditorPage() {
       {/* `key` force le remontage (et la réinitialisation des formulaires) au changement d'org. */}
       <div key={organization.id}>
         {activeTab === "infos" && <OrganizationInfoTab organization={organization} />}
+        {activeTab === "charte" && <BrandingSection organization={organization} />}
         {activeTab === "demarches" && (
           <OrganizationProceduresTab organizationId={organization.id} />
         )}
