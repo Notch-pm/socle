@@ -93,9 +93,14 @@ function parseRoute(req: Request): { path: string; serverUrl: string } {
   const prefixEnd = idx >= 0 ? idx + marker.length : 0;
   let path = url.pathname.slice(prefixEnd);
   if (path === "") path = "/";
-  const proto = req.headers.get("x-forwarded-proto") ?? url.protocol.replace(":", "");
+  // La passerelle Supabase retire `/functions/v1` et termine le TLS : on
+  // reconstruit l'URL publique à partir des en-têtes transmis + du préfixe FIXE.
+  // ⚠️ La déduire du chemin entrant (`url.pathname`) annonçait `https://<host>/ai-api`,
+  // qui répond 404 — un consommateur qui fait confiance au contrat partait dans le mur.
+  // `public-api` et `contacts-api` font ceci depuis toujours ; seule celle-ci divergeait.
+  const proto = req.headers.get("x-forwarded-proto") ?? url.protocol.replace(/:$/, "");
   const host = req.headers.get("x-forwarded-host") ?? url.host;
-  return { path, serverUrl: `${proto}://${host}${url.pathname.slice(0, prefixEnd)}` };
+  return { path, serverUrl: `${proto}://${host}/functions/v1/${FUNCTION_NAME}` };
 }
 
 /**

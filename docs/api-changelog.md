@@ -13,6 +13,29 @@ Format d'une entrée : `## AAAA-MM-JJ — <api> — ajout|correctif|rupture`
 
 ---
 
+## 2026-08-30 — ai-api — correctif
+
+**Le contrat annonçait une URL qui répond 404.** `openapi.json` déclarait comme
+serveur `https://<projet>.supabase.co/ai-api`, sans le préfixe `/functions/v1` :
+un consommateur qui faisait confiance au contrat — c'est-à-dire le bon réflexe — partait dans le
+mur. La bonne base est `https://<projet>.supabase.co/functions/v1/ai-api`, inchangée
+depuis le premier jour ; seule sa **déclaration** était fausse. Aucune requête existante n'est
+affectée, aucun champ ne bouge : contrat toujours **1.1.0**.
+
+- **Cause** : `parseRoute` reconstruisait l'URL publique depuis le chemin **entrant**,
+  dont la passerelle Supabase a déjà retiré `/functions/v1`. `public-api` et
+  `contacts-api` utilisent un préfixe fixe depuis toujours ; seule `ai-api`
+  divergeait. Elle utilise désormais le même.
+- ⚠️ **Pourquoi les tests ne l'ont pas vu** : `openapi.test.ts` vérifie bien que le
+  serveur annoncé porte `/functions/v1/ai-api` — mais il teste
+  `buildOpenApiDocument(serverUrl)`, à qui l'on passe l'URL. Le défaut était dans le
+  **calcul** de cette URL, resté dans `index.ts` (code Deno, hors du périmètre vitest).
+  Un test vert sur une fonction pure ne dit rien de ce qui l'appelle.
+- Si vous aviez codé en dur la mauvaise URL après lecture du contrat, corrigez : elle n'a jamais
+  fonctionné, la panne était immédiate et non silencieuse.
+
+---
+
 ## 2026-08-30 — public-api — ajout
 
 **La charte graphique d'une collectivité est maintenant lisible, héritage résolu.** Nouvelle
