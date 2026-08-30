@@ -728,6 +728,7 @@ export type Database = {
         Row: {
           agent_description: string | null
           category_id: string | null
+          communication_config: Json | null
           created_at: string | null
           form_schema: Json | null
           id: string
@@ -740,6 +741,7 @@ export type Database = {
           organization_id: string | null
           requester_config: Json | null
           short_description: string | null
+          status: string
           translations: Json | null
           type: string
           updated_at: string | null
@@ -748,6 +750,7 @@ export type Database = {
         Insert: {
           agent_description?: string | null
           category_id?: string | null
+          communication_config?: Json | null
           created_at?: string | null
           form_schema?: Json | null
           id?: string
@@ -760,6 +763,7 @@ export type Database = {
           organization_id?: string | null
           requester_config?: Json | null
           short_description?: string | null
+          status?: string
           translations?: Json | null
           type?: string
           updated_at?: string | null
@@ -768,6 +772,7 @@ export type Database = {
         Update: {
           agent_description?: string | null
           category_id?: string | null
+          communication_config?: Json | null
           created_at?: string | null
           form_schema?: Json | null
           id?: string
@@ -780,6 +785,7 @@ export type Database = {
           organization_id?: string | null
           requester_config?: Json | null
           short_description?: string | null
+          status?: string
           translations?: Json | null
           type?: string
           updated_at?: string | null

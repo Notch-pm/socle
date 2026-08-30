@@ -5,8 +5,9 @@
  * exemples, et erreurs (400/401/403/404/405/500) documentées par endpoint.
  *
  * Les schémas des JSON possédés (`FormSchema`, `RequesterConfig`,
- * `KnowledgeBase`) reflètent les modules sources (contrat public) :
- * `src/features/procedures/{formSchema,requesterFields,knowledgeBase,conditions}.ts`.
+ * `KnowledgeBase`, `CommunicationConfig`) reflètent les modules sources
+ * (contrat public) : `src/features/procedures/{formSchema,requesterFields,
+ * knowledgeBase,conditions,communication}.ts`.
  */
 
 const ERROR_SCHEMA_REF = "#/components/schemas/Error";
@@ -29,12 +30,12 @@ export function buildOpenApiDocument(serverUrl: string): Record<string, unknown>
     openapi: "3.1.0",
     info: {
       title: "API Socle — Référentiel de la gamme",
-      version: "1.2.0",
+      version: "1.4.0",
       description: [
         "API **en lecture seule** exposant le référentiel central de la gamme : les",
         "**organisations** (et sous-organisations) avec l'intégralité de leur configuration,",
         "les **démarches** (descriptif + formulaire + informations demandeur + base de",
-        "connaissances), les **catégories** (libellé + icône), les **types de pièce",
+        "connaissances + communication), les **catégories** (libellé + icône), les **types de pièce",
         "justificative** et les **quartiers** (découpage du territoire en polygones).",
         "",
         "Ces données sont la **source de vérité** consommée en aval par les autres",
@@ -63,7 +64,8 @@ export function buildOpenApiDocument(serverUrl: string): Record<string, unknown>
         "## Formats",
         "Réponses en **JSON** (`application/json`, UTF-8). Les dates sont au format ISO 8601.",
         "Les blocs de configuration possédés (`form_schema`, `requester_config`,",
-        "`knowledge_base`) sont des objets JSON dont la structure est décrite dans les schémas.",
+        "`knowledge_base`, `communication_config`) sont des objets JSON dont la structure est",
+        "décrite dans les schémas.",
         "",
         "## Erreurs",
         "Toute erreur renvoie `{ \"error\": { \"code\": \"...\", \"message\": \"...\" } }` avec un",
@@ -278,7 +280,7 @@ export function buildOpenApiDocument(serverUrl: string): Record<string, unknown>
           description:
             "Configuration **intégrale** d'une démarche : descriptif, informations demandeur " +
             "(`requester_config`), formulaire (`form_schema`), base de connaissances " +
-            "(`knowledge_base`), traductions et mots-clés.",
+            "(`knowledge_base`), communication (`communication_config`), traductions et mots-clés.",
           parameters: [
             {
               name: "id",
@@ -598,6 +600,17 @@ export function buildOpenApiDocument(serverUrl: string): Record<string, unknown>
             category_id: { type: ["string", "null"], format: "uuid" },
             name: { type: "string" },
             type: { type: "string", enum: ["interne", "externe"] },
+            status: {
+              type: "string",
+              enum: ["brouillon", "production"],
+              description:
+                "Cycle de vie du **paramétrage** : `brouillon` = configuration en cours " +
+                "d'écriture, à ne pas servir aux usagers ; `production` = déclarée prête. " +
+                "À ne pas confondre avec `communication_config.visibility` : celui-ci dit " +
+                "**où et quand** proposer une démarche déjà prête, celui-là dit si elle " +
+                "l'est. Une démarche en brouillon n'est proposée nulle part, quelle que " +
+                "soit sa visibilité.",
+            },
             keywords: { type: "array", items: { type: "string" } },
             short_description: { type: ["string", "null"] },
             user_description: { type: ["string", "null"] },
@@ -612,6 +625,7 @@ export function buildOpenApiDocument(serverUrl: string): Record<string, unknown>
             },
             form_schema: { $ref: "#/components/schemas/FormSchema" },
             knowledge_base: { $ref: "#/components/schemas/KnowledgeBase" },
+            communication_config: { $ref: "#/components/schemas/CommunicationConfig" },
             translations: {
               type: ["object", "null"],
               additionalProperties: true,
@@ -800,6 +814,54 @@ export function buildOpenApiDocument(serverUrl: string): Record<string, unknown>
           properties: {
             url: { type: "string", format: "uri" },
             description: { type: "string" },
+          },
+        },
+        CommunicationConfig: {
+          type: ["object", "null"],
+          description:
+            "Paramètres de communication de la démarche, organisés en blocs. " +
+            "`null` (démarche jamais paramétrée) doit se lire comme les valeurs par " +
+            "défaut : visible sur le portail, publication non bornée.",
+          properties: {
+            visibility: { $ref: "#/components/schemas/VisibilityConfig" },
+          },
+          example: {
+            visibility: {
+              portalVisible: true,
+              publicationPeriodEnabled: true,
+              publicationStart: "2026-09-01",
+              publicationEnd: "2026-12-31",
+            },
+          },
+        },
+        VisibilityConfig: {
+          type: "object",
+          description:
+            "Si la démarche est proposée au public, et quand. Les deux bornes de " +
+            "période sont **incluses** et facultatives : `publicationStart` seul " +
+            "publie à partir de ce jour, `publicationEnd` seul jusqu'à ce jour. " +
+            "Les dates sont **conservées** quand `publicationPeriodEnabled` est " +
+            "faux (le commutateur gouverne l'usage, pas la donnée) : ne pas les " +
+            "appliquer dans ce cas.",
+          properties: {
+            portalVisible: {
+              type: "boolean",
+              description: "La démarche est proposée aux usagers sur le portail en ligne.",
+            },
+            publicationPeriodEnabled: {
+              type: "boolean",
+              description: "La publication est bornée à une période.",
+            },
+            publicationStart: {
+              type: ["string", "null"],
+              format: "date",
+              description: "Premier jour de publication (AAAA-MM-JJ, inclus). `null` : pas de borne.",
+            },
+            publicationEnd: {
+              type: ["string", "null"],
+              format: "date",
+              description: "Dernier jour de publication (AAAA-MM-JJ, inclus). `null` : pas de borne.",
+            },
           },
         },
         DocumentType: {

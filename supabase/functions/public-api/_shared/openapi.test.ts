@@ -66,12 +66,41 @@ describe("buildOpenApiDocument", () => {
         "RequesterConfig",
         "FormSchema",
         "KnowledgeBase",
+        "CommunicationConfig",
+        "VisibilityConfig",
         "DocumentType",
         "Quartier",
         "SignedUrl",
         "Error",
       ]),
     );
+  });
+
+  it("documente la visibilité : bornes incluses, et null lu comme les défauts", () => {
+    const visibility = doc.components.schemas.VisibilityConfig;
+    expect(Object.keys(visibility.properties)).toEqual([
+      "portalVisible",
+      "publicationPeriodEnabled",
+      "publicationStart",
+      "publicationEnd",
+    ]);
+    // Les bornes sont des jours civils, pas des instants.
+    expect(visibility.properties.publicationStart.format).toBe("date");
+    expect(visibility.properties.publicationEnd.format).toBe("date");
+    // Sans ces deux phrases, un consommateur devine — et devinera de travers.
+    expect(visibility.description).toContain("incluses");
+    expect(visibility.description).toContain("conservées");
+    expect(doc.components.schemas.CommunicationConfig.description).toContain("défaut");
+    expect(doc.components.schemas.Procedure.properties.communication_config.$ref).toBe(
+      "#/components/schemas/CommunicationConfig",
+    );
+  });
+
+  it("documente le statut, et le distingue de la visibilité", () => {
+    const status = doc.components.schemas.Procedure.properties.status;
+    expect(status.enum).toEqual(["brouillon", "production"]);
+    // Deux notions voisines : le contrat doit dire laquelle fait quoi.
+    expect(status.description).toContain("communication_config.visibility");
   });
 
   it("mentionne le scope read requis dans le narratif d'authentification", () => {

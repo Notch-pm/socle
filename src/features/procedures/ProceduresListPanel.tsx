@@ -3,6 +3,7 @@ import { Plus, Pencil, Trash2, ListChecks } from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
+import { Switch } from "@/components/ui/switch";
 import { EmptyState } from "@/components/shared/EmptyState";
 import {
   AlertDialog,
@@ -18,8 +19,13 @@ import { useCategoriesQuery } from "@/features/categories/useCategories";
 import {
   useProceduresForOrg,
   useDeleteProcedure,
+  useUpdateProcedure,
   type Procedure,
 } from "@/features/procedures/useProcedures";
+import {
+  isDraftProcedure,
+  statusFromProductionToggle,
+} from "@/features/procedures/procedureStatus";
 
 export function ProceduresListPanel({
   organizationId,
@@ -36,9 +42,16 @@ export function ProceduresListPanel({
   const { data: procedures, isLoading, isError } = useProceduresForOrg(organizationId);
   const { data: categories } = useCategoriesQuery();
   const deleteProc = useDeleteProcedure();
+  const updateProc = useUpdateProcedure();
   const [deleting, setDeleting] = React.useState<Procedure | null>(null);
 
   const categoryName = new Map((categories ?? []).map((c) => [c.id, c.name]));
+
+  // Le droit d'écrire est porté par le RLS (l'UI ne masque pas le commutateur) :
+  // un membre non administrateur reçoit un refus de la base, pas un écran menteur.
+  function setProduction(proc: Procedure, enabled: boolean) {
+    updateProc.mutate({ id: proc.id, status: statusFromProductionToggle(enabled) });
+  }
 
   function confirmDelete() {
     if (!deleting) return;
@@ -79,6 +92,7 @@ export function ProceduresListPanel({
                   <th className="px-4 py-3">Libellé</th>
                   <th className="px-4 py-3">Catégorie</th>
                   <th className="px-4 py-3">Type</th>
+                  <th className="w-28 px-4 py-3">Production</th>
                   <th className="w-24 px-4 py-3" />
                 </tr>
               </thead>
@@ -92,6 +106,11 @@ export function ProceduresListPanel({
                       <div className="flex items-center gap-2">
                         <ListChecks className="size-4 text-muted-foreground" />
                         {proc.name}
+                        {isDraftProcedure(proc.status) ? (
+                          <Badge variant="outline" className="font-medium">
+                            Brouillon
+                          </Badge>
+                        ) : null}
                       </div>
                     </td>
                     <td className="px-4 py-3 text-muted-foreground">
@@ -101,6 +120,13 @@ export function ProceduresListPanel({
                       <Badge variant={proc.type === "interne" ? "muted" : "secondary"}>
                         {proc.type === "interne" ? "Interne" : "Externe"}
                       </Badge>
+                    </td>
+                    <td className="px-4 py-3">
+                      <Switch
+                        checked={!isDraftProcedure(proc.status)}
+                        onCheckedChange={(v) => setProduction(proc, v)}
+                        aria-label={`Passer « ${proc.name} » en production`}
+                      />
                     </td>
                     <td className="px-4 py-3">
                       <div className="flex justify-end gap-1">

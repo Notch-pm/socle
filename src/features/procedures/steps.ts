@@ -3,8 +3,8 @@ export interface StepDef {
   label: string;
 }
 
-/** Les 5 étapes du paramétrage d'une démarche. « Descriptif » et « Informations demandeur »
- *  sont fonctionnelles ; les autres sont des placeholders. */
+/** Les 5 étapes du paramétrage d'une démarche — toutes fonctionnelles, chacune
+ *  persistée dans sa propre colonne de `procedures`. */
 export const PROCEDURE_STEPS: readonly StepDef[] = [
   { key: "descriptif", label: "Descriptif" },
   { key: "demandeur", label: "Informations demandeur" },

@@ -65,6 +65,9 @@ export function serializeProcedure(row: Row): ProcedureDto {
     category_id: nullableStr(row.category_id),
     name: str(row.name),
     type: str(row.type),
+    // Colonne `text` + CHECK en base ; au moindre doute on sert « brouillon »,
+    // le statut qui ne fait rien publier.
+    status: row.status === "production" ? "production" : "brouillon",
     keywords: Array.isArray(row.keywords) ? (row.keywords as string[]) : [],
     short_description: nullableStr(row.short_description),
     user_description: nullableStr(row.user_description),
@@ -74,6 +77,7 @@ export function serializeProcedure(row: Row): ProcedureDto {
     requester_config: row.requester_config ?? null,
     form_schema: row.form_schema ?? null,
     knowledge_base: row.knowledge_base ?? null,
+    communication_config: row.communication_config ?? null,
     translations: row.translations ?? null,
     created_at: nullableStr(row.created_at),
     updated_at: nullableStr(row.updated_at),

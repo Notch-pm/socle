@@ -1,7 +1,7 @@
 # Journal des évolutions des API publiques
 
 > **Public** : équipes consommatrices (Ariane, Clara, Iris, partenaires) · **Question traitée** :
-> quand un contrat d'API a-t-il changé, et comment ? · **Dernière mise à jour** : 2026-08-29
+> quand un contrat d'API a-t-il changé, et comment ? · **Dernière mise à jour** : 2026-08-30
 
 Journal **append-only** : chaque évolution de la surface de contrat des API publiques
 (`public-api`, `contacts-api`, `ai-api`) — endpoint, paramètre, champ de réponse, comportement
@@ -10,6 +10,56 @@ une correction s'ajoute sous une nouvelle date. Politique de compatibilité et o
 consommateur : [integration.md](./integration.md#politique-de-compatibilité-v1).
 
 Format d'une entrée : `## AAAA-MM-JJ — <api> — ajout|correctif|rupture`
+
+---
+
+## 2026-08-30 — public-api — ajout
+
+**Une démarche dit maintenant si elle est finie.** Nouveau champ `status` sur `Procedure`
+(`brouillon` | `production`), colonne `procedures.status` alimentée par le commutateur
+« Production » de la liste des démarches. Version du contrat : **1.4.0**.
+
+Ajout **additif** — mais avec une conséquence à lire avant de brancher quoi que ce soit :
+
+- ⚠️ **Toutes les démarches existantes sont en `brouillon`.** La notion n'existait pas avant le
+  2026-08-30 : personne n'avait donc déclaré une démarche prête, et la migration n'a rien
+  affirmé à leur place. Un consommateur qui filtrerait sur `status = 'production'` dès
+  aujourd'hui n'obtiendrait **aucune** démarche. Attendre que les collectivités aient basculé
+  leur catalogue, ou traiter l'absence de bascule comme un cas à part.
+- ⚠️ **`status` et `communication_config.visibility` ne disent pas la même chose.** `status` dit
+  si la **configuration est finie** (décision de l'agent qui paramètre) ; `visibility` dit **où
+  et quand** proposer une démarche déjà prête (décision d'exposition). Une démarche en
+  production peut n'être sur aucun portail — une démarche interne, par exemple. Une démarche en
+  brouillon n'est nulle part, **quelle que soit sa visibilité** : c'est la garde qui prime.
+- Le champ est **toujours présent et jamais nul** : la colonne est `NOT NULL` avec un CHECK, et
+  le sérialiseur retombe sur `brouillon` devant toute valeur inattendue — le doute ne publie
+  rien.
+
+---
+
+## 2026-08-30 — public-api — ajout
+
+**La démarche dit désormais si elle doit être publiée, et quand.** Nouveau champ
+`communication_config` sur `Procedure` (`GET /v1/procedures` et `/v1/procedures/{id}`) — JSON
+**possédé**, transmis tel quel comme `form_schema` et `knowledge_base`. Premier bloc,
+`visibility`, alimenté par l'étape « Communication » du paramétrage : `portalVisible`,
+`publicationPeriodEnabled`, `publicationStart`, `publicationEnd`. Version du contrat : **1.3.0**.
+
+Ajout **additif** : aucun champ existant ne bouge, aucun consommateur n'a à changer. Le
+comportement n'est pas encore branché côté portail — le Socle **enregistre et publie** le
+paramètre pour que l'aval puisse s'y adosser quand il en aura l'usage.
+
+- ⚠️ **`null` n'est pas « non visible »** : une démarche jamais passée par l'étape porte
+  `communication_config: null`, à lire comme les **valeurs par défaut** — visible sur le
+  portail, publication non bornée. Toutes les démarches existantes sont dans ce cas : traiter
+  `null` comme un refus de publication les retirerait toutes d'un coup.
+- ⚠️ **Les deux bornes de période sont incluses**, au jour civil (`AAAA-MM-JJ` — pas d'instant,
+  pas de fuseau), et chacune est facultative : `publicationStart` seul publie à partir de ce
+  jour, `publicationEnd` seul jusqu'à ce jour, les deux nuls ne bornent rien.
+- ⚠️ **Les dates survivent à la désactivation de la période** : `publicationPeriodEnabled: false`
+  laisse `publicationStart`/`publicationEnd` en place (le commutateur gouverne l'usage, pas la
+  donnée — même parti que `email_sender_name` sur une organisation). Un consommateur qui
+  appliquerait les dates sans regarder le commutateur dépublierait à tort.
 
 ---
 

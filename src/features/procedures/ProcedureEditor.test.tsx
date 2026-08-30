@@ -23,6 +23,8 @@ const h = vi.hoisted(() => {
     requester_config: null,
     form_schema: null,
     knowledge_base: null,
+    communication_config: null,
+    status: "brouillon",
     created_at: null,
     updated_at: null,
   };
@@ -117,6 +119,27 @@ describe("ProcedureEditor — pied de page du stepper", () => {
     expect(screen.queryByRole("switch", { name: /Activer le public Citoyens/i })).toBeNull();
   });
 
+  it("étape « Communication » : enregistre le bloc visibilité et avance", () => {
+    const { onStepChange } = renderEditor(3);
+
+    fireEvent.click(screen.getByRole("switch", { name: "Visible sur le portail" }));
+    fireEvent.click(screen.getByRole("button", { name: "Enregistrer et continuer" }));
+
+    expect(h.mutateUpdate).toHaveBeenCalledTimes(1);
+    expect(h.mutateUpdate.mock.calls[0][0]).toEqual({
+      id: "proc-1",
+      communication_config: {
+        visibility: {
+          portalVisible: false,
+          publicationPeriodEnabled: true,
+          publicationStart: null,
+          publicationEnd: null,
+        },
+      },
+    });
+    expect(onStepChange).toHaveBeenCalledWith(4);
+  });
+
   it("dernière étape : « Enregistrer » seul (rien à continuer)", () => {
     const { onStepChange } = renderEditor(4);
 
@@ -125,6 +148,32 @@ describe("ProcedureEditor — pied de page du stepper", () => {
     fireEvent.click(screen.getByRole("button", { name: "Enregistrer" }));
     expect(h.mutateUpdate).toHaveBeenCalledTimes(1);
     expect(onStepChange).not.toHaveBeenCalled();
+  });
+
+  it("une démarche en brouillon porte le tag dans l'en-tête", () => {
+    renderEditor(0);
+    expect(screen.getByText("Brouillon")).toBeTruthy();
+  });
+
+  it("bout du stepper sur un brouillon : propose la mise en production", () => {
+    renderEditor(4);
+
+    expect(screen.queryByRole("alertdialog")).toBeNull();
+    fireEvent.click(screen.getByRole("button", { name: "Enregistrer" }));
+
+    const dialog = screen.getByRole("alertdialog");
+    expect(dialog.textContent).toContain("actuellement à l'état brouillon");
+
+    // Le premier enregistrement (l'étape), puis le passage en production.
+    fireEvent.click(screen.getByRole("button", { name: "Passer en production" }));
+    expect(h.mutateUpdate).toHaveBeenCalledTimes(2);
+    expect(h.mutateUpdate.mock.calls[1][0]).toEqual({ id: "proc-1", status: "production" });
+  });
+
+  it("enregistrer une étape intermédiaire ne propose rien", () => {
+    renderEditor(1);
+    fireEvent.click(screen.getByRole("button", { name: "Enregistrer" }));
+    expect(screen.queryByRole("alertdialog")).toBeNull();
   });
 
   it("navigation Précédent / stepper : notifie le parent du changement d'étape", () => {

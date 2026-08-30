@@ -1,17 +1,31 @@
 import * as React from "react";
 import { ArrowLeft } from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card";
-import { Button } from "@/components/ui/button";
+import { Button, buttonVariants } from "@/components/ui/button";
+import { Badge } from "@/components/ui/badge";
+import {
+  AlertDialog,
+  AlertDialogContent,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogCancel,
+  AlertDialogAction,
+} from "@/components/ui/alert-dialog";
 import { EmptyState } from "@/components/shared/EmptyState";
 import { Stepper } from "@/features/procedures/Stepper";
 import { PROCEDURE_STEPS } from "@/features/procedures/steps";
 import { DescriptifStep, type DescriptifValues } from "@/features/procedures/steps/DescriptifStep";
 import { DemandeurStep } from "@/features/procedures/steps/DemandeurStep";
 import { FormulaireStep } from "@/features/procedures/steps/FormulaireStep";
+import { CommunicationStep } from "@/features/procedures/steps/CommunicationStep";
 import { KnowledgeBaseStep } from "@/features/procedures/steps/KnowledgeBaseStep";
 import { PlaceholderStep } from "@/features/procedures/steps/PlaceholderStep";
 import type { RequesterConfig } from "@/features/procedures/requesterFields";
 import type { FormSchema } from "@/features/procedures/formSchema";
+import type { CommunicationConfig } from "@/features/procedures/communication";
+import { isDraftProcedure } from "@/features/procedures/procedureStatus";
 import type { KnowledgeBase } from "@/features/procedures/knowledgeBase";
 import {
   useProcedure,
@@ -23,8 +37,18 @@ import type { Json } from "@/types/database.types";
 const DESCRIPTIF_FORM_ID = "procedure-descriptif-form";
 const DEMANDEUR_FORM_ID = "procedure-demandeur-form";
 const FORMULAIRE_FORM_ID = "procedure-formulaire-form";
+const COMMUNICATION_FORM_ID = "procedure-communication-form";
 const CONNAISSANCES_FORM_ID = "procedure-connaissances-form";
 const LAST_STEP = PROCEDURE_STEPS.length - 1;
+
+/** Formulaire soumis depuis le pied de page, par rang d'étape (cf. PROCEDURE_STEPS). */
+const STEP_FORM_IDS: readonly string[] = [
+  DESCRIPTIF_FORM_ID,
+  DEMANDEUR_FORM_ID,
+  FORMULAIRE_FORM_ID,
+  COMMUNICATION_FORM_ID,
+  CONNAISSANCES_FORM_ID,
+];
 
 export function ProcedureEditor({
   organizationId,
@@ -54,6 +78,8 @@ export function ProcedureEditor({
   const [justSaved, setJustSaved] = React.useState(false);
   const savedTimer = React.useRef<number>();
   React.useEffect(() => () => window.clearTimeout(savedTimer.current), []);
+  // Proposition de mise en production, au bout du stepper (voir afterSave).
+  const [askProduction, setAskProduction] = React.useState(false);
 
   if (procedureId && isLoading) {
     return <div className="m-6 h-40 animate-pulse rounded-lg bg-muted/40" />;
@@ -84,11 +110,21 @@ export function ProcedureEditor({
   function afterSave() {
     if (advanceRef.current) {
       goToStep(Math.min(current + 1, LAST_STEP));
-    } else {
-      setJustSaved(true);
-      window.clearTimeout(savedTimer.current);
-      savedTimer.current = window.setTimeout(() => setJustSaved(false), 2500);
+      return;
     }
+    setJustSaved(true);
+    window.clearTimeout(savedTimer.current);
+    savedTimer.current = window.setTimeout(() => setJustSaved(false), 2500);
+    // Bout du stepper, démarche encore en brouillon : c'est le moment où la
+    // question se pose d'elle-même — le paramétrage vient d'être bouclé.
+    if (current === LAST_STEP && isDraftProcedure(procedure?.status)) setAskProduction(true);
+  }
+
+  function goToProduction() {
+    updateProc.mutate(
+      { id: procedureId!, status: "production" },
+      { onSuccess: () => setAskProduction(false) },
+    );
   }
 
   function handleDescriptifSubmit(values: DescriptifValues) {
@@ -117,6 +153,13 @@ export function ProcedureEditor({
     );
   }
 
+  function handleCommunicationSubmit(config: CommunicationConfig) {
+    updateProc.mutate(
+      { id: procedureId!, communication_config: config as unknown as Json },
+      { onSuccess: afterSave },
+    );
+  }
+
   function handleConnaissancesSubmit(kb: KnowledgeBase) {
     updateProc.mutate(
       { id: procedureId!, knowledge_base: kb as unknown as Json },
@@ -124,17 +167,8 @@ export function ProcedureEditor({
     );
   }
 
-  // Étapes fonctionnelles : chacune a un formulaire soumis depuis le pied de page.
-  const currentFormId =
-    current === 0
-      ? DESCRIPTIF_FORM_ID
-      : current === 1
-        ? DEMANDEUR_FORM_ID
-        : current === 2
-          ? FORMULAIRE_FORM_ID
-          : current === 4
-            ? CONNAISSANCES_FORM_ID
-            : null;
+  // Chaque étape a un formulaire soumis depuis le pied de page.
+  const currentFormId = STEP_FORM_IDS[current] ?? null;
 
   return (
     <div className="flex h-full min-h-0 flex-col overflow-hidden">
@@ -147,6 +181,11 @@ export function ProcedureEditor({
           <h1 className="text-2xl font-bold tracking-tight">
             {isEdit ? "Modifier la démarche" : "Nouvelle démarche"}
           </h1>
+          {isDraftProcedure(procedure?.status) && isEdit ? (
+            <Badge variant="outline" className="font-medium">
+              Brouillon
+            </Badge>
+          ) : null}
         </div>
         <div className="mt-5">
           <Stepper
@@ -186,6 +225,12 @@ export function ProcedureEditor({
                 formId={FORMULAIRE_FORM_ID}
                 procedure={procedure}
                 onSubmit={handleFormulaireSubmit}
+              />
+            ) : current === 3 && procedure ? (
+              <CommunicationStep
+                formId={COMMUNICATION_FORM_ID}
+                procedure={procedure}
+                onSubmit={handleCommunicationSubmit}
               />
             ) : current === 4 && procedure ? (
               <KnowledgeBaseStep
@@ -251,6 +296,33 @@ export function ProcedureEditor({
           )}
         </div>
       </div>
+
+      <AlertDialog open={askProduction} onOpenChange={setAskProduction}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Passer la démarche en production ?</AlertDialogTitle>
+            <AlertDialogDescription>
+              La démarche est actuellement à l'état brouillon. Souhaitez-vous la passer en
+              production ?
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Rester en brouillon</AlertDialogCancel>
+            <AlertDialogAction
+              className={buttonVariants({ variant: "primary", size: "md" })}
+              disabled={submitting}
+              onClick={(e) => {
+                // La modale se ferme sur succès (goToProduction), pas au clic :
+                // un refus du RLS doit rester visible, pas disparaître avec elle.
+                e.preventDefault();
+                goToProduction();
+              }}
+            >
+              {submitting ? "Enregistrement…" : "Passer en production"}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }

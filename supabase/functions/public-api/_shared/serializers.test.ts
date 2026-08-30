@@ -88,6 +88,7 @@ describe("serializers — whitelist stricte (aucune fuite)", () => {
       requester_config: { citoyen: { enabled: true, fields: {} } },
       form_schema: form,
       knowledge_base: null,
+      communication_config: { visibility: { portalVisible: false } },
       translations: null,
       created_at: null,
       updated_at: null,
@@ -96,6 +97,23 @@ describe("serializers — whitelist stricte (aucune fuite)", () => {
     expect(dto.keywords).toEqual([]);
     expect(dto.form_schema).toBe(form);
     expect(dto).not.toHaveProperty("is_active_global");
+    // JSON possédé : transmis tel quel, jamais réinterprété.
+    expect(dto.communication_config).toEqual({ visibility: { portalVisible: false } });
+  });
+
+  it("démarche jamais paramétrée : communication_config vaut null, pas undefined", () => {
+    const dto = serializeProcedure({ id: "p2", name: "Sans communication", type: "externe" });
+    expect(dto.communication_config).toBeNull();
+    expect(Object.keys(dto)).toContain("communication_config");
+  });
+
+  it("statut : seule « production » l'est ; le doute ne publie rien", () => {
+    expect(serializeProcedure({ status: "production" }).status).toBe("production");
+    expect(serializeProcedure({ status: "brouillon" }).status).toBe("brouillon");
+    // Colonne absente, nulle ou inattendue → brouillon.
+    for (const status of [undefined, null, "", "PRODUCTION", 1, true]) {
+      expect(serializeProcedure({ status }).status).toBe("brouillon");
+    }
   });
 
   it("activation : is_enabled coercé en booléen", () => {

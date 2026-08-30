@@ -46,6 +46,8 @@ function makeProcedure(formSchema: unknown = null): Procedure {
     requester_config: null,
     form_schema: formSchema as Procedure["form_schema"],
     knowledge_base: null,
+    communication_config: null,
+    status: "brouillon",
     created_at: null,
     updated_at: null,
   };

@@ -5,8 +5,9 @@
  * → importable à la fois par la fonction Deno et par les tests vitest.
  *
  * Les blocs JSON possédés (`form_schema`, `requester_config`, `knowledge_base`,
- * `translations`, `metadata`) sont **transmis tels quels** ; leur structure est
- * documentée dans l'OpenAPI (voir `openapi.ts`), typée `unknown` ici.
+ * `communication_config`, `translations`, `metadata`) sont **transmis tels quels** ;
+ * leur structure est documentée dans l'OpenAPI (voir `openapi.ts`), typée
+ * `unknown` ici.
  */
 
 /** Organisation (ou sous-organisation) — configuration complète exposée. */
@@ -43,6 +44,13 @@ export interface ProcedureDto {
   category_id: string | null;
   name: string;
   type: string;
+  /**
+   * Cycle de vie du paramétrage : `brouillon` (en cours d'écriture) ou
+   * `production` (déclarée prête). ⚠️ Distinct de la visibilité : `status` dit
+   * si la configuration est finie, `communication_config.visibility` dit où et
+   * quand la proposer.
+   */
+  status: string;
   keywords: string[];
   short_description: string | null;
   user_description: string | null;
@@ -52,6 +60,8 @@ export interface ProcedureDto {
   requester_config: unknown;
   form_schema: unknown;
   knowledge_base: unknown;
+  /** Paramètres de communication (bloc `visibility` : portail, période de publication). */
+  communication_config: unknown;
   translations: unknown;
   created_at: string | null;
   updated_at: string | null;

@@ -112,13 +112,14 @@ aucun endpoint, il décrit ce qui existe **en base**.
 | `category_id` | uuid nullable, FK `categories(id)` **sans `ON DELETE`** |
 | `name` | text NOT NULL |
 | `type` | text NOT NULL défaut `externe`, CHECK `interne`\|`externe` |
+| `status` | text NOT NULL défaut `brouillon`, CHECK `brouillon`\|`production` |
 | `short_description`, `user_description`, `agent_description` | text |
 | `keywords` | `text[]` |
 | `input_duration_minutes` | int, CHECK `NULL OR >= 0` |
 | `order_index` | int, défaut 0 |
 | `is_active_global` | bool défaut true |
 | `translations` | jsonb, défaut `{}` |
-| `requester_config`, `form_schema`, `knowledge_base` | jsonb — contrats possédés, voir [Contrats JSONB possédés](#contrats-jsonb-possédés) |
+| `requester_config`, `form_schema`, `knowledge_base`, `communication_config` | jsonb — contrats possédés, voir [Contrats JSONB possédés](#contrats-jsonb-possédés) |
 | `created_at`, `updated_at` | timestamp sans fuseau, **pas de trigger `set_updated_at`** |
 
 - **Trigger** `trg_enforce_procedure_root_org` (BEFORE INSERT/UPDATE OF `organization_id`).
@@ -130,6 +131,13 @@ aucun endpoint, il décrit ce qui existe **en base**.
 - `is_active_global` est **mort fonctionnellement** : aucune lecture dans `src/**`, exclu du DTO
   public par un test (`serializers.test.ts`). L'activation réelle passe par
   `organization_procedures` ci-dessous.
+- ⚠️ **Trois notions voisines, à ne pas confondre** — elles se cumulent, aucune ne remplace
+  l'autre : `status` dit si le **paramétrage est fini** (brouillon = ne rien servir) ·
+  `organization_procedures.is_enabled` dit **quelles organisations** du sous-arbre la proposent ·
+  `communication_config.visibility` dit **où et quand** (portail, période). Une démarche en
+  brouillon n'est proposée nulle part, quelles que soient les deux autres.
+- `status` a été ajouté le 2026-08-30 avec le défaut `brouillon` **pour toutes les lignes
+  existantes** : la notion n'existait pas, nul n'avait déclaré une démarche prête.
 - `category_id` sans `ON DELETE` : supprimer une catégorie utilisée par une démarche est **bloqué**
   par Postgres (pas de CASCADE, pas de SET NULL).
 
@@ -496,14 +504,18 @@ seulement) — voir `smtp_settings.password` plus haut.
 
 ## Contrats JSONB possédés
 
-`procedures.form_schema`, `procedures.requester_config`, `procedures.knowledge_base` (ainsi que
-`translations` et `metadata`) portent des commentaires SQL en base les qualifiant de **contrats
-possédés**, consommés en aval par Ariane/Clara. `public-api` les **transmet tels quels**
+`procedures.form_schema`, `procedures.requester_config`, `procedures.knowledge_base`,
+`procedures.communication_config` (ainsi que `translations` et `metadata`) portent des
+commentaires SQL en base les qualifiant de **contrats possédés**, consommés en aval par
+Ariane/Clara. `public-api` les **transmet tels quels**
 (pass-through), sans les interpréter.
 
 Leur structure n'est **pas** décrite ici (propriété du code applicatif et de l'OpenAPI) :
 - Code source faisant foi : `src/features/procedures/*.ts` (`formSchema.ts`, `requesterFields.ts`,
-  `knowledgeBase.ts`, `conditions.ts`, `formats.ts` — tous testés).
+  `knowledgeBase.ts`, `communication.ts`, `conditions.ts`, `formats.ts` — tous testés).
+- ⚠️ `communication_config` **NULL** n'est pas « non publiée » : c'est une démarche jamais passée
+  par l'étape, à lire comme les valeurs par défaut (visible, non bornée). Le parseur applicatif
+  le fait ; un consommateur SQL direct doit le faire aussi.
 - Contrat publié : `/api-doc` (Redoc, `public-api/openapi.json`).
 
 La sérialisation des deux Edge Functions applique une **whitelist stricte** : aucune colonne

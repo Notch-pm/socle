@@ -31,6 +31,8 @@ function makeProcedure(knowledgeBase: unknown = null): Procedure {
     requester_config: null,
     form_schema: null,
     knowledge_base: knowledgeBase as Procedure["knowledge_base"],
+    communication_config: null,
+    status: "brouillon",
     created_at: null,
     updated_at: null,
   };

@@ -30,7 +30,7 @@ public, append-only), `operations.md` (runbook), `roadmap.md` (évolutions souha
 schéma détaillé dans `docs/data-model.md` — les autres docs renvoient sans dupliquer ; CLAUDE.md
 garde les invariants, pièges (⚠️) et pointeurs de code. ⚠️ Toute PR qui touche une **surface de
 contrat** (`supabase/functions/*/_shared/{dto,serializers,openapi}.ts`,
-`src/features/procedures/{formSchema,requesterFields,knowledgeBase}.ts`) ajoute une entrée datée
+`src/features/procedures/{formSchema,requesterFields,knowledgeBase,communication}.ts`) ajoute une entrée datée
 à `docs/api-changelog.md` ; une doc périmée par une PR se met à jour **dans cette PR**.
 `docs/archive/` = instantanés historiques non maintenus.
 
@@ -236,13 +236,26 @@ est fonctionnelle (voir feature « Édition d'organisation » ci-dessous). Param
 (sa principale) et **superadmin** (toutes).
 
 - **Formulaire = stepper horizontal à 5 étapes** (`src/features/procedures/steps.ts`) : Descriptif,
-  Informations demandeur, Formulaire, Communication, Base de connaissances. **Descriptif, Informations
-  demandeur, Formulaire et Base de connaissances sont fonctionnelles** ; seule Communication reste un
-  placeholder. Chaque étape fonctionnelle a un `<form id>` soumis depuis le pied de `ProcedureEditor`
+  Informations demandeur, Formulaire, Communication, Base de connaissances. **Les 5 sont
+  fonctionnelles** (Communication depuis le 2026-08-30), chacune persistée dans sa propre colonne de
+  `procedures`. Chaque étape a un `<form id>` soumis depuis le pied de `ProcedureEditor`
   (`currentFormId`) et persiste via `useUpdateProcedure`. Le pied propose **deux boutons** :
   « Enregistrer » (reste sur l'étape, confirmation « Enregistré ✓ » éphémère) et « Enregistrer et
   continuer » (avance) — dernière étape : « Enregistrer » seul. L'étape courante est **reflétée dans
   `?step=`** (`onStepChange` → `setSearchParams` en `replace`) : position restaurée après rechargement.
+- **Cycle de vie = `procedures.status`** (`brouillon` | `production`, défaut **brouillon**, CHECK
+  en base). Commutateur **« Production »** par ligne dans la liste des démarches (composant partagé
+  `ProceduresListPanel` → écran admin `/demarches` **et** section catalogue du superadmin) ; tag
+  **« Brouillon »** dans la liste et dans l'en-tête de l'éditeur. **Au bout du stepper**, un
+  enregistrement sur la dernière étape propose la mise en production par une modale — le moment où
+  la question se pose d'elle-même. Le geste est **réversible** dans les deux sens.
+  ⚠️ Ne pas confondre avec les deux autres notions qui s'y cumulent : `organization_procedures.
+  is_enabled` (quelles organisations la proposent) et `communication_config.visibility` (où et
+  quand). `status` dit si le **paramétrage est fini** ; une démarche en brouillon n'est proposée
+  nulle part, quelles que soient les deux autres. ⚠️ Les démarches **antérieures au 2026-08-30 sont
+  toutes en brouillon** (la notion n'existait pas — rien n'a été affirmé à leur place) : un
+  consommateur qui filtre sur `production` n'obtient rien tant que le catalogue n'a pas été basculé.
+  Logique pure `procedureStatus.ts` (testée : au moindre doute, **brouillon** — le doute ne publie rien).
 - **Descriptif** → colonnes `procedures` : `name` (obligatoire), `category_id` (obligatoire, catégories
   de la racine), `type` (`interne`/`externe`), `keywords` (text[], CSV), `short_description`,
   `input_duration_minutes`, `order_index` (rang, défaut max+1).
@@ -262,6 +275,20 @@ est fonctionnelle (voir feature « Édition d'organisation » ci-dessous). Param
   de section) : un **seul `DndContext`** couvre tout le canevas (pas de contexte imbriqué dans
   `SectionEditor`, sinon les champs restent prisonniers de leur conteneur) ; logique pure
   `formReorder.ts` (`insertNode`/`moveNode`, testée), position avant/après déduite du point de dépôt.
+- **Communication** → colonne `procedures.communication_config` (JSONB) : schéma **possédé**
+  (contrat consommé en aval), organisé en **blocs** pour que les réglages à venir de l'étape
+  s'ajoutent en clés voisines sans déplacer l'existant. Premier bloc, **`visibility`** :
+  `portalVisible` (proposée sur le portail usagers), `publicationPeriodEnabled` +
+  `publicationStart`/`publicationEnd` (`AAAA-MM-JJ`, **bornes incluses**, chacune facultative).
+  Aucun comportement branché pour l'instant — le Socle **enregistre et publie**, l'aval s'y adosse.
+  ⚠️ Les deux commutateurs sont **actifs par défaut**, et une colonne **NULL** (démarche jamais
+  passée par l'étape — c'est le cas de toutes les existantes) se lit comme ces défauts : la traiter
+  comme « non publiée » dépublierait tout le catalogue d'un coup. ⚠️ Désactiver la période
+  **conserve** les dates (le commutateur gouverne l'usage, pas la donnée — même parti que
+  `email_sender_name`) : un consommateur qui applique les dates sans regarder le commutateur
+  dépublie à tort. Une fin antérieure au début est refusée à la saisie (`publicationPeriodError`) :
+  elle ne publierait jamais. Logique pure + parseur robuste `communication.ts` (testé), UI
+  `steps/CommunicationStep.tsx`.
 - **Base de connaissances** → colonne `procedures.knowledge_base` (JSONB) : informations à destination
   de **l'agent et de son assistant LLM**, schéma **possédé** (contrat consommé en aval). Champs : texte
   d'aide agent & procédures (**Markdown**, aperçu via `markdown.ts` — rendu HTML échappé, aucune
@@ -278,13 +305,14 @@ est fonctionnelle (voir feature « Édition d'organisation » ci-dessous). Param
   `Stepper.tsx`, `ProcedureEditor.tsx`, `ProceduresListPanel.tsx`, `ProceduresPage.tsx` (admin
   `/demarches`), `ProcedureEditorPage.tsx` (`variant` admin/superadmin). Étapes : `steps/DescriptifStep`,
   `steps/DemandeurStep`, `steps/FormulaireStep` (+ `steps/formulaire/*` : `FieldPalette`, `SectionEditor`,
-  `FieldRow`, `ConditionEditor`, `FormPreview`, `FormatsPicker`), `steps/KnowledgeBaseStep` (+
+  `FieldRow`, `ConditionEditor`, `FormPreview`, `FormatsPicker`), `steps/CommunicationStep`,
+  `steps/KnowledgeBaseStep` (+
   `steps/connaissances/*` : `MarkdownField`, `LinkListEditor`, `FaqEditor`, `StringListEditor`,
   `DocumentsUploader`, `controls`), `steps/PlaceholderStep`. Stockage des documents :
   `procedureStorage.ts` (logique pure de chemin/validation, testée) + `useProcedureDocuments.ts`
   (upload/suppression/URL signée). Logique pure **testée** : `requesterFields.ts`,
   `formSchema.ts`, `formReorder.ts`, `conditions.ts`, `formats.ts`, `knowledgeBase.ts`,
-  `markdown.ts`, `procedureStorage.ts`.
+  `communication.ts`, `procedureStatus.ts`, `markdown.ts`, `procedureStorage.ts`.
   Superadmin : section « Catalogue de démarches » dans `OrgSettingsPage` (racine uniquement).
 - Prérequis : une racine sans **catégorie** ne permet pas de créer une démarche (catégorie
   obligatoire) → créer d'abord des catégories via `/categories`.
