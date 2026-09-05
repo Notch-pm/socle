@@ -1,0 +1,54 @@
+# Configuration Supabase CLI — identifiant LOCAL du projet (nom du dossier),
+# pas l'identifiant du projet distant. Le lien vers le projet distant se fait
+# avec `supabase link --project-ref <ref>`.
+project_id = "socle"
+
+# ── Edge functions ───────────────────────────────────────────────────────────
+#
+# ⚠️ CE FICHIER N'EST PAS DE LA DOCUMENTATION : il gouverne le déploiement.
+#
+# `supabase functions deploy <nom>` applique le `verify_jwt` déclaré ici. Sans
+# déclaration, la valeur par défaut est **true** — et un simple redéploiement
+# met alors la passerelle devant une fonction qui porte son auth elle-même.
+# Elle répond dès lors `401 UNAUTHORIZED_NO_AUTH_HEADER` à tous ses appelants,
+# y compris à ses routes publiques de documentation.
+#
+# C'est exactement ce qui est arrivé à `public-api` le 2026-09-05, faute de ce
+# fichier : Iris, Clara et les pages `/api-doc` sont tombés le temps d'un
+# redéploiement. Les valeurs ci-dessous reproduisent l'état RÉEL de la
+# passerelle, vérifié fonction par fonction avant d'être figé ici.
+#
+# Règle de lecture : `verify_jwt = false` ne veut PAS dire « ouverte ». Il veut
+# dire « la passerelle laisse passer, l'authentification est portée par le code
+# de la fonction » — clé API, signature de webhook, ou JWT vérifié à la main.
+
+# Auth par clé API (`Authorization: Bearer sk_live_…`) hachée en base, vérifiée
+# dans le code. Les routes `/`, `/docs` et `/openapi.json` sont publiques par
+# conception : elles servent le contrat.
+[functions.public-api]
+verify_jwt = false
+
+# Même motif : clé API vérifiée dans le code (référentiel usagers).
+[functions.contacts-api]
+verify_jwt = false
+
+# Même motif : clé API vérifiée dans le code (guichet IA, plafond et journal).
+[functions.ai-api]
+verify_jwt = false
+
+# Hook « Send Email » de GoTrue : appelé sans JWT, authentifié par signature
+# Standard Webhooks dans le code.
+[functions.auth-email-hook]
+verify_jwt = false
+
+# ── Fonctions gardées par la PASSERELLE ──────────────────────────────────────
+# Déclarées explicitement, et pas seulement laissées au défaut : le jour où
+# quelqu'un alignera ce fichier « pour faire pareil », il devra lire pourquoi
+# ces deux-là diffèrent. Elles sont appelées par l'application avec le JWT de
+# session, et n'ont aucune authentification propre — les passer à `false` les
+# ouvrirait à tout le monde.
+[functions.invite-user]
+verify_jwt = true
+
+[functions.send-test-email]
+verify_jwt = true
