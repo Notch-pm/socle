@@ -1,0 +1,11 @@
+-- Correctif : `revoke all on function … from anon, authenticated` ne ferme
+-- RIEN tant que PUBLIC conserve le droit d'EXECUTE accordé par défaut à la
+-- création — les deux rôles en héritent. L'advisor 0028/0029 le voit et a
+-- raison : la fonction restait appelable via /rest/v1/rpc/.
+--
+-- Le risque pratique était nul (une fonction trigger appelée hors trigger
+-- échoue immédiatement), mais l'intention était fausse et le signal parasite.
+--
+-- ⚠️ RÈGLE À RETENIR : révoquer de PUBLIC **en plus** d'anon et authenticated,
+-- et le refaire après chaque CREATE OR REPLACE (le replace re-grante PUBLIC).
+revoke all on function public.enforce_ai_usage_quota_root_org() from public, anon, authenticated;
