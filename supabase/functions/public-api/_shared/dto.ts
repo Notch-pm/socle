@@ -277,3 +277,74 @@ export interface PortalProcedureDto {
   /** Durée de saisie estimée, en minutes. */
   input_duration_minutes: number | null;
 }
+
+/**
+ * Composition publiée d'une page du portail usagers — réponse de
+ * `GET /v1/portal/page`.
+ *
+ * Sections typées par `kind`. Le contrat promet deux choses au consommateur :
+ * il ne recevra que des sections que cette version du serveur sait décrire
+ * (un kind inconnu est écarté, pas servi brut), et les références de
+ * démarches (`pinned`, `shortcuts`) sont **déjà résolues** — elles ne portent
+ * que des démarches publiées. Un consommateur doit néanmoins **ignorer** un
+ * kind qu'il ne connaît pas : le serveur peut en apprendre avant lui.
+ */
+export interface PortalRechercheSectionDto {
+  id: string;
+  kind: "recherche";
+  title: string;
+  subtitle: string;
+  placeholder: string;
+  show_shortcuts: boolean;
+  /** Démarches en raccourci (identifiants de démarches publiées). */
+  shortcuts: string[];
+}
+
+export interface PortalDemarchesSectionDto {
+  id: string;
+  kind: "demarches";
+  title: string;
+  columns: 2 | 3 | 4;
+  pinned_first: boolean;
+  /** Démarches à la une (identifiants de démarches publiées). */
+  pinned: string[];
+}
+
+export interface PortalActusSectionDto {
+  id: string;
+  kind: "actus";
+  title: string;
+  layout: "grid" | "list";
+  count: 2 | 3 | 4;
+  show_dates: boolean;
+}
+
+export interface PortalCompteSectionDto {
+  id: string;
+  kind: "compte";
+  title: string;
+  subtitle: string;
+}
+
+export interface PortalTexteSectionDto {
+  id: string;
+  kind: "texte";
+  title: string;
+  body: string;
+  align: "left" | "center";
+}
+
+export type PortalSectionDto =
+  | PortalRechercheSectionDto
+  | PortalDemarchesSectionDto
+  | PortalActusSectionDto
+  | PortalCompteSectionDto
+  | PortalTexteSectionDto;
+
+export interface PortalPageDto {
+  slug: string;
+  /** Date de la publication servie (ISO 8601). */
+  published_at: string;
+  version: 1;
+  sections: PortalSectionDto[];
+}

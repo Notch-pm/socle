@@ -1,7 +1,7 @@
 # Journal des évolutions des API publiques
 
 > **Public** : équipes consommatrices (Ariane, Clara, Iris, partenaires) · **Question traitée** :
-> quand un contrat d'API a-t-il changé, et comment ? · **Dernière mise à jour** : 2026-09-01
+> quand un contrat d'API a-t-il changé, et comment ? · **Dernière mise à jour** : 2026-09-05
 
 Journal **append-only** : chaque évolution de la surface de contrat des API publiques
 (`public-api`, `contacts-api`, `ai-api`) — endpoint, paramètre, champ de réponse, comportement
@@ -10,6 +10,38 @@ une correction s'ajoute sous une nouvelle date. Politique de compatibilité et o
 consommateur : [integration.md](./integration.md#politique-de-compatibilité-v1).
 
 Format d'une entrée : `## AAAA-MM-JJ — <api> — ajout|correctif|rupture`
+
+---
+
+## 2026-09-05 — public-api — ajout
+
+**La composition publiée d'une page du portail.** Nouvelle route
+`GET /v1/portal/page?tenant_id=&slug=accueil` : la page d'accueil telle que la collectivité l'a
+**publiée** depuis l'éditeur du Socle — sections typées (`recherche`, `demarches`, `actus`,
+`compte`, `texte`), dans l'ordre. Version du contrat : **1.8.0**. Ajout additif.
+
+- **Le brouillon n'est jamais servi.** L'éditeur enregistre automatiquement un brouillon ; seule la
+  publication explicite alimente cette route. Sauvegarder n'est pas publier.
+- **`404` n'est pas une panne** : rien n'a encore été publié. Rendez votre mise en page par défaut.
+- **Les références sont résolues** : `pinned` et `shortcuts` ne portent que des identifiants de
+  démarches publiées (mêmes règles que `/v1/portal/procedures`). Joignez sur cette liste.
+- ⚠️ **Ignorez les `kind` inconnus.** Le serveur peut apprendre de nouvelles sections avant vous ;
+  une section inconnue s'ignore, elle ne casse pas la page. `actus` est servi sans contenu à ce jour.
+
+---
+
+## 2026-09-05 — public-api — ajout
+
+**Le portail usagers.** Deux routes sous le tag « Portail », version **1.7.0**, ajout additif :
+
+- `GET /v1/portal/tenant?hostname=` — résout un **domaine** en collectivité (`id`, `name`, `slug`,
+  `hostname`). C'est ce qui permet à une instance unique de portail de servir toutes les
+  collectivités sans en connaître aucune : ajouter un domaine dans le Socle suffit. Domaine inconnu,
+  hors périmètre ou collectivité obsolète : le **même `404`** — la route ne révèle pas ce qui existe.
+- `GET /v1/portal/procedures?tenant_id=` — les démarches qu'un **usager** doit voir, **déjà
+  filtrées** (`production`, `externe`, visibles sur le portail, dans leur période — heure de Paris).
+  Réponse volontairement étroite : ni `form_schema`, ni `knowledge_base`, ni `agent_description`.
+  **N'appliquez pas ces règles vous-même** depuis `/v1/procedures`.
 
 ---
 

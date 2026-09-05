@@ -23,6 +23,7 @@ describe("buildOpenApiDocument", () => {
       expect.arrayContaining([
         "/v1/portal/tenant",
         "/v1/portal/procedures",
+        "/v1/portal/page",
         "/v1/organizations",
         "/v1/organizations/{id}",
         "/v1/organizations/{id}/smtp",
@@ -150,8 +151,8 @@ describe("buildOpenApiDocument", () => {
 describe("contrat — documents et courriers", () => {
   const doc = buildOpenApiDocument("https://example.supabase.co/functions/v1/public-api") as any;
 
-  it("annonce la version 1.7.0 du contrat", () => {
-    expect(doc.info.version).toBe("1.7.0");
+  it("annonce la version 1.8.0 du contrat", () => {
+    expect(doc.info.version).toBe("1.8.0");
   });
 
   it("sert les documents d'une démarche déjà résolus", () => {
@@ -273,6 +274,48 @@ describe("contrat — démarches du portail", () => {
     ]);
     for (const leak of ["form_schema", "knowledge_base", "agent_description", "requester_config"]) {
       expect(schema.properties).not.toHaveProperty(leak);
+    }
+  });
+});
+
+describe("contrat — page publiée du portail", () => {
+  const doc = buildOpenApiDocument("https://example.supabase.co/functions/v1/public-api") as any;
+  const page = doc.paths["/v1/portal/page"].get;
+
+  it("prend la collectivité résolue, et une adresse de page par défaut", () => {
+    expect(page.tags).toEqual(["Portail"]);
+    expect(page.parameters).toEqual([
+      expect.objectContaining({ name: "tenant_id", in: "query", required: true }),
+      expect.objectContaining({ name: "slug", in: "query", required: false }),
+    ]);
+    expect(page.parameters[1].schema.default).toBe("accueil");
+  });
+
+  it("dit que 404 n'est pas une panne, et que le brouillon n'est jamais servi", () => {
+    // Les deux phrases que le portail doit lire avant de se brancher : sans la
+    // première il afficherait une erreur à une collectivité qui n'a rien
+    // publié ; sans la seconde il chercherait une route vers le brouillon.
+    expect(page.description).toContain("n'est pas une panne");
+    expect(page.description).toContain("sauvegarder n'est pas publier");
+  });
+
+  it("promet des références résolues et exige d'ignorer les kinds inconnus", () => {
+    expect(page.description).toContain("références sont déjà résolues");
+    expect(page.description).toContain("Ignorez les `kind`");
+  });
+
+  it("discrimine les sections par kind, une par type de la palette", () => {
+    const items = doc.components.schemas.PortalPage.properties.sections.items;
+    expect(Object.keys(items.discriminator.mapping).sort()).toEqual([
+      "actus",
+      "compte",
+      "demarches",
+      "recherche",
+      "texte",
+    ]);
+    for (const ref of items.oneOf) {
+      const name = ref.$ref.split("/").pop();
+      expect(doc.components.schemas[name].required).toContain("kind");
     }
   });
 });

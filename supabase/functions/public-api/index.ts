@@ -31,6 +31,7 @@ import { buildOrganizationTree, isUuid } from "./_shared/scope.ts";
 import { errorResponse, jsonResponse } from "./_shared/errors.ts";
 import { buildOpenApiDocument } from "./_shared/openapi.ts";
 import { isoDay, isPubliclyPublished } from "./_shared/publication.ts";
+import { serializePortalPage } from "./_shared/portalPage.ts";
 
 const FUNCTION_NAME = "public-api";
 const DOCUMENTS_BUCKET = "procedure-documents";
@@ -332,6 +333,69 @@ Deno.serve(async (req: Request) => {
         ((data ?? []) as Array<Record<string, unknown>>)
           .filter((row) => isPubliclyPublished(row, today))
           .map(serializePortalProcedure),
+        corsHeaders,
+      );
+    }
+
+    // --- /v1/portal/page ---
+    // La composition PUBLIÉE d'une page du portail — jamais le brouillon, qui
+    // est une colonne distincte et n'a pas de route. Sauvegarder n'est pas
+    // publier : c'est ici que la séparation devient visible de l'extérieur.
+    //
+    // 404 quand rien n'a jamais été publié : ce n'est pas une panne, c'est une
+    // collectivité qui n'a pas encore composé sa page. Le portail rend alors sa
+    // mise en page par défaut. Même 404 pour une collectivité hors périmètre —
+    // la route ne révèle pas ce qui existe.
+    //
+    // Les références (`pinned`, `shortcuts`) sont résolues ICI contre le
+    // catalogue publié — mêmes règles que /v1/portal/procedures — pour que le
+    // consommateur ne reçoive jamais l'identifiant d'une démarche qu'il ne
+    // saurait pas afficher.
+    if (segments[0] === "v1" && segments[1] === "portal" && segments[2] === "page") {
+      if (segments.length !== 3) {
+        return errorResponse("not_found", "Endpoint inconnu.", corsHeaders);
+      }
+      const tenantId = url.searchParams.get("tenant_id") ?? "";
+      if (!isUuid(tenantId)) {
+        return errorResponse("bad_request", "Paramètre tenant_id invalide.", corsHeaders);
+      }
+      const slug = url.searchParams.get("slug") ?? "accueil";
+      if (!/^[a-z0-9]+(-[a-z0-9]+)*$/.test(slug)) {
+        return errorResponse("bad_request", "Paramètre slug invalide.", corsHeaders);
+      }
+      if (!inScope(tenantId)) {
+        return errorResponse("not_found", "Aucune page publiée.", corsHeaders);
+      }
+      const { data: page, error: pageError } = await admin
+        .from("portal_pages")
+        .select("published, published_at")
+        .eq("organization_id", tenantId)
+        .eq("slug", slug)
+        .maybeSingle();
+      if (pageError) throw pageError;
+      if (!page || page.published === null || page.published_at === null) {
+        return errorResponse("not_found", "Aucune page publiée.", corsHeaders);
+      }
+
+      const { data: procedures, error: proceduresError } = await admin
+        .from("procedures")
+        .select("id, status, type, communication_config")
+        .eq("organization_id", tenantId);
+      if (proceduresError) throw proceduresError;
+      const today = isoDay(new Date());
+      const publishedIds = new Set(
+        ((procedures ?? []) as Array<Record<string, unknown>>)
+          .filter((row) => isPubliclyPublished(row, today))
+          .map((row) => String(row.id)),
+      );
+
+      return jsonResponse(
+        200,
+        serializePortalPage(
+          page.published,
+          { slug, published_at: String(page.published_at) },
+          publishedIds,
+        ),
         corsHeaders,
       );
     }

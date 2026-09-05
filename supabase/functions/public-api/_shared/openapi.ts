@@ -30,7 +30,7 @@ export function buildOpenApiDocument(serverUrl: string): Record<string, unknown>
     openapi: "3.1.0",
     info: {
       title: "API Socle — Référentiel de la gamme",
-      version: "1.7.0",
+      version: "1.8.0",
       description: [
         "API **en lecture seule** exposant le référentiel central de la gamme : les",
         "**organisations** (et sous-organisations) avec l'intégralité de leur configuration,",
@@ -203,6 +203,53 @@ export function buildOpenApiDocument(serverUrl: string): Record<string, unknown>
                     items: { $ref: "#/components/schemas/PortalProcedure" },
                   },
                 },
+              },
+            },
+            ...errorResponses("400", "401", "404", "500"),
+          },
+        },
+      },
+      "/v1/portal/page": {
+        get: {
+          tags: ["Portail"],
+          summary: "Récupérer la composition publiée d'une page du portail",
+          description:
+            "Renvoie la page telle que la collectivité l'a **publiée** depuis l'éditeur du Socle : " +
+            "une liste ordonnée de sections typées (`recherche`, `demarches`, `actus`, `compte`, " +
+            "`texte`). Le brouillon en cours d'édition n'est jamais servi — sauvegarder n'est pas " +
+            "publier.\n\n" +
+            "**`404` n'est pas une panne** : la collectivité n'a encore rien publié (ou la page " +
+            "demandée n'existe pas). Le portail rend alors sa mise en page par défaut. Une " +
+            "collectivité hors périmètre de la clé reçoit le même `404`.\n\n" +
+            "**Les références sont déjà résolues.** `pinned` et `shortcuts` ne contiennent que des " +
+            "identifiants de démarches **publiées** (mêmes règles que `GET /v1/portal/procedures`) ; " +
+            "une démarche passée en brouillon, hors période ou supprimée en est écartée. Le " +
+            "consommateur n'a aucun identifiant mort à gérer, et joint sur `GET /v1/portal/procedures`.\n\n" +
+            "**Ignorez les `kind` que vous ne connaissez pas.** Le serveur peut apprendre de nouvelles " +
+            "sections avant vous ; une section inconnue s'ignore, elle ne casse pas la page. Le bloc " +
+            "`actus` est servi mais les actualités n'existent pas encore côté Socle.",
+          parameters: [
+            {
+              name: "tenant_id",
+              in: "query",
+              required: true,
+              description:
+                "Identifiant de la collectivité, tel que rendu par `GET /v1/portal/tenant`.",
+              schema: { type: "string", format: "uuid" },
+            },
+            {
+              name: "slug",
+              in: "query",
+              required: false,
+              description: "Adresse de la page dans le portail. Seule `accueil` existe à ce jour.",
+              schema: { type: "string", default: "accueil", pattern: "^[a-z0-9]+(-[a-z0-9]+)*$" },
+            },
+          ],
+          responses: {
+            "200": {
+              description: "Composition publiée de la page.",
+              content: {
+                "application/json": { schema: { $ref: "#/components/schemas/PortalPage" } },
               },
             },
             ...errorResponses("400", "401", "404", "500"),
@@ -737,6 +784,118 @@ export function buildOpenApiDocument(serverUrl: string): Record<string, unknown>
               type: ["integer", "null"],
               description: "Durée de saisie estimée, en minutes.",
             },
+          },
+        },
+        PortalPage: {
+          type: "object",
+          description:
+            "Composition publiée d'une page du portail. `sections` est ordonnée ; chaque section " +
+            "est discriminée par `kind`.",
+          required: ["slug", "published_at", "version", "sections"],
+          properties: {
+            slug: { type: "string", examples: ["accueil"] },
+            published_at: {
+              type: "string",
+              format: "date-time",
+              description: "Date de la publication servie.",
+            },
+            version: { type: "integer", enum: [1] },
+            sections: {
+              type: "array",
+              items: {
+                oneOf: [
+                  { $ref: "#/components/schemas/PortalRechercheSection" },
+                  { $ref: "#/components/schemas/PortalDemarchesSection" },
+                  { $ref: "#/components/schemas/PortalActusSection" },
+                  { $ref: "#/components/schemas/PortalCompteSection" },
+                  { $ref: "#/components/schemas/PortalTexteSection" },
+                ],
+                discriminator: {
+                  propertyName: "kind",
+                  mapping: {
+                    recherche: "#/components/schemas/PortalRechercheSection",
+                    demarches: "#/components/schemas/PortalDemarchesSection",
+                    actus: "#/components/schemas/PortalActusSection",
+                    compte: "#/components/schemas/PortalCompteSection",
+                    texte: "#/components/schemas/PortalTexteSection",
+                  },
+                },
+              },
+            },
+          },
+        },
+        PortalRechercheSection: {
+          type: "object",
+          description: "Champ de recherche de démarche, avec raccourcis facultatifs.",
+          required: ["id", "kind", "title", "subtitle", "placeholder", "show_shortcuts", "shortcuts"],
+          properties: {
+            id: { type: "string" },
+            kind: { type: "string", enum: ["recherche"] },
+            title: { type: "string" },
+            subtitle: { type: "string" },
+            placeholder: { type: "string", description: "Texte du champ vide." },
+            show_shortcuts: { type: "boolean" },
+            shortcuts: {
+              type: "array",
+              items: { type: "string", format: "uuid" },
+              description: "Démarches en raccourci — identifiants de démarches publiées, 4 au plus.",
+            },
+          },
+        },
+        PortalDemarchesSection: {
+          type: "object",
+          description: "Grille de démarches ; le catalogue vient de `GET /v1/portal/procedures`.",
+          required: ["id", "kind", "title", "columns", "pinned_first", "pinned"],
+          properties: {
+            id: { type: "string" },
+            kind: { type: "string", enum: ["demarches"] },
+            title: { type: "string" },
+            columns: { type: "integer", enum: [2, 3, 4] },
+            pinned_first: {
+              type: "boolean",
+              description: "Les démarches à la une remontent en tête de grille.",
+            },
+            pinned: {
+              type: "array",
+              items: { type: "string", format: "uuid" },
+              description: "Démarches à la une — identifiants de démarches publiées.",
+            },
+          },
+        },
+        PortalActusSection: {
+          type: "object",
+          description: "Bloc actualités. Servi pour la complétude du contrat ; sans contenu à ce jour.",
+          required: ["id", "kind", "title", "layout", "count", "show_dates"],
+          properties: {
+            id: { type: "string" },
+            kind: { type: "string", enum: ["actus"] },
+            title: { type: "string" },
+            layout: { type: "string", enum: ["grid", "list"] },
+            count: { type: "integer", enum: [2, 3, 4] },
+            show_dates: { type: "boolean" },
+          },
+        },
+        PortalCompteSection: {
+          type: "object",
+          description: "Bandeau « espace usager ».",
+          required: ["id", "kind", "title", "subtitle"],
+          properties: {
+            id: { type: "string" },
+            kind: { type: "string", enum: ["compte"] },
+            title: { type: "string" },
+            subtitle: { type: "string" },
+          },
+        },
+        PortalTexteSection: {
+          type: "object",
+          description: "Bandeau texte libre.",
+          required: ["id", "kind", "title", "body", "align"],
+          properties: {
+            id: { type: "string" },
+            kind: { type: "string", enum: ["texte"] },
+            title: { type: "string" },
+            body: { type: "string" },
+            align: { type: "string", enum: ["left", "center"] },
           },
         },
         Organization: {
