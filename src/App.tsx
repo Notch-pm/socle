@@ -14,6 +14,7 @@ import { OrganizationsPage } from "@/features/organizations/OrganizationsPage";
 import { OrganizationEditorPage } from "@/features/organizations/OrganizationEditorPage";
 import { ProceduresPage } from "@/features/procedures/ProceduresPage";
 import { ProcedureEditorPage } from "@/features/procedures/ProcedureEditorPage";
+import { PortalEditorPage } from "@/features/portal/PortalEditorPage";
 import { QuartiersPage } from "@/features/quartiers/QuartiersPage";
 import { AiUsagePage } from "@/features/ai-usage/AiUsagePage";
 import { UtilisateursPage } from "@/pages/UtilisateursPage";
@@ -58,6 +59,11 @@ export function App() {
                 path="/superadmin/organisations/:orgId/demarches/:procId"
                 element={<ProcedureEditorPage variant="superadmin" />}
               />
+              {/* Éditeur du site de démarches — plein écran, comme l'éditeur de démarche. */}
+              <Route
+                path="/superadmin/organisations/:orgId/portail"
+                element={<PortalEditorPage variant="superadmin" />}
+              />
             </Route>
           </Route>
 
@@ -67,6 +73,7 @@ export function App() {
               <Route index element={<DashboardPage />} />
               <Route path="organisations" element={<OrganizationsPage />} />
               <Route path="organisations/:orgId" element={<OrganizationEditorPage />} />
+              <Route path="organisations/:orgId/portail" element={<PortalEditorPage variant="admin" />} />
               <Route path="demarches" element={<ProceduresPage />} />
               <Route path="demarches/nouveau" element={<ProcedureEditorPage variant="admin" />} />
               <Route path="demarches/:procId" element={<ProcedureEditorPage variant="admin" />} />

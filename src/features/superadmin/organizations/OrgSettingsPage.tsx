@@ -1,6 +1,6 @@
 import * as React from "react";
 import { useParams, useNavigate, useSearchParams } from "react-router-dom";
-import { ArrowLeft, Settings2, Users as UsersIcon, ListChecks, FileCheck2, FileSignature, MapPin, Mail, Palette, Globe, KeyRound, Gauge, type LucideIcon } from "lucide-react";
+import { ArrowLeft, Settings2, Users as UsersIcon, ListChecks, FileCheck2, FileSignature, MapPin, Mail, Palette, Globe, LayoutTemplate, KeyRound, Gauge, type LucideIcon } from "lucide-react";
 import { Card, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { EmptyState } from "@/components/shared/EmptyState";
@@ -217,6 +217,32 @@ export function OrgSettingsPage() {
           onConfigure={(node: OrgNode) => navigate(`/superadmin/organisations/${node.id}`)}
         />
       </section>
+
+      {/* L'éditeur du site a son propre shell plein écran : on y NAVIGUE, il ne
+          se monte pas dans une section. Réservé aux racines, comme les démarches
+          qu'il épingle. */}
+      {organization.parent_id === null ? (
+        <section className="flex flex-col gap-3">
+          <h2 className="text-lg font-semibold">Site de démarches</h2>
+          <Card
+            className="cursor-pointer transition-all hover:border-primary/30 hover:shadow-socle-md"
+            onClick={() => navigate(`/superadmin/organisations/${organization.id}/portail`)}
+          >
+            <CardHeader className="flex-row items-center gap-4">
+              <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-primary/10">
+                <LayoutTemplate className="size-5 text-primary" />
+              </div>
+              <div>
+                <CardTitle className="text-base">Composer la page d'accueil</CardTitle>
+                <CardDescription>
+                  Sections, démarches à la une, aperçu par appareil — brouillon enregistré
+                  automatiquement, publication explicite
+                </CardDescription>
+              </div>
+            </CardHeader>
+          </Card>
+        </section>
+      ) : null}
 
       <section className="flex flex-col gap-3">
         <h2 className="text-lg font-semibold">Paramétrage</h2>

@@ -1,7 +1,8 @@
 import * as React from "react";
 import { useParams, useNavigate } from "react-router-dom";
-import { ArrowLeft, Globe, ListChecks, Mail, Palette, Settings2, type LucideIcon } from "lucide-react";
+import { ArrowLeft, Globe, LayoutTemplate, ListChecks, Mail, Palette, Settings2, type LucideIcon } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { EmptyState } from "@/components/shared/EmptyState";
 import { cn } from "@/lib/utils";
 import { useOrganization } from "@/features/superadmin/organizations/useOrganizationsAdmin";
@@ -11,7 +12,7 @@ import { OrganizationProceduresTab } from "@/features/organizations/Organization
 import { BrandingSection } from "@/features/organizations/BrandingSection";
 import { DomainsSection } from "@/features/organizations/DomainsSection";
 
-type TabKey = "infos" | "charte" | "domaines" | "demarches" | "smtp";
+type TabKey = "infos" | "charte" | "domaines" | "portail" | "demarches" | "smtp";
 
 const TABS: { key: TabKey; label: string; icon: LucideIcon }[] = [
   { key: "infos", label: "Informations de base", icon: Settings2 },
@@ -22,6 +23,7 @@ const TABS: { key: TabKey; label: string; icon: LucideIcon }[] = [
   // l'onglet vit donc sur toute organisation, sous-organisation comprise, dès
   // lors qu'elle tient son propre guichet.
   { key: "domaines", label: "Domaines du portail", icon: Globe },
+  { key: "portail", label: "Site de démarches", icon: LayoutTemplate },
   { key: "demarches", label: "Démarches", icon: ListChecks },
   // Onglet visible sur TOUTE organisation depuis l'héritage du relais : une
   // sous-organisation y choisit entre la configuration de son parent et la sienne.
@@ -101,6 +103,29 @@ export function OrganizationEditorPage() {
         {activeTab === "infos" && <OrganizationInfoTab organization={organization} />}
         {activeTab === "charte" && <BrandingSection organization={organization} />}
         {activeTab === "domaines" && <DomainsSection organizationId={organization.id} />}
+        {activeTab === "portail" &&
+          (organization.parent_id === null ? (
+            // L'éditeur a son propre shell plein écran : l'onglet est un
+            // lanceur, pas un conteneur.
+            <Card>
+              <CardHeader>
+                <CardTitle className="text-base">Page d'accueil du portail</CardTitle>
+                <CardDescription>
+                  Composez la page que vos usagers voient en arrivant : sections, démarches à
+                  la une, aperçu par appareil. Le brouillon s'enregistre automatiquement ; la
+                  publication est un geste explicite.
+                </CardDescription>
+              </CardHeader>
+              <CardContent>
+                <Button onClick={() => navigate(`/organisations/${organization.id}/portail`)}>
+                  <LayoutTemplate />
+                  Ouvrir l'éditeur
+                </Button>
+              </CardContent>
+            </Card>
+          ) : (
+            <EmptyState message="La page d'accueil se compose au niveau de l'organisation principale (racine)." />
+          ))}
         {activeTab === "demarches" && (
           <OrganizationProceduresTab organizationId={organization.id} />
         )}

@@ -132,6 +132,31 @@ aucun endpoint, il décrit ce qui existe **en base**.
 
 ---
 
+### `portal_pages` — composition des pages du portail usagers
+
+- `organization_id` NOT NULL, FK **CASCADE** ; `slug` text NOT NULL défaut `accueil` (CHECK
+  `^[a-z0-9]+(-[a-z0-9]+)*$`) ; `draft` jsonb NOT NULL ; `published` jsonb ; `published_at` ;
+  `created_at` / `updated_at` (trigger `set_updated_at`). **UNIQUE (organization_id, slug)**.
+- **Deux colonnes, deux gestes.** `draft` est ce que l'éditeur CMS manipule — écrit
+  automatiquement à chaque modification, jamais servi au public. `published` est ce que le
+  portail servira — ne change que par une publication explicite. **Sauvegarder n'est pas
+  publier** : la séparation est dans le schéma, pas dans une option. CHECK
+  `(published is null) = (published_at is null)` : une publication porte toujours sa date.
+- Contenu : schéma JSON **possédé**, défini par `src/features/portal/portalPage.ts`
+  (`{ version: 1, sections: [...] }`, sections typées `recherche` / `demarches` / `actus` /
+  `compte` / `texte`). Les épinglages référencent des `procedures.id`, jamais des libellés.
+  Parse tolérant section par section : une section illisible est écartée, les autres sont
+  conservées — c'est la page d'accueil d'une collectivité, une section abîmée ne doit pas
+  effacer les autres.
+- **Racine uniquement** (trigger `enforce_portal_page_root_org`, motif document_templates) :
+  le catalogue que la page épingle est celui de la racine.
+- **RLS** : lecture `has_org_access(organization_id)` · écriture `is_org_admin(organization_id)`
+  (qui court-circuite déjà le super admin) — calqué sur `document_templates`.
+- Consommé à terme par le portail via l'API publique (`published` seulement), en service role
+  hors RLS, borné au périmètre de la clé.
+
+---
+
 ---
 
 ## Catalogue de démarches
