@@ -21,6 +21,8 @@ describe("buildOpenApiDocument", () => {
     const paths = Object.keys(doc.paths);
     expect(paths).toEqual(
       expect.arrayContaining([
+        "/v1/portal/tenant",
+        "/v1/portal/procedures",
         "/v1/organizations",
         "/v1/organizations/{id}",
         "/v1/organizations/{id}/smtp",
@@ -148,8 +150,8 @@ describe("buildOpenApiDocument", () => {
 describe("contrat — documents et courriers", () => {
   const doc = buildOpenApiDocument("https://example.supabase.co/functions/v1/public-api") as any;
 
-  it("annonce la version 1.6.0 du contrat", () => {
-    expect(doc.info.version).toBe("1.6.0");
+  it("annonce la version 1.7.0 du contrat", () => {
+    expect(doc.info.version).toBe("1.7.0");
   });
 
   it("sert les documents d'une démarche déjà résolus", () => {
@@ -197,5 +199,80 @@ describe("contrat — documents et courriers", () => {
     expect(doc.components.schemas.CommunicationConfig.properties.documents.$ref).toBe(
       "#/components/schemas/DocumentsConfig",
     );
+  });
+});
+
+describe("contrat — portail usagers", () => {
+  const doc = buildOpenApiDocument("https://example.supabase.co/functions/v1/public-api") as any;
+  const tenant = doc.paths["/v1/portal/tenant"].get;
+
+  it("prend le nom d'hôte en paramètre obligatoire", () => {
+    expect(tenant.tags).toEqual(["Portail"]);
+    const hostname = tenant.parameters.find((p: any) => p.name === "hostname");
+    expect(hostname).toMatchObject({ in: "query", required: true });
+    expect(hostname.schema.maxLength).toBe(253);
+  });
+
+  it("promet qu'ajouter une collectivité ne demande aucun déploiement", () => {
+    // C'est LA propriété que le portail achète en appelant cette route : si le
+    // contrat cesse de la tenir, le portail redevient une application par
+    // collectivité. Épinglée ici pour que la promesse ne s'efface pas d'une
+    // réécriture de description.
+    expect(tenant.description).toContain("aucun déploiement");
+  });
+
+  it("documente le 404 indistinct — la route ne renseigne pas sur l'existence d'une collectivité", () => {
+    expect(tenant.responses).toHaveProperty("400");
+    expect(tenant.responses).toHaveProperty("404");
+    expect(tenant.description).toMatch(/inconnu.*hors périmètre.*obsolète/s);
+  });
+
+  it("sert un tenant minimal — pas une fiche organisation", () => {
+    const schema = doc.components.schemas.Tenant;
+    expect(Object.keys(schema.properties).sort()).toEqual(["hostname", "id", "name", "slug"]);
+    // Une page publique : rien de ce qui suit n'a de raison d'y être servi.
+    for (const leak of ["address", "phone", "email", "metadata", "email_sender_name"]) {
+      expect(schema.properties).not.toHaveProperty(leak);
+    }
+  });
+});
+
+describe("contrat — démarches du portail", () => {
+  const doc = buildOpenApiDocument("https://example.supabase.co/functions/v1/public-api") as any;
+  const procedures = doc.paths["/v1/portal/procedures"].get;
+
+  it("exige l'identifiant de la collectivité résolue", () => {
+    expect(procedures.tags).toEqual(["Portail"]);
+    expect(procedures.parameters).toEqual([
+      expect.objectContaining({ name: "tenant_id", in: "query", required: true }),
+    ]);
+  });
+
+  it("détourne explicitement de refaire le filtrage côté consommateur", () => {
+    // La raison d'être de la route. Sans cette phrase, un intégrateur repartirait
+    // de /v1/procedures et réimplémenterait trois règles qu'il verrait diverger.
+    expect(procedures.description).toContain("N'appliquez pas ces règles vous-même");
+    expect(procedures.description).toMatch(/production/);
+    expect(procedures.description).toMatch(/externe/);
+    expect(procedures.description).toMatch(/période de publication/);
+  });
+
+  it("annonce qu'une liste vide est normale", () => {
+    expect(procedures.description).toContain("n'a encore rien publié");
+    expect(procedures.responses["200"].description).toContain("Peut être vide");
+  });
+
+  it("sert une démarche amputée du paramétrage d'instruction", () => {
+    const schema = doc.components.schemas.PortalProcedure;
+    expect(Object.keys(schema.properties).sort()).toEqual([
+      "id",
+      "input_duration_minutes",
+      "name",
+      "short_description",
+      "user_description",
+    ]);
+    for (const leak of ["form_schema", "knowledge_base", "agent_description", "requester_config"]) {
+      expect(schema.properties).not.toHaveProperty(leak);
+    }
   });
 });

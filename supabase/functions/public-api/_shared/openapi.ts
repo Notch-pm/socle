@@ -30,7 +30,7 @@ export function buildOpenApiDocument(serverUrl: string): Record<string, unknown>
     openapi: "3.1.0",
     info: {
       title: "API Socle — Référentiel de la gamme",
-      version: "1.6.0",
+      version: "1.7.0",
       description: [
         "API **en lecture seule** exposant le référentiel central de la gamme : les",
         "**organisations** (et sous-organisations) avec l'intégralité de leur configuration,",
@@ -111,8 +111,104 @@ export function buildOpenApiDocument(serverUrl: string): Record<string, unknown>
           "une interface aux couleurs de l'organisation sans remonter sa hiérarchie.",
       },
       { name: "Documents", description: "Accès temporaire aux documents privés." },
+      {
+        name: "Portail",
+        description:
+          "Résolution `domaine → collectivité` pour le portail usagers. Une instance unique " +
+          "de portail sert toutes les collectivités : elle ne connaît que le nom d'hôte visité, " +
+          "le Socle lui dit à qui il appartient.",
+      },
     ],
     paths: {
+      "/v1/portal/tenant": {
+        get: {
+          tags: ["Portail"],
+          summary: "Résoudre un domaine en collectivité",
+          description:
+            "Renvoie la collectivité rattachée au **nom d'hôte** visité par un usager " +
+            "(`nantes.edilumen.fr`, `demarches.ville-de-rennes.fr`…), telle qu'enregistrée dans " +
+            "les domaines de l'organisation.\n\n" +
+            "C'est l'entrée du portail usagers : une instance unique sert toutes les " +
+            "collectivités et n'en connaît aucune à l'avance. **Ajouter une collectivité au " +
+            "portail ne demande aucun déploiement** — il suffit de lui enregistrer un domaine.\n\n" +
+            "Le nom d'hôte est traité comme une donnée non fiable : il ne fait que désigner un " +
+            "domaine enregistré, et la réponse reste bornée au périmètre de la clé. Un domaine " +
+            "**inconnu**, **hors périmètre**, ou dont l'organisation est **obsolète** reçoivent " +
+            "le même `404` — la route ne renseigne pas sur l'existence d'une collectivité.\n\n" +
+            "La réponse est volontairement minimale (identifiant, nom, slug). Pour habiller la " +
+            "page aux couleurs de la collectivité, voir `GET /v1/organizations/{id}/branding` ; " +
+            "pour ses démarches, `GET /v1/procedures?enabled_for={id}`.",
+          parameters: [
+            {
+              name: "hostname",
+              in: "query",
+              required: true,
+              description:
+                "Nom d'hôte visité. Normalisé avant recherche : minuscules, port et point " +
+                "final retirés. Doit être un FQDN d'au moins deux labels.",
+              schema: { type: "string", maxLength: 253, examples: ["nantes.edilumen.fr"] },
+            },
+          ],
+          responses: {
+            "200": {
+              description: "Collectivité rattachée à ce domaine.",
+              content: {
+                "application/json": { schema: { $ref: "#/components/schemas/Tenant" } },
+              },
+            },
+            ...errorResponses("400", "401", "404", "500"),
+          },
+        },
+      },
+      "/v1/portal/procedures": {
+        get: {
+          tags: ["Portail"],
+          summary: "Lister les démarches publiées d'une collectivité",
+          description:
+            "Renvoie les démarches qu'un **usager** doit voir sur le portail de la " +
+            "collectivité, déjà filtrées par le Socle. Une démarche est publiée quand les " +
+            "**trois** conditions sont réunies :\n\n" +
+            "- son paramétrage est en `production` (une démarche `brouillon` n'est proposée " +
+            "nulle part) ;\n" +
+            "- elle est de type `externe` (une démarche `interne` n'a pas de guichet en ligne) ;\n" +
+            "- son bloc `communication_config.visibility` la dit visible sur le portail et, si " +
+            "une période de publication est active, le jour courant est dans ses bornes " +
+            "(incluses, **heure de Paris**).\n\n" +
+            "**N'appliquez pas ces règles vous-même** à partir de `GET /v1/procedures` : elles " +
+            "évoluent avec le paramétrage, et un consommateur qui les recopie finit par publier " +
+            "ce qui ne devait pas l'être.\n\n" +
+            "La réponse ne porte **que le public** : ni `form_schema`, ni `knowledge_base`, ni " +
+            "`agent_description`, ni `requester_config`, ni documents. Ce paramétrage " +
+            "d'instruction ne quitte pas le Socle — filtrer `Procedure` côté portail l'aurait " +
+            "déjà fait transiter par un serveur public.\n\n" +
+            "Les démarches sont rendues dans l'ordre d'affichage défini par la collectivité. " +
+            "Une liste **vide** est une réponse normale : la collectivité n'a encore rien publié.",
+          parameters: [
+            {
+              name: "tenant_id",
+              in: "query",
+              required: true,
+              description:
+                "Identifiant de la collectivité, tel que rendu par `GET /v1/portal/tenant`.",
+              schema: { type: "string", format: "uuid" },
+            },
+          ],
+          responses: {
+            "200": {
+              description: "Démarches publiées, dans l'ordre d'affichage. Peut être vide.",
+              content: {
+                "application/json": {
+                  schema: {
+                    type: "array",
+                    items: { $ref: "#/components/schemas/PortalProcedure" },
+                  },
+                },
+              },
+            },
+            ...errorResponses("400", "401", "404", "500"),
+          },
+        },
+      },
       "/v1/organizations": {
         get: {
           tags: ["Organisations"],
@@ -599,6 +695,49 @@ export function buildOpenApiDocument(serverUrl: string): Record<string, unknown>
             },
           },
           example: { error: { code: "not_found", message: "Organisation introuvable." } },
+        },
+        Tenant: {
+          type: "object",
+          description:
+            "Collectivité derrière un domaine du portail usagers. Whitelist la plus étroite " +
+            "de cette API : c'est le seul DTO dont la destination est une page **publique**.",
+          required: ["id", "name", "hostname"],
+          properties: {
+            id: { type: "string", format: "uuid", description: "Identifiant de l'organisation." },
+            name: { type: "string", description: "Nom de la collectivité, tel qu'affiché." },
+            slug: { type: ["string", "null"], description: "Identifiant lisible, s'il est défini." },
+            hostname: {
+              type: "string",
+              description: "Domaine tel que résolu (forme normalisée stockée).",
+              examples: ["nantes.edilumen.fr"],
+            },
+          },
+        },
+        PortalProcedure: {
+          type: "object",
+          description:
+            "Démarche telle qu'un usager la voit. Whitelist beaucoup plus étroite que " +
+            "`Procedure` : le paramétrage d'instruction n'y figure pas.",
+          required: ["id", "name"],
+          properties: {
+            id: { type: "string", format: "uuid" },
+            name: { type: "string", description: "Intitulé de la démarche." },
+            short_description: {
+              type: ["string", "null"],
+              description: "Résumé court, pour une liste.",
+            },
+            user_description: {
+              type: ["string", "null"],
+              description:
+                "Descriptif destiné à l'usager. Ni celui-ci ni `short_description` n'est " +
+                "obligatoire au paramétrage : les deux sont servis pour qu'il reste toujours " +
+                "quelque chose à afficher.",
+            },
+            input_duration_minutes: {
+              type: ["integer", "null"],
+              description: "Durée de saisie estimée, en minutes.",
+            },
+          },
         },
         Organization: {
           type: "object",

@@ -21,18 +21,29 @@ import {
   serializeDocumentTemplate,
   serializeDocumentType,
   serializeOrganization,
+  serializePortalProcedure,
   serializeProcedure,
   serializeQuartier,
   serializeSmtpSettings,
+  serializeTenant,
 } from "./_shared/serializers.ts";
 import { buildOrganizationTree, isUuid } from "./_shared/scope.ts";
 import { errorResponse, jsonResponse } from "./_shared/errors.ts";
 import { buildOpenApiDocument } from "./_shared/openapi.ts";
+import { isoDay, isPubliclyPublished } from "./_shared/publication.ts";
 
 const FUNCTION_NAME = "public-api";
 const DOCUMENTS_BUCKET = "procedure-documents";
 const TEMPLATES_BUCKET = "document-templates";
 const SIGNED_URL_TTL_SECONDS = 300;
+
+/**
+ * FQDN en minuscules, au moins deux labels — miroir exact de la contrainte
+ * `organization_domains_hostname_check`. Une entrée qui ne peut pas exister en
+ * base est refusée avant la requête, en 400 : c'est une valeur malformée, pas
+ * un domaine inconnu.
+ */
+const HOSTNAME_RE = /^[a-z0-9]([a-z0-9-]*[a-z0-9])?(\.[a-z0-9]([a-z0-9-]*[a-z0-9])?)+$/;
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -217,6 +228,114 @@ Deno.serve(async (req: Request) => {
 
     const url = new URL(req.url);
     const segments = path.split("/").filter(Boolean); // ex. ["v1","organizations","<id>"]
+
+    // --- /v1/portal/tenant ---
+    // Résolution `domaine → collectivité` pour le portail usagers. C'est la
+    // route qui permet à UNE instance de portail de servir toutes les
+    // collectivités sans en connaître aucune : elle reçoit le nom d'hôte
+    // visité, elle rend le tenant.
+    //
+    // Le nom d'hôte vient d'un navigateur : il est traité comme une donnée
+    // NON FIABLE. Il n'ouvre d'accès à rien — il ne fait que désigner une ligne
+    // de `organization_domains`, elle-même filtrée par le périmètre de la clé.
+    // Un domaine inventé ne résout rien ; un domaine d'une autre collectivité
+    // ne résout que si la clé la couvre déjà, et ne rend alors que ce que cette
+    // collectivité publie de toute façon sur son propre portail.
+    //
+    // Trois refus, UN SEUL message : domaine inconnu, hors périmètre de la clé,
+    // ou organisation obsolète répondent le même 404. Distinguer les cas ferait
+    // de cette route un révélateur de l'existence des collectivités du
+    // référentiel, domaine par domaine.
+    //
+    // Une organisation `obsolete` ne sert plus de portail : le référentiel la
+    // garde pour l'historique des demandes, il n'en fait pas un guichet ouvert.
+    if (segments[0] === "v1" && segments[1] === "portal" && segments[2] === "tenant") {
+      if (segments.length !== 3) {
+        return errorResponse("not_found", "Endpoint inconnu.", corsHeaders);
+      }
+      // Normalisation miroir du trigger `normalize_organization_domain` : la
+      // table stocke la forme canonique, la comparaison se fait donc sur elle.
+      // Le port est retiré — un navigateur de développement visite `:5175`.
+      const rawHostname = (url.searchParams.get("hostname") ?? "").trim().toLowerCase();
+      const hostname = rawHostname.replace(/:\d+$/, "").replace(/\.+$/, "");
+      if (!HOSTNAME_RE.test(hostname) || hostname.length > 253) {
+        return errorResponse("bad_request", "Paramètre hostname invalide.", corsHeaders);
+      }
+
+      const { data: domain, error: domainError } = await admin
+        .from("organization_domains")
+        .select("hostname, organization_id")
+        .eq("hostname", hostname)
+        .maybeSingle();
+      if (domainError) throw domainError;
+      if (!domain || !inScope(domain.organization_id as string)) {
+        return errorResponse("not_found", "Aucune collectivité n'est rattachée à ce domaine.", corsHeaders);
+      }
+
+      const { data: org, error: orgError } = await admin
+        .from("organizations")
+        .select("id, name, slug, status")
+        .eq("id", domain.organization_id)
+        .maybeSingle();
+      if (orgError) throw orgError;
+      if (!org || org.status !== "active") {
+        return errorResponse("not_found", "Aucune collectivité n'est rattachée à ce domaine.", corsHeaders);
+      }
+      return jsonResponse(200, serializeTenant(org, String(domain.hostname)), corsHeaders);
+    }
+
+
+    // --- /v1/portal/procedures ---
+    // Démarches qu'un USAGER doit voir sur le portail de sa collectivité.
+    //
+    // Pourquoi cette route existe alors que `/v1/procedures` sert déjà les
+    // démarches : ce que le portail a besoin de savoir (« qu'est-ce qui est
+    // publié ? ») est une décision du SOCLE, pas un filtre à recopier chez
+    // chaque consommateur. Trois règles la composent — paramétrage `production`,
+    // type `externe`, `visibility` du bloc communication (portail + période) —
+    // et un portail qui les réimplémenterait finirait par diverger, en publiant
+    // trop plutôt que trop peu. `isPubliclyPublished` les écrit une fois.
+    //
+    // Et surtout : `ProcedureDto` porte le paramétrage d'INSTRUCTION
+    // (form_schema, knowledge_base, agent_description, requester_config,
+    // documents). Filtrer côté portail l'aurait déjà fait transiter par un
+    // serveur public. Ici il ne sort pas du Socle.
+    //
+    // `enabled_for` n'est PAS utilisé : il ne rend que les démarches liées par
+    // `organization_procedures`, ce qui exclurait celles qu'une collectivité
+    // possède en propre — c'est-à-dire le cas ordinaire.
+    if (segments[0] === "v1" && segments[1] === "portal" && segments[2] === "procedures") {
+      if (segments.length !== 3) {
+        return errorResponse("not_found", "Endpoint inconnu.", corsHeaders);
+      }
+      const tenantId = url.searchParams.get("tenant_id") ?? "";
+      if (!isUuid(tenantId)) {
+        return errorResponse("bad_request", "Paramètre tenant_id invalide.", corsHeaders);
+      }
+      if (!inScope(tenantId)) {
+        return errorResponse("not_found", "Collectivité introuvable.", corsHeaders);
+      }
+      const { data, error } = await admin
+        .from("procedures")
+        .select(
+          "id, name, short_description, user_description, input_duration_minutes, " +
+            "status, type, communication_config, order_index",
+        )
+        .eq("organization_id", tenantId)
+        .order("order_index", { ascending: true });
+      if (error) throw error;
+      // Jour de référence à PARIS : la fonction tourne en UTC, et une période
+      // qui s'ouvre aujourd'hui doit s'ouvrir à minuit heure française.
+      const today = isoDay(new Date());
+      return jsonResponse(
+        200,
+        ((data ?? []) as Array<Record<string, unknown>>)
+          .filter((row) => isPubliclyPublished(row, today))
+          .map(serializePortalProcedure),
+        corsHeaders,
+      );
+    }
+
     // --- /v1/organizations ---
     if (segments[0] === "v1" && segments[1] === "organizations") {
       if (segments.length === 2) {

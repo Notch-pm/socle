@@ -5,11 +5,13 @@ import {
   serializeDocumentType,
   serializeOrganization,
   serializeOrganizationProcedure,
+  serializePortalProcedure,
   serializeProcedure,
   serializeProcedureDocuments,
   serializeQuartier,
   serializeBranding,
   serializeSmtpSettings,
+  serializeTenant,
 } from "./serializers.ts";
 
 describe("serializers — whitelist stricte (aucune fuite)", () => {
@@ -451,5 +453,97 @@ describe("serializeProcedureDocuments", () => {
     );
     expect(dto.restrict_visibility).toBe(false);
     expect(dto.items[0].visibility).toBe("negative");
+  });
+});
+
+describe("serializeTenant — la whitelist la plus étroite (page publique)", () => {
+  const row = {
+    id: "org-1",
+    name: "Ville de Nantes",
+    slug: "nantes",
+    // Colonnes que `select *` ramènerait, et qu'aucun visiteur du portail n'a
+    // à lire. C'est tout l'intérêt du sérialiseur dédié : le jour où la route
+    // passera à `select *`, rien de ceci ne franchira.
+    address: "2 rue de l'Hôtel de Ville",
+    phone: "0240000000",
+    email: "contact@nantes.fr",
+    metadata: { siret: "12345678900011" },
+    email_sender_name: "Ville de Nantes",
+    status: "active",
+    parent_id: null,
+  };
+
+  it("n'expose que id, name, slug et le domaine résolu", () => {
+    const dto = serializeTenant(row, "nantes.edilumen.fr");
+    expect(dto).toEqual({
+      id: "org-1",
+      name: "Ville de Nantes",
+      slug: "nantes",
+      hostname: "nantes.edilumen.fr",
+    });
+  });
+
+  it("rend le domaine tel que résolu, pas celui demandé", () => {
+    // Le portail normalise son entrée, la base stocke la forme canonique : la
+    // réponse porte celle de la BASE, pour que le portail sache sur quelle clé
+    // le tenant a été trouvé sans refaire la normalisation.
+    expect(serializeTenant(row, "demarches.nantes.fr").hostname).toBe("demarches.nantes.fr");
+  });
+
+  it("tolère un slug absent", () => {
+    expect(serializeTenant({ ...row, slug: null }, "nantes.edilumen.fr").slug).toBeNull();
+  });
+});
+
+describe("serializePortalProcedure — le paramétrage d'instruction ne sort pas", () => {
+  const row = {
+    id: "proc-1",
+    name: "Demande d'acte de naissance",
+    short_description: "En quelques minutes.",
+    user_description: "Adressée au service état civil.",
+    input_duration_minutes: 5,
+    // Tout ce qui suit sert à INSTRUIRE la demande, pas à la proposer. Un
+    // portail public n'a rien à en faire, et le seul fait de le lui transmettre
+    // le publierait.
+    agent_description: "Vérifier la filiation avant validation.",
+    form_schema: { fields: [{ id: "nom" }] },
+    requester_config: { identity: "required" },
+    knowledge_base: { agent: { documents: ["org/notice.pdf"] } },
+    communication_config: { visibility: { portalVisible: true } },
+    documents: { items: [{ id: "tpl-1" }] },
+    keywords: ["état civil"],
+    organization_id: "org-1",
+    category_id: "cat-1",
+  };
+
+  it("n'expose que les cinq champs publics", () => {
+    expect(serializePortalProcedure(row)).toEqual({
+      id: "proc-1",
+      name: "Demande d'acte de naissance",
+      short_description: "En quelques minutes.",
+      user_description: "Adressée au service état civil.",
+      input_duration_minutes: 5,
+    });
+  });
+
+  it("ne laisse fuir aucun élément d'instruction", () => {
+    const dto = serializePortalProcedure(row) as Record<string, unknown>;
+    for (const leak of [
+      "agent_description",
+      "form_schema",
+      "requester_config",
+      "knowledge_base",
+      "communication_config",
+      "documents",
+    ]) {
+      expect(dto).not.toHaveProperty(leak);
+    }
+  });
+
+  it("tolère les descriptifs absents — aucun n'est obligatoire au paramétrage", () => {
+    const dto = serializePortalProcedure({ id: "p", name: "Sans descriptif" });
+    expect(dto.short_description).toBeNull();
+    expect(dto.user_description).toBeNull();
+    expect(dto.input_duration_minutes).toBeNull();
   });
 });

@@ -230,3 +230,50 @@ export interface BrandingDto {
   /** Couleur secondaire, `#rrggbb` minuscule. */
   secondary_color: string | null;
 }
+
+/**
+ * Collectivité derrière un domaine du portail usagers — réponse de
+ * `GET /v1/portal/tenant`.
+ *
+ * Volontairement **minimal**, et distinct d'`OrganizationDto` : c'est le seul
+ * DTO de cette API dont le consommateur est un serveur qui rend des pages
+ * **publiques**. Il porte donc de quoi identifier et nommer la collectivité,
+ * rien de plus — pas d'adresse, pas de téléphone, pas de `metadata`, pas de
+ * réglages d'expéditeur. Ce dont le portail a besoin en plus (charte graphique)
+ * a déjà sa route, avec son héritage résolu.
+ *
+ * `hostname` renvoie le domaine **tel que résolu** (normalisé) : le portail sait
+ * ainsi sur quelle clé le tenant a été trouvé, sans refaire la normalisation.
+ */
+export interface TenantDto {
+  id: string;
+  name: string;
+  slug: string | null;
+  hostname: string;
+}
+
+/**
+ * Démarche telle qu'un USAGER la voit sur le portail — réponse de
+ * `GET /v1/portal/procedures`.
+ *
+ * Whitelist beaucoup plus étroite que `ProcedureDto`, et c'est tout l'objet de
+ * la route : le paramétrage d'une démarche contient de quoi INSTRUIRE
+ * (`agent_description`, `knowledge_base`, `form_schema`, `requester_config`,
+ * `documents`). Rien de tout cela n'a à traverser un portail public — un
+ * consommateur qui filtrerait `ProcedureDto` côté client aurait déjà fait
+ * transiter ce qu'il masque.
+ *
+ * `user_description` **et** `short_description` sont servis : le paramétrage ne
+ * rend obligatoire ni l'un ni l'autre, et une collectivité qui n'a rempli que
+ * l'un des deux doit tout de même avoir quelque chose à afficher.
+ */
+export interface PortalProcedureDto {
+  id: string;
+  name: string;
+  /** Résumé court, pour une liste. */
+  short_description: string | null;
+  /** Descriptif destiné à l'usager. */
+  user_description: string | null;
+  /** Durée de saisie estimée, en minutes. */
+  input_duration_minutes: number | null;
+}

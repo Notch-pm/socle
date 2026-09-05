@@ -12,10 +12,12 @@ import type {
   ProcedureDocumentDto,
   ProcedureDocumentsDto,
   OrganizationDto,
+  PortalProcedureDto,
   OrganizationProcedureDto,
   ProcedureDto,
   QuartierDto,
   SmtpSettingsDto,
+  TenantDto,
 } from "./dto.ts";
 
 /** Ligne DB brute, structure inconnue à la compilation. */
@@ -308,5 +310,36 @@ export function serializeBranding(organizationId: string, row: Row | null): Bran
     logo_white_url: logoWhiteUrl,
     primary_color: primaryColor,
     secondary_color: secondaryColor,
+  };
+}
+
+/**
+ * Collectivité servie par un domaine du portail. Whitelist la plus étroite de
+ * ce fichier — quatre champs — parce que c'est la seule dont la destination est
+ * une page publique : tout champ ajouté ici devient lisible par n'importe quel
+ * visiteur du portail.
+ */
+export function serializeTenant(row: Row, hostname: string): TenantDto {
+  return {
+    id: str(row.id),
+    name: str(row.name),
+    slug: nullableStr(row.slug),
+    hostname,
+  };
+}
+
+/**
+ * Démarche pour le portail usagers. Cinq champs — aucun élément du paramétrage
+ * d'instruction ne franchit. Le filtrage de PUBLICATION est fait en amont
+ * (`isPubliclyPublished`) : ce sérialiseur ne décide pas ce qui est publié, il
+ * décide ce qui est montré.
+ */
+export function serializePortalProcedure(row: Row): PortalProcedureDto {
+  return {
+    id: str(row.id),
+    name: str(row.name),
+    short_description: nullableStr(row.short_description),
+    user_description: nullableStr(row.user_description),
+    input_duration_minutes: nullableNum(row.input_duration_minutes),
   };
 }
