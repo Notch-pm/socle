@@ -1,7 +1,7 @@
 # Modèle de données
 
 > **Public** : développeurs, ops · **Question traitée** : qu'est-ce qui existe en base (tables,
-> contraintes, RLS, fonctions, storage) ? · **Dernière mise à jour** : 2026-08-12
+> contraintes, RLS, fonctions, storage) ? · **Dernière mise à jour** : 2026-09-05
 
 Pour le rôle de Socle dans la gamme et les décisions d'architecture, voir [../CLAUDE.md](../CLAUDE.md)
 et [./architecture.md](./architecture.md). Pour les endpoints, schémas de requête/réponse et la
@@ -144,7 +144,8 @@ aucun endpoint, il décrit ce qui existe **en base**.
   `(published is null) = (published_at is null)` : une publication porte toujours sa date.
 - Contenu : schéma JSON **possédé**, défini par `src/features/portal/portalPage.ts`
   (`{ version: 1, sections: [...] }`, sections typées `recherche` / `demarches` / `actus` /
-  `compte` / `texte`). Les épinglages référencent des `procedures.id`, jamais des libellés.
+  `compte` / `texte` / `footer` — ce dernier porte un fond `#rrggbb`, 1 à 3 colonnes et des
+  sous-blocs `texte`). Les épinglages référencent des `procedures.id`, jamais des libellés.
   Parse tolérant section par section : une section illisible est écartée, les autres sont
   conservées — c'est la page d'accueil d'une collectivité, une section abîmée ne doit pas
   effacer les autres.
@@ -152,8 +153,9 @@ aucun endpoint, il décrit ce qui existe **en base**.
   le catalogue que la page épingle est celui de la racine.
 - **RLS** : lecture `has_org_access(organization_id)` · écriture `is_org_admin(organization_id)`
   (qui court-circuite déjà le super admin) — calqué sur `document_templates`.
-- Consommé à terme par le portail via l'API publique (`published` seulement), en service role
-  hors RLS, borné au périmètre de la clé.
+- Consommé par le portail via `GET /v1/portal/page?tenant_id=&slug=` de l'API publique
+  (contrat 1.8.0 ; `published` seulement, 404 = jamais publiée, références résolues sur les
+  démarches publiées), en service role hors RLS, borné au périmètre de la clé.
 
 ---
 

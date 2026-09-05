@@ -2,7 +2,7 @@
 
 > **Public** : tous (devs Socle, équipes consommatrices) · **Question traitée** : quelles
 > évolutions sont envisagées, et lesquelles ont déjà été livrées ? · **Dernière mise à jour** :
-> 2026-09-01
+> 2026-09-05
 
 Liste d'**intentions**, pas d'engagements — sauf mention explicite d'une date de livraison.
 Née du chantier « Clara délègue ses usagers au Socle » (2026-07-16), enrichie depuis. Pour ce qui
@@ -108,6 +108,77 @@ existe réellement aujourd'hui : [architecture.md](./architecture.md),
   signalement des inconnus). Écarté : Word découpe volontiers une variable en plusieurs fragments
   XML — une détection naïve signalerait des variables absentes qui sont bien là — et `.doc`
   (binaire, non zippé) resterait hors de portée.
+
+## Portail usagers (Nora) & site de démarches
+
+Le portail usagers est un dépôt à part (`Notch-pm/Nora`, README en tête) ; sa feuille de route
+vit ici parce que presque chaque étape commence par une capacité du Socle (une table, une route
+d'API, un écran de paramétrage). Ordre de bataille tel qu'arrêté le 2026-09-05 — chaque étape
+suppose la précédente.
+
+### Livré
+
+- **2026-09-05 — Résolution de tenant par domaine.** `organization_domains` (unique sur toute la
+  plateforme), écran « Domaines du portail » (admin et superadmin), `GET /v1/portal/tenant`,
+  `GET /v1/portal/procedures` (contrat 1.7.0). Nora : instance unique sans base de données,
+  `portal-api` (edge function) qui seule détient la clé du Socle, développement local par
+  `<label>.localhost`.
+- **2026-09-05 — Éditeur du site de démarches** (« interface typée CMS ») dans le Socle :
+  `portal_pages` (`draft` autosauvegardé / `published` explicite — sauvegarder n'est pas
+  publier), schéma possédé versionné, palette / canevas / inspecteur, glisser-déposer avec ombre
+  de destination, zoom, aperçu par appareil, retrait de bloc, catalogue épinglé avec sa visibilité
+  portail. Blocs : recherche, grille de démarches, espace usager (décoratif), bandeau texte,
+  contact et horaires (preset), pied de page (pleine largeur, fond, 1 à 3 colonnes).
+- **2026-09-05 — Rendu au portail** : `GET /v1/portal/page` (1.8.0, pied de page en 1.9.0),
+  composition publiée rendue par Nora avec recherche réelle sur le catalogue, charte graphique de
+  la collectivité injectée (`/v1/organizations/{id}/branding`, décorative : jamais bloquante).
+
+### Envisagé, dans l'ordre
+
+1. **Les démarches « pour de vrai ».** Aujourd'hui le portail liste les démarches ; il doit les
+   *servir* : une page par démarche (description, pièces attendues, délai, coût, catégorie —
+   tout existe déjà dans `Procedure`), puis le **formulaire** rendu depuis `form_schema` (le
+   Socle en est la source de vérité, Nora en fera un rendu de référence comme `FormPreview`), et
+   la **création de la demande** — vers Iris (traitement) via API, avec un accusé à l'usager.
+   Prérequis Socle : une route de démarche détaillée sous `/v1/portal/*` (le contrat portail
+   reste séparé du contrat référentiel), et le statut de la demande consultable.
+2. **Multilingue.** Le Socle porte déjà `translations` sur les démarches (JSON possédé, transmis
+   tel quel). À faire : la langue de l'interface du portail (français par défaut, sélecteur), les
+   textes des sections de la page composée (le schéma `PortalPage` gagnera une couche par langue,
+   version 2 du schéma — parse tolérant oblige, la version 1 restera lisible), et les démarches
+   dans la langue choisie avec repli sur le français.
+3. **Les autres templates.** L'onglet « Thème » (grisé) : gabarits de page et variantes de mise en
+   page au-delà de la composition libre ; d'autres pages que l'accueil (`portal_pages.slug` est
+   prêt : « Contact », « Mentions légales », « Accessibilité » — obligatoires pour un site
+   public) ; le bloc « Actualités » (grisé) quand une source d'actualités existera au Socle.
+4. **Démarches hors compte.** Une demande sans espace usager : identité saisie dans le
+   formulaire, confirmation par courriel (lien de suivi signé, à durée limitée), pas de mot de
+   passe. C'est le parcours qui fait vivre le portail dès le premier jour.
+5. **Démarches avec compte.** L'espace usager derrière le bloc « Espace usager » : mes demandes,
+   leur état, mes informations. Authentification portée par Nora (projet Supabase du portail) et
+   **rattachée au référentiel usagers du Socle** (`contacts`, via `contacts-api`) — le compte
+   portail est une clé externe du contact (`contact_external_references`, source `portail_citoyen`,
+   déjà prévue), pas une seconde fiche.
+6. **Création de compte.** Inscription par courriel avec validation, réinitialisation de mot de
+   passe, données minimales (RGPD : finalité, durée, droit d'accès et d'effacement à documenter),
+   rapprochement d'une demande hors compte faite avec le même courriel.
+7. **Les échanges.** Fil de messages entre l'usager et l'agent sur une demande (demande de
+   complément, réponse, notification par courriel via le SMTP hérité de la collectivité). Le fil
+   vit avec la demande (Iris) ; le portail en est une vue.
+8. **Les pièces jointes.** Dépôt des pièces demandées par la démarche (`document_types`, déjà
+   paramétrées par démarche) : formats et tailles bornés, stockage privé, analyse antivirus à
+   cadrer, remplacement d'une pièce refusée, et le même mécanisme pour les pièces jointes aux
+   échanges.
+9. **FranceConnect (?)** Identification par FranceConnect / FranceConnect+ pour les démarches qui
+   exigent une identité vérifiée. Question ouverte : habilitation à obtenir par la collectivité
+   ou par l'éditeur, périmètre des données restituées, cohabitation avec les comptes locaux.
+   À instruire avant de coder.
+
+Transverse, à ne pas perdre en route : **accessibilité RGAA** et mentions obligatoires d'un site
+public, **domaines réels** (retirer `PORTAL_DEV_DOMAIN_SUFFIX` de la fonction déployée dès le
+premier), **lien « Prévisualiser » vers le vrai portail** depuis l'éditeur (aujourd'hui l'aperçu
+est le canevas sans son chrome), sortie de l'éditeur du shell de l'app, et les points d'ergonomie
+notés dans `architecture.md` § 7.
 
 ## Frontend Socle
 

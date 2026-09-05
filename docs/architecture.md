@@ -2,7 +2,7 @@
 
 > **Public** : développeuses et développeurs (humains et agents IA) travaillant sur Socle ·
 > **Question traitée** : comment le système est-il construit, et pourquoi · **Dernière mise à
-> jour** : 2026-09-01
+> jour** : 2026-09-05
 
 Ce document explique les frontières du système et les décisions qui les justifient. Il ne liste
 ni les tables (→ [`./data-model.md`](./data-model.md)), ni les endpoints (→ les OpenAPI, publiées
@@ -103,6 +103,7 @@ Il n'y a **pas** de route catch-all `*` (constat en §7).
 | `/superadmin/organisations/:orgId` | `OrgSettingsPage` |
 | `/superadmin/organisations/:orgId/demarches/nouveau` | `ProcedureEditorPage variant="superadmin"` |
 | `/superadmin/organisations/:orgId/demarches/:procId` | idem |
+| `/superadmin/organisations/:orgId/portail` | `PortalEditorPage variant="superadmin"` — éditeur du site de démarches (pleine hauteur dans le shell) |
 
 **Principe structurant : une organisation racine = un client = une entrée de menu = une
 `OrgSettingsPage`.** Aucune vue ne fond tous les clients de la plateforme dans un même arbre —
@@ -133,6 +134,7 @@ nombre de clés plateforme actives.
 | `/categories` | `CategoriesPage` |
 | `/types-pieces` | `DocumentTypesPage` |
 | `/documents` | `DocumentsPage` (modèles à variables) |
+| `/site-de-demarches` (`?org=<rootId>`) | `PortalEditorPage variant="admin"` — éditeur du site de démarches (pleine hauteur dans le shell) |
 | `/quartiers` | `QuartiersPage` |
 | `/utilisateurs` | `UtilisateursPage` |
 
@@ -201,9 +203,9 @@ testée » par feature) plutôt que dupliqué ici.
 
 ## 5. APIs & contrats publics
 
-Socle est le référentiel central de la gamme : les autres produits (Ariane, Clara, Iris, portail
-citoyen à terme) ne redéfinissent pas les organisations, démarches, quartiers ou usagers — ils les
-**consomment**. Cette consommation passe par deux Edge Functions Deno qui font autorité :
+Socle est le référentiel central de la gamme : les autres produits (Ariane, Clara, Iris, et le
+portail usagers Nora) ne redéfinissent pas les organisations, démarches, quartiers ou usagers — ils
+les **consomment**. Cette consommation passe par deux Edge Functions Deno qui font autorité :
 `public-api` (référentiel, lecture seule) et `contacts-api` (usagers, lecture/écriture, scope de
 clé dédié). Les deux authentifient par clé API (`api_keys`, secret haché SHA-256, jamais en
 clair) et lisent avec la **service role** — donc **hors RLS** : le périmètre par organisation est
@@ -226,6 +228,15 @@ Trois garanties structurent ce contrat public :
 Garanties d'isolation, scopes, clé plateforme et politique de compatibilité pour les équipes
 consommatrices → [`./integration.md`](./integration.md).
 
+**Le portail usagers (Nora) est le consommateur le plus contraint** : une instance unique, sans
+base de données, servie sous le domaine de chaque collectivité. Le Socle lui résout le domaine
+visité (`GET /v1/portal/tenant?hostname=`, table `organization_domains`, `hostname` unique sur
+toute la plateforme), lui sert le catalogue déjà filtré (`/v1/portal/procedures`), la composition
+**publiée** de la page d'accueil (`/v1/portal/page`, table `portal_pages` — éditée dans le Socle
+par l'écran « Site de démarches », voir `CLAUDE.md`) et la charte résolue. Nora ne connaît que ces
+routes ; la traduction vers son propre vocabulaire se fait chez lui, en un seul endroit, et il
+ignore toute section qu'il ne sait pas rendre — le Socle peut apprendre un bloc avant le portail.
+
 ## 6. Journal des décisions
 
 | Date | Décision | Pourquoi |
@@ -241,6 +252,9 @@ consommatrices → [`./integration.md`](./integration.md).
 | 2026-08-12 | Refonte du corpus documentaire : un document = un public + une question (`README.md`, `CLAUDE.md`, `docs/architecture.md`, `docs/data-model.md`, `docs/integration.md`, `docs/operations.md`, `docs/api-changelog.md`, `docs/roadmap.md`) ; anciens `ARCHITECTURE.md` / `DATA_MODEL.md` / `UI_ARCHITECTURE.md` archivés sous `docs/archive/`. | Les trois anciens documents contredisaient l'état réel du système (notamment le modèle de droits) — une doc fausse est pire qu'une doc absente. |
 | 2026-08-12 | Durcissement du contrat de clés et traçabilité : `public-api` vérifie le scope `read` (403 sinon), `EXECUTE` d'`org_subtree_ids` réservé à `service_role`, historique des migrations rapatrié dans `supabase/migrations/`, baseline complète `supabase/schema.sql` générée (`db dump`), types TS régénérés ; les deux APIs redéployées. | Aligner le comportement réel sur le contrat documenté (le modèle de scopes n'était vérifié que par `contacts-api`), et redonner au repo la trace du schéma. |
 | 2026-08-23 | Le serveur d'envoi (SMTP) **s'hérite** le long de la hiérarchie : une organisation utilise le relais de l'ancêtre le plus proche qui en a un propre, sauf si elle en déclare un elle-même (`smtp_settings.inherit_parent`). La résolution se fait **à la lecture** (`resolve_smtp_settings`), sans recopie dans les enfants. | Une collectivité paramètre son relais une fois, à la racine, et toutes ses entités en bénéficient — y compris quand elle le change ensuite. Recopier la configuration dans chaque enfant aurait créé autant de copies à resynchroniser (et à désynchroniser silencieusement). |
+| 2026-09-05 | Le portail usagers (Nora) est une instance unique **sans base de données** : le Socle résout le domaine visité (`organization_domains`, `hostname` unique globalement) et sert catalogue, composition publiée et charte par `public-api` (tag « Portail »). Le portail ne connaît que ces routes, jamais la structure interne du Socle. | Ajouter une collectivité = une ligne au Socle, aucun déploiement ; un seul référentiel, aucune copie à resynchroniser ; un renommage de colonne au Socle ne remonte pas jusqu'aux écrans du portail (traduction en un seul endroit, côté Nora). Le nom d'hôte est une donnée non fiable : il est déterminé côté serveur (`Origin`), et inconnu / hors périmètre / obsolète reçoivent le même 404. |
+| 2026-09-05 | Composition de la page d'accueil dans `portal_pages` : deux colonnes `draft` (autosauvegardé) et `published` (publication explicite), une ligne par `(organization_id, slug)`, schéma JSON possédé et versionné, parse tolérant section par section. **Sauvegarder n'est pas publier.** | La maquette distingue exactement deux états et le public ne lira jamais que `published` ; la séparation est structurelle (deux colonnes, deux mutations) et non une option — une autosauvegarde ne peut pas publier par accident. Une table de versions aurait été prématurée. |
+| 2026-09-05 | `supabase/config.toml` déclare `verify_jwt` **fonction par fonction**, et un déploiement passe toujours par ce fichier. | Un redéploiement de `public-api` sans lui a remis le défaut `verify_jwt = true` et coupé tous les consommateurs (Iris, Clara, `/api-doc`) le temps d'un redéploiement. Le fichier gouverne le déploiement : il n'est pas de la documentation. |
 
 ## 7. Risques acceptés & dette
 
@@ -260,6 +274,17 @@ Constats factuels au 2026-08-12, à ne pas masquer :
   sélecteur intégré au formulaire (`CategoryFormDialog`, `DocumentTypeFormDialog`). C'est le point
   ouvert le plus structurant côté frontend.
 - **`npm run lint` = `tsc -b` seul** : il n'y a ni ESLint ni Prettier configurés dans le projet.
+
+Ajoutés le 2026-09-05 (éditeur du site de démarches) :
+
+- **L'éditeur vit dans le shell** de l'app (barre haute + rail) alors qu'il a son propre shell
+  plein écran : deux barres superposées. À sortir du `AppShell` / `SuperAdminLayout`.
+- **Ergonomie de la publication** : le bouton de confirmation « Publier » prend le style
+  destructif par défaut de l'`AlertDialogAction` (rouge), et la ligne d'état continue de dire
+  « brouillon enregistré » après une publication.
+- **Les tests de composants ne pilotent pas dnd-kit** (`PointerSensor`) : le glisser-déposer
+  n'est couvert qu'à travers sa logique pure (`portalReorder.test.ts`) et le placement de l'ombre
+  (`PortalCanvas.test.tsx`) ; le geste lui-même se vérifie à la main.
 
 ## 8. Voir aussi
 

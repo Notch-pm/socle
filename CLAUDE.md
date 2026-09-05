@@ -76,7 +76,8 @@ Projet Supabase : `qhrokbkyxgcvkbpmbmna`.
 1. **App par organisation** (`AppShell`, routes protégées par `ProtectedRoute`) — pour les
    utilisateurs et **administrateurs d'organisation**. Routes : `/`, `/organisations`,
    `/demarches`, `/categories`, `/types-pieces`, `/quartiers`, `/utilisateurs`,
-   `/consommation-ia` (consultation seule).
+   `/consommation-ia` (consultation seule), `/documents`, `/site-de-demarches` (éditeur du
+   portail usagers — voir feature).
 2. **Zone super admin** (`SuperAdminLayout`, protégée par `SuperAdminRoute`) — routes
    `/superadmin/*`. Réservée à `global_role = 'super_admin'`.
 3. **Routes publiques** (hors shell) : `/login`, `/mot-de-passe-oublie`, `/activer-compte`,
@@ -136,6 +137,8 @@ exécutables par `authenticated` : le RLS les évalue avec les droits de l'appel
   `contact_relations` (référentiel des usagers — voir feature).
 - `quartiers` (découpage du territoire par racine, polygones PostGIS — voir feature).
 - `document_templates` (catalogue de documents à variables par racine, fichiers dans un bucket privé — voir feature).
+- `organization_domains` (domaines du portail usagers, `hostname` **unique sur toute la plateforme** — voir feature « site de démarches »).
+- `portal_pages` (composition des pages du portail, `draft` autosauvegardé / `published` explicite — voir feature « site de démarches »).
 
 Types TS générés dans `src/types/database.types.ts` — **ne pas éditer à la main**,
 régénérer depuis le schéma live (Supabase MCP `generate_typescript_types` / CLI).
@@ -564,6 +567,88 @@ avec **`verify_jwt = false`** (l'auth est portée par la fonction, pas par la pa
   `ApiKeyFormDialog.test.tsx`). `created_by` = `profile.id`.
 - Logique pure **testée** : `_shared/{serializers,scope,errors,openapi}.ts`,
   `superadmin/organizations/apiKeys.ts` (génération/hachage, `apiKeyStatus`, `countActiveApiKeys`).
+
+## Feature : site de démarches — portail usagers (`organization_domains`, `portal_pages`)
+
+Le portail usagers est **Nora** (dépôt `Notch-pm/Nora`) : une instance unique, **sans base de
+données**, qui sert toutes les collectivités. Elle demande au Socle à qui appartient le domaine
+visité, puis ce qu'elle doit afficher. Le Socle est donc la source de vérité de trois choses : le
+**domaine** (`organization_domains`), le **catalogue public** (`/v1/portal/procedures`) et la
+**composition de la page d'accueil** (`portal_pages`), éditée ici, dans l'écran « Site de
+démarches ». Ajouter une collectivité au portail = une ligne de domaine, aucun déploiement.
+
+- **Domaines** (`organization_domains`) : `hostname` **unique sur toute la plateforme** (un domaine
+  désigne exactement une collectivité — c'est l'invariant de toute la résolution de tenant),
+  normalisé par trigger à l'écriture, au plus un `is_primary` par organisation, **pas** restreint
+  à une racine (une sous-organisation peut tenir son guichet). Écran `DomainsSection` : onglet
+  « Domaines du portail » de l'éditeur d'organisation (admin) et section `?section=domaines`
+  d'`OrgSettingsPage` (superadmin). ⚠️ Un doublon peut appartenir à une organisation que
+  l'administrateur n'a pas le droit de voir : l'erreur ne dit pas laquelle. `localhost` est
+  refusé par CHECK — le développement de Nora simule un domaine réel (`<label>.localhost` →
+  `<label>.<PORTAL_DEV_DOMAIN_SUFFIX>`).
+- **Composition** (`portal_pages`, une ligne par `(organization_id, slug)`, racine uniquement) :
+  deux colonnes, **`draft`** et **`published`**. ⚠️ **Sauvegarder n'est pas publier** — et c'est
+  structurel, pas une option : le brouillon est **autosauvegardé** (`useSaveDraft`, 800 ms après
+  la dernière modification, n'écrit que `draft`, flush au démontage et au `beforeunload`) ; la
+  publication est un geste explicite (`usePublishPortalPage`, `AlertDialog` qui ne se ferme que
+  sur succès — un refus RLS doit rester visible) ; « Annuler » = `draft := published`. Le portail
+  ne sert **que** `published` (404 = jamais publiée). Test dédié : une rafale de modifications ne
+  produit qu'une écriture, jamais sur `published`.
+- **Schéma possédé** (`src/features/portal/portalPage.ts`, motif `formSchema.ts`) :
+  `{ version: 1, sections }`, kinds `recherche` / `demarches` / `actus` / `compte` / `texte` /
+  `footer`. Parse **tolérant section par section** (une section illisible est écartée, les autres
+  restent — une page d'accueil de collectivité ne s'efface pas pour un bloc abîmé) ; repli total
+  sur `defaultPortalPage()` si ce n'est pas une page. Les épinglages et raccourcis référencent des
+  **`procedures.id`**, jamais des libellés. ⚠️ Les couleurs (`footer.background`) n'entrent que
+  sous la forme `#rrggbb` : ce sont des valeurs CSS injectées dans une page publique — on écarte,
+  on ne nettoie pas. « Contact et horaires » n'est pas un kind mais un **preset** de `texte`
+  composé depuis `organizations.address / phone / email` (pas de colonne d'horaires : l'agent les
+  tape).
+- **Catalogue** (`catalogue.ts`) : la liste d'épinglage montre **tout** le catalogue de la racine
+  avec sa visibilité portail (`brouillon` / `interne` / `masquee` / `hors-periode` / `visible`,
+  calculée par les règles existantes de `communication.ts`) — on surface, on ne masque pas ;
+  le canevas atténue les démarches que le portail n'affichera pas.
+- **Éditeur** (`PortalEditorPage` → `PortalEditor` → `editor/*`) : entrée de menu « Site de
+  démarches » (`/site-de-demarches`, `?org=` quand plusieurs racines) et
+  `/superadmin/organisations/:orgId/portail`. Palette / canevas / inspecteur, aperçu = le canevas
+  sans son chrome, Bureau / Tablette / Mobile (`device.ts`, largeur de page fixe mise à l'échelle
+  par CSS `zoom` — pas `transform`, pour que le conteneur défilant suive ; ajustement à la fenêtre
+  et Ctrl/⌘ + molette). Glisser-déposer dnd-kit avec la logique pure dans `portalReorder.ts` :
+  **`dropIndex`** est le nombre unique que partagent l'ombre affichée et le dépôt (ce qu'on voit
+  est là où le bloc va) ; `transition: null` + `dropAnimation={null}` (aucun effet de « retour »
+  après dépôt) ; un dépôt sur sa propre place ne remonte pas au parent (sinon une sauvegarde
+  partirait pour rien). **Retirer un bloc** : bouton « Supprimer la section » de l'inspecteur
+  (hors du panneau grisé des actualités — on doit pouvoir retirer ce qu'on ne peut pas éditer),
+  corbeille de la pastille du bloc (qui **annule le zoom** de la page pour rester cliquable), ou
+  Suppr / Retour arrière hors d'un champ. Sans confirmation : c'est un brouillon.
+- **Pied de page** (`footer`) : pleine largeur (annule les marges de la page), fond configurable
+  (défaut sombre `#0f1f18`, texte clair ou sombre selon la luminance — `isDarkColor`), 1 à 3
+  colonnes de sous-blocs `texte`. **En dernière position, il EST le bas de la page** : pas de
+  marge sous lui, « Ajouter une section » passe au-dessus, et `appendIndex` glisse tout bloc
+  ajouté « en fin de page » au-dessus de lui (un second pied de page s'ajoute après).
+- **Grisé, pas caché** : le bloc « Actualités » (palette et inspecteur) et les vues « Contenus »
+  / « Thème » — aucune route, `aria-disabled`, « Bientôt disponible ». Le parse accepte quand
+  même `actus` : une composition importée plus tard ne sera pas amputée.
+- **API** (tag « Portail » de `public-api`, contrat 1.7.0 → 1.9.0) : `GET /v1/portal/tenant?hostname=`
+  (**même 404** pour inconnu / hors périmètre / obsolète : on ne renseigne pas sur l'existence des
+  collectivités), `GET /v1/portal/procedures?tenant_id=` (déjà filtrées : `production`, `externe`,
+  `portalVisible`, dans leur période **heure de Paris**), `GET /v1/portal/page?tenant_id=&slug=`
+  (`published` seulement, références résolues sur les démarches publiées). La charte vient de
+  `GET /v1/organizations/{id}/branding` (résolue). ⚠️ `supabase/config.toml` déclare
+  `verify_jwt = false` pour `public-api` : un déploiement sans ce fichier remet le défaut `true`
+  et coupe **tous** les consommateurs (incident du 2026-09-05).
+- Code : `src/features/portal/` — `portalPage.ts`, `portalReorder.ts`, `catalogue.ts` (purs,
+  **testés**), `usePortalPage.ts` (`usePortalPage`, `useEnsurePortalPage`, `useSaveDraft`,
+  `usePublishPortalPage`, `useDiscardDraft`), `PortalEditorPage.tsx` (chargement, autosave,
+  publier / annuler — **testé**), `PortalEditor.tsx` (shell, état du glisser), `editor/`
+  (`PortalCanvas`, `SectionBlock`, `SectionInspector`, `SectionPalette`, `ProcedurePickList`,
+  `sections/*` — l'implémentation **de référence** du rendu de chaque kind ; Nora est le rendu
+  réel). `src/components/ui/segmented-control.tsx` (promu pour l'éditeur ; `TabButton` /
+  `ModeButton` restent à y rallier). Domaines : `src/features/organizations/{organizationDomains.ts,
+  useOrganizationDomains.ts, DomainsSection.tsx}` (testés). Migrations `organization_domains`,
+  `portal_pages`.
+- Suite prévue (démarches « pour de vrai », multilingue, comptes usagers, échanges, pièces
+  jointes, FranceConnect…) : `docs/roadmap.md`, section « Portail usagers ».
 
 ## Feature : référentiel des usagers (`contacts`)
 
