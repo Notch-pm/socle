@@ -36,6 +36,8 @@ export interface SectionInspectorProps {
   /** Pour pré-remplir un sous-bloc « Contact et horaires » dans un pied de page. */
   contact: ContactSource;
   onChange: (section: PortalSection) => void;
+  /** Retire la section de la page. Sans confirmation : c'est un brouillon, « Annuler » le rend. */
+  onRemove: () => void;
   onClose: () => void;
 }
 
@@ -50,7 +52,7 @@ const TEXT_ALIGN_OPTIONS: { value: TextAlign; label: string }[] = [
  * `PortalSection` complet à chaque frappe — le parent l'enregistre via
  * `replaceSection`.
  */
-export function SectionInspector({ section, index, total, catalogue, contact, onChange, onClose }: SectionInspectorProps) {
+export function SectionInspector({ section, index, total, catalogue, contact, onChange, onRemove, onClose }: SectionInspectorProps) {
   const isActus = section.kind === "actus";
 
   return (
@@ -112,6 +114,22 @@ export function SectionInspector({ section, index, total, catalogue, contact, on
             Bientôt disponible — les actualités ne sont pas encore éditables.
           </p>
         ) : null}
+      </div>
+
+      {/* Hors du bloc grisé des actualités : on doit pouvoir retirer un bloc
+          qu'on ne peut pas éditer. Et hors du canevas : la pastille du bloc se
+          réduit avec la page, ce bouton non. */}
+      <div className="border-t border-border px-4 py-3">
+        <Button
+          type="button"
+          variant="outline"
+          size="sm"
+          onClick={onRemove}
+          className="w-full text-destructive hover:border-destructive hover:bg-destructive/5 hover:text-destructive"
+        >
+          <Trash2 />
+          Supprimer la section
+        </Button>
       </div>
     </div>
   );

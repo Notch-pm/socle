@@ -77,6 +77,17 @@ export function insertSection(
 }
 
 /**
+ * Où va un bloc ajouté « en fin de page » (clic dans la palette, dépôt hors de
+ * toute zone) : en fin de liste — sauf quand la page se termine par un pied de
+ * page, qui reste dernier. Un nouveau pied de page, lui, s'ajoute après.
+ */
+export function appendIndex(sections: PortalSection[], section: PortalSection): number {
+  const last = sections[sections.length - 1];
+  if (last?.kind === "footer" && section.kind !== "footer") return sections.length - 1;
+  return sections.length;
+}
+
+/**
  * Déplace une section existante vers un index de destination exprimé sur la
  * liste AVANT retrait — celui que `dropIndex` rend et que l'ombre affiche. Le
  * retrait décale les suivants d'un cran, d'où la correction. Ids inconnus ou

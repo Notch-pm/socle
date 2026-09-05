@@ -20,6 +20,10 @@ export interface SectionBlockProps {
   selected: boolean;
   isFirst: boolean;
   isLast: boolean;
+  /** Pied de page en dernière position : il épouse le bas de la page, sans marge sous lui. */
+  flush: boolean;
+  /** Échelle d'affichage de la page — la pastille de sélection l'annule pour rester lisible. */
+  scale: number;
   /** En aperçu : aucun chrome, aucun contour, aucune interaction. */
   previewing: boolean;
   onSelect: () => void;
@@ -44,6 +48,8 @@ export function SectionBlock({
   selected,
   isFirst,
   isLast,
+  flush,
+  scale,
   previewing,
   onSelect,
   onShift,
@@ -80,7 +86,12 @@ export function SectionBlock({
       )}
     >
       {selected && !previewing ? (
-        <div className="absolute -top-3.5 left-2.5 z-10 flex items-center gap-0.5 rounded-full bg-primary py-1 pl-2.5 pr-1 text-primary-foreground shadow-socle-md">
+        <div
+          // La page est réduite pour tenir dans le canevas ; ses commandes, non.
+          // À 36 %, une corbeille de 22 px en ferait 8 — inutilisable.
+          style={{ zoom: 1 / scale }}
+          className="absolute -top-3.5 left-2.5 z-10 flex items-center gap-0.5 rounded-full bg-primary py-1 pl-2.5 pr-1 text-primary-foreground shadow-socle-md"
+        >
           <span aria-hidden="true" className="flex items-center justify-center text-primary-foreground/90">
             <GripVertical className="size-3" />
           </span>
@@ -123,7 +134,7 @@ export function SectionBlock({
         </div>
       ) : null}
 
-      <SectionContent section={section} device={device} catalogue={catalogue} />
+      <SectionContent section={section} device={device} catalogue={catalogue} flush={flush} />
     </div>
   );
 }
@@ -132,10 +143,12 @@ function SectionContent({
   section,
   device,
   catalogue,
+  flush,
 }: {
   section: PortalSection;
   device: Device;
   catalogue: PortalCatalogueEntry[];
+  flush: boolean;
 }) {
   switch (section.kind) {
     case "recherche":
@@ -149,6 +162,6 @@ function SectionContent({
     case "texte":
       return <TexteSection section={section} />;
     case "footer":
-      return <FooterSection section={section} device={device} />;
+      return <FooterSection section={section} device={device} flush={flush} />;
   }
 }

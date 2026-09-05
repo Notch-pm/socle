@@ -24,6 +24,7 @@ import {
   type PortalSection,
 } from "@/features/portal/portalPage";
 import {
+  appendIndex,
   dropIndex,
   insertSectionAt,
   moveSectionToIndex,
@@ -114,6 +115,30 @@ export function PortalEditor({
     onChange({ ...page, sections: next });
   }
 
+  function handleRemove(id: string) {
+    setSections(removeSection(sections, id));
+    setSelectedId((current) => (current === id ? null : current));
+  }
+
+  // Suppr ou Retour arrière retire le bloc sélectionné — sauf quand on tape
+  // dans un champ de l'inspecteur, où ces touches gardent leur sens.
+  React.useEffect(() => {
+    if (!selectedId || previewing) return;
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key !== "Delete" && event.key !== "Backspace") return;
+      const target = event.target as HTMLElement | null;
+      const tag = target?.tagName;
+      if (tag === "INPUT" || tag === "TEXTAREA" || tag === "SELECT" || target?.isContentEditable) return;
+      event.preventDefault();
+      handleRemove(selectedId);
+    };
+    window.addEventListener("keydown", onKeyDown);
+    return () => window.removeEventListener("keydown", onKeyDown);
+    // `handleRemove` lit `sections` du rendu courant : l'effet se réabonne à
+    // chaque changement de sélection ou de page, c'est voulu.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selectedId, previewing, sections]);
+
   /** Où le bloc tomberait si on le lâchait maintenant — `null` : nulle part. */
   function targetIndex(event: DragOverEvent | DragEndEvent): number | null {
     const { active, over } = event;
@@ -148,7 +173,7 @@ export function PortalEditor({
     if (data?.palette && data.kind) {
       const section = sectionFromPaletteKind(data.kind, contact);
       // Lâché hors de toute zone : en fin de page, comme un clic.
-      setSections(insertSectionAt(sections, section, index ?? sections.length));
+      setSections(insertSectionAt(sections, section, index ?? appendIndex(sections, section)));
       setSelectedId(section.id);
       return;
     }
@@ -160,7 +185,7 @@ export function PortalEditor({
   }
 
   function handleAddFromPalette(section: PortalSection) {
-    setSections(insertSectionAt(sections, section, sections.length));
+    setSections(insertSectionAt(sections, section, appendIndex(sections, section)));
     setSelectedId(section.id);
   }
 
@@ -244,10 +269,7 @@ export function PortalEditor({
             dropLabel={drag?.label ?? null}
             onSelect={setSelectedId}
             onShift={(id, direction) => setSections(shiftSection(sections, id, direction))}
-            onRemove={(id) => {
-              setSections(removeSection(sections, id));
-              setSelectedId((current) => (current === id ? null : current));
-            }}
+            onRemove={handleRemove}
             onOpenPalette={() => setPaletteOpen(true)}
           />
 
@@ -268,6 +290,7 @@ export function PortalEditor({
               catalogue={catalogue}
               contact={contact}
               onChange={(next) => setSections(replaceSection(sections, next))}
+              onRemove={() => handleRemove(selected.id)}
               onClose={() => setSelectedId(null)}
             />
           )}

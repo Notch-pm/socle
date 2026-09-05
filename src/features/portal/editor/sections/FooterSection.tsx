@@ -8,7 +8,16 @@ import { effectiveColumns, type Device } from "../device";
  * répartis sur ses colonnes dans l'ordre. Le texte se lit en clair ou en
  * sombre selon la luminance du fond.
  */
-export function FooterSection({ section, device }: { section: FooterSectionData; device: Device }) {
+export function FooterSection({
+  section,
+  device,
+  flush = false,
+}: {
+  section: FooterSectionData;
+  device: Device;
+  /** Dernier bloc de la page : annule aussi le rembourrage du bas, le fond touche le bord. */
+  flush?: boolean;
+}) {
   const dark = isDarkColor(section.background);
   const cols = effectiveColumns(section.columns, device);
   return (
@@ -17,6 +26,7 @@ export function FooterSection({ section, device }: { section: FooterSectionData;
         "px-6 py-7",
         // Rembourrage du bloc (18 px) + marge de la page (24 px bureau, 14 px mobile).
         device === "mobile" ? "-mx-[32px]" : "-mx-[42px]",
+        flush && "-mb-[18px]",
         dark ? "text-white" : "text-foreground",
       )}
       style={{ backgroundColor: section.background }}

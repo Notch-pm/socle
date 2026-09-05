@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { createSection, type PortalSection } from "./portalPage";
 import {
+  appendIndex,
   dropIndex,
   insertSection,
   moveSection,
@@ -51,6 +52,23 @@ describe("insertSection", () => {
     const original = page();
     insertSection(original, { ...createSection("compte"), id: "n" }, null);
     expect(ids(original)).toEqual(["a", "b", "c"]);
+  });
+});
+
+describe("appendIndex — « en fin de page » respecte un pied de page final", () => {
+  it("ajoute en fin de liste quand la page ne finit pas par un pied de page", () => {
+    expect(appendIndex(page(), createSection("compte"))).toBe(3);
+    expect(appendIndex([], createSection("compte"))).toBe(0);
+  });
+
+  it("glisse un bloc au-dessus du pied de page final, qui reste dernier", () => {
+    const withFooter = [...page(), { ...createSection("footer"), id: "f" }];
+    expect(appendIndex(withFooter, createSection("compte"))).toBe(3);
+  });
+
+  it("ajoute un second pied de page après le premier", () => {
+    const withFooter = [...page(), { ...createSection("footer"), id: "f" }];
+    expect(appendIndex(withFooter, createSection("footer"))).toBe(4);
   });
 });
 

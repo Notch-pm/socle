@@ -80,6 +80,23 @@ export function PortalCanvas({
   const [zoom, setZoom] = React.useState<number | null>(null);
   const { setNodeRef: setListRef } = useDroppable({ id: CANVAS_DROP_ID, disabled: previewing });
 
+  // Un pied de page en dernière position est le bas de la page : plus de
+  // marge sous lui, et « Ajouter une section » passe au-dessus. Sauf pendant
+  // qu'on glisse un bloc sous lui — l'ombre a besoin de la place.
+  const endsWithFooter = sections[sections.length - 1]?.kind === "footer";
+  const flushFooter = endsWithFooter && dropIndex !== sections.length;
+
+  const addButton = previewing ? null : (
+    <button
+      type="button"
+      onClick={onOpenPalette}
+      className="flex h-14 items-center justify-center gap-2 rounded-xl border-[1.5px] border-dashed border-border text-[13.5px] font-semibold text-muted-foreground transition-colors hover:border-primary hover:bg-primary/[0.04] hover:text-primary"
+    >
+      <Plus className="size-4" />
+      Ajouter une section
+    </button>
+  );
+
   React.useLayoutEffect(() => {
     const el = containerRef.current;
     if (!el) return;
@@ -185,19 +202,23 @@ export function PortalCanvas({
                 ref={setListRef}
                 className={cn(
                   "flex flex-col gap-[22px]",
-                  device === "mobile" ? "px-3.5 pb-7 pt-5" : "px-6 pb-[34px] pt-[26px]",
+                  device === "mobile" ? "px-3.5 pt-5" : "px-6 pt-[26px]",
+                  flushFooter ? "pb-0" : device === "mobile" ? "pb-7" : "pb-[34px]",
                 )}
               >
                 {sections.map((section, index) => (
                   <React.Fragment key={section.id}>
+                    {endsWithFooter && index === sections.length - 1 ? addButton : null}
                     {dropIndex === index ? shadow : null}
                     <SectionBlock
                       section={section}
                       device={device}
                       catalogue={catalogue}
+                      scale={scale}
                       selected={!previewing && section.id === selectedId}
                       isFirst={index === 0}
                       isLast={index === sections.length - 1}
+                      flush={flushFooter && index === sections.length - 1}
                       previewing={previewing}
                       onSelect={() => onSelect(section.id)}
                       onShift={(direction) => onShift(section.id, direction)}
@@ -206,17 +227,7 @@ export function PortalCanvas({
                   </React.Fragment>
                 ))}
                 {dropIndex === sections.length ? shadow : null}
-
-                {previewing ? null : (
-                  <button
-                    type="button"
-                    onClick={onOpenPalette}
-                    className="flex h-14 items-center justify-center gap-2 rounded-xl border-[1.5px] border-dashed border-border text-[13.5px] font-semibold text-muted-foreground transition-colors hover:border-primary hover:bg-primary/[0.04] hover:text-primary"
-                  >
-                    <Plus className="size-4" />
-                    Ajouter une section
-                  </button>
-                )}
+                {endsWithFooter ? null : addButton}
               </div>
             </SortableContext>
           </div>

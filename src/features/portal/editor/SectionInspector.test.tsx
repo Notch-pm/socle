@@ -3,6 +3,7 @@ import { describe, it, expect, vi } from "vitest";
 import { render, screen, fireEvent } from "@testing-library/react";
 import { SectionInspector } from "./SectionInspector";
 
+const h = { remove: vi.fn() };
 const CONTACT = { name: "ACCM", address: "1 place", phone: null, email: null };
 import { createSection, MAX_SHORTCUTS, type PortalSection } from "@/features/portal/portalPage";
 import type { PortalCatalogueEntry } from "@/features/portal/catalogue";
@@ -36,6 +37,7 @@ function renderInspector(section: PortalSection, catalogue: PortalCatalogueEntry
       index={1}
       total={4}
       contact={CONTACT}
+        onRemove={h.remove}
         catalogue={catalogue}
       onChange={onChange}
       onClose={onClose}
@@ -125,5 +127,25 @@ describe("SectionInspector — commun", () => {
     const { onClose } = renderInspector(createSection("texte"));
     fireEvent.click(screen.getByLabelText("Fermer le panneau"));
     expect(onClose).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe("SectionInspector — retirer la section", () => {
+  it("propose de supprimer la section, y compris quand elle n'est pas éditable", () => {
+    h.remove.mockReset();
+    render(
+      <SectionInspector
+        section={createSection("actus")}
+        index={0}
+        total={1}
+        catalogue={[]}
+        contact={CONTACT}
+        onChange={vi.fn()}
+        onRemove={h.remove}
+        onClose={vi.fn()}
+      />,
+    );
+    fireEvent.click(screen.getByRole("button", { name: /Supprimer la section/ }));
+    expect(h.remove).toHaveBeenCalledTimes(1);
   });
 });
