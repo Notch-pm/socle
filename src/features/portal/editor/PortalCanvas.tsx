@@ -1,11 +1,22 @@
 import * as React from "react";
-import { SortableContext, verticalListSortingStrategy } from "@dnd-kit/sortable";
+import { useDroppable } from "@dnd-kit/core";
+import { SortableContext, type SortingStrategy } from "@dnd-kit/sortable";
 import { Menu, Plus } from "lucide-react";
 import { cn } from "@/lib/utils";
 import type { PortalSection } from "@/features/portal/portalPage";
 import type { PortalCatalogueEntry } from "@/features/portal/catalogue";
 import { DEVICE_PAGE_WIDTH, type Device } from "./device";
 import { SectionBlock } from "./SectionBlock";
+
+/** Id de la zone de dépôt racine : toute la liste des sections. */
+export const CANVAS_DROP_ID = "canvas";
+
+/**
+ * Pas de glissement automatique des voisins : c'est l'OMBRE qui dit où le
+ * bloc va. Les deux mécanismes ensemble se contrediraient — les voisins
+ * s'écarteraient d'un côté pendant que l'ombre se dessinerait de l'autre.
+ */
+const noShift: SortingStrategy = () => null;
 
 export interface PortalCanvasProps {
   organizationName: string;
@@ -16,10 +27,30 @@ export interface PortalCanvasProps {
   /** La palette flottante occupe la gauche du canevas — la page laisse la place. */
   paletteOpen: boolean;
   previewing: boolean;
+  /** Pendant un glisser : l'index où le bloc tomberait, `null` sinon. */
+  dropIndex: number | null;
+  /** Libellé du bloc en cours de déplacement, pour l'ombre. */
+  dropLabel: string | null;
   onSelect: (id: string) => void;
   onShift: (id: string, direction: -1 | 1) => void;
   onRemove: (id: string) => void;
   onOpenPalette: () => void;
+}
+
+/**
+ * L'ombre : la place que prendra le bloc si on le lâche maintenant. Dessinée
+ * à l'index de destination, entre les sections existantes, avec le libellé du
+ * bloc — pour qu'on sache ce qui va tomber là, pas seulement où.
+ */
+function DropShadow({ label }: { label: string }) {
+  return (
+    <div
+      aria-hidden="true"
+      className="flex h-[72px] items-center justify-center rounded-xl border-2 border-dashed border-primary/60 bg-primary/[0.06] text-[12.5px] font-semibold text-primary"
+    >
+      {label} — déposer ici
+    </div>
+  );
 }
 
 /**
@@ -36,6 +67,8 @@ export function PortalCanvas({
   catalogue,
   paletteOpen,
   previewing,
+  dropIndex,
+  dropLabel,
   onSelect,
   onShift,
   onRemove,
@@ -43,6 +76,9 @@ export function PortalCanvas({
 }: PortalCanvasProps) {
   const containerRef = React.useRef<HTMLDivElement>(null);
   const [containerWidth, setContainerWidth] = React.useState(1128);
+  // `null` = ajusté à la fenêtre ; un nombre = zoom choisi à la molette.
+  const [zoom, setZoom] = React.useState<number | null>(null);
+  const { setNodeRef: setListRef } = useDroppable({ id: CANVAS_DROP_ID, disabled: previewing });
 
   React.useLayoutEffect(() => {
     const el = containerRef.current;
@@ -61,13 +97,40 @@ export function PortalCanvas({
   const pageWidth = DEVICE_PAGE_WIDTH[device];
   const freeWidth = Math.max(320, containerWidth - padLeft - padRight);
   const fit = Math.min(1, Math.round((freeWidth / pageWidth) * 100) / 100);
-  const zoomHint = fit < 0.995 ? ` · affiché à ${Math.round(fit * 100)} %` : "";
+  const scale = zoom ?? fit;
+
+  // Ctrl (ou ⌘) + molette zoome le canevas — c'est aussi ce qu'envoie un
+  // pincement sur pavé tactile. La molette seule continue de faire défiler.
+  // Écouteur natif non passif : `preventDefault` doit empêcher le zoom du
+  // navigateur entier. `fitRef` : le zoom part de l'échelle affichée à cet
+  // instant, que l'écouteur — posé une fois — ne peut pas voir autrement.
+  const fitRef = React.useRef(fit);
+  fitRef.current = fit;
+  React.useEffect(() => {
+    const el = containerRef.current;
+    if (!el) return;
+    const onWheel = (event: WheelEvent) => {
+      if (!(event.ctrlKey || event.metaKey)) return;
+      event.preventDefault();
+      setZoom((current) => {
+        const from = current ?? fitRef.current;
+        const next = from * (event.deltaY < 0 ? 1.1 : 1 / 1.1);
+        return Math.min(2, Math.max(0.25, Math.round(next * 100) / 100));
+      });
+    };
+    el.addEventListener("wheel", onWheel, { passive: false });
+    return () => el.removeEventListener("wheel", onWheel);
+  }, []);
+
+  const zoomHint = scale < 0.995 || scale > 1.005 ? ` · affiché à ${Math.round(scale * 100)} %` : "";
   const layoutHint =
     device === "mobile"
       ? "les grilles passent sur une colonne"
       : device === "tablette"
         ? "grilles limitées à 2 colonnes"
         : "mise en page complète";
+
+  const shadow = dropIndex !== null && dropLabel !== null ? <DropShadow label={dropLabel} /> : null;
 
   return (
     <div className="relative min-w-0 flex-1 bg-muted">
@@ -77,12 +140,26 @@ export function PortalCanvas({
         style={{ padding: `30px ${padRight}px 60px ${padLeft}px` }}
       >
         <div className="flex flex-col items-center gap-2">
-          <span className="text-[11px] tabular-nums text-muted-foreground">
+          <span className="flex items-center gap-2 text-[11px] tabular-nums text-muted-foreground">
             {pageWidth} px{zoomHint} — {layoutHint}
+            {zoom === null ? (
+              <span className="text-muted-foreground/70">· Ctrl + molette pour zoomer</span>
+            ) : (
+              <button
+                type="button"
+                onClick={() => setZoom(null)}
+                className="rounded-full border border-border px-2 py-0.5 font-semibold text-foreground hover:border-primary hover:text-primary"
+              >
+                Ajuster à la fenêtre
+              </button>
+            )}
           </span>
+          {/* `zoom` et non `transform: scale()` : le zoom agit sur la mise en
+              page, le conteneur défilant suit donc la page agrandie au lieu de
+              la couper sur les bords — et centre celle qui est réduite. */}
           <div
             className="overflow-hidden rounded-[14px] bg-background shadow-socle-lg transition-[width] duration-200 ease-out"
-            style={{ width: pageWidth, transform: `scale(${fit})`, transformOrigin: "top center" }}
+            style={{ width: pageWidth, zoom: scale }}
           >
             <header className="flex h-14 items-center gap-3.5 border-b border-border px-6">
               <div className="size-[26px] shrink-0 rounded-lg bg-primary" />
@@ -103,28 +180,32 @@ export function PortalCanvas({
               ) : null}
             </header>
 
-            <SortableContext items={sections.map((s) => s.id)} strategy={verticalListSortingStrategy}>
+            <SortableContext items={sections.map((s) => s.id)} strategy={noShift}>
               <div
+                ref={setListRef}
                 className={cn(
                   "flex flex-col gap-[22px]",
                   device === "mobile" ? "px-3.5 pb-7 pt-5" : "px-6 pb-[34px] pt-[26px]",
                 )}
               >
                 {sections.map((section, index) => (
-                  <SectionBlock
-                    key={section.id}
-                    section={section}
-                    device={device}
-                    catalogue={catalogue}
-                    selected={!previewing && section.id === selectedId}
-                    isFirst={index === 0}
-                    isLast={index === sections.length - 1}
-                    previewing={previewing}
-                    onSelect={() => onSelect(section.id)}
-                    onShift={(direction) => onShift(section.id, direction)}
-                    onRemove={() => onRemove(section.id)}
-                  />
+                  <React.Fragment key={section.id}>
+                    {dropIndex === index ? shadow : null}
+                    <SectionBlock
+                      section={section}
+                      device={device}
+                      catalogue={catalogue}
+                      selected={!previewing && section.id === selectedId}
+                      isFirst={index === 0}
+                      isLast={index === sections.length - 1}
+                      previewing={previewing}
+                      onSelect={() => onSelect(section.id)}
+                      onShift={(direction) => onShift(section.id, direction)}
+                      onRemove={() => onRemove(section.id)}
+                    />
+                  </React.Fragment>
                 ))}
+                {dropIndex === sections.length ? shadow : null}
 
                 {previewing ? null : (
                   <button

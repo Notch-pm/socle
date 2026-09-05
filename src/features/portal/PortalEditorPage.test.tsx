@@ -25,6 +25,13 @@ const h = vi.hoisted(() => ({
 vi.mock("react-router-dom", () => ({
   useParams: () => ({ orgId: "org-1" }),
   useNavigate: () => h.navigate,
+  useSearchParams: () => [new URLSearchParams(), vi.fn()],
+}));
+
+// La variante admin choisit l'organisation parmi les racines administrées ;
+// les tests exercent la variante superadmin, où l'organisation vient de l'URL.
+vi.mock("@/features/ai-usage/useAdminRootOrganizations", () => ({
+  useAdminRootOrganizations: () => ({ data: [], isLoading: false, isError: false }),
 }));
 
 vi.mock("@/features/superadmin/organizations/useOrganizationsAdmin", () => ({

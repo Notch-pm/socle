@@ -3,20 +3,30 @@ import {
   DndContext,
   DragOverlay,
   PointerSensor,
+  pointerWithin,
+  rectIntersection,
   useSensor,
   useSensors,
+  type CollisionDetection,
   type DragEndEvent,
+  type DragOverEvent,
   type DragStartEvent,
 } from "@dnd-kit/core";
-import { ArrowLeft, Eye, LayoutGrid, Newspaper, RotateCcw, SlidersHorizontal, Users } from "lucide-react";
+import { ArrowLeft, Eye, RotateCcw } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { SegmentedControl } from "@/components/ui/segmented-control";
-import logo from "@/assets/logo-edilumen.svg";
-import type { ContactSource, PaletteKind, PortalPage, PortalSection } from "@/features/portal/portalPage";
 import {
-  insertSection,
-  moveSection,
+  SECTION_LABELS,
+  type ContactSource,
+  type PaletteKind,
+  type PortalPage,
+  type PortalSection,
+} from "@/features/portal/portalPage";
+import {
+  dropIndex,
+  insertSectionAt,
+  moveSectionToIndex,
   removeSection,
   replaceSection,
   resolveDropPosition,
@@ -25,7 +35,7 @@ import {
 import type { PortalCatalogueEntry } from "@/features/portal/catalogue";
 import { DEVICE_OPTIONS, type Device } from "@/features/portal/editor/device";
 import { sectionFromPaletteKind } from "@/features/portal/editor/paletteSection";
-import { PortalCanvas } from "@/features/portal/editor/PortalCanvas";
+import { CANVAS_DROP_ID, PortalCanvas } from "@/features/portal/editor/PortalCanvas";
 import { SectionInspector } from "@/features/portal/editor/SectionInspector";
 import { SectionPalette } from "@/features/portal/editor/SectionPalette";
 
@@ -48,11 +58,32 @@ export interface PortalEditorProps {
 
 type EditorView = "composition" | "contenus" | "theme";
 
+/** Ce qu'on tient pendant un glisser : quoi, et où ça va tomber. */
+interface DragState {
+  /** Id de la section saisie ; `null` pour un bloc venu de la palette. */
+  id: string | null;
+  label: string;
+  /** Index de destination sur la liste courante — l'ombre est dessinée là. */
+  dropIndex: number | null;
+}
+
+/**
+ * La zone de dépôt racine couvre toute la liste : sans cela, un bloc lâché
+ * sous la dernière section n'irait nulle part. Mais elle recouvre aussi chaque
+ * section — on ne la retient que si aucune section n'est survolée.
+ */
+const collisionDetection: CollisionDetection = (args) => {
+  const within = pointerWithin(args);
+  const collisions = within.length > 0 ? within : rectIntersection(args);
+  const specific = collisions.filter((c) => c.id !== CANVAS_DROP_ID);
+  return specific.length > 0 ? specific : collisions;
+};
+
 /**
  * Shell plein écran de l'éditeur CMS du portail usagers — vue « Composition ».
  * Purement présentationnel : aucun accès réseau, l'état de composition
  * (`page`) est possédé par le parent, seule l'interface locale (sélection,
- * appareil, palette, aperçu) vit ici.
+ * appareil, palette, aperçu, glisser en cours) vit ici.
  */
 export function PortalEditor({
   organizationName,
@@ -71,8 +102,10 @@ export function PortalEditor({
   const [selectedId, setSelectedId] = React.useState<string | null>(null);
   const [paletteOpen, setPaletteOpen] = React.useState(true);
   const [previewing, setPreviewing] = React.useState(false);
-  const [dragLabel, setDragLabel] = React.useState<string | null>(null);
+  const [drag, setDrag] = React.useState<DragState | null>(null);
 
+  // 5 px avant qu'un glisser ne commence : c'est ce qui laisse passer le clic
+  // sur un bloc (sélection) et sur un bouton de la palette (ajout).
   const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 5 } }));
   const sections = page.sections;
   const selected = sections.find((s) => s.id === selectedId) ?? null;
@@ -81,29 +114,53 @@ export function PortalEditor({
     onChange({ ...page, sections: next });
   }
 
+  /** Où le bloc tomberait si on le lâchait maintenant — `null` : nulle part. */
+  function targetIndex(event: DragOverEvent | DragEndEvent): number | null {
+    const { active, over } = event;
+    if (!over) return null;
+    if (over.id === CANVAS_DROP_ID) return sections.length;
+    const position = resolveDropPosition(active.rect.current.translated, over.rect);
+    return dropIndex(sections, String(over.id), position);
+  }
+
   function handleDragStart(event: DragStartEvent) {
     const data = event.active.data.current as { palette?: boolean; label?: string } | undefined;
-    setDragLabel(data?.palette ? (data.label ?? "Bloc") : null);
+    if (data?.palette) {
+      setDrag({ id: null, label: data.label ?? "Bloc", dropIndex: null });
+      return;
+    }
+    const id = String(event.active.id);
+    const section = sections.find((s) => s.id === id);
+    setDrag({ id, label: section ? SECTION_LABELS[section.kind] : "Section", dropIndex: null });
+  }
+
+  function handleDragOver(event: DragOverEvent) {
+    const index = targetIndex(event);
+    setDrag((current) =>
+      current && current.dropIndex !== index ? { ...current, dropIndex: index } : current,
+    );
   }
 
   function handleDragEnd(event: DragEndEvent) {
-    setDragLabel(null);
-    const { active, over } = event;
-    const data = active.data.current as { palette?: boolean; kind?: PaletteKind } | undefined;
+    const index = targetIndex(event);
+    setDrag(null);
+    const data = event.active.data.current as { palette?: boolean; kind?: PaletteKind } | undefined;
     if (data?.palette && data.kind) {
-      const overId = over?.id != null ? String(over.id) : null;
-      const position = resolveDropPosition(active.rect.current.translated, over?.rect ?? null);
       const section = sectionFromPaletteKind(data.kind, contact);
-      setSections(insertSection(sections, section, overId, position));
+      // Lâché hors de toute zone : en fin de page, comme un clic.
+      setSections(insertSectionAt(sections, section, index ?? sections.length));
       setSelectedId(section.id);
       return;
     }
-    if (!over || active.id === over.id) return;
-    setSections(moveSection(sections, String(active.id), String(over.id)));
+    if (index === null) return;
+    const next = moveSectionToIndex(sections, String(event.active.id), index);
+    // Déposé sur sa propre place : rien n'a changé, on ne le dit pas au parent —
+    // sans quoi une sauvegarde partirait pour un brouillon identique.
+    if (next !== sections) setSections(next);
   }
 
   function handleAddFromPalette(section: PortalSection) {
-    setSections(insertSection(sections, section, null));
+    setSections(insertSectionAt(sections, section, sections.length));
     setSelectedId(section.id);
   }
 
@@ -118,8 +175,6 @@ export function PortalEditor({
         >
           <ArrowLeft className="size-4" />
         </button>
-        <img src={logo} alt="Edilumen" className="h-5 shrink-0" />
-        <span className="h-[22px] w-px shrink-0 bg-border" aria-hidden="true" />
         <div className="flex min-w-0 flex-col gap-0.5">
           <span className="truncate text-[13.5px] font-bold">Site de démarches — {organizationName}</span>
           <span className={cn("truncate text-[11.5px]", statusIsError ? "text-destructive" : "text-muted-foreground")}>
@@ -168,89 +223,68 @@ export function PortalEditor({
         </div>
       </header>
 
-      <div className="flex min-h-0 flex-1">
-        <nav aria-label="Sections de l'éditeur" className="flex w-[52px] shrink-0 flex-col items-center gap-1.5 bg-sidebar py-2.5">
-          <RailTile icon={LayoutGrid} label="Composition" active />
-          <RailTile icon={Newspaper} label="Actualités" />
-          <RailTile icon={SlidersHorizontal} label="Thème" />
-          <RailTile icon={Users} label="Usagers" />
-        </nav>
+      <div className="relative flex min-h-0 flex-1">
+        <DndContext
+          sensors={sensors}
+          collisionDetection={collisionDetection}
+          onDragStart={handleDragStart}
+          onDragOver={handleDragOver}
+          onDragEnd={handleDragEnd}
+          onDragCancel={() => setDrag(null)}
+        >
+          <PortalCanvas
+            organizationName={organizationName}
+            sections={sections}
+            device={device}
+            selectedId={selectedId}
+            catalogue={catalogue}
+            paletteOpen={paletteOpen}
+            previewing={previewing}
+            dropIndex={drag?.dropIndex ?? null}
+            dropLabel={drag?.label ?? null}
+            onSelect={setSelectedId}
+            onShift={(id, direction) => setSections(shiftSection(sections, id, direction))}
+            onRemove={(id) => {
+              setSections(removeSection(sections, id));
+              setSelectedId((current) => (current === id ? null : current));
+            }}
+            onOpenPalette={() => setPaletteOpen(true)}
+          />
 
-        <div className="relative flex min-h-0 flex-1">
-          <DndContext sensors={sensors} onDragStart={handleDragStart} onDragEnd={handleDragEnd}>
-            <PortalCanvas
-              organizationName={organizationName}
-              sections={sections}
-              device={device}
-              selectedId={selectedId}
-              catalogue={catalogue}
-              paletteOpen={paletteOpen}
-              previewing={previewing}
-              onSelect={setSelectedId}
-              onShift={(id, direction) => setSections(shiftSection(sections, id, direction))}
-              onRemove={(id) => {
-                setSections(removeSection(sections, id));
-                setSelectedId((current) => (current === id ? null : current));
-              }}
-              onOpenPalette={() => setPaletteOpen(true)}
+          {previewing ? null : (
+            <SectionPalette
+              open={paletteOpen}
+              onOpenChange={setPaletteOpen}
+              contact={contact}
+              onAdd={handleAddFromPalette}
             />
+          )}
 
-            {previewing ? null : (
-              <SectionPalette
-                open={paletteOpen}
-                onOpenChange={setPaletteOpen}
-                contact={contact}
-                onAdd={handleAddFromPalette}
-              />
-            )}
+          {previewing || !selected ? null : (
+            <SectionInspector
+              section={selected}
+              index={sections.findIndex((s) => s.id === selected.id)}
+              total={sections.length}
+              catalogue={catalogue}
+              onChange={(next) => setSections(replaceSection(sections, next))}
+              onClose={() => setSelectedId(null)}
+            />
+          )}
 
-            {previewing || !selected ? null : (
-              <SectionInspector
-                section={selected}
-                index={sections.findIndex((s) => s.id === selected.id)}
-                total={sections.length}
-                catalogue={catalogue}
-                onChange={(next) => setSections(replaceSection(sections, next))}
-                onClose={() => setSelectedId(null)}
-              />
-            )}
-
-            <DragOverlay>
-              {dragLabel ? (
-                <div className="rounded-lg border border-primary/40 bg-background px-3 py-2 text-sm shadow-socle-md">
-                  {dragLabel}
-                </div>
-              ) : null}
-            </DragOverlay>
-          </DndContext>
-        </div>
+          {/* Le fantôme ne sert qu'aux blocs venus de la palette : une
+              section existante se déplace elle-même, l'ombre dit où elle va.
+              `dropAnimation={null}` : au dépôt, le fantôme disparaît sur
+              place au lieu de revenir vers la palette — le bloc est déjà
+              dans la page, l'animation de retour mentirait. */}
+          <DragOverlay dropAnimation={null}>
+            {drag && drag.id === null ? (
+              <div className="rounded-lg border border-primary/40 bg-background px-3 py-2 text-sm shadow-socle-md">
+                {drag.label}
+              </div>
+            ) : null}
+          </DragOverlay>
+        </DndContext>
       </div>
     </div>
-  );
-}
-
-function RailTile({
-  icon: Icon,
-  label,
-  active,
-}: {
-  icon: React.ComponentType<{ className?: string }>;
-  label: string;
-  active?: boolean;
-}) {
-  return (
-    <button
-      type="button"
-      title={active ? undefined : "Bientôt disponible"}
-      aria-label={label}
-      aria-disabled={!active || undefined}
-      onClick={() => {}}
-      className={cn(
-        "flex size-9 items-center justify-center rounded-lg transition-colors",
-        active ? "bg-sidebar-active text-primary" : "cursor-not-allowed text-sidebar-foreground/50 opacity-50",
-      )}
-    >
-      <Icon className="size-[18px]" />
-    </button>
   );
 }

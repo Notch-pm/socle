@@ -73,10 +73,11 @@ export function App() {
               <Route index element={<DashboardPage />} />
               <Route path="organisations" element={<OrganizationsPage />} />
               <Route path="organisations/:orgId" element={<OrganizationEditorPage />} />
-              <Route path="organisations/:orgId/portail" element={<PortalEditorPage variant="admin" />} />
               <Route path="demarches" element={<ProceduresPage />} />
               <Route path="demarches/nouveau" element={<ProcedureEditorPage variant="admin" />} />
               <Route path="demarches/:procId" element={<ProcedureEditorPage variant="admin" />} />
+              {/* Éditeur du site de démarches — plein écran, organisation choisie dans la page. */}
+              <Route path="site-de-demarches" element={<PortalEditorPage variant="admin" />} />
               <Route path="categories" element={<CategoriesPage />} />
               <Route path="types-pieces" element={<DocumentTypesPage />} />
               <Route path="documents" element={<DocumentsPage />} />

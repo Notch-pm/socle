@@ -1,5 +1,5 @@
 import { NavLink } from "react-router-dom";
-import { LayoutDashboard, Network, ListChecks, Tags, FileCheck2, FileSignature, MapPin, Users, Sparkles } from "lucide-react";
+import { LayoutDashboard, Network, ListChecks, LayoutTemplate, Tags, FileCheck2, FileSignature, MapPin, Users, Sparkles } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 interface NavItem {
@@ -14,6 +14,8 @@ const PINNED: NavItem = { to: "/", title: "Tableau de bord", icon: LayoutDashboa
 const ITEMS: NavItem[] = [
   { to: "/organisations", title: "Organisations", icon: Network },
   { to: "/demarches", title: "Démarches", icon: ListChecks },
+  // La face publique des démarches : la page d'accueil que les usagers voient.
+  { to: "/site-de-demarches", title: "Site de démarches", icon: LayoutTemplate },
   { to: "/categories", title: "Catégories", icon: Tags },
   { to: "/types-pieces", title: "Types de pièce justificative", icon: FileCheck2 },
   { to: "/documents", title: "Documents", icon: FileSignature },

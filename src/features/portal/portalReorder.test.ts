@@ -1,8 +1,10 @@
 import { describe, expect, it } from "vitest";
 import { createSection, type PortalSection } from "./portalPage";
 import {
+  dropIndex,
   insertSection,
   moveSection,
+  moveSectionToIndex,
   removeSection,
   replaceSection,
   resolveDropPosition,
@@ -19,6 +21,20 @@ function page(): PortalSection[] {
 
 const ids = (sections: PortalSection[]) => sections.map((s) => s.id);
 
+describe("dropIndex — le nombre que l'ombre et le dépôt partagent", () => {
+  it("désigne la place avant ou après la cible", () => {
+    expect(dropIndex(page(), "b", "before")).toBe(1);
+    expect(dropIndex(page(), "b", "after")).toBe(2);
+    expect(dropIndex(page(), "a", "before")).toBe(0);
+    expect(dropIndex(page(), "c", "after")).toBe(3);
+  });
+
+  it("désigne la fin sans cible ou avec une cible inconnue", () => {
+    expect(dropIndex(page(), null)).toBe(3);
+    expect(dropIndex(page(), "zzz")).toBe(3);
+  });
+});
+
 describe("insertSection", () => {
   it("ajoute en fin sans cible (clic dans la palette)", () => {
     const next = insertSection(page(), { ...createSection("compte"), id: "n" }, null);
@@ -31,11 +47,6 @@ describe("insertSection", () => {
     expect(ids(insertSection(page(), n, "b", "after"))).toEqual(["a", "b", "n", "c"]);
   });
 
-  it("ajoute en fin si la cible est inconnue", () => {
-    const next = insertSection(page(), { ...createSection("compte"), id: "n" }, "zzz");
-    expect(ids(next)).toEqual(["a", "b", "c", "n"]);
-  });
-
   it("ne modifie pas la liste d'origine", () => {
     const original = page();
     insertSection(original, { ...createSection("compte"), id: "n" }, null);
@@ -43,10 +54,34 @@ describe("insertSection", () => {
   });
 });
 
-describe("moveSection", () => {
-  it("suit la sémantique arrayMove, dans les deux sens", () => {
-    expect(ids(moveSection(page(), "a", "c"))).toEqual(["b", "c", "a"]);
-    expect(ids(moveSection(page(), "c", "a"))).toEqual(["c", "a", "b"]);
+describe("moveSectionToIndex — l'index est celui de la liste AVANT retrait", () => {
+  it("corrige le décalage quand on descend", () => {
+    // « a » déposé après « c » : l'ombre est à l'index 3 de [a, b, c] ; une
+    // fois « a » retirée, cette place est l'index 2.
+    expect(ids(moveSectionToIndex(page(), "a", 3))).toEqual(["b", "c", "a"]);
+    expect(ids(moveSectionToIndex(page(), "a", 2))).toEqual(["b", "a", "c"]);
+  });
+
+  it("ne corrige rien quand on monte", () => {
+    expect(ids(moveSectionToIndex(page(), "c", 0))).toEqual(["c", "a", "b"]);
+    expect(ids(moveSectionToIndex(page(), "c", 1))).toEqual(["a", "c", "b"]);
+  });
+
+  it("rend la même référence quand la destination est la place actuelle", () => {
+    // Déposer « b » juste avant ou juste après elle-même ne change rien : les
+    // deux ombres possibles autour du bloc saisi sont des non-gestes.
+    const original = page();
+    expect(moveSectionToIndex(original, "b", 1)).toBe(original);
+    expect(moveSectionToIndex(original, "b", 2)).toBe(original);
+    expect(moveSectionToIndex(original, "zzz", 0)).toBe(original);
+  });
+});
+
+describe("moveSection — avant / après la cible, comme l'ombre", () => {
+  it("dépose avant ou après la cible", () => {
+    expect(ids(moveSection(page(), "a", "c", "before"))).toEqual(["b", "a", "c"]);
+    expect(ids(moveSection(page(), "a", "c", "after"))).toEqual(["b", "c", "a"]);
+    expect(ids(moveSection(page(), "c", "a", "before"))).toEqual(["c", "a", "b"]);
   });
 
   it("rend la même référence quand rien ne bouge", () => {
@@ -54,6 +89,7 @@ describe("moveSection", () => {
     expect(moveSection(original, "a", "a")).toBe(original);
     expect(moveSection(original, "a", "zzz")).toBe(original);
     expect(moveSection(original, "zzz", "a")).toBe(original);
+    expect(moveSection(original, "a", "b", "before")).toBe(original);
   });
 });
 

@@ -27,10 +27,14 @@ export interface SectionBlockProps {
 }
 
 /**
- * Une section triable du canevas : la poignée porte les `listeners` dnd-kit
- * (jamais la carte entière), sans quoi les champs de l'inspecteur qui vivent
- * dans le prolongement visuel de la section deviendraient inutilisables au
- * survol d'un glisser-déposer.
+ * Une section triable du canevas. Le bloc ENTIER se saisit — comme dans la
+ * maquette — pas seulement une poignée qui n'apparaîtrait qu'une fois le bloc
+ * sélectionné : le capteur exige 5 px de déplacement avant de commencer, le
+ * clic de sélection passe donc toujours. Les boutons du chrome arrêtent la
+ * propagation, ils restent des boutons.
+ *
+ * Pendant le glisser, le bloc suit le pointeur, atténué ; l'ombre dessinée par
+ * le canevas dit où il tombera.
  */
 export function SectionBlock({
   section,
@@ -44,14 +48,19 @@ export function SectionBlock({
   onShift,
   onRemove,
 }: SectionBlockProps) {
-  const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({
+  // `transition: null` : sans transition, le bloc se pose là où il est lâché.
+  // Avec, sa transformation reviendrait à zéro en glissant — depuis l'endroit
+  // du dépôt vers sa nouvelle place — et donnerait l'impression de repartir
+  // dans la liste alors qu'il y est déjà.
+  const { attributes, listeners, setNodeRef, transform, isDragging } = useSortable({
     id: section.id,
     disabled: previewing,
+    transition: null,
   });
   const style: CSSProperties = {
     transform: CSS.Transform.toString(transform),
-    transition,
-    opacity: isDragging ? 0.5 : 1,
+    opacity: isDragging ? 0.35 : 1,
+    zIndex: isDragging ? 20 : undefined,
   };
 
   return (
@@ -59,25 +68,21 @@ export function SectionBlock({
       ref={setNodeRef}
       style={style}
       onClick={previewing ? undefined : onSelect}
+      {...(previewing ? {} : attributes)}
+      {...(previewing ? {} : listeners)}
       className={cn(
         "relative rounded-xl p-[18px]",
         !previewing &&
-          "cursor-pointer outline outline-2 outline-offset-[3px] outline-transparent transition-[outline-color,background-color]",
+          "cursor-grab outline outline-2 outline-offset-[3px] outline-transparent transition-[outline-color,background-color] active:cursor-grabbing",
         !previewing && !selected && "hover:outline-dashed hover:outline-primary/45",
         !previewing && selected && "bg-primary/[0.03] outline-primary",
       )}
     >
       {selected && !previewing ? (
         <div className="absolute -top-3.5 left-2.5 z-10 flex items-center gap-0.5 rounded-full bg-primary py-1 pl-2.5 pr-1 text-primary-foreground shadow-socle-md">
-          <button
-            type="button"
-            aria-label="Déplacer la section"
-            className="flex cursor-grab items-center justify-center text-primary-foreground/90"
-            {...attributes}
-            {...listeners}
-          >
+          <span aria-hidden="true" className="flex items-center justify-center text-primary-foreground/90">
             <GripVertical className="size-3" />
-          </button>
+          </span>
           <span className="mx-1 whitespace-nowrap text-[11.5px] font-bold">{SECTION_LABELS[section.kind]}</span>
           <button
             type="button"

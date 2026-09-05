@@ -5,6 +5,11 @@
  *
  * Aucune dépendance dnd-kit : le composant traduit les événements en appels
  * ici, et c'est ce qui rend le réordonnancement testable.
+ *
+ * Le pivot est `dropIndex` : l'index de destination, calculé UNE fois à partir
+ * de la cible survolée et du côté (avant / après). L'ombre affichée pendant le
+ * glisser et le dépôt lui-même partent du même nombre — ce que l'utilisateur
+ * voit est exactement là où le bloc va.
  */
 import type { PortalSection } from "./portalPage";
 
@@ -28,22 +33,39 @@ export function resolveDropPosition(active: Box | null, over: Box | null): DropP
   return activeCenter > over.top + over.height / 2 ? "after" : "before";
 }
 
-function arrayMove<T>(items: T[], from: number, to: number): T[] {
+/**
+ * Index d'insertion dans la liste TELLE QU'ELLE EST (l'élément déplacé, s'il
+ * y en a un, compte encore). `overId` inconnu ou nul : la fin.
+ */
+export function dropIndex(
+  sections: PortalSection[],
+  overId: string | null,
+  position: DropPosition = "before",
+): number {
+  if (!overId) return sections.length;
+  const index = sections.findIndex((s) => s.id === overId);
+  if (index < 0) return sections.length;
+  return index + (position === "after" ? 1 : 0);
+}
+
+function insertAt<T>(items: T[], item: T, index: number): T[] {
   const next = [...items];
-  const [moved] = next.splice(from, 1);
-  next.splice(to, 0, moved);
+  next.splice(Math.max(0, Math.min(index, next.length)), 0, item);
   return next;
 }
 
-function insertAt<T>(items: T[], item: T, index: number | null): T[] {
-  const next = [...items];
-  next.splice(index == null ? next.length : Math.min(index, next.length), 0, item);
-  return next;
+/** Insère une nouvelle section à un index (issue de la palette). */
+export function insertSectionAt(
+  sections: PortalSection[],
+  section: PortalSection,
+  index: number,
+): PortalSection[] {
+  return insertAt(sections, section, index);
 }
 
 /**
- * Insère une nouvelle section (issue de la palette). Sans cible (`overId`
- * null : clic, ou dépôt hors zone), ajout à la fin ; cible inconnue, idem.
+ * Insère une nouvelle section (issue de la palette) par rapport à une cible.
+ * Sans cible (`overId` null : clic, ou dépôt hors zone), ajout à la fin.
  */
 export function insertSection(
   sections: PortalSection[],
@@ -51,27 +73,43 @@ export function insertSection(
   overId: string | null,
   position: DropPosition = "before",
 ): PortalSection[] {
-  if (!overId) return [...sections, section];
-  const index = sections.findIndex((s) => s.id === overId);
-  if (index < 0) return [...sections, section];
-  return insertAt(sections, section, index + (position === "after" ? 1 : 0));
+  return insertSectionAt(sections, section, dropIndex(sections, overId, position));
 }
 
 /**
- * Déplace une section existante vers la cible survolée — sémantique
- * `arrayMove`, alignée sur le tri visuel de dnd-kit. Ids inconnus ou
- * identiques : liste inchangée (même référence).
+ * Déplace une section existante vers un index de destination exprimé sur la
+ * liste AVANT retrait — celui que `dropIndex` rend et que l'ombre affiche. Le
+ * retrait décale les suivants d'un cran, d'où la correction. Ids inconnus ou
+ * destination sans effet : liste inchangée (même référence).
+ */
+export function moveSectionToIndex(
+  sections: PortalSection[],
+  activeId: string,
+  rawIndex: number,
+): PortalSection[] {
+  const from = sections.findIndex((s) => s.id === activeId);
+  if (from < 0) return sections;
+  const to = from < rawIndex ? rawIndex - 1 : rawIndex;
+  if (to === from) return sections;
+  const next = [...sections];
+  const [moved] = next.splice(from, 1);
+  next.splice(Math.max(0, Math.min(to, next.length)), 0, moved);
+  return next;
+}
+
+/**
+ * Déplace une section existante avant ou après la cible survolée. Même
+ * arithmétique que l'ombre : c'est `dropIndex` qui décide.
  */
 export function moveSection(
   sections: PortalSection[],
   activeId: string,
   overId: string,
+  position: DropPosition = "before",
 ): PortalSection[] {
   if (activeId === overId) return sections;
-  const from = sections.findIndex((s) => s.id === activeId);
-  const to = sections.findIndex((s) => s.id === overId);
-  if (from < 0 || to < 0) return sections;
-  return arrayMove(sections, from, to);
+  if (!sections.some((s) => s.id === overId)) return sections;
+  return moveSectionToIndex(sections, activeId, dropIndex(sections, overId, position));
 }
 
 /**
@@ -86,7 +124,10 @@ export function shiftSection(
   const from = sections.findIndex((s) => s.id === id);
   const to = from + direction;
   if (from < 0 || to < 0 || to >= sections.length) return sections;
-  return arrayMove(sections, from, to);
+  const next = [...sections];
+  const [moved] = next.splice(from, 1);
+  next.splice(to, 0, moved);
+  return next;
 }
 
 /** Remplace la section de même id (édition contrôlée, immuable). */

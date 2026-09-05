@@ -1,5 +1,5 @@
 import * as React from "react";
-import { useNavigate, useParams } from "react-router-dom";
+import { useNavigate, useParams, useSearchParams } from "react-router-dom";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -11,7 +11,10 @@ import {
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 import { EmptyState } from "@/components/shared/EmptyState";
+import { PageHeader } from "@/components/shared/PageHeader";
+import { Field } from "@/components/ui/field";
 import { useOrganization, type Organization } from "@/features/superadmin/organizations/useOrganizationsAdmin";
+import { useAdminRootOrganizations } from "@/features/ai-usage/useAdminRootOrganizations";
 import { useProceduresForOrg } from "@/features/procedures/useProcedures";
 import { PortalEditor } from "@/features/portal/PortalEditor";
 import { isoDay, toCatalogueEntry } from "@/features/portal/catalogue";
@@ -44,12 +47,26 @@ function dateLabel(iso: string): string {
  * Éditeur de la page d'accueil du portail, en pleine page. Sert les deux zones,
  * comme `ProcedureEditorPage` : un super admin ne voit jamais les routes de
  * l'application par organisation.
- *  - admin       : /organisations/:orgId/portail
+ *  - admin       : /site-de-demarches (entrée du menu ; l'organisation est
+ *                  choisie ici, comme sur /consommation-ia)
  *  - superadmin  : /superadmin/organisations/:orgId/portail
  */
 export function PortalEditorPage({ variant }: { variant: "admin" | "superadmin" }) {
-  const { orgId } = useParams<{ orgId: string }>();
+  const params = useParams<{ orgId: string }>();
+  const [searchParams, setSearchParams] = useSearchParams();
   const navigate = useNavigate();
+  const isSuper = variant === "superadmin";
+
+  // Côté collectivité, l'organisation ne vient pas de l'URL mais des racines
+  // que l'utilisateur administre : une seule → directement ; plusieurs → il
+  // choisit, et le choix vit dans l'URL (`?org=`) pour survivre au rechargement.
+  const roots = useAdminRootOrganizations();
+  const rootList = roots.data ?? [];
+  const chosen = searchParams.get("org");
+  const orgId = isSuper
+    ? params.orgId
+    : (chosen ?? (rootList.length === 1 ? rootList[0].id : undefined));
+
   const { data: organization, isLoading: loadingOrg } = useOrganization(orgId);
   const { data: row, isLoading: loadingRow } = usePortalPage(orgId);
   const ensure = useEnsurePortalPage();
@@ -61,8 +78,50 @@ export function PortalEditorPage({ variant }: { variant: "admin" | "superadmin" 
     if (orgId && !loadingRow && row === null && ensure.isIdle) ensureMutate(orgId);
   }, [orgId, loadingRow, row, ensure.isIdle, ensureMutate]);
 
-  const closePath =
-    variant === "superadmin" ? `/superadmin/organisations/${orgId}` : `/organisations/${orgId}`;
+  const closePath = isSuper ? `/superadmin/organisations/${orgId}` : "/";
+
+  if (!isSuper && roots.isLoading) {
+    return (
+      <div className="p-6">
+        <div className="h-32 animate-pulse rounded-lg bg-muted/40" />
+      </div>
+    );
+  }
+
+  if (!isSuper && !orgId) {
+    if (rootList.length === 0) {
+      return (
+        <div className="p-6">
+          <EmptyState message="Cette page est réservée aux administrateurs d'une organisation principale." />
+        </div>
+      );
+    }
+    return (
+      <div className="p-6">
+        <PageHeader
+          title="Site de démarches"
+          subtitle="Choisissez la collectivité dont vous composez la page d'accueil."
+        />
+        <Field label="Organisation" htmlFor="portal-editor-org" className="max-w-sm">
+          <select
+            id="portal-editor-org"
+            value=""
+            onChange={(e) => setSearchParams({ org: e.target.value })}
+            className="h-11 w-full rounded-lg border border-input bg-background px-3 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+          >
+            <option value="" disabled>
+              Sélectionner une organisation
+            </option>
+            {rootList.map((org) => (
+              <option key={org.id} value={org.id}>
+                {org.name}
+              </option>
+            ))}
+          </select>
+        </Field>
+      </div>
+    );
+  }
 
   if (loadingOrg || loadingRow || (row === null && !ensure.isError)) {
     return (
