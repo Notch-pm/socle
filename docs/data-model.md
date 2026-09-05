@@ -104,6 +104,34 @@ aucun endpoint, il décrit ce qui existe **en base**.
   UPDATE** → changer le rôle d'un membre en place est impossible côté client, l'UI doit
   supprimer puis recréer la ligne.
 
+### `organization_domains` — domaines du portail usagers
+
+- `organization_id` NOT NULL, FK **CASCADE** ; `hostname` text NOT NULL ; `is_primary` bool NOT
+  NULL défaut `false` ; `created_at`.
+- **UNIQUE (hostname) GLOBAL**, pas par organisation : un domaine désigne exactement une
+  collectivité. C'est l'invariant sur lequel repose toute la résolution de tenant du portail —
+  deux lignes concurrentes la rendraient indéterminée. Conséquence côté UI : un doublon peut
+  appartenir à une organisation que l'administrateur n'a pas le droit de voir, le message
+  d'erreur ne peut donc pas dire laquelle.
+- **UNIQUE partiel `(organization_id) WHERE is_primary`** : au plus un domaine canonique par
+  organisation — celui qu'on écrit dans un lien. Les autres restent servis à l'identique.
+  Changer de canonique demande donc DEUX écritures, et l'ordre est la garde : retirer l'ancien
+  drapeau d'abord, poser le nouveau ensuite.
+- **CHECK** : FQDN minuscule d'au moins deux labels, 4 à 253 caractères. `localhost` est donc
+  refusé — le développement du portail simule un domaine réel (`PORTAL_DEV_DOMAIN_SUFFIX`).
+- **Trigger `normalize_organization_domain`** (BEFORE INSERT/UPDATE) : minuscules, espaces et
+  point final retirés. Normalisation à l'ÉCRITURE parce que le nom d'hôte est une clé de
+  recherche : normaliser des deux côtés d'une comparaison est une source d'écart permanente.
+- **Pas de restriction à une organisation racine**, contrairement à `quartiers` ou
+  `document_templates` : un domaine appartient à qui l'exploite, et une sous-organisation qui
+  tient son propre guichet doit pouvoir en porter un.
+- **RLS** : lecture `has_org_access(organization_id)` · écriture `is_org_admin(organization_id)`
+  (qui court-circuite déjà le super admin) — calqué sur `document_templates`.
+- Consommé par `GET /v1/portal/tenant?hostname=` de l'API publique, en service role hors RLS,
+  borné au périmètre de la clé.
+
+---
+
 ---
 
 ## Catalogue de démarches

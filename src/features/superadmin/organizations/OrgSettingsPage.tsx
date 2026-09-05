@@ -1,6 +1,6 @@
 import * as React from "react";
 import { useParams, useNavigate, useSearchParams } from "react-router-dom";
-import { ArrowLeft, Settings2, Users as UsersIcon, ListChecks, FileCheck2, FileSignature, MapPin, Mail, Palette, KeyRound, Gauge, type LucideIcon } from "lucide-react";
+import { ArrowLeft, Settings2, Users as UsersIcon, ListChecks, FileCheck2, FileSignature, MapPin, Mail, Palette, Globe, KeyRound, Gauge, type LucideIcon } from "lucide-react";
 import { Card, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { EmptyState } from "@/components/shared/EmptyState";
@@ -9,6 +9,7 @@ import { GeneralInfoSection } from "@/features/superadmin/organizations/sections
 import { SmtpSettingsSection } from "@/features/superadmin/organizations/sections/SmtpSettingsSection";
 import { OrganizationsManager } from "@/features/organizations/OrganizationsManager";
 import { BrandingSection } from "@/features/organizations/BrandingSection";
+import { DomainsSection } from "@/features/organizations/DomainsSection";
 import { ApiKeysSection } from "@/features/superadmin/organizations/sections/ApiKeysSection";
 import { AiUsageSection } from "@/features/superadmin/organizations/sections/AiUsageSection";
 import { UsersManagementPage } from "@/features/users/UsersManagementPage";
@@ -21,6 +22,7 @@ type Section =
   | "menu"
   | "general"
   | "charte"
+  | "domaines"
   | "utilisateurs"
   | "demarches"
   | "types-pieces"
@@ -33,6 +35,7 @@ type Section =
 const SECTIONS: { key: Section; title: string; description: string; icon: LucideIcon }[] = [
   { key: "general", title: "Informations générales", description: "Nom, slug, type, organisation parente", icon: Settings2 },
   { key: "charte", title: "Charte graphique", description: "Logos et couleurs repris par les applications de la gamme", icon: Palette },
+  { key: "domaines", title: "Domaines du portail", description: "Adresses par lesquelles les usagers atteignent les démarches en ligne", icon: Globe },
   { key: "utilisateurs", title: "Utilisateurs", description: "Membres et rôles de cette organisation", icon: UsersIcon },
   { key: "demarches", title: "Catalogue de démarches", description: "Démarches de l'organisation principale", icon: ListChecks },
   { key: "types-pieces", title: "Types de pièce justificative", description: "Pièces demandées dans les démarches", icon: FileCheck2 },
@@ -57,13 +60,14 @@ const SECTIONS: { key: Section; title: string; description: string; icon: Lucide
  * (le composant reste monté d'une organisation à l'autre) n'a plus lieu d'être.
  */
 const SECTION_KEYS = new Set<string>([
-  "general", "charte", "utilisateurs", "demarches", "types-pieces", "documents", "quartiers", "smtp", "api", "ia",
+  "general", "charte", "domaines", "utilisateurs", "demarches", "types-pieces", "documents", "quartiers", "smtp", "api", "ia",
 ]);
 
 const SECTION_LABELS: Record<Section, string> = {
   menu: "",
   general: "Informations générales",
   charte: "Charte graphique",
+  domaines: "Domaines du portail",
   utilisateurs: "Utilisateurs",
   demarches: "Catalogue de démarches",
   "types-pieces": "Types de pièce justificative",
@@ -127,6 +131,7 @@ export function OrgSettingsPage() {
 
         {activeSection === "general" && <GeneralInfoSection organization={organization} />}
         {activeSection === "charte" && <BrandingSection organization={organization} />}
+        {activeSection === "domaines" && <DomainsSection organizationId={organization.id} />}
         {activeSection === "utilisateurs" && <UsersManagementPage organizationId={organization.id} />}
         {activeSection === "demarches" &&
           (organization.parent_id === null ? (
