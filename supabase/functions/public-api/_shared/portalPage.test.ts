@@ -93,3 +93,58 @@ describe("serializePortalPage — tolérance, comme l'éditeur", () => {
     });
   });
 });
+
+describe("serializePortalPage — pied de page", () => {
+  it("sert le fond, les colonnes et les sous-blocs texte, dans l'ordre", () => {
+    const dto = serializePortalPage(
+      {
+        sections: [
+          {
+            id: "f",
+            kind: "footer",
+            title: "",
+            background: "#1F2937",
+            columns: 2,
+            children: [
+              { id: "c1", kind: "texte", title: "Contact", body: "1 place", align: "left" },
+              { id: "c2", kind: "texte", title: "Horaires", body: "9h-17h", align: "center" },
+            ],
+          },
+        ],
+      },
+      META,
+      PUBLISHED,
+    );
+    expect(dto.sections[0]).toEqual({
+      id: "f",
+      kind: "footer",
+      title: "",
+      background: "#1f2937",
+      columns: 2,
+      children: [
+        { id: "c1", kind: "texte", title: "Contact", body: "1 place", align: "left" },
+        { id: "c2", kind: "texte", title: "Horaires", body: "9h-17h", align: "center" },
+      ],
+    });
+  });
+
+  it("n'accepte dans un pied de page que des bandeaux texte, et une couleur bien formée", () => {
+    const dto = serializePortalPage(
+      {
+        sections: [
+          {
+            id: "f",
+            kind: "footer",
+            background: "red",
+            columns: 7,
+            children: [{ id: "g", kind: "demarches" }, { id: "t", kind: "texte", title: "OK" }],
+          },
+        ],
+      },
+      META,
+      PUBLISHED,
+    );
+    expect(dto.sections[0]).toMatchObject({ background: "#0f1f18", columns: 3 });
+    expect((dto.sections[0] as { children: { id: string }[] }).children.map((c) => c.id)).toEqual(["t"]);
+  });
+});

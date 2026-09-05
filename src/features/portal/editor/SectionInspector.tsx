@@ -1,15 +1,24 @@
-import { X } from "lucide-react";
+import * as React from "react";
+import { ChevronDown, ChevronUp, Trash2, X } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Field } from "@/components/ui/field";
 import { Input } from "@/components/ui/input";
+import { Button } from "@/components/ui/button";
 import { Switch } from "@/components/ui/switch";
 import { SegmentedControl } from "@/components/ui/segmented-control";
 import {
+  FOOTER_COLUMNS,
   GRID_COLUMNS,
+  HEX_COLOR,
   MAX_SHORTCUTS,
   SECTION_LABELS,
+  createContactSection,
+  createSection,
   type ActusSection,
+  type ContactSource,
   type DemarchesSection,
+  type FooterColumns,
+  type FooterSection,
   type PortalSection,
   type RechercheSection,
   type TextAlign,
@@ -24,6 +33,8 @@ export interface SectionInspectorProps {
   index: number;
   total: number;
   catalogue: PortalCatalogueEntry[];
+  /** Pour pré-remplir un sous-bloc « Contact et horaires » dans un pied de page. */
+  contact: ContactSource;
   onChange: (section: PortalSection) => void;
   onClose: () => void;
 }
@@ -39,7 +50,7 @@ const TEXT_ALIGN_OPTIONS: { value: TextAlign; label: string }[] = [
  * `PortalSection` complet à chaque frappe — le parent l'enregistre via
  * `replaceSection`.
  */
-export function SectionInspector({ section, index, total, catalogue, onChange, onClose }: SectionInspectorProps) {
+export function SectionInspector({ section, index, total, catalogue, contact, onChange, onClose }: SectionInspectorProps) {
   const isActus = section.kind === "actus";
 
   return (
@@ -63,7 +74,10 @@ export function SectionInspector({ section, index, total, catalogue, onChange, o
 
       <div className="flex flex-1 flex-col gap-[18px] overflow-auto p-4">
         <div className={cn("flex flex-col gap-[18px]", isActus && "pointer-events-none opacity-50")} aria-disabled={isActus || undefined}>
-          <Field label="Titre affiché" htmlFor="insp-title">
+          <Field
+            label={section.kind === "footer" ? "Titre (facultatif)" : "Titre affiché"}
+            htmlFor="insp-title"
+          >
             <Input
               id="insp-title"
               value={section.title}
@@ -88,6 +102,9 @@ export function SectionInspector({ section, index, total, catalogue, onChange, o
             </Field>
           ) : null}
           {section.kind === "texte" ? <TexteFields section={section} onChange={onChange} /> : null}
+          {section.kind === "footer" ? (
+            <FooterFields section={section} contact={contact} onChange={onChange} />
+          ) : null}
         </div>
 
         {isActus ? (
@@ -275,6 +292,175 @@ function TexteFields({
           options={TEXT_ALIGN_OPTIONS}
         />
       </Field>
+    </>
+  );
+}
+
+const FOOTER_COLUMN_OPTIONS = FOOTER_COLUMNS.map((n) => ({ value: String(n), label: String(n) }));
+
+/**
+ * Saisie d'une couleur : nuancier natif + notation hexadécimale, les deux
+ * liés. Le champ texte garde un brouillon local — seule exception au
+ * « l'inspecteur ne détient aucun état » : une couleur se tape caractère par
+ * caractère, et n'est remontée qu'une fois bien formée. Sans ce brouillon, le
+ * champ refuserait chaque frappe intermédiaire.
+ */
+function ColorField({
+  id,
+  label,
+  value,
+  onChange,
+}: {
+  id: string;
+  label: string;
+  value: string;
+  onChange: (value: string) => void;
+}) {
+  const [draft, setDraft] = React.useState(value);
+  React.useEffect(() => setDraft(value), [value]);
+  const valid = HEX_COLOR.test(draft.trim().toLowerCase());
+  return (
+    <Field label={label} htmlFor={id} hint="Notation hexadécimale, ex. #0f1f18" error={valid ? undefined : "Couleur attendue : #rrggbb"}>
+      <div className="flex items-center gap-2">
+        <input
+          type="color"
+          aria-label={`${label} — nuancier`}
+          value={value}
+          onChange={(e) => onChange(e.target.value.toLowerCase())}
+          className="h-9 w-11 shrink-0 cursor-pointer rounded-lg border border-input bg-background p-1"
+        />
+        <Input
+          id={id}
+          value={draft}
+          onChange={(e) => {
+            const next = e.target.value;
+            setDraft(next);
+            const normalized = next.trim().toLowerCase();
+            if (HEX_COLOR.test(normalized)) onChange(normalized);
+          }}
+          aria-invalid={!valid}
+        />
+      </div>
+    </Field>
+  );
+}
+
+/**
+ * Le pied de page : sa couleur, ses colonnes, et ses sous-blocs — ajoutés,
+ * édités, ordonnés et retirés ICI, pas par glisser-déposer imbriqué. La
+ * colonne d'un sous-bloc découle de son rang.
+ */
+function FooterFields({
+  section,
+  contact,
+  onChange,
+}: {
+  section: FooterSection;
+  contact: ContactSource;
+  onChange: (section: PortalSection) => void;
+}) {
+  const children = section.children;
+  const setChildren = (next: TexteSection[]) => onChange({ ...section, children: next });
+  const replaceChild = (child: TexteSection) =>
+    setChildren(children.map((c) => (c.id === child.id ? child : c)));
+  const shiftChild = (index: number, direction: -1 | 1) => {
+    const to = index + direction;
+    if (to < 0 || to >= children.length) return;
+    const next = [...children];
+    const [moved] = next.splice(index, 1);
+    next.splice(to, 0, moved);
+    setChildren(next);
+  };
+
+  return (
+    <>
+      <ColorField
+        id="insp-footer-background"
+        label="Couleur de fond"
+        value={section.background}
+        onChange={(background) => onChange({ ...section, background })}
+      />
+      <Field label="Colonnes">
+        <SegmentedControl
+          aria-label="Colonnes"
+          value={String(section.columns)}
+          onChange={(value) => onChange({ ...section, columns: Number(value) as FooterColumns })}
+          options={FOOTER_COLUMN_OPTIONS}
+        />
+      </Field>
+
+      <div className="flex flex-col gap-2">
+        <span className="text-[12.5px] font-bold">Blocs du pied de page</span>
+        {children.length === 0 ? (
+          <span className="text-xs text-muted-foreground">Aucun bloc pour l'instant.</span>
+        ) : null}
+        {children.map((child, i) => (
+          <div key={child.id} className="flex flex-col gap-2 rounded-lg border border-border p-2.5">
+            <div className="flex items-center gap-1">
+              <Input
+                aria-label="Titre du bloc"
+                value={child.title}
+                onChange={(e) => replaceChild({ ...child, title: e.target.value })}
+                className="h-8"
+              />
+              <button
+                type="button"
+                aria-label="Monter le bloc"
+                disabled={i === 0}
+                onClick={() => shiftChild(i, -1)}
+                className="flex size-7 shrink-0 items-center justify-center rounded-md text-muted-foreground hover:bg-muted disabled:opacity-40"
+              >
+                <ChevronUp className="size-3.5" />
+              </button>
+              <button
+                type="button"
+                aria-label="Descendre le bloc"
+                disabled={i === children.length - 1}
+                onClick={() => shiftChild(i, 1)}
+                className="flex size-7 shrink-0 items-center justify-center rounded-md text-muted-foreground hover:bg-muted disabled:opacity-40"
+              >
+                <ChevronDown className="size-3.5" />
+              </button>
+              <button
+                type="button"
+                aria-label="Retirer le bloc"
+                onClick={() => setChildren(children.filter((c) => c.id !== child.id))}
+                className="flex size-7 shrink-0 items-center justify-center rounded-md text-destructive hover:bg-destructive/10"
+              >
+                <Trash2 className="size-3.5" />
+              </button>
+            </div>
+            <textarea
+              aria-label="Texte du bloc"
+              value={child.body}
+              onChange={(e) => replaceChild({ ...child, body: e.target.value })}
+              rows={3}
+              className="w-full rounded-lg border border-input bg-background px-3 py-2 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+            />
+          </div>
+        ))}
+        <div className="flex flex-wrap gap-2">
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            onClick={() => setChildren([...children, createContactSection(contact)])}
+          >
+            Contact et horaires
+          </Button>
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            onClick={() => setChildren([...children, createSection("texte")])}
+          >
+            Bandeau texte
+          </Button>
+        </div>
+        <span className="text-[11px] text-muted-foreground">
+          Les blocs se répartissent dans les colonnes, dans l'ordre.
+        </span>
+      </div>
     </>
   );
 }

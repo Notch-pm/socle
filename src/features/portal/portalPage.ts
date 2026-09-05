@@ -15,7 +15,7 @@
  */
 import { z } from "zod";
 
-export const SECTION_KINDS = ["recherche", "demarches", "actus", "compte", "texte"] as const;
+export const SECTION_KINDS = ["recherche", "demarches", "actus", "compte", "texte", "footer"] as const;
 export type SectionKind = (typeof SECTION_KINDS)[number];
 
 export const SECTION_LABELS: Record<SectionKind, string> = {
@@ -24,11 +24,16 @@ export const SECTION_LABELS: Record<SectionKind, string> = {
   actus: "Actualités",
   compte: "Espace usager",
   texte: "Bandeau texte",
+  footer: "Pied de page",
 };
 
 /** Colonnes d'une grille de démarches — et nombre d'articles d'un bloc actualités. */
 export const GRID_COLUMNS = [2, 3, 4] as const;
 export type GridColumns = (typeof GRID_COLUMNS)[number];
+
+/** Colonnes d'un pied de page. */
+export const FOOTER_COLUMNS = [1, 2, 3] as const;
+export type FooterColumns = (typeof FOOTER_COLUMNS)[number];
 
 export const ACTUS_LAYOUTS = ["grid", "list"] as const;
 export type ActusLayout = (typeof ACTUS_LAYOUTS)[number];
@@ -38,6 +43,12 @@ export type TextAlign = (typeof TEXT_ALIGNS)[number];
 
 /** Raccourcis sous le champ de recherche : au-delà, la ligne déborde. */
 export const MAX_SHORTCUTS = 4;
+
+/** Une couleur est une valeur CSS injectée dans la page : `#rrggbb`, rien d'autre. */
+export const HEX_COLOR = /^#[0-9a-f]{6}$/;
+
+/** Le sombre classique d'un pied de page — l'encre forêt de la gamme. */
+export const DEFAULT_FOOTER_BACKGROUND = "#0f1f18";
 
 interface SectionCommon {
   id: string;
@@ -85,12 +96,27 @@ export interface TexteSection extends SectionCommon {
   align: TextAlign;
 }
 
+/**
+ * Pied de page : un bandeau pleine largeur, à la couleur de fond choisie, qui
+ * répartit des sous-blocs sur une à trois colonnes. Les sous-blocs sont des
+ * bandeaux texte — « Contact et horaires » en est un — dans l'ordre choisi ;
+ * la colonne de chacun découle de son rang.
+ */
+export interface FooterSection extends SectionCommon {
+  kind: "footer";
+  /** Couleur de fond, `#rrggbb` minuscule. */
+  background: string;
+  columns: FooterColumns;
+  children: TexteSection[];
+}
+
 export type PortalSection =
   | RechercheSection
   | DemarchesSection
   | ActusSection
   | CompteSection
-  | TexteSection;
+  | TexteSection
+  | FooterSection;
 
 export interface PortalPage {
   version: 1;
@@ -115,6 +141,7 @@ export const PALETTE_ITEMS: { kind: PaletteKind; label: string; hint: string; av
   { kind: "compte", label: "Espace usager", hint: "Bandeau de connexion", available: true },
   { kind: "texte", label: "Bandeau texte", hint: "Titre + paragraphe", available: true },
   { kind: "contact", label: "Contact et horaires", hint: "Coordonnées de la mairie", available: true },
+  { kind: "footer", label: "Pied de page", hint: "Pleine largeur, 1 à 3 colonnes", available: true },
 ];
 
 function genId(): string {
@@ -165,6 +192,16 @@ const BUILDERS: { [K in SectionKind]: (id: string) => SectionOf<K> } = {
     body: "Un paragraphe court à destination des usagers.",
     align: "left",
   }),
+  // Sans titre ni sous-bloc : un pied de page se remplit depuis l'inspecteur,
+  // et un titre d'amorce y ferait un bandeau de plus à effacer.
+  footer: (id) => ({
+    id,
+    kind: "footer",
+    title: "",
+    background: DEFAULT_FOOTER_BACKGROUND,
+    columns: 3,
+    children: [],
+  }),
 };
 
 /**
@@ -201,6 +238,21 @@ export function createContactSection(org: ContactSource): TexteSection {
     body: parts.length > 0 ? parts.join(" · ") : "Coordonnées et horaires d'ouverture.",
     align: "left",
   };
+}
+
+/**
+ * Le texte se lit-il en clair sur ce fond ? Luminance relative (sRGB, WCAG) :
+ * sous 0,4 le fond est sombre et appelle du texte clair. Une couleur illisible
+ * est traitée comme sombre — le défaut du pied de page l'est.
+ */
+export function isDarkColor(hex: string): boolean {
+  if (!HEX_COLOR.test(hex)) return true;
+  const channel = (i: number) => {
+    const c = parseInt(hex.slice(i, i + 2), 16) / 255;
+    return c <= 0.03928 ? c / 12.92 : ((c + 0.055) / 1.055) ** 2.4;
+  };
+  const luminance = 0.2126 * channel(1) + 0.7152 * channel(3) + 0.0722 * channel(5);
+  return luminance < 0.4;
 }
 
 /**
@@ -275,18 +327,41 @@ const texteSchema = z.object({
   align: z.enum(TEXT_ALIGNS).default("left"),
 });
 
+// Les sous-blocs sont lus à part, un par un (voir `parseSection`) : un
+// sous-bloc abîmé ne doit pas emporter le pied de page entier.
+const footerSchema = z.object({
+  ...common,
+  kind: z.literal("footer"),
+  background: z.string().regex(HEX_COLOR).catch(DEFAULT_FOOTER_BACKGROUND),
+  columns: z.union([z.literal(1), z.literal(2), z.literal(3)]).default(3),
+  children: z.array(z.unknown()).default([]),
+});
+
 const sectionSchema = z.discriminatedUnion("kind", [
   rechercheSchema,
   demarchesSchema,
   actusSchema,
   compteSchema,
   texteSchema,
+  footerSchema,
 ]);
 
 const pageShape = z.object({
   version: z.literal(1).default(1),
   sections: z.array(z.unknown()).default([]),
 });
+
+function parseSection(candidate: unknown): PortalSection | null {
+  const parsed = sectionSchema.safeParse(candidate);
+  if (!parsed.success) return null;
+  if (parsed.data.kind !== "footer") return parsed.data as PortalSection;
+  const children: TexteSection[] = [];
+  for (const child of parsed.data.children) {
+    const texte = texteSchema.safeParse(child);
+    if (texte.success) children.push(texte.data as TexteSection);
+  }
+  return { ...parsed.data, children } as FooterSection;
+}
 
 /**
  * Transforme un JSON stocké (arbitraire) en `PortalPage` valide.
@@ -296,7 +371,8 @@ const pageShape = z.object({
  * manquants complétés par défaut. C'est plus indulgent que `parseFormSchema`,
  * et délibérément : c'est la page d'accueil d'une collectivité — perdre toute
  * sa composition pour une section abîmée serait pire que d'en perdre une.
- * Une structure de page illisible retombe sur la composition par défaut.
+ * Même tolérance dans un pied de page, sous-bloc par sous-bloc. Une structure
+ * de page illisible retombe sur la composition par défaut.
  */
 export function parsePortalPage(raw: unknown): PortalPage {
   if (!raw || typeof raw !== "object") return defaultPortalPage();
@@ -304,8 +380,8 @@ export function parsePortalPage(raw: unknown): PortalPage {
   if (!page.success) return defaultPortalPage();
   const sections: PortalSection[] = [];
   for (const candidate of page.data.sections) {
-    const parsed = sectionSchema.safeParse(candidate);
-    if (parsed.success) sections.push(parsed.data as PortalSection);
+    const section = parseSection(candidate);
+    if (section) sections.push(section);
   }
   return { version: 1, sections };
 }

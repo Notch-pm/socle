@@ -30,7 +30,7 @@ export function buildOpenApiDocument(serverUrl: string): Record<string, unknown>
     openapi: "3.1.0",
     info: {
       title: "API Socle — Référentiel de la gamme",
-      version: "1.8.0",
+      version: "1.9.0",
       description: [
         "API **en lecture seule** exposant le référentiel central de la gamme : les",
         "**organisations** (et sous-organisations) avec l'intégralité de leur configuration,",
@@ -216,7 +216,7 @@ export function buildOpenApiDocument(serverUrl: string): Record<string, unknown>
           description:
             "Renvoie la page telle que la collectivité l'a **publiée** depuis l'éditeur du Socle : " +
             "une liste ordonnée de sections typées (`recherche`, `demarches`, `actus`, `compte`, " +
-            "`texte`). Le brouillon en cours d'édition n'est jamais servi — sauvegarder n'est pas " +
+            "`texte`, `footer`). Le brouillon en cours d'édition n'est jamais servi — sauvegarder n'est pas " +
             "publier.\n\n" +
             "**`404` n'est pas une panne** : la collectivité n'a encore rien publié (ou la page " +
             "demandée n'existe pas). Le portail rend alors sa mise en page par défaut. Une " +
@@ -809,6 +809,7 @@ export function buildOpenApiDocument(serverUrl: string): Record<string, unknown>
                   { $ref: "#/components/schemas/PortalActusSection" },
                   { $ref: "#/components/schemas/PortalCompteSection" },
                   { $ref: "#/components/schemas/PortalTexteSection" },
+                  { $ref: "#/components/schemas/PortalFooterSection" },
                 ],
                 discriminator: {
                   propertyName: "kind",
@@ -818,6 +819,7 @@ export function buildOpenApiDocument(serverUrl: string): Record<string, unknown>
                     actus: "#/components/schemas/PortalActusSection",
                     compte: "#/components/schemas/PortalCompteSection",
                     texte: "#/components/schemas/PortalTexteSection",
+                    footer: "#/components/schemas/PortalFooterSection",
                   },
                 },
               },
@@ -896,6 +898,30 @@ export function buildOpenApiDocument(serverUrl: string): Record<string, unknown>
             title: { type: "string" },
             body: { type: "string" },
             align: { type: "string", enum: ["left", "center"] },
+          },
+        },
+        PortalFooterSection: {
+          type: "object",
+          description:
+            "Pied de page : bandeau **pleine largeur** à la couleur de fond choisie, dont les " +
+            "sous-blocs (des bandeaux texte — coordonnées, horaires, mentions) se répartissent sur " +
+            "une à trois colonnes, dans l'ordre. Le texte se lit en clair sur un fond sombre.",
+          required: ["id", "kind", "title", "background", "columns", "children"],
+          properties: {
+            id: { type: "string" },
+            kind: { type: "string", enum: ["footer"] },
+            title: { type: "string", description: "En-tête facultatif, souvent vide." },
+            background: {
+              type: "string",
+              pattern: "^#[0-9a-f]{6}$",
+              description: "Couleur de fond, `#rrggbb` minuscule.",
+              examples: ["#0f1f18"],
+            },
+            columns: { type: "integer", enum: [1, 2, 3] },
+            children: {
+              type: "array",
+              items: { $ref: "#/components/schemas/PortalTexteSection" },
+            },
           },
         },
         Organization: {

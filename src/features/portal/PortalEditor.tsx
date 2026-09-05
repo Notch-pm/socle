@@ -266,6 +266,7 @@ export function PortalEditor({
               index={sections.findIndex((s) => s.id === selected.id)}
               total={sections.length}
               catalogue={catalogue}
+              contact={contact}
               onChange={(next) => setSections(replaceSection(sections, next))}
               onClose={() => setSelectedId(null)}
             />

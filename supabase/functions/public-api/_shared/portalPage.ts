@@ -14,7 +14,13 @@
 import type {
   PortalPageDto,
   PortalSectionDto,
+  PortalTexteSectionDto,
 } from "./dto.ts";
+
+/** Une couleur est une valeur CSS injectée chez le consommateur : `#rrggbb`, rien d'autre. */
+const HEX_COLOR = /^#[0-9a-f]{6}$/;
+/** Le sombre classique d'un pied de page — le défaut de l'éditeur. */
+const DEFAULT_FOOTER_BACKGROUND = "#0f1f18";
 
 type Row = Record<string, unknown>;
 
@@ -92,6 +98,26 @@ function serializeSection(raw: unknown, publishedIds: Set<string>): PortalSectio
         body: str(row.body),
         align: row.align === "center" ? "center" : "left",
       };
+    case "footer": {
+      // Les sous-blocs sont lus un par un, et seuls les bandeaux texte
+      // passent : un sous-bloc abîmé n'emporte pas le pied de page.
+      const children: PortalTexteSectionDto[] = [];
+      if (Array.isArray(row.children)) {
+        for (const child of row.children) {
+          const section = serializeSection(child, publishedIds);
+          if (section && section.kind === "texte") children.push(section);
+        }
+      }
+      const background = str(row.background).toLowerCase();
+      return {
+        id,
+        kind: "footer",
+        title,
+        background: HEX_COLOR.test(background) ? background : DEFAULT_FOOTER_BACKGROUND,
+        columns: row.columns === 1 || row.columns === 2 ? row.columns : 3,
+        children,
+      };
+    }
     default:
       // Un kind inconnu de cette version du serveur est ignoré, pas servi
       // brut : le contrat promet des sections que le consommateur sait lire.

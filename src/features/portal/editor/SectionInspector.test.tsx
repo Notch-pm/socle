@@ -2,6 +2,8 @@
 import { describe, it, expect, vi } from "vitest";
 import { render, screen, fireEvent } from "@testing-library/react";
 import { SectionInspector } from "./SectionInspector";
+
+const CONTACT = { name: "ACCM", address: "1 place", phone: null, email: null };
 import { createSection, MAX_SHORTCUTS, type PortalSection } from "@/features/portal/portalPage";
 import type { PortalCatalogueEntry } from "@/features/portal/catalogue";
 
@@ -33,7 +35,8 @@ function renderInspector(section: PortalSection, catalogue: PortalCatalogueEntry
       section={section}
       index={1}
       total={4}
-      catalogue={catalogue}
+      contact={CONTACT}
+        catalogue={catalogue}
       onChange={onChange}
       onClose={onClose}
     />,

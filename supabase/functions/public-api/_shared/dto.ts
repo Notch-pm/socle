@@ -339,7 +339,8 @@ export type PortalSectionDto =
   | PortalDemarchesSectionDto
   | PortalActusSectionDto
   | PortalCompteSectionDto
-  | PortalTexteSectionDto;
+  | PortalTexteSectionDto
+  | PortalFooterSectionDto;
 
 export interface PortalPageDto {
   slug: string;
@@ -347,4 +348,18 @@ export interface PortalPageDto {
   published_at: string;
   version: 1;
   sections: PortalSectionDto[];
+}
+
+/**
+ * Pied de page : pleine largeur, couleur de fond, sous-blocs texte répartis sur
+ * une à trois colonnes dans l'ordre. `children` ne porte que des bandeaux texte.
+ */
+export interface PortalFooterSectionDto {
+  id: string;
+  kind: "footer";
+  title: string;
+  /** `#rrggbb` minuscule. */
+  background: string;
+  columns: 1 | 2 | 3;
+  children: PortalTexteSectionDto[];
 }

@@ -151,8 +151,8 @@ describe("buildOpenApiDocument", () => {
 describe("contrat — documents et courriers", () => {
   const doc = buildOpenApiDocument("https://example.supabase.co/functions/v1/public-api") as any;
 
-  it("annonce la version 1.8.0 du contrat", () => {
-    expect(doc.info.version).toBe("1.8.0");
+  it("annonce la version 1.9.0 du contrat", () => {
+    expect(doc.info.version).toBe("1.9.0");
   });
 
   it("sert les documents d'une démarche déjà résolus", () => {
@@ -310,6 +310,7 @@ describe("contrat — page publiée du portail", () => {
       "actus",
       "compte",
       "demarches",
+      "footer",
       "recherche",
       "texte",
     ]);

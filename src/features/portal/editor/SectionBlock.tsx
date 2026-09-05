@@ -9,6 +9,7 @@ import type { Device } from "./device";
 import { ActusSection } from "./sections/ActusSection";
 import { CompteSection } from "./sections/CompteSection";
 import { DemarchesSection } from "./sections/DemarchesSection";
+import { FooterSection } from "./sections/FooterSection";
 import { RechercheSection } from "./sections/RechercheSection";
 import { TexteSection } from "./sections/TexteSection";
 
@@ -147,5 +148,7 @@ function SectionContent({
       return <CompteSection section={section} device={device} />;
     case "texte":
       return <TexteSection section={section} />;
+    case "footer":
+      return <FooterSection section={section} device={device} />;
   }
 }

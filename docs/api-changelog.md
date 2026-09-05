@@ -15,6 +15,16 @@ Format d'une entrée : `## AAAA-MM-JJ — <api> — ajout|correctif|rupture`
 
 ## 2026-09-05 — public-api — ajout
 
+**Le pied de page.** Nouveau `kind` dans la composition publiée (`GET /v1/portal/page`) :
+`footer` — bandeau **pleine largeur**, `background` (`#rrggbb`), `columns` (1 à 3), `children`
+(bandeaux `texte`, répartis dans les colonnes dans l'ordre). Version du contrat : **1.9.0**. Ajout
+additif — un consommateur qui ignore les `kind` inconnus, comme le contrat le demande, n'a rien à
+faire.
+
+---
+
+## 2026-09-05 — public-api — ajout
+
 **La composition publiée d'une page du portail.** Nouvelle route
 `GET /v1/portal/page?tenant_id=&slug=accueil` : la page d'accueil telle que la collectivité l'a
 **publiée** depuis l'éditeur du Socle — sections typées (`recherche`, `demarches`, `actus`,
