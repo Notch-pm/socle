@@ -60,8 +60,19 @@ export interface ProcedureDto {
   requester_config: unknown;
   form_schema: unknown;
   knowledge_base: unknown;
-  /** Paramètres de communication (bloc `visibility` : portail, période de publication). */
+  /**
+   * Paramètres de communication, **transmis tels quels** (blocs `visibility` et
+   * `documents`). Pour les documents, préférez le champ `documents` ci-dessous :
+   * il est déjà résolu contre le catalogue.
+   */
   communication_config: unknown;
+  /**
+   * Documents et courriers accessibles à l'agent, **résolus** (libellé, type,
+   * nom de fichier) — de quoi les afficher sans second appel. Reconstruire cette
+   * liste depuis `communication_config` obligerait chaque application à
+   * réécrire (différemment) la même résolution.
+   */
+  documents: ProcedureDocumentsDto;
   translations: unknown;
   created_at: string | null;
   updated_at: string | null;
@@ -75,6 +86,57 @@ export interface OrganizationProcedureDto {
   custom_name: string | null;
   custom_order: number | null;
   metadata: unknown;
+}
+
+/**
+ * Document du catalogue (`document_templates`) : un modèle `.doc`/`.docx`/`.odt`
+ * porteur de variables, que l'application aval fusionne avec les données du
+ * dossier. Le fichier lui-même s'obtient par
+ * `GET /v1/document-templates/{id}/signed-url`.
+ */
+export interface DocumentTemplateDto {
+  id: string;
+  organization_id: string;
+  name: string;
+  description: string | null;
+  /** `interne`, `externe` ou `courrier`. */
+  type: string;
+  /** Nom d'origine du fichier déposé (affichable). */
+  file_name: string;
+  created_at: string | null;
+  updated_at: string | null;
+}
+
+/** Un document rendu accessible à l'agent depuis une démarche, déjà résolu. */
+export interface ProcedureDocumentDto {
+  id: string;
+  name: string;
+  description: string | null;
+  /** `interne`, `externe` ou `courrier` (type au catalogue). */
+  type: string;
+  /**
+   * Sous-groupe de l'étape Communication : `courrier` pour les modèles de
+   * courrier, `document` pour les types `interne`/`externe`.
+   */
+  group: string;
+  file_name: string;
+  /**
+   * `toujours`, `positive` ou `negative` (issue de la demande).
+   * ⚠️ **Sans effet** tant que `restrict_visibility` est faux.
+   */
+  visibility: string;
+}
+
+/** Bloc « Documents et courriers » d'une démarche, résolu contre le catalogue. */
+export interface ProcedureDocumentsDto {
+  /**
+   * ⚠️ Faux (le défaut) : servez **tous** les `items`, quelles que soient leurs
+   * `visibility`. Les conditions sont conservées quand le paramétreur désactive
+   * la restriction — les appliquer sans regarder ce drapeau masquerait à tort.
+   */
+  restrict_visibility: boolean;
+  /** Dans l'ordre choisi au paramétrage. Un document supprimé du catalogue en disparaît. */
+  items: ProcedureDocumentDto[];
 }
 
 /** Type de pièce justificative (référencé par les champs PJ des démarches). */

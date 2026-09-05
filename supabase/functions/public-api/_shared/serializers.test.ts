@@ -1,10 +1,12 @@
 import { describe, expect, it } from "vitest";
 import {
   serializeCategory,
+  serializeDocumentTemplate,
   serializeDocumentType,
   serializeOrganization,
   serializeOrganizationProcedure,
   serializeProcedure,
+  serializeProcedureDocuments,
   serializeQuartier,
   serializeBranding,
   serializeSmtpSettings,
@@ -94,7 +96,7 @@ describe("serializers — whitelist stricte (aucune fuite)", () => {
       created_at: null,
       updated_at: null,
       is_active_global: true, // colonne non exposée
-    });
+    }, new Map());
     expect(dto.keywords).toEqual([]);
     expect(dto.form_schema).toBe(form);
     expect(dto).not.toHaveProperty("is_active_global");
@@ -103,17 +105,17 @@ describe("serializers — whitelist stricte (aucune fuite)", () => {
   });
 
   it("démarche jamais paramétrée : communication_config vaut null, pas undefined", () => {
-    const dto = serializeProcedure({ id: "p2", name: "Sans communication", type: "externe" });
+    const dto = serializeProcedure({ id: "p2", name: "Sans communication", type: "externe" }, new Map());
     expect(dto.communication_config).toBeNull();
     expect(Object.keys(dto)).toContain("communication_config");
   });
 
   it("statut : seule « production » l'est ; le doute ne publie rien", () => {
-    expect(serializeProcedure({ status: "production" }).status).toBe("production");
-    expect(serializeProcedure({ status: "brouillon" }).status).toBe("brouillon");
+    expect(serializeProcedure({ status: "production" }, new Map()).status).toBe("production");
+    expect(serializeProcedure({ status: "brouillon" }, new Map()).status).toBe("brouillon");
     // Colonne absente, nulle ou inattendue → brouillon.
     for (const status of [undefined, null, "", "PRODUCTION", 1, true]) {
-      expect(serializeProcedure({ status }).status).toBe("brouillon");
+      expect(serializeProcedure({ status }, new Map()).status).toBe("brouillon");
     }
   });
 
@@ -356,5 +358,98 @@ describe("serializeBranding — la charte applicable, héritage déjà résolu",
     expect(dto.primary_color).toBeNull();
     expect(dto.secondary_color).toBeNull();
     expect(dto.configured).toBe(false);
+  });
+});
+
+describe("serializeDocumentTemplate", () => {
+  it("expose le catalogue sans jamais servir le chemin de stockage", () => {
+    const dto = serializeDocumentTemplate({
+      id: "t1",
+      organization_id: "org-1",
+      name: "Accusé de réception",
+      description: null,
+      type: "courrier",
+      file_name: "ar.docx",
+      file_path: "org-1/uid-ar.docx",
+      created_at: null,
+      updated_at: null,
+    });
+    expect(dto.name).toBe("Accusé de réception");
+    expect(dto.file_name).toBe("ar.docx");
+    // Le chemin est un détail interne : le fichier s'obtient par /signed-url.
+    expect(Object.keys(dto)).not.toContain("file_path");
+  });
+});
+
+describe("serializeProcedureDocuments", () => {
+  const templates = new Map<string, Record<string, unknown>>([
+    ["d1", { id: "d1", name: "Notice", description: "Aide", type: "interne", file_name: "n.docx" }],
+    ["c1", { id: "c1", name: "Refus", description: null, type: "courrier", file_name: "r.docx" }],
+  ]);
+
+  it("vaut le bloc vide pour une démarche jamais paramétrée", () => {
+    for (const raw of [null, undefined, 42, {}, { visibility: {} }]) {
+      expect(serializeProcedureDocuments(raw, templates)).toEqual({
+        restrict_visibility: false,
+        items: [],
+      });
+    }
+  });
+
+  it("résout documents puis courriers, en marquant leur groupe", () => {
+    const dto = serializeProcedureDocuments(
+      {
+        documents: {
+          restrictVisibility: true,
+          documents: [{ id: "d1", visibility: "positive" }],
+          letters: [{ id: "c1", visibility: "negative" }],
+        },
+      },
+      templates,
+    );
+    expect(dto.restrict_visibility).toBe(true);
+    expect(dto.items.map((i) => [i.id, i.group, i.visibility])).toEqual([
+      ["d1", "document", "positive"],
+      ["c1", "courrier", "negative"],
+    ]);
+    expect(dto.items[0].name).toBe("Notice");
+    expect(dto.items[0].file_name).toBe("n.docx");
+  });
+
+  it("écarte une référence dont le document a quitté le catalogue", () => {
+    // Pas de clé étrangère dans le JSON : une sélection survit à son document.
+    // Servir un id mort obligerait le consommateur à gérer un 404 sur signed-url.
+    const dto = serializeProcedureDocuments(
+      { documents: { documents: [{ id: "disparu" }, { id: "d1" }] } },
+      templates,
+    );
+    expect(dto.items.map((i) => i.id)).toEqual(["d1"]);
+  });
+
+  it("ramène une condition inconnue à « toujours », sans masquer le document", () => {
+    const dto = serializeProcedureDocuments(
+      { documents: { documents: [{ id: "d1", visibility: "un-jour" }] } },
+      templates,
+    );
+    expect(dto.items[0].visibility).toBe("toujours");
+  });
+
+  it("dédoublonne et ignore les entrées sans identifiant", () => {
+    const dto = serializeProcedureDocuments(
+      { documents: { documents: [{ id: "d1" }, null, { id: "  " }, { id: "d1" }] } },
+      templates,
+    );
+    expect(dto.items.map((i) => i.id)).toEqual(["d1"]);
+  });
+
+  it("restrict_visibility faux par défaut : les conditions ne s'appliquent pas", () => {
+    // Le consommateur qui applique les conditions sans lire ce drapeau masquerait
+    // à tort des documents que le paramétreur a rendus visibles.
+    const dto = serializeProcedureDocuments(
+      { documents: { letters: [{ id: "c1", visibility: "negative" }] } },
+      templates,
+    );
+    expect(dto.restrict_visibility).toBe(false);
+    expect(dto.items[0].visibility).toBe("negative");
   });
 });

@@ -3,6 +3,27 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 import { render, screen, fireEvent } from "@testing-library/react";
 import { ProcedureEditor } from "./ProcedureEditor";
 
+// Catalogue de documents : on court-circuite l'appel réseau TanStack Query.
+// Trois entrées couvrant les deux groupes (interne/externe -> Documents,
+// courrier -> Courriers).
+vi.mock("@/features/documents/useDocumentTemplates", () => ({
+  useDocumentTemplatesForOrg: () => ({
+    data: [
+      { id: "tpl-doc", name: "Notice explicative", type: "interne", file_name: "notice.docx",
+        organization_id: "org-1", description: null, file_path: "org-1/notice.docx",
+        created_at: null, updated_at: null },
+      { id: "tpl-doc2", name: "Formulaire de recours", type: "externe", file_name: "recours.odt",
+        organization_id: "org-1", description: null, file_path: "org-1/recours.odt",
+        created_at: null, updated_at: null },
+      { id: "tpl-lettre", name: "Lettre de refus", type: "courrier", file_name: "refus.docx",
+        organization_id: "org-1", description: null, file_path: "org-1/refus.docx",
+        created_at: null, updated_at: null },
+    ],
+    isLoading: false,
+  }),
+}));
+
+
 // Démarche servie par le mock de useProcedure + espions de mutation (hissés car
 // les factories de vi.mock sont évaluées avant le corps du module).
 const h = vi.hoisted(() => {
@@ -135,6 +156,7 @@ describe("ProcedureEditor — pied de page du stepper", () => {
           publicationStart: null,
           publicationEnd: null,
         },
+        documents: { restrictVisibility: false, documents: [], letters: [] },
       },
     });
     expect(onStepChange).toHaveBeenCalledWith(4);

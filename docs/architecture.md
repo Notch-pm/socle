@@ -2,7 +2,7 @@
 
 > **Public** : développeuses et développeurs (humains et agents IA) travaillant sur Socle ·
 > **Question traitée** : comment le système est-il construit, et pourquoi · **Dernière mise à
-> jour** : 2026-08-12
+> jour** : 2026-09-01
 
 Ce document explique les frontières du système et les décisions qui les justifient. Il ne liste
 ni les tables (→ [`./data-model.md`](./data-model.md)), ni les endpoints (→ les OpenAPI, publiées
@@ -132,6 +132,7 @@ nombre de clés plateforme actives.
 | `/demarches/:procId` (`?step=N`) | idem |
 | `/categories` | `CategoriesPage` |
 | `/types-pieces` | `DocumentTypesPage` |
+| `/documents` | `DocumentsPage` (modèles à variables) |
 | `/quartiers` | `QuartiersPage` |
 | `/utilisateurs` | `UtilisateursPage` |
 

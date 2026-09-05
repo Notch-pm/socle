@@ -1,6 +1,6 @@
 import * as React from "react";
 import { useParams, useNavigate, useSearchParams } from "react-router-dom";
-import { ArrowLeft, Settings2, Users as UsersIcon, ListChecks, FileCheck2, MapPin, Mail, Palette, KeyRound, Gauge, type LucideIcon } from "lucide-react";
+import { ArrowLeft, Settings2, Users as UsersIcon, ListChecks, FileCheck2, FileSignature, MapPin, Mail, Palette, KeyRound, Gauge, type LucideIcon } from "lucide-react";
 import { Card, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { EmptyState } from "@/components/shared/EmptyState";
@@ -14,6 +14,7 @@ import { AiUsageSection } from "@/features/superadmin/organizations/sections/AiU
 import { UsersManagementPage } from "@/features/users/UsersManagementPage";
 import { ProceduresListPanel } from "@/features/procedures/ProceduresListPanel";
 import { DocumentTypesManager } from "@/features/document-types/DocumentTypesManager";
+import { DocumentTemplatesManager } from "@/features/documents/DocumentTemplatesManager";
 import { QuartiersManager } from "@/features/quartiers/QuartiersManager";
 
 type Section =
@@ -23,6 +24,7 @@ type Section =
   | "utilisateurs"
   | "demarches"
   | "types-pieces"
+  | "documents"
   | "quartiers"
   | "smtp"
   | "api"
@@ -34,6 +36,7 @@ const SECTIONS: { key: Section; title: string; description: string; icon: Lucide
   { key: "utilisateurs", title: "Utilisateurs", description: "Membres et rôles de cette organisation", icon: UsersIcon },
   { key: "demarches", title: "Catalogue de démarches", description: "Démarches de l'organisation principale", icon: ListChecks },
   { key: "types-pieces", title: "Types de pièce justificative", description: "Pièces demandées dans les démarches", icon: FileCheck2 },
+  { key: "documents", title: "Documents", description: "Modèles de documents et de courriers à variables", icon: FileSignature },
   { key: "quartiers", title: "Quartiers", description: "Découpage du territoire pour rattacher les usagers", icon: MapPin },
   { key: "smtp", title: "Emails (SMTP)", description: "Serveur SMTP utilisé pour les emails de cette organisation", icon: Mail },
   { key: "api", title: "API publique", description: "Clés d'accès en lecture seule (organisations, démarches, catégories)", icon: KeyRound },
@@ -54,7 +57,7 @@ const SECTIONS: { key: Section; title: string; description: string; icon: Lucide
  * (le composant reste monté d'une organisation à l'autre) n'a plus lieu d'être.
  */
 const SECTION_KEYS = new Set<string>([
-  "general", "charte", "utilisateurs", "demarches", "types-pieces", "quartiers", "smtp", "api", "ia",
+  "general", "charte", "utilisateurs", "demarches", "types-pieces", "documents", "quartiers", "smtp", "api", "ia",
 ]);
 
 const SECTION_LABELS: Record<Section, string> = {
@@ -64,6 +67,7 @@ const SECTION_LABELS: Record<Section, string> = {
   utilisateurs: "Utilisateurs",
   demarches: "Catalogue de démarches",
   "types-pieces": "Types de pièce justificative",
+  documents: "Documents",
   quartiers: "Quartiers",
   smtp: "Emails (SMTP)",
   api: "API publique",
@@ -144,6 +148,12 @@ export function OrgSettingsPage() {
             <DocumentTypesManager organizationId={organization.id} />
           ) : (
             <EmptyState message="Les types de pièce se paramètrent au niveau de l'organisation principale (racine)." />
+          ))}
+        {activeSection === "documents" &&
+          (organization.parent_id === null ? (
+            <DocumentTemplatesManager organizationId={organization.id} />
+          ) : (
+            <EmptyState message="Les documents se paramètrent au niveau de l'organisation principale (racine)." />
           ))}
         {activeSection === "quartiers" &&
           (organization.parent_id === null ? (

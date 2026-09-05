@@ -29,6 +29,9 @@ describe("buildOpenApiDocument", () => {
         "/v1/procedures",
         "/v1/procedures/{id}",
         "/v1/document-types",
+        "/v1/document-templates",
+        "/v1/document-templates/{id}",
+        "/v1/document-templates/{id}/signed-url",
         "/v1/quartiers",
         "/v1/documents/signed-url",
       ]),
@@ -139,5 +142,60 @@ describe("buildOpenApiDocument", () => {
     expect(schema.properties.source_organization_id).toBeDefined();
     expect(schema.properties.inherited).toBeDefined();
     expect(schema.properties.configured).toBeDefined();
+  });
+});
+
+describe("contrat — documents et courriers", () => {
+  const doc = buildOpenApiDocument("https://example.supabase.co/functions/v1/public-api") as any;
+
+  it("annonce la version 1.6.0 du contrat", () => {
+    expect(doc.info.version).toBe("1.6.0");
+  });
+
+  it("sert les documents d'une démarche déjà résolus", () => {
+    expect(doc.components.schemas.Procedure.properties.documents.$ref).toBe(
+      "#/components/schemas/ProcedureDocuments",
+    );
+    const items = doc.components.schemas.ProcedureDocuments.properties.items;
+    expect(items.items.$ref).toBe("#/components/schemas/ProcedureDocument");
+  });
+
+  it("avertit que les conditions ne s'appliquent pas sans restrict_visibility", () => {
+    // Le piège coûteux : appliquer les conditions sans lire le drapeau masquerait
+    // des documents que le paramétreur a rendus visibles.
+    const desc =
+      doc.components.schemas.ProcedureDocuments.properties.restrict_visibility.description;
+    expect(desc).toContain("tous");
+    expect(desc).toMatch(/masquerait/);
+  });
+
+  it("distingue les deux groupes et les trois conditions", () => {
+    const props = doc.components.schemas.ProcedureDocument.properties;
+    expect(props.group.enum).toEqual(["document", "courrier"]);
+    expect(props.visibility.enum).toEqual(["toujours", "positive", "negative"]);
+    expect(props.type.enum).toEqual(["interne", "externe", "courrier"]);
+  });
+
+  it("n'expose jamais le chemin de stockage d'un document", () => {
+    // Le fichier passe par une URL signée : un chemin brut inviterait le
+    // consommateur à le reconstruire, et déplacerait la garde de périmètre.
+    expect(Object.keys(doc.components.schemas.DocumentTemplate.properties)).not.toContain(
+      "file_path",
+    );
+    expect(doc.paths["/v1/document-templates/{id}/signed-url"].get.responses["200"]).toBeTruthy();
+  });
+
+  it("filtre le catalogue sur les trois qualifications", () => {
+    const [param] = doc.paths["/v1/document-templates"].get.parameters;
+    expect(param.name).toBe("type");
+    expect(param.schema.enum).toEqual(["interne", "externe", "courrier"]);
+  });
+
+  it("documente le bloc brut sans encourager à le résoudre soi-même", () => {
+    const desc = doc.components.schemas.DocumentsConfig.description;
+    expect(desc).toContain("Procedure.documents");
+    expect(doc.components.schemas.CommunicationConfig.properties.documents.$ref).toBe(
+      "#/components/schemas/DocumentsConfig",
+    );
   });
 });

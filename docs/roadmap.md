@@ -2,7 +2,7 @@
 
 > **Public** : tous (devs Socle, équipes consommatrices) · **Question traitée** : quelles
 > évolutions sont envisagées, et lesquelles ont déjà été livrées ? · **Dernière mise à jour** :
-> 2026-08-12
+> 2026-09-01
 
 Liste d'**intentions**, pas d'engagements — sauf mention explicite d'une date de livraison.
 Née du chantier « Clara délègue ses usagers au Socle » (2026-07-16), enrichie depuis. Pour ce qui
@@ -79,6 +79,35 @@ existe réellement aujourd'hui : [architecture.md](./architecture.md),
 - **Publication du guide d'intégration hors du repo** : `docs/integration.md` est aujourd'hui
   interne au repo Socle ; à publier ailleurs (portail, section in-app) si les équipes
   Ariane/Clara/Iris n'y ont pas accès.
+
+## Catalogue de documents
+
+### Livré
+
+- **Exposition par `public-api`** (contrat 1.6.0) : catalogue `GET /v1/document-templates`
+  (+ `/{id}`, filtre `type`), téléchargement par URL signée, et sélection **résolue** dans
+  `Procedure.documents` — 2026-09-01.
+- **Rattachement aux démarches** : bloc « Documents et courriers » de l'étape Communication, avec
+  restriction de visibilité **par document** selon l'issue de la demande — 2026-09-01.
+- **Modèle de données, bucket privé et UI Socle** (`/documents` côté admin, section « Documents »
+  d'`OrgSettingsPage` côté superadmin) : dépôt de modèles `.doc`/`.docx`/`.odt` par organisation
+  principale, qualifiés interne/externe/courrier, et **catalogue des variables** consultable depuis
+  la liste — 2026-09-01.
+
+### Envisagé
+
+- **Catalogue des variables exposé par l'API** : `documentVariables.ts` vit côté front ; un
+  consommateur qui voudrait valider un modèle avant fusion n'a pas la liste des jetons reconnus.
+- **Sources de données des variables** : la plupart des variables publiées n'ont **pas** de source
+  dans le Socle — les composantes d'adresse (numéro, BTQ, voie, complément, appartement, bâtiment)
+  manquent à `contacts` (voir « Adresse structurée » ci-dessus), et toute la famille `demande.*`
+  vit dans Ariane/Clara. Le catalogue est un **contrat de nommage** ; c'est l'aval qui fusionne.
+  **`organisme.*` fait exception** : coordonnées et charte graphique sont déjà servies par le Socle
+  (`GET /v1/organizations/{id}` et `…/branding`), donc immédiatement valorisables.
+- **Contrôle des variables employées** dans un fichier déposé (extraction des jetons `{{…}}`,
+  signalement des inconnus). Écarté : Word découpe volontiers une variable en plusieurs fragments
+  XML — une détection naïve signalerait des variables absentes qui sont bien là — et `.doc`
+  (binaire, non zippé) resterait hors de portée.
 
 ## Frontend Socle
 

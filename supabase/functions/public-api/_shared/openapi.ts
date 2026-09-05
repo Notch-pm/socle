@@ -30,7 +30,7 @@ export function buildOpenApiDocument(serverUrl: string): Record<string, unknown>
     openapi: "3.1.0",
     info: {
       title: "API Socle — Référentiel de la gamme",
-      version: "1.5.0",
+      version: "1.6.0",
       description: [
         "API **en lecture seule** exposant le référentiel central de la gamme : les",
         "**organisations** (et sous-organisations) avec l'intégralité de leur configuration,",
@@ -84,6 +84,13 @@ export function buildOpenApiDocument(serverUrl: string): Record<string, unknown>
       {
         name: "Types de pièce",
         description: "Types de pièce justificative référencés par les champs PJ.",
+      },
+      {
+        name: "Documents",
+        description:
+          "Catalogue de modèles de documents et de courriers (.doc/.docx/.odt) porteurs de " +
+          "variables, et fichiers associés. Les documents rattachés à une démarche sont " +
+          "servis résolus dans `Procedure.documents`.",
       },
       {
         name: "Quartiers",
@@ -345,6 +352,99 @@ export function buildOpenApiDocument(serverUrl: string): Record<string, unknown>
               description: "La démarche.",
               content: {
                 "application/json": { schema: { $ref: "#/components/schemas/Procedure" } },
+              },
+            },
+            ...errorResponses("400", "401", "404", "500"),
+          },
+        },
+      },
+      "/v1/document-templates": {
+        get: {
+          tags: ["Documents"],
+          summary: "Lister les modèles de documents et de courriers",
+          description:
+            "Catalogue du périmètre de la clé. Pour savoir lesquels s'appliquent à une " +
+            "démarche donnée, lisez plutôt `Procedure.documents` : la sélection y est déjà " +
+            "résolue, dans l'ordre du paramétrage.",
+          parameters: [
+            {
+              name: "type",
+              in: "query",
+              schema: { type: "string", enum: ["interne", "externe", "courrier"] },
+              description: "Filtre sur la qualification du document.",
+            },
+          ],
+          responses: {
+            "200": {
+              description: "Liste des documents du catalogue.",
+              content: {
+                "application/json": {
+                  schema: {
+                    type: "array",
+                    items: { $ref: "#/components/schemas/DocumentTemplate" },
+                  },
+                },
+              },
+            },
+            ...errorResponses("400", "401", "500"),
+          },
+        },
+      },
+      "/v1/document-templates/{id}": {
+        get: {
+          tags: ["Documents"],
+          summary: "Lire un document du catalogue",
+          parameters: [
+            {
+              name: "id",
+              in: "path",
+              required: true,
+              schema: { type: "string", format: "uuid" },
+            },
+          ],
+          responses: {
+            "200": {
+              description: "Le document.",
+              content: {
+                "application/json": {
+                  schema: { $ref: "#/components/schemas/DocumentTemplate" },
+                },
+              },
+            },
+            ...errorResponses("400", "401", "404", "500"),
+          },
+        },
+      },
+      "/v1/document-templates/{id}/signed-url": {
+        get: {
+          tags: ["Documents"],
+          summary: "Obtenir une URL de téléchargement temporaire",
+          description:
+            "Le bucket est privé : le fichier s'obtient par une URL signée valable " +
+            "**5 minutes**. Ne stockez pas cette URL, redemandez-la au besoin. " +
+            "Un document hors du périmètre de la clé répond 404, comme s'il n'existait pas.",
+          parameters: [
+            {
+              name: "id",
+              in: "path",
+              required: true,
+              schema: { type: "string", format: "uuid" },
+            },
+          ],
+          responses: {
+            "200": {
+              description: "URL signée temporaire.",
+              content: {
+                "application/json": {
+                  schema: {
+                    type: "object",
+                    properties: {
+                      url: { type: "string", format: "uri" },
+                      file_name: { type: "string" },
+                      expires_at: { type: "string", format: "date-time" },
+                    },
+                  },
+                },
               },
             },
             ...errorResponses("400", "401", "404", "500"),
@@ -725,6 +825,7 @@ export function buildOpenApiDocument(serverUrl: string): Record<string, unknown>
             form_schema: { $ref: "#/components/schemas/FormSchema" },
             knowledge_base: { $ref: "#/components/schemas/KnowledgeBase" },
             communication_config: { $ref: "#/components/schemas/CommunicationConfig" },
+            documents: { $ref: "#/components/schemas/ProcedureDocuments" },
             translations: {
               type: ["object", "null"],
               additionalProperties: true,
@@ -923,6 +1024,7 @@ export function buildOpenApiDocument(serverUrl: string): Record<string, unknown>
             "défaut : visible sur le portail, publication non bornée.",
           properties: {
             visibility: { $ref: "#/components/schemas/VisibilityConfig" },
+            documents: { $ref: "#/components/schemas/DocumentsConfig" },
           },
           example: {
             visibility: {
@@ -930,6 +1032,49 @@ export function buildOpenApiDocument(serverUrl: string): Record<string, unknown>
               publicationPeriodEnabled: true,
               publicationStart: "2026-09-01",
               publicationEnd: "2026-12-31",
+            },
+            documents: {
+              restrictVisibility: true,
+              documents: [{ id: "6f1c…", visibility: "toujours" }],
+              letters: [{ id: "a92b…", visibility: "negative" }],
+            },
+          },
+        },
+        DocumentsConfig: {
+          type: "object",
+          description:
+            "Bloc « Documents et courriers » **brut**. ⚠️ Ne le résolvez pas vous-même : " +
+            "`Procedure.documents` porte la même sélection déjà rapprochée du catalogue " +
+            "(libellé, type, nom de fichier), références mortes écartées. Ce bloc n'est " +
+            "documenté que pour lever toute ambiguïté sur ce qui est stocké. " +
+            "Les identifiants renvoient à `document_templates` : `documents` puise dans " +
+            "les types `interne`/`externe`, `letters` dans `courrier`.",
+          properties: {
+            restrictVisibility: {
+              type: "boolean",
+              description:
+                "Faux (défaut) : toutes les conditions `visibility` sont **sans effet**, " +
+                "tous les documents s'appliquent. Les conditions sont conservées quand le " +
+                "paramétreur désactive la restriction.",
+            },
+            documents: {
+              type: "array",
+              items: { $ref: "#/components/schemas/DocumentSelection" },
+            },
+            letters: {
+              type: "array",
+              items: { $ref: "#/components/schemas/DocumentSelection" },
+            },
+          },
+        },
+        DocumentSelection: {
+          type: "object",
+          properties: {
+            id: { type: "string", format: "uuid", description: "Identifiant du document." },
+            visibility: {
+              type: "string",
+              enum: ["toujours", "positive", "negative"],
+              description: "Issue de la demande pour laquelle le document s'applique.",
             },
           },
         },
@@ -961,6 +1106,111 @@ export function buildOpenApiDocument(serverUrl: string): Record<string, unknown>
               format: "date",
               description: "Dernier jour de publication (AAAA-MM-JJ, inclus). `null` : pas de borne.",
             },
+          },
+        },
+        ProcedureDocuments: {
+          type: "object",
+          description:
+            "Documents et courriers que l'agent peut produire depuis cette démarche, " +
+            "**déjà résolus** contre le catalogue : de quoi les afficher sans second appel. " +
+            "Le fichier s'obtient ensuite par `/v1/document-templates/{id}/signed-url`.",
+          properties: {
+            restrict_visibility: {
+              type: "boolean",
+              description:
+                "⚠️ Faux (le défaut) : servez **tous** les `items`, quelles que soient leurs " +
+                "`visibility`. Les conditions restent enregistrées quand le paramétreur " +
+                "désactive la restriction — les appliquer sans lire ce drapeau masquerait " +
+                "à tort des documents rendus visibles.",
+            },
+            items: {
+              type: "array",
+              items: { $ref: "#/components/schemas/ProcedureDocument" },
+              description:
+                "Dans l'ordre choisi au paramétrage : documents puis courriers. Un document " +
+                "supprimé du catalogue **disparaît** de cette liste (le paramétrage ne porte " +
+                "pas de clé étrangère).",
+            },
+          },
+          example: {
+            restrict_visibility: true,
+            items: [
+              {
+                id: "6f1c…",
+                name: "Notice explicative",
+                description: null,
+                type: "interne",
+                group: "document",
+                file_name: "notice.docx",
+                visibility: "toujours",
+              },
+              {
+                id: "a92b…",
+                name: "Lettre de refus",
+                description: null,
+                type: "courrier",
+                group: "courrier",
+                file_name: "refus.docx",
+                visibility: "negative",
+              },
+            ],
+          },
+        },
+        ProcedureDocument: {
+          type: "object",
+          properties: {
+            id: { type: "string", format: "uuid" },
+            name: { type: "string", description: "Libellé du document." },
+            description: { type: ["string", "null"] },
+            type: { type: "string", enum: ["interne", "externe", "courrier"] },
+            group: {
+              type: "string",
+              enum: ["document", "courrier"],
+              description:
+                "Sous-groupe de l'étape Communication : `courrier` pour les modèles de " +
+                "courrier, `document` pour les types `interne`/`externe`.",
+            },
+            file_name: { type: "string", description: "Nom d'origine du fichier." },
+            visibility: {
+              type: "string",
+              enum: ["toujours", "positive", "negative"],
+              description:
+                "Issue de la demande pour laquelle le document s'applique. Sans effet si " +
+                "`restrict_visibility` est faux.",
+            },
+          },
+        },
+        DocumentTemplate: {
+          type: "object",
+          description:
+            "Modèle de document ou de courrier du catalogue d'une organisation principale. " +
+            "Le fichier (.doc/.docx/.odt) porte des variables `{{usager.nom}}`, " +
+            "`{{demande.code_suivi}}`, `{{organisme.nom}}` — c'est l'application aval qui " +
+            "les valorise, le Socle ne fusionne rien.",
+          properties: {
+            id: { type: "string", format: "uuid" },
+            organization_id: { type: "string", format: "uuid" },
+            name: { type: "string", description: "Libellé, unique dans l'organisation." },
+            description: { type: ["string", "null"] },
+            type: { type: "string", enum: ["interne", "externe", "courrier"] },
+            file_name: {
+              type: "string",
+              description:
+                "Nom d'origine du fichier. Le chemin de stockage n'est pas exposé : passez " +
+                "par `/v1/document-templates/{id}/signed-url`.",
+            },
+            created_at: { type: ["string", "null"], format: "date-time" },
+            updated_at: { type: ["string", "null"], format: "date-time" },
+          },
+          example: {
+            id: "a92b…",
+            organization_id: "3d1f…",
+            name: "Lettre de refus",
+            description: "Envoyée à l'usager en cas de décision défavorable.",
+            type: "courrier",
+            file_name: "refus.docx",
+            created_at: "2026-09-01T09:00:00Z",
+            updated_at: "2026-09-01T09:00:00Z",
           },
         },
         DocumentType: {

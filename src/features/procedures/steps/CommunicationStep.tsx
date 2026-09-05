@@ -7,8 +7,12 @@ import {
   parseCommunicationConfig,
   publicationPeriodError,
   type CommunicationConfig,
+  type CommunicationDocument,
+  type DocumentsConfig,
   type VisibilityConfig,
 } from "@/features/procedures/communication";
+import { DocumentsBlock } from "@/features/procedures/steps/communication/DocumentsBlock";
+import { useDocumentTemplatesForOrg } from "@/features/documents/useDocumentTemplates";
 import type { Procedure } from "@/features/procedures/useProcedures";
 
 /** Ligne « libellé + explication » à gauche, commutateur à droite. */
@@ -39,9 +43,10 @@ function ToggleRow({
 }
 
 /**
- * Étape « Communication » : paramètres de diffusion de la démarche. Premier bloc,
- * « Visibilité » — persisté dans `procedures.communication_config` (schéma
- * possédé), exposé par l'API publique et exploité en aval par le portail usagers.
+ * Étape « Communication » : paramètres de diffusion de la démarche. Deux blocs,
+ * « Visibilité » et « Documents et courriers » — persistés dans
+ * `procedures.communication_config` (schéma possédé), exposés par l'API publique
+ * et exploités en aval (portail usagers, Iris).
  */
 export function CommunicationStep({
   formId,
@@ -55,11 +60,20 @@ export function CommunicationStep({
   const [config, setConfig] = React.useState<CommunicationConfig>(() =>
     parseCommunicationConfig(procedure.communication_config),
   );
-  const { visibility } = config;
+  const { visibility, documents } = config;
   const periodError = publicationPeriodError(visibility);
+
+  // Le catalogue est celui de l'organisation principale porteuse de la démarche.
+  const { data: templates, isLoading: loadingTemplates } = useDocumentTemplatesForOrg(
+    procedure.organization_id,
+  );
 
   function setVisibility<K extends keyof VisibilityConfig>(key: K, value: VisibilityConfig[K]) {
     setConfig((c) => ({ ...c, visibility: { ...c.visibility, [key]: value } }));
+  }
+
+  function setDocuments<K extends keyof DocumentsConfig>(key: K, value: DocumentsConfig[K]) {
+    setConfig((c) => ({ ...c, documents: { ...c.documents, [key]: value } }));
   }
 
   function handleSubmit(e: React.FormEvent) {
@@ -132,6 +146,34 @@ export function CommunicationStep({
             </Field>
           </div>
         ) : null}
+      </section>
+
+      <section className="flex flex-col gap-4 rounded-xl border border-border p-5">
+        <div>
+          <h3 className="text-base font-semibold">Documents et courriers</h3>
+          <p className="mt-1 text-sm text-muted-foreground">
+            Ce que l'agent pourra produire depuis cette démarche, choisi dans le catalogue de
+            l'organisation.
+          </p>
+        </div>
+
+        <ToggleRow
+          id="comm-documents-restrict"
+          label="Restreindre la visibilité selon l'issue"
+          description="Chaque document n'est proposé que pour les demandes traitées positivement, négativement, ou toujours."
+          checked={documents.restrictVisibility}
+          onCheckedChange={(v) => setDocuments("restrictVisibility", v)}
+        />
+
+        <DocumentsBlock
+          templates={templates ?? []}
+          loading={loadingTemplates}
+          documents={documents.documents}
+          letters={documents.letters}
+          restrictVisibility={documents.restrictVisibility}
+          onChangeDocuments={(next: CommunicationDocument[]) => setDocuments("documents", next)}
+          onChangeLetters={(next: CommunicationDocument[]) => setDocuments("letters", next)}
+        />
       </section>
     </form>
   );

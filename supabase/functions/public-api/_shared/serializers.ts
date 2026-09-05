@@ -7,7 +7,10 @@
 import type {
   BrandingDto,
   CategoryDto,
+  DocumentTemplateDto,
   DocumentTypeDto,
+  ProcedureDocumentDto,
+  ProcedureDocumentsDto,
   OrganizationDto,
   OrganizationProcedureDto,
   ProcedureDto,
@@ -59,7 +62,101 @@ export function serializeCategory(row: Row): CategoryDto {
   };
 }
 
-export function serializeProcedure(row: Row): ProcedureDto {
+export function serializeDocumentTemplate(row: Row): DocumentTemplateDto {
+  return {
+    id: str(row.id),
+    organization_id: str(row.organization_id),
+    name: str(row.name),
+    description: nullableStr(row.description),
+    type: str(row.type),
+    file_name: str(row.file_name),
+    created_at: nullableStr(row.created_at),
+    updated_at: nullableStr(row.updated_at),
+  };
+}
+
+/** Conditions de visibilité reconnues (miroir de `DOCUMENT_VISIBILITIES`). */
+const VISIBILITIES = new Set(["toujours", "positive", "negative"]);
+
+/**
+ * Lit une liste de documents du bloc `communication_config.documents`.
+ *
+ * ⚠️ **Miroir volontaire** de `parseDocumentList` dans
+ * `src/features/procedures/communication.ts` : le code d'une edge function est
+ * déployé séparément et ne peut rien importer de `src/`. Les deux doivent rester
+ * d'accord — mêmes règles (identifiant non vide, dédoublonnage, condition
+ * inconnue ramenée à `toujours`), et les tests des deux côtés les épinglent.
+ */
+function readDocumentIds(raw: unknown): Array<{ id: string; visibility: string }> {
+  if (!Array.isArray(raw)) return [];
+  const seen = new Set<string>();
+  const out: Array<{ id: string; visibility: string }> = [];
+  for (const item of raw) {
+    if (!item || typeof item !== "object") continue;
+    const { id, visibility } = item as Record<string, unknown>;
+    const key = typeof id === "string" ? id.trim() : "";
+    if (!key || seen.has(key)) continue;
+    seen.add(key);
+    out.push({
+      id: key,
+      visibility: VISIBILITIES.has(visibility as string) ? (visibility as string) : "toujours",
+    });
+  }
+  return out;
+}
+
+/**
+ * Résout le bloc « Documents et courriers » d'une démarche contre le catalogue.
+ *
+ * ⚠️ Une référence dont le document a été **supprimé du catalogue** est écartée :
+ * le JSON ne porte pas de clé étrangère, une sélection peut donc survivre à son
+ * document. Servir un identifiant mort obligerait chaque consommateur à gérer un
+ * 404 sur `signed-url`.
+ */
+export function serializeProcedureDocuments(
+  communicationConfig: unknown,
+  templatesById: Map<string, Row>,
+): ProcedureDocumentsDto {
+  const empty: ProcedureDocumentsDto = { restrict_visibility: false, items: [] };
+  if (!communicationConfig || typeof communicationConfig !== "object") return empty;
+
+  const block = (communicationConfig as Record<string, unknown>).documents;
+  if (!block || typeof block !== "object") return empty;
+
+  const documents = block as Record<string, unknown>;
+  const items: ProcedureDocumentDto[] = [];
+  // Documents d'abord, courriers ensuite — l'ordre de l'écran de paramétrage.
+  for (const [key, group] of [
+    ["documents", "document"],
+    ["letters", "courrier"],
+  ] as const) {
+    for (const entry of readDocumentIds(documents[key])) {
+      const template = templatesById.get(entry.id);
+      if (!template) continue;
+      items.push({
+        id: str(template.id),
+        name: str(template.name),
+        description: nullableStr(template.description),
+        type: str(template.type),
+        group,
+        file_name: str(template.file_name),
+        visibility: entry.visibility,
+      });
+    }
+  }
+
+  return {
+    restrict_visibility: documents.restrictVisibility === true,
+    items,
+  };
+}
+
+/**
+ * `templatesById` porte le catalogue de documents du périmètre : sans lui, le
+ * champ `documents` serait vide alors que la démarche en propose. Tout appelant
+ * doit donc le fournir — d'où le paramètre requis.
+ */
+export function serializeProcedure(row: Row, templatesById: Map<string, Row>): ProcedureDto {
   return {
     id: str(row.id),
     organization_id: nullableStr(row.organization_id),
@@ -79,6 +176,7 @@ export function serializeProcedure(row: Row): ProcedureDto {
     form_schema: row.form_schema ?? null,
     knowledge_base: row.knowledge_base ?? null,
     communication_config: row.communication_config ?? null,
+    documents: serializeProcedureDocuments(row.communication_config, templatesById),
     translations: row.translations ?? null,
     created_at: nullableStr(row.created_at),
     updated_at: nullableStr(row.updated_at),

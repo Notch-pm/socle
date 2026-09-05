@@ -24,15 +24,17 @@ aucun endpoint, il décrit ce qui existe **en base**.
 
 - **Rattachement à une organisation racine** — trigger `enforce_*_root_org` (`BEFORE
   INSERT/UPDATE OF organization_id`) : refuse toute valeur dont l'organisation n'est pas une
-  racine (`parent_id IS NULL`). Présent sur `procedures`, `document_types`, `api_keys`,
-  `contacts`, `contact_roles`, `quartiers`. Par cohérence inter-tables, `contact_role_assignments`
+  racine (`parent_id IS NULL`). Présent sur `procedures`, `document_types`, `document_templates`,
+  `api_keys`, `contacts`, `contact_roles`, `quartiers`. Par cohérence inter-tables, `contact_role_assignments`
   et `contact_relations` vérifient eux aussi que leurs lignes liées partagent la même racine
   (triggers dédiés, détaillés plus bas). **`categories` fait exception** — voir Points de
   vigilance.
 - **Unicité de nom par organisation** — index unique `(organization_id, lower(name))` :
-  présent sur `document_types`, `contact_roles`, `quartiers`. **Absent de `categories`.**
+  présent sur `document_types`, `document_templates`, `contact_roles`, `quartiers`. **Absent de
+  `categories`.**
 - **Horodatage `set_updated_at()`** — trigger `BEFORE UPDATE` qui met à jour `updated_at` :
-  présent sur `smtp_settings`, `contacts`, `contact_external_references`, `quartiers`.
+  présent sur `smtp_settings`, `contacts`, `contact_external_references`, `quartiers`,
+  `document_templates`.
   **Absent de `procedures`**, qui a pourtant une colonne `updated_at`.
 - **`SECURITY DEFINER` anti-récursion des helpers RLS** — `is_super_admin()`, `is_org_admin()`,
   `has_org_access()`, `is_admin_of_self_or_ancestor()` lisent `users` / `user_organizations` /
@@ -172,6 +174,22 @@ aucun endpoint, il décrit ce qui existe **en base**.
 - **RLS** : lecture `has_org_access(organization_id)` · écriture (ALL) `is_org_admin(organization_id)`.
 - Consommé par le champ « pièce justificative » du form builder de `procedures.form_schema`
   (`documentTypeId`, obligatoire à la saisie — logique côté `src/features/procedures/`).
+
+### `document_templates` — catalogue de documents à variables
+
+Modèles de documents et de courriers (`.doc`/`.docx`/`.odt`) porteurs de variables
+`{{usager.nom}}`. ⚠️ **À ne pas confondre avec `document_types`** : celle-ci décrit les pièces
+**demandées à l'usager**, celle-là les documents **produits par l'administration**.
+
+- `organization_id` NOT NULL, FK CASCADE, **racine imposée** par
+  `enforce_document_template_root_org` ; `name` NOT NULL ; `description` ; `type` NOT NULL avec
+  **CHECK `in ('interne','externe','courrier')`** ; `file_path` + `file_name` NOT NULL ;
+  `created_at`/`updated_at` (trigger `set_updated_at`).
+- Index **unique `(organization_id, lower(name))`** + index sur `organization_id`.
+- **RLS** : lecture `has_org_access(organization_id)` · écriture (ALL) `is_org_admin(organization_id)`.
+- Fichiers dans le bucket privé **`document-templates`** (voir Storage ci-dessous).
+- **Non exposé par les APIs publiques** à ce jour, et non rattaché aux démarches — les deux sont
+  en « envisagé » dans [roadmap.md](./roadmap.md).
 
 ---
 
@@ -494,7 +512,8 @@ car `contacts` n'a aucune policy d'écriture client :
 `SECURITY DEFINER`, **EXECUTE révoqué de `anon`/`authenticated`** (motif transverse, advisors
 0028/0029 — sans effet sur leur déclenchement, seulement sur leur appel direct via
 `/rest/v1/rpc/…`) : `handle_new_user`, `enforce_procedure_root_org`,
-`enforce_document_type_root_org`, `enforce_api_key_root_org`, `enforce_contact_root_org`,
+`enforce_document_type_root_org`, `enforce_document_template_root_org`,
+`enforce_api_key_root_org`, `enforce_contact_root_org`,
 `enforce_contact_role_root_org`, `enforce_contact_role_same_org`, `enforce_quartier_root_org`,
 `assign_contact_quartier`, `sync_contact_external_ref_org`, `sync_contact_relation_org`,
 `enforce_smtp_no_inherit_on_root`, `enforce_branding_root_no_inherit`.
@@ -514,7 +533,9 @@ seulement) — voir `smtp_settings.password` plus haut.
 
 ---
 
-## Storage — bucket `procedure-documents`
+## Storage — buckets privés
+
+### `procedure-documents` — documents de la base de connaissances
 
 - Bucket **privé**, limite **25 Mio/fichier**, `allowed_mime_types = NULL` (aucun filtrage MIME
   côté serveur — la validation de format est purement applicative, côté `procedureStorage.ts`).
@@ -525,6 +546,22 @@ seulement) — voir `smtp_settings.password` plus haut.
   INSERT/UPDATE/DELETE `is_org_admin(...)` sur le même premier segment de chemin.
 - Accès en lecture par **URL signée temporaire** ; la référence `{path, name}` est stockée dans
   `procedures.knowledge_base` (voir ci-dessous).
+
+### `document-templates` — fichiers du catalogue de documents
+
+- Bucket **privé**, limite **25 Mio/fichier**, `allowed_mime_types = NULL` (validation de format
+  purement applicative, côté `src/features/documents/documentTemplates.ts` :
+  `.doc`/`.docx`/`.odt`).
+- **Isolation par convention de chemin** : `{organization_id racine}/{uid}-{fichier}`.
+  ⚠️ **Pas de segment de document**, contrairement à `procedure-documents` : le fichier est
+  déposé **avant** que la ligne `document_templates` existe, il n'y a donc pas d'id à y mettre ;
+  le `uid` (`crypto.randomUUID()`) porte seul l'unicité.
+- **4 policies** sur `storage.objects`, rôle `authenticated`, scopées
+  `bucket_id = 'document-templates'` : SELECT `has_org_access((storage.foldername(name))[1]::uuid)` ;
+  INSERT/UPDATE/DELETE `is_org_admin(...)`. L'UPDATE porte **`using` ET `with check`** — sans les
+  deux, un objet pourrait être déplacé hors de son tenant.
+- Accès en lecture par **URL signée temporaire** ; le chemin est stocké dans
+  `document_templates.file_path`.
 
 ---
 
@@ -541,7 +578,12 @@ Leur structure n'est **pas** décrite ici (propriété du code applicatif et de 
   `knowledgeBase.ts`, `communication.ts`, `conditions.ts`, `formats.ts` — tous testés).
 - ⚠️ `communication_config` **NULL** n'est pas « non publiée » : c'est une démarche jamais passée
   par l'étape, à lire comme les valeurs par défaut (visible, non bornée). Le parseur applicatif
-  le fait ; un consommateur SQL direct doit le faire aussi.
+  le fait ; un consommateur SQL direct doit le faire aussi. ⚠️ Le bloc `documents` du même JSON
+  fait **exception** : ses défauts sont **vides** (aucun document proposé), pas actifs — sans quoi
+  une colonne NULL déverserait tout le catalogue dans chaque démarche.
+- ⚠️ Le bloc `communication_config.documents` référence `document_templates` **sans clé
+  étrangère** : une sélection survit à la suppression de son document. L'UI comme `public-api`
+  écartent ces références mortes ; un consommateur SQL direct doit joindre, pas faire confiance.
 - Contrat publié : `/api-doc` (Redoc, `public-api/openapi.json`).
 
 La sérialisation des deux Edge Functions applique une **whitelist stricte** : aucune colonne
@@ -553,7 +595,11 @@ serveur-à-serveur pour les apps agents) malgré le commentaire SQL de la colonn
 l'OpenAPI de `contacts-api`, voir Points de vigilance.
 
 La fiche contact expose aussi l'objet **`quartier` résolu** (`{id, name, color}`), construit via
-un embed PostgREST centralisé dans la constante `CONTACT_SELECT` de `contacts-api`.
+un embed PostgREST centralisé dans la constante `CONTACT_SELECT` de `contacts-api`. De même, la
+démarche expose **`documents` résolu** (libellé, type, groupe, nom de fichier) à partir du bloc
+`communication_config.documents` et du catalogue, via `loadTemplates` dans `public-api` —
+⚠️ `document_templates.file_path` n'est **jamais** exposé : le fichier passe par
+`GET /v1/document-templates/{id}/signed-url`.
 
 ---
 

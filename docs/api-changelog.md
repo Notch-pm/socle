@@ -1,7 +1,7 @@
 # Journal des évolutions des API publiques
 
 > **Public** : équipes consommatrices (Ariane, Clara, Iris, partenaires) · **Question traitée** :
-> quand un contrat d'API a-t-il changé, et comment ? · **Dernière mise à jour** : 2026-08-30
+> quand un contrat d'API a-t-il changé, et comment ? · **Dernière mise à jour** : 2026-09-01
 
 Journal **append-only** : chaque évolution de la surface de contrat des API publiques
 (`public-api`, `contacts-api`, `ai-api`) — endpoint, paramètre, champ de réponse, comportement
@@ -10,6 +10,43 @@ une correction s'ajoute sous une nouvelle date. Politique de compatibilité et o
 consommateur : [integration.md](./integration.md#politique-de-compatibilité-v1).
 
 Format d'une entrée : `## AAAA-MM-JJ — <api> — ajout|correctif|rupture`
+
+---
+
+## 2026-09-01 — public-api — ajout
+
+**Une démarche dit désormais quels documents l'agent peut en produire.** Nouveau catalogue
+`GET /v1/document-templates` (+ `/{id}`, + `/{id}/signed-url`) : des modèles `.doc`/`.docx`/`.odt`
+porteurs de variables, qualifiés `interne`, `externe` ou `courrier`. Et sur chaque démarche, un
+nouveau champ **`documents`** qui porte la sélection faite au paramétrage. Scope `read`.
+Version du contrat : **1.6.0**.
+
+Ajout **additif** : aucun champ existant ne change, `communication_config` reste transmis tel quel.
+
+- **`Procedure.documents` est déjà résolu.** Vous y trouvez le libellé, le type, le groupe et le
+  nom de fichier de chaque document, dans l'ordre du paramétrage — de quoi afficher la liste à un
+  agent **sans second appel**. C'est le même parti que le `quartier` embarqué dans la fiche
+  contact et que la charte graphique résolue : ce qui s'applique, servi tel quel.
+- ⚠️ **`documents.restrict_visibility` gouverne les conditions, et il vaut `false` par défaut.**
+  Chaque document porte une `visibility` (`toujours` / `positive` / `negative`, l'issue de la
+  demande). Ces conditions sont **conservées** quand le paramétreur désactive la restriction — le
+  commutateur gouverne l'usage, pas la donnée. Un consommateur qui applique les `visibility` sans
+  lire `restrict_visibility` **masquerait des documents rendus visibles**. Lisez le drapeau d'abord.
+- ⚠️ **Ne reconstituez pas la liste depuis `communication_config.documents`.** Ce bloc brut ne
+  porte que des identifiants, et une sélection peut **survivre à son document** : le paramétrage
+  vit dans un JSON sans clé étrangère, un document supprimé du catalogue y laisse un identifiant
+  mort. `Procedure.documents` les écarte déjà. Le bloc brut n'est documenté (`DocumentsConfig`)
+  que pour lever l'ambiguïté sur ce qui est stocké.
+- **Le fichier passe par une URL signée**, valable 5 minutes :
+  `GET /v1/document-templates/{id}/signed-url`. Le chemin de stockage n'est **pas** exposé — ni
+  sur `DocumentTemplate`, ni ailleurs. La garde de périmètre porte sur la ligne, pas sur une
+  chaîne que vous fourniriez. Ne stockez pas l'URL obtenue, redemandez-la.
+- ⚠️ **À ne pas confondre avec `GET /v1/documents/signed-url`**, qui sert depuis toujours les
+  documents de la *base de connaissances* d'une démarche (bucket `procedure-documents`) à partir
+  d'un chemin. Deux ressources différentes, deux buckets, deux endpoints : celui-ci est inchangé.
+- **Rien de rétroactif** : une démarche qui n'est pas passée par l'étape Communication depuis ce
+  jour a `documents: {restrict_visibility: false, items: []}`. Aucun document n'est proposé nulle
+  part tant qu'il n'a pas été choisi — le catalogue ne se déverse pas dans les démarches.
 
 ---
 

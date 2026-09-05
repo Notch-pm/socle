@@ -9,6 +9,7 @@ import { ForgotPasswordPage } from "@/features/auth/ForgotPasswordPage";
 import { DashboardPage } from "@/pages/DashboardPage";
 import { CategoriesPage } from "@/features/categories/CategoriesPage";
 import { DocumentTypesPage } from "@/features/document-types/DocumentTypesPage";
+import { DocumentsPage } from "@/features/documents/DocumentsPage";
 import { OrganizationsPage } from "@/features/organizations/OrganizationsPage";
 import { OrganizationEditorPage } from "@/features/organizations/OrganizationEditorPage";
 import { ProceduresPage } from "@/features/procedures/ProceduresPage";
@@ -71,6 +72,7 @@ export function App() {
               <Route path="demarches/:procId" element={<ProcedureEditorPage variant="admin" />} />
               <Route path="categories" element={<CategoriesPage />} />
               <Route path="types-pieces" element={<DocumentTypesPage />} />
+              <Route path="documents" element={<DocumentsPage />} />
               <Route path="quartiers" element={<QuartiersPage />} />
               <Route path="utilisateurs" element={<UtilisateursPage />} />
               {/* Consultation seule — le plafond se règle côté superadmin. */}

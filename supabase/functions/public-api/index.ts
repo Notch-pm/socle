@@ -18,6 +18,7 @@ import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import {
   serializeBranding,
   serializeCategory,
+  serializeDocumentTemplate,
   serializeDocumentType,
   serializeOrganization,
   serializeProcedure,
@@ -30,6 +31,7 @@ import { buildOpenApiDocument } from "./_shared/openapi.ts";
 
 const FUNCTION_NAME = "public-api";
 const DOCUMENTS_BUCKET = "procedure-documents";
+const TEMPLATES_BUCKET = "document-templates";
 const SIGNED_URL_TTL_SECONDS = 300;
 
 const corsHeaders = {
@@ -37,6 +39,27 @@ const corsHeaders = {
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
   "Access-Control-Allow-Methods": "GET, OPTIONS",
 };
+
+/**
+ * Catalogue de documents du périmètre, indexé par identifiant : `serializeProcedure`
+ * s'en sert pour résoudre le bloc « Documents et courriers ». Une seule requête,
+ * y compris pour une liste de démarches — le motif de `list_quartiers_geojson`.
+ */
+async function loadTemplates(
+  admin: ReturnType<typeof createClient>,
+  orgIds: Array<string | null>,
+): Promise<Map<string, Record<string, unknown>>> {
+  const ids = orgIds.filter((id): id is string => typeof id === "string");
+  if (ids.length === 0) return new Map();
+  const { data, error } = await admin
+    .from("document_templates")
+    .select("*")
+    .in("organization_id", ids);
+  if (error) throw error;
+  return new Map(
+    ((data ?? []) as Array<Record<string, unknown>>).map((row) => [String(row.id), row]),
+  );
+}
 
 /** SHA-256 hexadécimal (même algorithme que la génération côté navigateur). */
 async function sha256Hex(input: string): Promise<string> {
@@ -194,7 +217,6 @@ Deno.serve(async (req: Request) => {
 
     const url = new URL(req.url);
     const segments = path.split("/").filter(Boolean); // ex. ["v1","organizations","<id>"]
-
     // --- /v1/organizations ---
     if (segments[0] === "v1" && segments[1] === "organizations") {
       if (segments.length === 2) {
@@ -341,7 +363,12 @@ Deno.serve(async (req: Request) => {
         }
         const { data, error } = await query.order("order_index", { ascending: true });
         if (error) throw error;
-        return jsonResponse(200, (data ?? []).map(serializeProcedure), corsHeaders);
+        const templates = await loadTemplates(admin, scopeIds);
+        return jsonResponse(
+          200,
+          (data ?? []).map((row) => serializeProcedure(row, templates)),
+          corsHeaders,
+        );
       }
       if (segments.length === 3) {
         const id = segments[2];
@@ -353,7 +380,8 @@ Deno.serve(async (req: Request) => {
         if (!data || !inScope(data.organization_id)) {
           return errorResponse("not_found", "Démarche introuvable.", corsHeaders);
         }
-        return jsonResponse(200, serializeProcedure(data), corsHeaders);
+        const templates = await loadTemplates(admin, [data.organization_id]);
+        return jsonResponse(200, serializeProcedure(data, templates), corsHeaders);
       }
     }
 
@@ -366,6 +394,67 @@ Deno.serve(async (req: Request) => {
         .order("name", { ascending: true });
       if (error) throw error;
       return jsonResponse(200, (data ?? []).map(serializeDocumentType), corsHeaders);
+    }
+
+    // --- /v1/document-templates ---
+    if (segments[0] === "v1" && segments[1] === "document-templates") {
+      if (segments.length === 2) {
+        let query = admin.from("document_templates").select("*").in("organization_id", scopeIds);
+        const type = url.searchParams.get("type");
+        if (type !== null) {
+          if (type !== "interne" && type !== "externe" && type !== "courrier") {
+            return errorResponse(
+              "bad_request",
+              "Paramètre type invalide (interne, externe ou courrier).",
+              corsHeaders,
+            );
+          }
+          query = query.eq("type", type);
+        }
+        const { data, error } = await query.order("name", { ascending: true });
+        if (error) throw error;
+        return jsonResponse(200, (data ?? []).map(serializeDocumentTemplate), corsHeaders);
+      }
+
+      const id = segments[2];
+      if (!isUuid(id)) {
+        return errorResponse("bad_request", "Identifiant de document invalide.", corsHeaders);
+      }
+      const { data, error } = await admin
+        .from("document_templates")
+        .select("*")
+        .eq("id", id)
+        .maybeSingle();
+      if (error) throw error;
+      // Hors périmètre = 404 : on ne révèle pas l'existence du document.
+      if (!data || !inScope(data.organization_id)) {
+        return errorResponse("not_found", "Document introuvable.", corsHeaders);
+      }
+
+      if (segments.length === 3) {
+        return jsonResponse(200, serializeDocumentTemplate(data), corsHeaders);
+      }
+
+      // --- /v1/document-templates/{id}/signed-url ---
+      // Le chemin de stockage reste interne : le périmètre est vérifié sur la
+      // ligne, pas sur une chaîne fournie par l'appelant.
+      if (segments.length === 4 && segments[3] === "signed-url") {
+        const { data: signed, error: signErr } = await admin.storage
+          .from(TEMPLATES_BUCKET)
+          .createSignedUrl(String(data.file_path), SIGNED_URL_TTL_SECONDS);
+        if (signErr || !signed) {
+          return errorResponse("not_found", "Fichier introuvable.", corsHeaders);
+        }
+        return jsonResponse(
+          200,
+          {
+            url: signed.signedUrl,
+            file_name: String(data.file_name),
+            expires_at: new Date(Date.now() + SIGNED_URL_TTL_SECONDS * 1000).toISOString(),
+          },
+          corsHeaders,
+        );
+      }
     }
 
     // --- /v1/quartiers ---
