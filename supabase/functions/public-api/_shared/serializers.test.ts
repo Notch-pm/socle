@@ -6,6 +6,7 @@ import {
   serializeOrganization,
   serializeOrganizationProcedure,
   serializePortalProcedure,
+  serializePortalProcedureDetail,
   serializeProcedure,
   serializeProcedureDocuments,
   serializeQuartier,
@@ -585,5 +586,66 @@ describe("serializePortalProcedure — le paramétrage d'instruction ne sort pas
     expect(dto.short_description).toBeNull();
     expect(dto.user_description).toBeNull();
     expect(dto.input_duration_minutes).toBeNull();
+  });
+});
+
+describe("serializePortalProcedureDetail — le formulaire sort, l'instruction non", () => {
+  const row = {
+    id: "proc-1",
+    name: "Demande d'acte de naissance",
+    short_description: "En quelques minutes.",
+    user_description: "Adressée au service état civil.",
+    input_duration_minutes: 5,
+    translations: { br: { name: "Testeni ganedigezh" } },
+  };
+  const detail = {
+    id: "proc-1",
+    category_id: "cat-1",
+    form_schema: { version: 1, content: [{ id: "f1", key: "nom", type: "text", label: "Nom" }] },
+    requester_config: { citoyen: { enabled: true, fields: { courriel: "obligatoire" } } },
+  };
+  const category = { id: "cat-1", name: "État civil", translations: { br: { name: "Stad-civil" } } };
+
+  it("ajoute au public de la liste la catégorie et les deux schémas de saisie", () => {
+    const dto = serializePortalProcedureDetail(row, [{ id: "accm", name: "ACCM" }], detail, category);
+    expect(dto).toEqual({
+      id: "proc-1",
+      name: "Demande d'acte de naissance",
+      short_description: "En quelques minutes.",
+      user_description: "Adressée au service état civil.",
+      input_duration_minutes: 5,
+      organizations: [{ id: "accm", name: "ACCM" }],
+      translations: { br: { name: "Testeni ganedigezh" } },
+      category: { id: "cat-1", name: "État civil", translations: { br: { name: "Stad-civil" } } },
+      form_schema: detail.form_schema,
+      requester_config: detail.requester_config,
+    });
+  });
+
+  it("recopie le schéma TEL QUEL — le réécrire ici en ferait une seconde grammaire", () => {
+    const dto = serializePortalProcedureDetail(row, [], detail, null);
+    expect(dto.form_schema).toBe(detail.form_schema);
+    expect(dto.requester_config).toBe(detail.requester_config);
+  });
+
+  it("ne laisse pas fuir ce qu'un agent seul doit lire", () => {
+    const dto = serializePortalProcedureDetail(
+      { ...row, knowledge_base: { agent: {} }, agent_description: "Vérifier la filiation." },
+      [],
+      { ...detail, knowledge_base: { agent: {} }, agent_description: "Vérifier la filiation." },
+      null,
+    ) as Record<string, unknown>;
+    for (const leak of ["agent_description", "knowledge_base", "communication_config", "documents"]) {
+      expect(dto).not.toHaveProperty(leak);
+    }
+  });
+
+  it("une démarche sans catégorie ni formulaire se sert quand même", () => {
+    // Cas courant d'une démarche qu'on vient de créer : elle s'affiche, sans
+    // saisie. Ce n'est pas une erreur, et le portail ne doit pas la refuser.
+    const dto = serializePortalProcedureDetail(row);
+    expect(dto.category).toBeNull();
+    expect(dto.form_schema).toBeNull();
+    expect(dto.requester_config).toBeNull();
   });
 });

@@ -15,6 +15,36 @@ Format d'une entrée : `## AAAA-MM-JJ — <api> — ajout|correctif|rupture`
 
 ## 2026-09-06 — public-api — ajout
 
+**Une démarche, avec son formulaire.** Le portail listait les démarches ; il peut désormais en
+*servir* une : la présenter, puis la faire remplir. Version du contrat : **1.12.0**. Ajout
+additif.
+
+- `GET /v1/portal/procedures/{id}?tenant_id=` — nouvelle route. Elle rend `PortalProcedureDetail` :
+  tout ce que porte la liste, plus la **catégorie** et les **deux schémas de saisie**,
+  `form_schema` et `requester_config`.
+- **Mêmes règles de publication que la liste**, appliquées par le même code (`publishedCatalogue`) :
+  la démarche doit appartenir au catalogue publié de la collectivité. Sinon **404** — le même que
+  pour un identifiant inexistant. Une démarche en brouillon, interne, hors période ou qu'aucun
+  organisme n'active est donc introuvable, **et son `form_schema` n'est même pas lu en base** : la
+  lecture n'a lieu qu'après la décision de publication.
+- **Pourquoi ces deux schémas sortent, et pas les autres.** `form_schema` et `requester_config` ne
+  sont pas du paramétrage d'instruction : ils **sont** le formulaire de l'usager, et sans eux un
+  portail ne peut afficher qu'un titre. `knowledge_base`, `agent_description` et les documents de
+  la communication, eux, ne franchissent toujours pas — ce qu'un agent lit pour instruire n'a rien
+  à faire dans le navigateur d'un habitant. La liste, elle, reste un **catalogue** et n'en porte
+  aucun : c'est le détail qui les sert, une démarche à la fois.
+- ⚠️ **La clé machine d'un champ est `key`, pas `id`.** `key` nomme la donnée en aval — c'est elle
+  qui indexe le `form_data` d'une demande, et la seule qu'un agent lise. L'`id` ne sert qu'aux
+  conditions (`visibleIf`, `requiredIf`), qui s'évaluent sur les identifiants. Déposer un
+  `form_data` indexé par `id` produirait des demandes dont aucun agent ne reconnaît les champs.
+- `form_schema` est un schéma **possédé et versionné** (`{ version: 1, content: [...] }`) : à
+  parser avec tolérance, un `type` de champ inconnu s'ignore. Les deux schémas valent `null` quand
+  la démarche n'a rien de paramétré — c'est une démarche sans saisie, pas une erreur.
+
+---
+
+## 2026-09-06 — public-api — ajout
+
 **Les libellés traduits, et les langues d'une collectivité.** Une collectivité active les langues
 dans lesquelles elle s'adresse à ses usagers (français toujours compris) ; les libellés des
 **démarches** et des **catégories** se traduisent dans chacune d'elles. Version du contrat :

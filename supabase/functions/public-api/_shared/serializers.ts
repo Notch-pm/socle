@@ -13,6 +13,7 @@ import type {
   ProcedureDocumentsDto,
   OrganizationDto,
   PortalOrganizationRefDto,
+  PortalProcedureDetailDto,
   PortalProcedureDto,
   OrganizationProcedureDto,
   ProcedureDto,
@@ -378,5 +379,36 @@ export function serializePortalProcedure(
     input_duration_minutes: nullableNum(row.input_duration_minutes),
     organizations: organizations.map((org) => ({ id: str(org.id), name: str(org.name) })),
     translations: row.translations ?? null,
+  };
+}
+
+/**
+ * Démarche du portail, version détaillée : le public de la liste, plus la
+ * catégorie et les deux schémas de saisie. Ici encore le sérialiseur ne décide
+ * pas ce qui est publié — l'appelant ne lui passe que des démarches déjà
+ * retenues par `publishedCatalogue`.
+ *
+ * `form_schema` et `requester_config` sont recopiés TELS QUELS : ce sont des
+ * schémas possédés, versionnés, que le consommateur parse avec sa propre
+ * tolérance. Les réécrire ici en ferait une seconde grammaire.
+ */
+export function serializePortalProcedureDetail(
+  row: Row,
+  organizations: PortalOrganizationRefDto[] = [],
+  detail: Row | null = null,
+  category: Row | null = null,
+): PortalProcedureDetailDto {
+  return {
+    ...serializePortalProcedure(row, organizations),
+    category:
+      category === null
+        ? null
+        : {
+            id: str(category.id),
+            name: str(category.name),
+            translations: category.translations ?? null,
+          },
+    form_schema: detail?.form_schema ?? null,
+    requester_config: detail?.requester_config ?? null,
   };
 }

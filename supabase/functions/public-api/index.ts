@@ -22,6 +22,7 @@ import {
   serializeDocumentType,
   serializeOrganization,
   serializePortalProcedure,
+  serializePortalProcedureDetail,
   serializeProcedure,
   serializeQuartier,
   serializeSmtpSettings,
@@ -401,7 +402,7 @@ Deno.serve(async (req: Request) => {
     // apparaître sur le portail de l'agglomération une démarche qu'une seule de
     // ses communes active, et ce sur quoi l'usager filtre.
     if (segments[0] === "v1" && segments[1] === "portal" && segments[2] === "procedures") {
-      if (segments.length !== 3) {
+      if (segments.length > 4) {
         return errorResponse("not_found", "Endpoint inconnu.", corsHeaders);
       }
       const tenantId = url.searchParams.get("tenant_id") ?? "";
@@ -412,6 +413,65 @@ Deno.serve(async (req: Request) => {
         return errorResponse("not_found", "Collectivité introuvable.", corsHeaders);
       }
       const catalogue = await loadPortalCatalogue(admin, tenantId);
+
+      // --- /v1/portal/procedures/{id} ---
+      // La démarche que l'usager va REMPLIR : le public de la liste, plus la
+      // catégorie et les deux schémas de saisie (`form_schema`,
+      // `requester_config`).
+      //
+      // Elle se sert du catalogue déjà chargé, et pas d'une lecture directe par
+      // identifiant : la publication reste décidée au même endroit, par les
+      // mêmes quatre règles. Une démarche absente du catalogue rend **404** —
+      // le même que pour un identifiant inexistant, et le même que pour une
+      // collectivité hors périmètre. Le portail n'apprend jamais qu'une
+      // démarche existe mais n'est pas publiée : ce serait renseigner sur le
+      // paramétrage d'une collectivité depuis un serveur public.
+      //
+      // Le `form_schema` n'est donc lu en base qu'APRÈS la décision de
+      // publication : il ne peut pas sortir pour une démarche en brouillon.
+      if (segments.length === 4) {
+        const procedureId = segments[3];
+        if (!isUuid(procedureId)) {
+          return errorResponse("bad_request", "Identifiant de démarche invalide.", corsHeaders);
+        }
+        const entry = catalogue.find((candidate) => candidate.row.id === procedureId);
+        if (!entry) {
+          return errorResponse("not_found", "Démarche introuvable.", corsHeaders);
+        }
+
+        const { data: detail, error: detailError } = await admin
+          .from("procedures")
+          .select("id, category_id, form_schema, requester_config")
+          .eq("id", procedureId)
+          .maybeSingle();
+        if (detailError) throw detailError;
+
+        // La catégorie n'est qu'un libellé de plus sur la page ; son absence
+        // n'empêche rien, et une démarche peut n'en avoir aucune.
+        let category: Record<string, unknown> | null = null;
+        const categoryId = detail?.category_id;
+        if (typeof categoryId === "string" && categoryId !== "") {
+          const { data: categoryRow, error: categoryError } = await admin
+            .from("categories")
+            .select("id, name, translations")
+            .eq("id", categoryId)
+            .maybeSingle();
+          if (categoryError) throw categoryError;
+          category = (categoryRow as Record<string, unknown> | null) ?? null;
+        }
+
+        return jsonResponse(
+          200,
+          serializePortalProcedureDetail(
+            entry.row,
+            entry.organizations,
+            (detail as Record<string, unknown> | null) ?? null,
+            category,
+          ),
+          corsHeaders,
+        );
+      }
+
       return jsonResponse(
         200,
         catalogue.map((entry) => serializePortalProcedure(entry.row, entry.organizations)),

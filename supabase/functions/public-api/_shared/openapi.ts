@@ -30,7 +30,7 @@ export function buildOpenApiDocument(serverUrl: string): Record<string, unknown>
     openapi: "3.1.0",
     info: {
       title: "API Socle — Référentiel de la gamme",
-      version: "1.11.0",
+      version: "1.12.0",
       description: [
         "API **en lecture seule** exposant le référentiel central de la gamme : les",
         "**organisations** (et sous-organisations) avec l'intégralité de leur configuration,",
@@ -191,10 +191,13 @@ export function buildOpenApiDocument(serverUrl: string): Record<string, unknown>
             "**N'appliquez pas ces règles vous-même** à partir de `GET /v1/procedures` : elles " +
             "évoluent avec le paramétrage, et un consommateur qui les recopie finit par publier " +
             "ce qui ne devait pas l'être.\n\n" +
-            "La réponse ne porte **que le public** : ni `form_schema`, ni `knowledge_base`, ni " +
-            "`agent_description`, ni `requester_config`, ni documents. Ce paramétrage " +
-            "d'instruction ne quitte pas le Socle — filtrer `Procedure` côté portail l'aurait " +
-            "déjà fait transiter par un serveur public.\n\n" +
+            "**Cette liste est un catalogue** : elle ne porte ni `form_schema`, ni " +
+            "`requester_config`, ni `knowledge_base`, ni `agent_description`, ni documents. " +
+            "Pour afficher une démarche et la faire remplir, appelez " +
+            "`GET /v1/portal/procedures/{id}` : elle ajoute la catégorie et les deux schémas " +
+            "de SAISIE, et seulement eux. Le paramétrage d'INSTRUCTION, lui, ne quitte jamais " +
+            "le Socle — filtrer `Procedure` côté portail l'aurait déjà fait transiter par un " +
+            "serveur public.\n\n" +
             "Les démarches sont rendues dans l'ordre d'affichage défini par la collectivité. " +
             "Une liste **vide** est une réponse normale : la collectivité n'a encore rien publié.",
           parameters: [
@@ -216,6 +219,61 @@ export function buildOpenApiDocument(serverUrl: string): Record<string, unknown>
                     type: "array",
                     items: { $ref: "#/components/schemas/PortalProcedure" },
                   },
+                },
+              },
+            },
+            ...errorResponses("400", "401", "404", "500"),
+          },
+        },
+      },
+      "/v1/portal/procedures/{id}": {
+        get: {
+          tags: ["Portail"],
+          summary: "Récupérer une démarche publiée, avec son formulaire",
+          description:
+            "Renvoie la démarche que l'usager va **remplir** : tout ce que porte la liste, plus " +
+            "la catégorie et les **deux schémas de saisie** — `form_schema` (les questions de la " +
+            "démarche) et `requester_config` (les publics admis et les informations demandées au " +
+            "requérant).\n\n" +
+            "Ces deux schémas ne sont pas du paramétrage d'instruction : ils **sont** le " +
+            "formulaire de l'usager, et sans eux un portail ne peut afficher qu'un titre. Ce qui " +
+            "reste au Socle : `knowledge_base`, `agent_description` et les documents — ce qu'un " +
+            "agent lit pour instruire.\n\n" +
+            "**Mêmes règles de publication que la liste**, appliquées par le même code : la " +
+            "démarche doit appartenir au catalogue publié de la collectivité. Sinon **404**, le " +
+            "même que pour un identifiant inexistant. Une démarche en brouillon, hors période, " +
+            "interne ou qu'aucun organisme n'active est donc introuvable — et son `form_schema` " +
+            "n'est jamais lu.\n\n" +
+            "`form_schema` est un schéma **possédé et versionné** " +
+            "(`{ version: 1, content: [...] }`) : parsez-le avec tolérance, un `type` de champ " +
+            "inconnu s'ignore. ⚠️ La clé machine d'un champ est **`key`** — c'est elle qui " +
+            "nomme la donnée en aval ; son **`id`** ne sert qu'aux conditions (`visibleIf`, " +
+            "`requiredIf`), qui s'évaluent sur les identifiants. Les deux schémas valent `null` " +
+            "quand la démarche n'a rien de paramétré : c'est une démarche sans saisie, pas une " +
+            "erreur.",
+          parameters: [
+            {
+              name: "id",
+              in: "path",
+              required: true,
+              description: "Identifiant de la démarche, tel que rendu par la liste.",
+              schema: { type: "string", format: "uuid" },
+            },
+            {
+              name: "tenant_id",
+              in: "query",
+              required: true,
+              description:
+                "Identifiant de la collectivité, tel que rendu par `GET /v1/portal/tenant`.",
+              schema: { type: "string", format: "uuid" },
+            },
+          ],
+          responses: {
+            "200": {
+              description: "La démarche publiée, avec ses schémas de saisie.",
+              content: {
+                "application/json": {
+                  schema: { $ref: "#/components/schemas/PortalProcedureDetail" },
                 },
               },
             },
@@ -827,6 +885,51 @@ export function buildOpenApiDocument(serverUrl: string): Record<string, unknown>
           properties: {
             id: { type: "string", format: "uuid" },
             name: { type: "string" },
+          },
+        },
+        PortalProcedureDetail: {
+          allOf: [
+            { $ref: "#/components/schemas/PortalProcedure" },
+            {
+              type: "object",
+              description:
+                "Ce que la liste ne porte pas : la catégorie, et les schémas de saisie.",
+              required: ["category", "form_schema", "requester_config"],
+              properties: {
+                category: {
+                  description: "Catégorie de la démarche. `null` si elle n'en a pas.",
+                  oneOf: [
+                    { $ref: "#/components/schemas/PortalCategoryRef" },
+                    { type: "null" },
+                  ],
+                },
+                form_schema: {
+                  type: ["object", "null"],
+                  description:
+                    "Schéma de formulaire possédé, `{ version: 1, content: [...] }`. Un nœud " +
+                    "racine est un champ ou une `section`. La clé machine d'un champ est " +
+                    "`key` ; son `id` ne sert qu'aux conditions. `null` = pas de formulaire.",
+                },
+                requester_config: {
+                  type: ["object", "null"],
+                  description:
+                    "Publics admis et informations demandées au requérant : " +
+                    "`{ citoyen: { enabled, fields: { courriel: \"obligatoire\", ... } }, ... }`. " +
+                    "Un champ vaut `masque`, `visible` ou `obligatoire` ; un public non " +
+                    "`enabled` n'est pas proposé. `null` = jamais paramétré.",
+                },
+              },
+            },
+          ],
+        },
+        PortalCategoryRef: {
+          type: "object",
+          description: "Catégorie d'une démarche : de quoi la nommer, rien de plus.",
+          required: ["id", "name"],
+          properties: {
+            id: { type: "string", format: "uuid" },
+            name: { type: "string", description: "Libellé en français, la langue pivot." },
+            translations: { $ref: "#/components/schemas/Translations" },
           },
         },
         PortalPage: {

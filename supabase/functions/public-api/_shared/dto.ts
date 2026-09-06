@@ -314,6 +314,46 @@ export interface PortalOrganizationRefDto {
   name: string;
 }
 
+/** Catégorie d'une démarche, telle qu'un usager la lit : de quoi la nommer. */
+export interface PortalCategoryRefDto {
+  id: string;
+  name: string;
+  /** Mêmes règles que `CategoryDto.translations` (pas de clé `fr`, repli sur `name`). */
+  translations: unknown;
+}
+
+/**
+ * Démarche du portail dans sa version DÉTAILLÉE — réponse de
+ * `GET /v1/portal/procedures/{id}`, ce qu'il faut pour afficher une démarche
+ * et la faire remplir.
+ *
+ * Elle ajoute au public de la liste les deux schémas de SAISIE :
+ * `form_schema` (les questions de la démarche) et `requester_config` (les
+ * publics admis et les informations demandées au requérant). Ces deux-là ne
+ * sont pas du paramétrage d'instruction — ils SONT le formulaire de l'usager,
+ * et sans eux aucun portail ne peut afficher autre chose qu'un titre.
+ *
+ * Ce qui ne franchit toujours pas : `knowledge_base`, `agent_description` et
+ * les documents de la communication. Ce qu'un agent lit pour instruire n'a
+ * rien à faire dans le navigateur d'un usager.
+ */
+export interface PortalProcedureDetailDto extends PortalProcedureDto {
+  /** Catégorie de la démarche, `null` si elle n'en a pas. */
+  category: PortalCategoryRefDto | null;
+  /**
+   * Schéma de formulaire possédé par le Socle (`{ version: 1, content: [...] }`).
+   * `null` quand la démarche n'a pas encore de formulaire — le portail affiche
+   * alors la démarche sans saisie, ce n'est pas une erreur.
+   */
+  form_schema: unknown;
+  /**
+   * Publics admis et informations demandées au requérant, par public
+   * (`{ citoyen: { enabled, fields: { courriel: "obligatoire", … } }, … }`).
+   * `null` = jamais paramétré : aucun public n'est proposé.
+   */
+  requester_config: unknown;
+}
+
 /**
  * Composition publiée d'une page du portail usagers — réponse de
  * `GET /v1/portal/page`.

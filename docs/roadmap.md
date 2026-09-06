@@ -144,17 +144,19 @@ suppose la précédente.
   **catégories** se traduisent dans chacune. `enabled_languages` sur la racine,
   `translations` sur `procedures` et `categories`, `resolve_org_languages` pour la remontée,
   contrat 1.11.0 (`Tenant.languages`, `translations` sur `Category` et `PortalProcedure`).
+- **2026-09-06 — Les démarches « pour de vrai » : une page, un formulaire, une demande.** Le
+  portail sert désormais une démarche au lieu de la lister : `GET /v1/portal/procedures/{id}`
+  (contrat **1.12.0**) ajoute la catégorie et les deux schémas de SAISIE (`form_schema`,
+  `requester_config`) — même `publishedCatalogue`, donc 404 et aucune lecture du formulaire pour
+  une démarche non publiée. Nora en fait deux écrans (présentation, puis formulaire), rend le
+  schéma en miroir de `FormPreview`, et **dépose la demande dans Iris** par son API d'ingestion
+  (source enregistrée, clé côté serveur du portail), avec l'accusé et sa référence. Les clés de
+  `requester_config` (`courriel`, `nom_usuel`, `siret`…) sont celles qu'Iris rapproche du
+  référentiel : aucune table de correspondance nulle part.
 
 ### Envisagé, dans l'ordre
 
-1. **Les démarches « pour de vrai ».** Aujourd'hui le portail liste les démarches ; il doit les
-   *servir* : une page par démarche (description, pièces attendues, délai, coût, catégorie —
-   tout existe déjà dans `Procedure`), puis le **formulaire** rendu depuis `form_schema` (le
-   Socle en est la source de vérité, Nora en fera un rendu de référence comme `FormPreview`), et
-   la **création de la demande** — vers Iris (traitement) via API, avec un accusé à l'usager.
-   Prérequis Socle : une route de démarche détaillée sous `/v1/portal/*` (le contrat portail
-   reste séparé du contrat référentiel), et le statut de la demande consultable.
-2. **Multilingue.** Fait côté référentiel (2026-09-06) : les langues activées par la collectivité
+1. **Multilingue.** Fait côté référentiel (2026-09-06) : les langues activées par la collectivité
    et les **libellés** traduits des démarches et des catégories, servis au portail
    (`Tenant.languages`, `translations`). Reste à faire : la langue de l'interface du portail
    (français par défaut, sélecteur bâti sur `languages`), les **textes** des sections de la page
@@ -164,29 +166,34 @@ suppose la précédente.
    `translations` les accueille en clés voisines de `name`, sans reprise. Enfin, les langues de
    France sans code ISO (gallo, poitevin-saintongeais, francique lorrain) attendent une convention
    de nommage — voir l'en-tête de `src/features/languages/languages.ts`.
-3. **Les autres templates.** L'onglet « Thème » (grisé) : gabarits de page et variantes de mise en
+2. **Les autres templates.** L'onglet « Thème » (grisé) : gabarits de page et variantes de mise en
    page au-delà de la composition libre ; d'autres pages que l'accueil (`portal_pages.slug` est
    prêt : « Contact », « Mentions légales », « Accessibilité » — obligatoires pour un site
    public) ; le bloc « Actualités » (grisé) quand une source d'actualités existera au Socle.
-4. **Démarches hors compte.** Une demande sans espace usager : identité saisie dans le
-   formulaire, confirmation par courriel (lien de suivi signé, à durée limitée), pas de mot de
-   passe. C'est le parcours qui fait vivre le portail dès le premier jour.
-5. **Démarches avec compte.** L'espace usager derrière le bloc « Espace usager » : mes demandes,
+3. **Démarches hors compte.** La demande part déjà (2026-09-06) ; il lui manque son après :
+   confirmation par courriel et **lien de suivi signé** à durée limitée, sans mot de passe. Il
+   faut pour cela que le **statut d'une demande soit consultable** depuis le portail — Iris le
+   sert sur `GET /v1/requests/{id}` avec le scope `requests:read`, à exposer sous une route du
+   portail qui ne révèle rien sans le lien signé. C'est le parcours qui fait vivre le portail dès
+   le premier jour.
+4. **Démarches avec compte.** L'espace usager derrière le bloc « Espace usager » : mes demandes,
    leur état, mes informations. Authentification portée par Nora (projet Supabase du portail) et
    **rattachée au référentiel usagers du Socle** (`contacts`, via `contacts-api`) — le compte
    portail est une clé externe du contact (`contact_external_references`, source `portail_citoyen`,
    déjà prévue), pas une seconde fiche.
-6. **Création de compte.** Inscription par courriel avec validation, réinitialisation de mot de
+5. **Création de compte.** Inscription par courriel avec validation, réinitialisation de mot de
    passe, données minimales (RGPD : finalité, durée, droit d'accès et d'effacement à documenter),
    rapprochement d'une demande hors compte faite avec le même courriel.
-7. **Les échanges.** Fil de messages entre l'usager et l'agent sur une demande (demande de
+6. **Les échanges.** Fil de messages entre l'usager et l'agent sur une demande (demande de
    complément, réponse, notification par courriel via le SMTP hérité de la collectivité). Le fil
    vit avec la demande (Iris) ; le portail en est une vue.
-8. **Les pièces jointes.** Dépôt des pièces demandées par la démarche (`document_types`, déjà
-   paramétrées par démarche) : formats et tailles bornés, stockage privé, analyse antivirus à
+7. **Les pièces jointes.** Le formulaire du portail AFFICHE déjà les pièces attendues (champs
+   `attachment` du `form_schema`), désactivées et jamais bloquantes — le worker de copie d'Iris
+   n'étant pas actif, une URL signée expirerait avant d'être lue. Reste le dépôt réel des pièces
+   demandées par la démarche (`document_types`, déjà paramétrées par démarche) : formats et tailles bornés, stockage privé, analyse antivirus à
    cadrer, remplacement d'une pièce refusée, et le même mécanisme pour les pièces jointes aux
    échanges.
-9. **FranceConnect (?)** Identification par FranceConnect / FranceConnect+ pour les démarches qui
+8. **FranceConnect (?)** Identification par FranceConnect / FranceConnect+ pour les démarches qui
    exigent une identité vérifiée. Question ouverte : habilitation à obtenir par la collectivité
    ou par l'éditeur, périmètre des données restituées, cohabitation avec les comptes locaux.
    À instruire avant de coder.

@@ -696,13 +696,19 @@ démarches ». Ajouter une collectivité au portail = une ligne de domaine, aucu
 - **Grisé, pas caché** : le bloc « Actualités » (palette et inspecteur) et les vues « Contenus »
   / « Thème » — aucune route, `aria-disabled`, « Bientôt disponible ». Le parse accepte quand
   même `actus` : une composition importée plus tard ne sera pas amputée.
-- **API** (tag « Portail » de `public-api`, contrat 1.7.0 → 1.11.0) : `GET /v1/portal/tenant?hostname=`
+- **API** (tag « Portail » de `public-api`, contrat 1.7.0 → 1.12.0) : `GET /v1/portal/tenant?hostname=`
   (**même 404** pour inconnu / hors périmètre / obsolète : on ne renseigne pas sur l'existence des
   collectivités ; porte `languages`, les langues de la collectivité, héritage résolu), `GET /v1/portal/procedures?tenant_id=` (déjà filtrées : `production`, `externe`,
   `portalVisible`, dans leur période **heure de Paris**, **et activées par au moins un organisme
   actif de l'arbre du tenant** — chaque démarche porte `organizations`, dans l'ordre de l'arbre ;
   règle pure `_shared/portalCatalogue.ts`, lectures dans `loadPortalCatalogue` : sous-arbre,
-  organisations, activations, catalogue de la **racine** du tenant), `GET /v1/portal/page?tenant_id=&slug=`
+  organisations, activations, catalogue de la **racine** du tenant), `GET /v1/portal/procedures/{id}?tenant_id=`
+  (le **détail** : le public de la liste, plus la catégorie et les DEUX schémas de saisie
+  `form_schema` et `requester_config` — ils *sont* le formulaire de l'usager ; `knowledge_base`,
+  `agent_description` et les documents ne franchissent toujours pas. Même `publishedCatalogue`,
+  donc **404** pour une démarche non publiée, et son `form_schema` n'est pas même lu.
+  ⚠️ clé machine d'un champ = `key` ; l'`id` ne sert qu'aux conditions),
+  `GET /v1/portal/page?tenant_id=&slug=`
   (`published` seulement, références résolues sur ce même catalogue). La charte vient de
   `GET /v1/organizations/{id}/branding` (résolue). ⚠️ `supabase/config.toml` déclare
   `verify_jwt = false` pour `public-api` : un déploiement sans ce fichier remet le défaut `true`

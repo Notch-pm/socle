@@ -23,6 +23,7 @@ describe("buildOpenApiDocument", () => {
       expect.arrayContaining([
         "/v1/portal/tenant",
         "/v1/portal/procedures",
+        "/v1/portal/procedures/{id}",
         "/v1/portal/page",
         "/v1/organizations",
         "/v1/organizations/{id}",
@@ -151,8 +152,37 @@ describe("buildOpenApiDocument", () => {
 describe("contrat — documents et courriers", () => {
   const doc = buildOpenApiDocument("https://example.supabase.co/functions/v1/public-api") as any;
 
-  it("annonce la version 1.11.0 du contrat", () => {
-    expect(doc.info.version).toBe("1.11.0");
+  it("annonce la version 1.12.0 du contrat", () => {
+    expect(doc.info.version).toBe("1.12.0");
+  });
+
+  it("sert les schémas de saisie sur le détail, jamais sur la liste", () => {
+    // La bascule du contrat 1.12.0 : le formulaire d'une démarche existe pour
+    // le portail, mais seulement une démarche à la fois, et seulement publiée.
+    const detail = doc.paths["/v1/portal/procedures/{id}"].get;
+    expect(detail.description).toMatch(/form_schema/);
+    expect(detail.description).toMatch(/requester_config/);
+    expect(detail.responses["200"].content["application/json"].schema.$ref).toBe(
+      "#/components/schemas/PortalProcedureDetail",
+    );
+    expect(detail.responses).toHaveProperty("404");
+
+    const listSchema = doc.paths["/v1/portal/procedures"].get.responses["200"]
+      .content["application/json"].schema.items.$ref;
+    expect(listSchema).toBe("#/components/schemas/PortalProcedure");
+    expect(doc.components.schemas.PortalProcedure.properties).not.toHaveProperty("form_schema");
+    // Et la liste dit où aller chercher le formulaire.
+    expect(doc.paths["/v1/portal/procedures"].get.description).toContain(
+      "GET /v1/portal/procedures/{id}",
+    );
+  });
+
+  it("avertit que la clé machine d'un champ est `key`, pas son `id`", () => {
+    // Le piège coûteux : déposer `form_data` indexé par `id` produirait des
+    // demandes dont aucun agent ne reconnaît les champs.
+    const detail = doc.paths["/v1/portal/procedures/{id}"].get.description;
+    expect(detail).toMatch(/`key`/);
+    expect(detail).toMatch(/conditions/);
   });
 
   it("dit qui propose chaque démarche du portail, et que la liste n'est jamais vide", () => {
