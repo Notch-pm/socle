@@ -128,11 +128,13 @@ export function ProcedureEditor({
   }
 
   function handleDescriptifSubmit(values: DescriptifValues) {
+    // Traductions typées de l'app → colonne JSONB générique de Supabase.
+    const payload = { ...values, translations: values.translations as unknown as Json };
     if (isEdit) {
-      updateProc.mutate({ id: procedureId!, ...values }, { onSuccess: afterSave });
+      updateProc.mutate({ id: procedureId!, ...payload }, { onSuccess: afterSave });
     } else {
       createProc.mutate(
-        { ...values, organization_id: resolvedOrgId },
+        { ...payload, organization_id: resolvedOrgId },
         { onSuccess: (data) => onCreated(data.id, advanceRef.current ? 1 : 0) },
       );
     }

@@ -39,10 +39,15 @@ vi.mock("@/features/superadmin/organizations/useOrganizationsAdmin", () => ({
     data: { id: "org-1", name: "ACCM", parent_id: null, address: null, phone: null, email: null },
     isLoading: false,
   }),
+  useAllOrganizations: () => ({ data: [] }),
 }));
 
 vi.mock("@/features/procedures/useProcedures", () => ({
   useProceduresForOrg: () => ({ data: [] }),
+}));
+
+vi.mock("@/features/organizations/useOrganizationProcedures", () => ({
+  useEnabledProcedureBindings: () => ({ data: [] }),
 }));
 
 vi.mock("@/features/portal/usePortalPage", () => ({

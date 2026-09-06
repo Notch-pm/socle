@@ -1,6 +1,15 @@
 import * as React from "react";
 import { useParams, useNavigate } from "react-router-dom";
-import { ArrowLeft, Globe, ListChecks, Mail, Palette, Settings2, type LucideIcon } from "lucide-react";
+import {
+  ArrowLeft,
+  Globe,
+  Languages,
+  ListChecks,
+  Mail,
+  Palette,
+  Settings2,
+  type LucideIcon,
+} from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { EmptyState } from "@/components/shared/EmptyState";
 import { cn } from "@/lib/utils";
@@ -10,14 +19,18 @@ import { OrganizationInfoTab } from "@/features/organizations/OrganizationInfoTa
 import { OrganizationProceduresTab } from "@/features/organizations/OrganizationProceduresTab";
 import { BrandingSection } from "@/features/organizations/BrandingSection";
 import { DomainsSection } from "@/features/organizations/DomainsSection";
+import { LanguagesSection } from "@/features/languages/LanguagesSection";
 
-type TabKey = "infos" | "charte" | "domaines" | "demarches" | "smtp";
+type TabKey = "infos" | "charte" | "langues" | "domaines" | "demarches" | "smtp";
 
 const TABS: { key: TabKey; label: string; icon: LucideIcon }[] = [
   { key: "infos", label: "Informations de base", icon: Settings2 },
   // Comme le relais SMTP, la charte se règle sur TOUTE organisation : une
   // sous-organisation y choisit entre celle de son parent et la sienne.
   { key: "charte", label: "Charte graphique", icon: Palette },
+  // Les langues, elles, ne se découpent pas par service : le réglage n'existe
+  // que sur l'organisation principale, l'onglet le dit sur les autres.
+  { key: "langues", label: "Langues", icon: Languages },
   // Le portail usagers sert la collectivité que DÉSIGNE le domaine visité :
   // l'onglet vit donc sur toute organisation, sous-organisation comprise, dès
   // lors qu'elle tient son propre guichet.
@@ -100,6 +113,7 @@ export function OrganizationEditorPage() {
       <div key={organization.id}>
         {activeTab === "infos" && <OrganizationInfoTab organization={organization} />}
         {activeTab === "charte" && <BrandingSection organization={organization} />}
+        {activeTab === "langues" && <LanguagesSection organization={organization} />}
         {activeTab === "domaines" && <DomainsSection organizationId={organization.id} />}
         {activeTab === "demarches" && (
           <OrganizationProceduresTab organizationId={organization.id} />

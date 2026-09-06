@@ -126,9 +126,10 @@ exécutables par `authenticated` : le RLS les évalue avec les droits de l'appel
 
 ### Modèle de données (principales tables)
 
-- `organizations` — hiérarchie auto-référencée via `parent_id` (voir feature ci-dessous).
+- `organizations` — hiérarchie auto-référencée via `parent_id` (voir feature ci-dessous) ; `enabled_languages` (langues de la collectivité, **racine uniquement** — voir feature « langues »).
 - `users`, `user_organizations` (jointure user↔org + `role`).
-- `categories`, `procedures`, `organization_procedures` (catalogue de démarches).
+- `categories`, `procedures`, `organization_procedures` (catalogue de démarches) — la colonne
+  `translations` des deux premières porte les **libellés traduits** (voir feature « langues »).
 - `smtp_settings` (SMTP par organisation, **hérité du parent** sauf configuration propre —
   voir feature).
 - `api_keys` (clés d'API rattachées à une racine, ou **clé plateforme** — `organization_id` NULL, périmètre global, liaison unique avec Clara — voir feature ; `consumer` = application imputable des appels facturés).
@@ -227,6 +228,9 @@ garde sa modale (`OrganizationsManager` reçoit `onEditOrganization` seulement c
   (`public-api`, scope `read`, contrat 1.5.0 — voir feature « API publique »). ⚠️ Les trois
   colonnes ajoutées ne sont **pas** exposées sur `OrganizationDto` et ne doivent pas l'être :
   brutes, elles sont nulles sur une organisation qui hérite.
+- **Onglet « Langues »** (`LanguagesSection`, **organisation principale uniquement** — une
+  sous-organisation y lit qu'elle suit sa racine) : quelles langues la collectivité active pour
+  s'adresser à ses usagers. Voir feature « Langues et libellés traduits ».
 - **Onglet « Démarches »** (`OrganizationProceduresTab`) : **activation par organisation**. Liste
   le catalogue de l'**organisation principale** (ancêtre racine, `findRootAncestor`) avec un
   `Switch` par démarche. L'activation est **opt-in** : une démarche est active ⇔ une liaison
@@ -291,7 +295,8 @@ est fonctionnelle (voir feature « Édition d'organisation » ci-dessous). Param
   Logique pure `procedureStatus.ts` (testée : au moindre doute, **brouillon** — le doute ne publie rien).
 - **Descriptif** → colonnes `procedures` : `name` (obligatoire), `category_id` (obligatoire, catégories
   de la racine), `type` (`interne`/`externe`), `keywords` (text[], CSV), `short_description`,
-  `input_duration_minutes`, `order_index` (rang, défaut max+1).
+  `input_duration_minutes`, `order_index` (rang, défaut max+1), + `translations` (libellé traduit
+  dans chaque langue activée par la racine — voir feature « Langues et libellés traduits »).
 - **Informations demandeur** → colonne `procedures.requester_config` (JSONB). Publics
   citoyen/entreprise/association activables ; par public, chaque donnée vaut `masque`/`visible`/
   `obligatoire`. Logique pure + parseur robuste `requesterFields.ts` (testé), UI `steps/DemandeurStep.tsx`.
@@ -393,6 +398,62 @@ l'isolation est portée par le **RLS de `storage.objects`**, pas par une colonne
   téléversé puis abandonné sans enregistrer laisse un objet orphelin — acceptable pour l'instant).
 - Code : `procedureStorage.ts` (pur, testé : chemin, formats, taille), `useProcedureDocuments.ts`
   (hooks upload/suppression + `createSignedDocumentUrl`), UI `steps/connaissances/DocumentsUploader`.
+
+## Feature : langues et libellés traduits (`enabled_languages`, `translations`)
+
+Une collectivité choisit les langues dans lesquelles elle s'adresse à ses usagers ; les libellés
+des **démarches** et des **catégories** se traduisent dans chacune. Le réglage vit sur
+l'**organisation principale** (racine) : les langues d'une collectivité ne se découpent pas par
+service — motif du catalogue de démarches, des quartiers, du plafond IA.
+
+- **Le français est la langue pivot** : c'est lui que portent les colonnes `name`. Il est toujours
+  actif, ne se retire pas, et n'a **jamais** d'entrée dans `translations` — l'y écrire créerait une
+  seconde source de vérité pour un même libellé, et rien ne dirait laquelle fait foi le jour où
+  elles divergent.
+- **Catalogue figé dans le code** (`src/features/languages/languages.ts`), comme
+  `documentVariables.ts` : c'est un **contrat de nommage** consommé en aval (le portail en fait son
+  sélecteur, les clés de `translations` sont ces codes), pas une donnée de client. Deux groupes —
+  **langues mondiales** et **langues régionales de France** (métropole et outre-mer). Codes
+  **BCP 47** : ISO 639-1 quand il existe (`en`, `br`, `oc`), ISO 639-3 sinon (`gsw`, `frp`, `gcr`,
+  `swb`, `dhv`). ⚠️ Quelques langues de France n'ont **aucun code ISO** (gallo,
+  poitevin-saintongeais, francique lorrain, champenois…) : elles ne sont pas au catalogue, et les
+  ajouter demande de **choisir une convention** (`fr-x-gallo`, usage privé BCP 47) — décision de
+  nommage public, donc entrée au changelog d'API. La LSF n'y est pas : pas de forme écrite.
+- **Base** : `organizations.enabled_languages` (`text[]`, défaut `{fr}`), CHECK
+  `is_valid_language_set` — la base valide la **forme** (au moins `fr`, sans doublon, codes bien
+  formés), **pas la liste** : ajouter une langue ne doit pas demander une migration. Trigger
+  `enforce_languages_root_org` : poser des langues sur une sous-organisation est **refusé**, mais
+  **rattacher** une organisation sous une autre est accepté (sa liste revient au défaut) — refuser
+  bloquerait une réorganisation sans rien protéger.
+- **Traductions** : `procedures.translations` (colonne préexistante, jamais utilisée, qui prend ici
+  une forme possédée) et `categories.translations` (nouvelle). Forme
+  `{ "<code>": { "name": "…" } }` — un objet par langue, pour que les champs traduits à venir
+  (descriptif court, descriptif usager) s'ajoutent en clés voisines sans déplacer l'existant.
+  CHECK `jsonb_typeof = 'object'` des deux côtés.
+- ⚠️ **Désactiver une langue n'efface pas ses traductions** (le réglage gouverne l'usage, pas la
+  donnée — motif `email_sender_name`, `publicationPeriodEnabled`) : `translationsForWrite` part de
+  l'existant et ne touche qu'aux langues **actives**. La réactiver rend le travail déjà fait.
+- ⚠️ **Une traduction vide n'est pas stockée** : c'est l'absence de traduction. Un consommateur qui
+  lirait `""` afficherait un libellé vide là où il devait **retomber sur le français**.
+- **UI** : `LanguagesSection` (onglet « Langues » de `OrganizationEditorPage` côté admin, section
+  `?section=langues` d'`OrgSettingsPage` côté superadmin — motif `BrandingSection`) : deux groupes
+  de cases à cocher, recherche, français coché et verrouillé, récapitulatif des langues actives.
+  `TranslationFields` (partagé) affiche un champ par langue active dans l'étape **Descriptif** d'une
+  démarche et dans le **dialogue de catégorie** ; `TranslatedIn` montre dans les deux listes les
+  langues déjà traduites.
+- **En aval** (contrat 1.11.0) : `GET /v1/portal/tenant` porte `languages` (héritage **résolu** par
+  la RPC `resolve_org_languages`, EXECUTE réservé au service role — motif `resolve_branding`), et
+  `translations` est servi **tel quel** sur `Category`, `Procedure` et `PortalProcedure` (schéma
+  OpenAPI partagé `Translations`). ⚠️ `enabled_languages` n'est **pas** exposé sur
+  `OrganizationDto` : brute, la colonne d'une sous-organisation vaut `{fr}` et ferait croire à une
+  collectivité monolingue — même piège que les colonnes de charte graphique.
+- Code : `src/features/languages/` — `languages.ts` (catalogue + `parseEnabledLanguages`,
+  `enabledLanguagesForWrite`, `sortLanguageCodes`), `translations.ts` (`parseTranslations`,
+  `translationsForWrite`, `localizedName`) — les deux **purs et testés** —,
+  `useOrganizationLanguages.ts`, `LanguagesSection.tsx` (testé), `TranslationFields.tsx`,
+  `TranslatedIn.tsx`. Miroir côté edge function : `readLanguages` dans
+  `public-api/_shared/serializers.ts` (testé des deux côtés, motif `readDocumentIds`).
+- Migration : `langues_et_traductions`.
 
 ## Feature : types de pièce justificative (`document_types`)
 
@@ -605,9 +666,15 @@ démarches ». Ajouter une collectivité au portail = une ligne de domaine, aucu
   composé depuis `organizations.address / phone / email` (pas de colonne d'horaires : l'agent les
   tape).
 - **Catalogue** (`catalogue.ts`) : la liste d'épinglage montre **tout** le catalogue de la racine
-  avec sa visibilité portail (`brouillon` / `interne` / `masquee` / `hors-periode` / `visible`,
-  calculée par les règles existantes de `communication.ts`) — on surface, on ne masque pas ;
-  le canevas atténue les démarches que le portail n'affichera pas.
+  avec sa visibilité portail (`brouillon` / `interne` / `masquee` / `hors-periode` /
+  `non-activee` / `visible`, calculée par les règles existantes de `communication.ts` plus
+  l'activation) — on surface, on ne masque pas. **Le canevas rend la liste réelle** (2026-09-06) :
+  les seules démarches `visible`, chacune avec les **organismes qui la proposent**
+  (`organization_procedures.is_enabled` sur l'arbre de la racine — `portalTreeOrganizations`,
+  `useEnabledProcedureBindings`, `buildCatalogue`), et le filtre par organisme figé dans
+  l'en-tête dès que deux organismes proposent quelque chose. ⚠️ Une démarche que **personne**
+  n'active n'est pas servie par le portail, même en `production` : c'est le badge « Non activée ».
+  La règle est le **miroir volontaire** de `public-api/_shared/portalCatalogue.ts`.
 - **Éditeur** (`PortalEditorPage` → `PortalEditor` → `editor/*`) : entrée de menu « Site de
   démarches » (`/site-de-demarches`, `?org=` quand plusieurs racines) et
   `/superadmin/organisations/:orgId/portail`. Palette / canevas / inspecteur, aperçu = le canevas
@@ -629,11 +696,14 @@ démarches ». Ajouter une collectivité au portail = une ligne de domaine, aucu
 - **Grisé, pas caché** : le bloc « Actualités » (palette et inspecteur) et les vues « Contenus »
   / « Thème » — aucune route, `aria-disabled`, « Bientôt disponible ». Le parse accepte quand
   même `actus` : une composition importée plus tard ne sera pas amputée.
-- **API** (tag « Portail » de `public-api`, contrat 1.7.0 → 1.9.0) : `GET /v1/portal/tenant?hostname=`
+- **API** (tag « Portail » de `public-api`, contrat 1.7.0 → 1.11.0) : `GET /v1/portal/tenant?hostname=`
   (**même 404** pour inconnu / hors périmètre / obsolète : on ne renseigne pas sur l'existence des
-  collectivités), `GET /v1/portal/procedures?tenant_id=` (déjà filtrées : `production`, `externe`,
-  `portalVisible`, dans leur période **heure de Paris**), `GET /v1/portal/page?tenant_id=&slug=`
-  (`published` seulement, références résolues sur les démarches publiées). La charte vient de
+  collectivités ; porte `languages`, les langues de la collectivité, héritage résolu), `GET /v1/portal/procedures?tenant_id=` (déjà filtrées : `production`, `externe`,
+  `portalVisible`, dans leur période **heure de Paris**, **et activées par au moins un organisme
+  actif de l'arbre du tenant** — chaque démarche porte `organizations`, dans l'ordre de l'arbre ;
+  règle pure `_shared/portalCatalogue.ts`, lectures dans `loadPortalCatalogue` : sous-arbre,
+  organisations, activations, catalogue de la **racine** du tenant), `GET /v1/portal/page?tenant_id=&slug=`
+  (`published` seulement, références résolues sur ce même catalogue). La charte vient de
   `GET /v1/organizations/{id}/branding` (résolue). ⚠️ `supabase/config.toml` déclare
   `verify_jwt = false` pour `public-api` : un déploiement sans ce fichier remet le défaut `true`
   et coupe **tous** les consommateurs (incident du 2026-09-05).

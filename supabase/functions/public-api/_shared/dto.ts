@@ -32,8 +32,16 @@ export interface OrganizationDto {
 export interface CategoryDto {
   id: string;
   organization_id: string | null;
+  /** Libellé **en français** — la langue pivot du référentiel. */
   name: string;
   icon: string | null;
+  /**
+   * Libellés traduits, `{ "<code de langue>": { "name": "…" } }`. Jamais de clé
+   * `fr` : le français est `name`. Une langue absente n'est pas un trou, c'est
+   * un **repli sur `name`** — voir `GET /v1/portal/tenant` pour les langues
+   * activées par la collectivité.
+   */
+  translations: unknown;
   created_at: string | null;
 }
 
@@ -250,6 +258,17 @@ export interface TenantDto {
   name: string;
   slug: string | null;
   hostname: string;
+  /**
+   * Langues activées par la collectivité (codes BCP 47), **français toujours
+   * compris et toujours en tête**. C'est de quoi bâtir un sélecteur de langue :
+   * les libellés traduits des démarches et des catégories sont servis dans ces
+   * langues-là (`translations`), avec repli sur le français.
+   *
+   * ⚠️ Le réglage vit sur l'organisation **principale** : la liste est celle de
+   * la collectivité, même quand le domaine visité désigne une sous-organisation
+   * (héritage **déjà résolu**, comme la charte graphique).
+   */
+  languages: string[];
 }
 
 /**
@@ -266,6 +285,10 @@ export interface TenantDto {
  * `user_description` **et** `short_description` sont servis : le paramétrage ne
  * rend obligatoire ni l'un ni l'autre, et une collectivité qui n'a rempli que
  * l'un des deux doit tout de même avoir quelque chose à afficher.
+ *
+ * `organizations` : les organismes de l'arbre de la collectivité qui
+ * **proposent** la démarche (activation par organisation), dans l'ordre de
+ * l'arbre. Jamais vide — une démarche que personne n'active n'est pas servie.
  */
 export interface PortalProcedureDto {
   id: string;
@@ -276,6 +299,19 @@ export interface PortalProcedureDto {
   user_description: string | null;
   /** Durée de saisie estimée, en minutes. */
   input_duration_minutes: number | null;
+  /** Organismes qui proposent la démarche, dans l'ordre de l'arbre. */
+  organizations: PortalOrganizationRefDto[];
+  /**
+   * Libellés traduits, `{ "<code de langue>": { "name": "…" } }` — mêmes règles
+   * que `CategoryDto.translations` (pas de clé `fr`, repli sur `name`).
+   */
+  translations: unknown;
+}
+
+/** Un organisme qui propose une démarche sur le portail : de quoi le nommer, rien de plus. */
+export interface PortalOrganizationRefDto {
+  id: string;
+  name: string;
 }
 
 /**

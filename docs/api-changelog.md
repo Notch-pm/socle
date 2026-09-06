@@ -1,7 +1,7 @@
 # Journal des évolutions des API publiques
 
 > **Public** : équipes consommatrices (Ariane, Clara, Iris, partenaires) · **Question traitée** :
-> quand un contrat d'API a-t-il changé, et comment ? · **Dernière mise à jour** : 2026-09-05
+> quand un contrat d'API a-t-il changé, et comment ? · **Dernière mise à jour** : 2026-09-06
 
 Journal **append-only** : chaque évolution de la surface de contrat des API publiques
 (`public-api`, `contacts-api`, `ai-api`) — endpoint, paramètre, champ de réponse, comportement
@@ -10,6 +10,53 @@ une correction s'ajoute sous une nouvelle date. Politique de compatibilité et o
 consommateur : [integration.md](./integration.md#politique-de-compatibilité-v1).
 
 Format d'une entrée : `## AAAA-MM-JJ — <api> — ajout|correctif|rupture`
+
+---
+
+## 2026-09-06 — public-api — ajout
+
+**Les libellés traduits, et les langues d'une collectivité.** Une collectivité active les langues
+dans lesquelles elle s'adresse à ses usagers (français toujours compris) ; les libellés des
+**démarches** et des **catégories** se traduisent dans chacune d'elles. Version du contrat :
+**1.11.0**. Ajout additif.
+
+- `GET /v1/portal/tenant` gagne `languages` : les codes **BCP 47** activés par la collectivité,
+  **français toujours compris et en tête** — de quoi bâtir un sélecteur de langue. Le réglage vit
+  sur l'organisation **principale** : la liste est celle de la collectivité, héritage **déjà
+  résolu**, même quand le domaine visité désigne une sous-organisation.
+- `Category` gagne `translations`, et `PortalProcedure` aussi. `Procedure.translations` existait
+  déjà (toujours vide, « structure libre ») : elle prend une **forme documentée**, décrite par le
+  schéma partagé `Translations`.
+- Forme : `{ "<code>": { "name": "…" } }`. Un objet par langue, pour que d'autres champs traduits
+  s'y ajoutent en clés voisines sans déplacer l'existant.
+- ⚠️ **Il n'y a jamais de clé `fr`** : le libellé français est `name`. La chercher, c'est ne rien
+  trouver.
+- ⚠️ **Une langue absente n'est pas un libellé vide, c'est un repli sur `name`.** Afficher la
+  chaîne vide d'une traduction manquante donnerait une carte de démarche sans titre.
+- Codes : ISO 639-1 quand il existe (`en`, `br`, `oc`), ISO 639-3 sinon (`gsw`, `frp`, `gcr`).
+  Quelques langues de France n'ont aucun code ISO (gallo, poitevin-saintongeais, francique
+  lorrain) : elles ne sont pas encore proposées, et leur arrivée demandera une convention de
+  nommage — donc une entrée à ce journal.
+- Rien à faire pour un consommateur qui ne fait pas de multilingue : `name` ne change pas.
+
+---
+
+## 2026-09-06 — public-api — ajout
+
+**Qui propose chaque démarche du portail.** `GET /v1/portal/procedures` gagne, sur chaque
+démarche, `organizations` : les organismes de l'arbre de la collectivité (elle-même, ses communes,
+ses services) qui l'ont **activée**, dans l'ordre de l'arbre — de quoi les nommer sur une carte et
+filtrer par organisme. Version du contrat : **1.10.0**. Ajout additif sur la forme.
+
+- ⚠️ **Le contenu de la liste change.** L'activation par organisation
+  (`organization_procedures.is_enabled`) devient la **quatrième** règle de publication, après
+  `production`, `externe` et la visibilité du bloc communication. Une démarche activée par une
+  seule commune apparaît désormais sur le portail de l'agglomération ; une démarche que
+  **personne** n'active n'est plus servie, même en `production`. `organizations` n'est donc jamais
+  vide. Une organisation obsolète n'active rien.
+- Les références de `GET /v1/portal/page` (`pinned`, `shortcuts`) suivent la même liste : une
+  démarche épinglée que personne n'active en est écartée.
+- Comme avant : **n'appliquez pas ces règles vous-même** depuis `/v1/procedures`.
 
 ---
 

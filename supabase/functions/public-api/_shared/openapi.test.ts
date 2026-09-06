@@ -151,8 +151,18 @@ describe("buildOpenApiDocument", () => {
 describe("contrat — documents et courriers", () => {
   const doc = buildOpenApiDocument("https://example.supabase.co/functions/v1/public-api") as any;
 
-  it("annonce la version 1.9.0 du contrat", () => {
-    expect(doc.info.version).toBe("1.9.0");
+  it("annonce la version 1.11.0 du contrat", () => {
+    expect(doc.info.version).toBe("1.11.0");
+  });
+
+  it("dit qui propose chaque démarche du portail, et que la liste n'est jamais vide", () => {
+    const schema = doc.components.schemas.PortalProcedure;
+    expect(schema.required).toContain("organizations");
+    expect(schema.properties.organizations.items.$ref).toBe("#/components/schemas/PortalOrganizationRef");
+    expect(schema.properties.organizations.description).toMatch(/Jamais vide/);
+    const route = doc.paths["/v1/portal/procedures"].get.description;
+    expect(route).toContain("**quatre** conditions");
+    expect(route).toMatch(/activée/);
   });
 
   it("sert les documents d'une démarche déjà résolus", () => {
@@ -230,7 +240,13 @@ describe("contrat — portail usagers", () => {
 
   it("sert un tenant minimal — pas une fiche organisation", () => {
     const schema = doc.components.schemas.Tenant;
-    expect(Object.keys(schema.properties).sort()).toEqual(["hostname", "id", "name", "slug"]);
+    expect(Object.keys(schema.properties).sort()).toEqual([
+      "hostname",
+      "id",
+      "languages",
+      "name",
+      "slug",
+    ]);
     // Une page publique : rien de ce qui suit n'a de raison d'y être servi.
     for (const leak of ["address", "phone", "email", "metadata", "email_sender_name"]) {
       expect(schema.properties).not.toHaveProperty(leak);
@@ -269,12 +285,44 @@ describe("contrat — démarches du portail", () => {
       "id",
       "input_duration_minutes",
       "name",
+      "organizations",
       "short_description",
+      "translations",
       "user_description",
     ]);
     for (const leak of ["form_schema", "knowledge_base", "agent_description", "requester_config"]) {
       expect(schema.properties).not.toHaveProperty(leak);
     }
+  });
+});
+
+describe("contrat — libellés traduits", () => {
+  const doc = buildOpenApiDocument("https://example.supabase.co/functions/v1/public-api") as any;
+  const ref = { $ref: "#/components/schemas/Translations" };
+
+  it("décrit les traductions une fois, et les trois ressources s'y réfèrent", () => {
+    // Un seul schéma : les démarches, les catégories et le portail ne peuvent
+    // pas se mettre à décrire trois formes différentes du même objet.
+    expect(doc.components.schemas.Translations).toBeTruthy();
+    expect(doc.components.schemas.Category.properties.translations).toEqual(ref);
+    expect(doc.components.schemas.Procedure.properties.translations).toEqual(ref);
+    expect(doc.components.schemas.PortalProcedure.properties.translations).toEqual(ref);
+  });
+
+  it("dit les deux règles qu'un consommateur ne peut pas deviner", () => {
+    // Sans elles, un intégrateur cherche une clé « fr » qui n'existe pas, puis
+    // affiche un libellé vide là où il devait retomber sur le français.
+    const description = doc.components.schemas.Translations.description;
+    expect(description).toContain("`fr`");
+    expect(description).toContain("repli");
+  });
+
+  it("dit où trouver les langues activées par la collectivité", () => {
+    const languages = doc.components.schemas.Tenant.properties.languages;
+    expect(languages.type).toBe("array");
+    expect(languages.description).toContain("français");
+    expect(languages.description).toContain("résolu");
+    expect(doc.info.description).toContain("## Langues");
   });
 });
 

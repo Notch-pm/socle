@@ -57,6 +57,7 @@ function org(over: Partial<Organization> = {}): Organization {
     email: null,
     email_sender_name: null,
     email_sender_override: false,
+    enabled_languages: ["fr"],
     logo_url: null,
     logo_white_url: null,
     primary_color: null,

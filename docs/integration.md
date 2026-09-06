@@ -2,7 +2,7 @@
 
 > **Public** : équipes consommatrices (Ariane, Clara, Iris, partenaires) · **Question traitée** :
 > comment consommer les API de Socle correctement, sans rien casser lors d'une évolution ? ·
-> **Dernière mise à jour** : 2026-08-29
+> **Dernière mise à jour** : 2026-09-06
 
 Socle est le référentiel central de la gamme : organisations, démarches, types de pièce
 justificative, quartiers et usagers. Il expose trois API REST **versionnées** (`/v1`), en HTTPS,
@@ -192,6 +192,22 @@ consommateur :
   via `GET /v1/documents/signed-url?path=…`.
 - **Tolérez les champs inconnus** dans ces objets — la politique de compatibilité (ci-dessous)
   s'appuie dessus pour évoluer sans rupture.
+
+## Libellés traduits (`translations`) et langues d'une collectivité
+
+Le référentiel est saisi **en français** : `name` porte toujours le libellé français. Une
+collectivité peut activer d'autres langues ; les libellés traduits des **démarches** et des
+**catégories** arrivent alors dans `translations`, indexés par code de langue (BCP 47).
+
+- **Les langues activées** se lisent sur `GET /v1/portal/tenant` → `languages` (français toujours
+  compris et en tête). Le réglage vit sur l'organisation **principale** : la liste est celle de la
+  collectivité, héritage **déjà résolu**, même si le domaine visité désigne une sous-organisation.
+- ⚠️ **Pas de clé `fr`** dans `translations` : le libellé français est `name`. La chercher, c'est
+  ne rien trouver.
+- ⚠️ **Une langue absente n'est pas un libellé vide** : repliez sur `name`. Afficher la chaîne
+  vide d'une traduction manquante donne une carte de démarche sans titre.
+- Une traduction peut exister dans une langue que la collectivité **n'affiche plus** (le réglage
+  gouverne l'usage, pas la donnée) : n'affichez que les langues de `languages`.
 
 ## Particularités utiles
 

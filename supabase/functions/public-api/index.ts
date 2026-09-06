@@ -30,8 +30,14 @@ import {
 import { buildOrganizationTree, isUuid } from "./_shared/scope.ts";
 import { errorResponse, jsonResponse } from "./_shared/errors.ts";
 import { buildOpenApiDocument } from "./_shared/openapi.ts";
-import { isoDay, isPubliclyPublished } from "./_shared/publication.ts";
+import { isoDay } from "./_shared/publication.ts";
 import { serializePortalPage } from "./_shared/portalPage.ts";
+import {
+  publishedCatalogue,
+  type ProcedureBinding,
+  type PublishedProcedure,
+  type TreeOrganization,
+} from "./_shared/portalCatalogue.ts";
 
 const FUNCTION_NAME = "public-api";
 const DOCUMENTS_BUCKET = "procedure-documents";
@@ -71,6 +77,81 @@ async function loadTemplates(
   return new Map(
     ((data ?? []) as Array<Record<string, unknown>>).map((row) => [String(row.id), row]),
   );
+}
+
+/**
+ * Le catalogue PUBLIÉ du portail d'une collectivité — la seule lecture que
+ * `/v1/portal/procedures` et `/v1/portal/page` partagent, pour qu'une
+ * référence de page ne pointe jamais vers une démarche que la liste ne sert
+ * pas. Les règles sont dans `publishedCatalogue` ; ici, les quatre lectures :
+ *
+ *   1. l'arbre du tenant (`org_subtree_ids`, lui compris) ;
+ *   2. les organisations de cet arbre — pour leur nom, leur statut et l'ordre ;
+ *   3. les activations (`organization_procedures`) portées par cet arbre ;
+ *   4. le catalogue de la **racine** du tenant, à qui les démarches
+ *      appartiennent (trigger `enforce_procedure_root_org`).
+ *
+ * La quatrième borne ce qu'une activation peut faire remonter : une liaison
+ * vers la démarche d'une autre racine — que le RLS n'interdit pas d'écrire à
+ * un admin — ne ferait pas apparaître sur ce portail le nom d'une démarche
+ * qui n'est pas la sienne.
+ */
+async function loadPortalCatalogue(
+  admin: ReturnType<typeof createClient>,
+  tenantId: string,
+): Promise<PublishedProcedure[]> {
+  const { data: subtree, error: subtreeError } = await admin.rpc("org_subtree_ids", { root: tenantId });
+  if (subtreeError) throw subtreeError;
+  const treeIds = Array.isArray(subtree) ? (subtree as string[]) : [];
+  if (treeIds.length === 0) return [];
+
+  const { data: organizations, error: organizationsError } = await admin
+    .from("organizations")
+    .select("id, name, parent_id, status")
+    .in("id", treeIds);
+  if (organizationsError) throw organizationsError;
+  const tree = (organizations ?? []) as TreeOrganization[];
+
+  const { data: bindings, error: bindingsError } = await admin
+    .from("organization_procedures")
+    .select("procedure_id, organization_id, is_enabled")
+    .in("organization_id", treeIds)
+    .eq("is_enabled", true);
+  if (bindingsError) throw bindingsError;
+  if (!bindings || bindings.length === 0) return [];
+
+  // La racine du tenant : lui-même le plus souvent ; sinon on remonte
+  // `parent_id` — dix niveaux au plus, le trigger `enforce_org_depth` y veille.
+  let rootId = tenantId;
+  let parentId = tree.find((org) => org.id === tenantId)?.parent_id ?? null;
+  for (let depth = 0; parentId !== null && depth < 12; depth++) {
+    rootId = parentId;
+    const { data: parent, error: parentError } = await admin
+      .from("organizations")
+      .select("parent_id")
+      .eq("id", parentId)
+      .maybeSingle();
+    if (parentError) throw parentError;
+    parentId = (parent?.parent_id as string | null | undefined) ?? null;
+  }
+
+  const { data: procedures, error: proceduresError } = await admin
+    .from("procedures")
+    .select(
+      "id, name, short_description, user_description, input_duration_minutes, " +
+        "status, type, communication_config, order_index, translations",
+    )
+    .eq("organization_id", rootId);
+  if (proceduresError) throw proceduresError;
+
+  // Jour de référence à PARIS : la fonction tourne en UTC, et une période
+  // qui s'ouvre aujourd'hui doit s'ouvrir à minuit heure française.
+  return publishedCatalogue({
+    procedures: (procedures ?? []) as Array<Record<string, unknown>>,
+    bindings: bindings as ProcedureBinding[],
+    organizations: tree,
+    today: isoDay(new Date()),
+  });
 }
 
 /** SHA-256 hexadécimal (même algorithme que la génération côté navigateur). */
@@ -282,7 +363,20 @@ Deno.serve(async (req: Request) => {
       if (!org || org.status !== "active") {
         return errorResponse("not_found", "Aucune collectivité n'est rattachée à ce domaine.", corsHeaders);
       }
-      return jsonResponse(200, serializeTenant(org, String(domain.hostname)), corsHeaders);
+
+      // Langues de la collectivité — résolues en base (le réglage vit sur la
+      // racine, le domaine peut désigner une sous-organisation). Un échec ne
+      // ferme pas le portail : le sérialiseur retombe sur le français, qui est
+      // la seule langue dont on est certain.
+      const { data: languages } = await admin.rpc("resolve_org_languages", {
+        p_org_id: org.id,
+      });
+
+      return jsonResponse(
+        200,
+        serializeTenant(org, String(domain.hostname), languages),
+        corsHeaders,
+      );
     }
 
 
@@ -292,19 +386,20 @@ Deno.serve(async (req: Request) => {
     // Pourquoi cette route existe alors que `/v1/procedures` sert déjà les
     // démarches : ce que le portail a besoin de savoir (« qu'est-ce qui est
     // publié ? ») est une décision du SOCLE, pas un filtre à recopier chez
-    // chaque consommateur. Trois règles la composent — paramétrage `production`,
-    // type `externe`, `visibility` du bloc communication (portail + période) —
-    // et un portail qui les réimplémenterait finirait par diverger, en publiant
-    // trop plutôt que trop peu. `isPubliclyPublished` les écrit une fois.
+    // chaque consommateur. Quatre règles la composent — paramétrage `production`,
+    // type `externe`, `visibility` du bloc communication (portail + période),
+    // et activation par au moins un organisme de l'arbre du tenant — et un
+    // portail qui les réimplémenterait finirait par diverger, en publiant trop
+    // plutôt que trop peu. `publishedCatalogue` les écrit une fois.
     //
     // Et surtout : `ProcedureDto` porte le paramétrage d'INSTRUCTION
     // (form_schema, knowledge_base, agent_description, requester_config,
     // documents). Filtrer côté portail l'aurait déjà fait transiter par un
     // serveur public. Ici il ne sort pas du Socle.
     //
-    // `enabled_for` n'est PAS utilisé : il ne rend que les démarches liées par
-    // `organization_procedures`, ce qui exclurait celles qu'une collectivité
-    // possède en propre — c'est-à-dire le cas ordinaire.
+    // Chaque démarche dit qui la propose (`organizations`) : c'est ce qui fait
+    // apparaître sur le portail de l'agglomération une démarche qu'une seule de
+    // ses communes active, et ce sur quoi l'usager filtre.
     if (segments[0] === "v1" && segments[1] === "portal" && segments[2] === "procedures") {
       if (segments.length !== 3) {
         return errorResponse("not_found", "Endpoint inconnu.", corsHeaders);
@@ -316,23 +411,10 @@ Deno.serve(async (req: Request) => {
       if (!inScope(tenantId)) {
         return errorResponse("not_found", "Collectivité introuvable.", corsHeaders);
       }
-      const { data, error } = await admin
-        .from("procedures")
-        .select(
-          "id, name, short_description, user_description, input_duration_minutes, " +
-            "status, type, communication_config, order_index",
-        )
-        .eq("organization_id", tenantId)
-        .order("order_index", { ascending: true });
-      if (error) throw error;
-      // Jour de référence à PARIS : la fonction tourne en UTC, et une période
-      // qui s'ouvre aujourd'hui doit s'ouvrir à minuit heure française.
-      const today = isoDay(new Date());
+      const catalogue = await loadPortalCatalogue(admin, tenantId);
       return jsonResponse(
         200,
-        ((data ?? []) as Array<Record<string, unknown>>)
-          .filter((row) => isPubliclyPublished(row, today))
-          .map(serializePortalProcedure),
+        catalogue.map((entry) => serializePortalProcedure(entry.row, entry.organizations)),
         corsHeaders,
       );
     }
@@ -377,17 +459,8 @@ Deno.serve(async (req: Request) => {
         return errorResponse("not_found", "Aucune page publiée.", corsHeaders);
       }
 
-      const { data: procedures, error: proceduresError } = await admin
-        .from("procedures")
-        .select("id, status, type, communication_config")
-        .eq("organization_id", tenantId);
-      if (proceduresError) throw proceduresError;
-      const today = isoDay(new Date());
-      const publishedIds = new Set(
-        ((procedures ?? []) as Array<Record<string, unknown>>)
-          .filter((row) => isPubliclyPublished(row, today))
-          .map((row) => String(row.id)),
-      );
+      const catalogue = await loadPortalCatalogue(admin, tenantId);
+      const publishedIds = new Set(catalogue.map((entry) => String(entry.row.id)));
 
       return jsonResponse(
         200,

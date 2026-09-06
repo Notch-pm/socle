@@ -58,12 +58,13 @@ describe("serializers — whitelist stricte (aucune fuite)", () => {
     expect(dto).not.toHaveProperty("password");
   });
 
-  it("catégorie : libellé + icône", () => {
+  it("catégorie : libellé, icône et libellés traduits", () => {
     const dto = serializeCategory({
       id: "c1",
       organization_id: "org-1",
       name: "État civil",
       icon: "FileText",
+      translations: { en: { name: "Civil status" } },
       created_at: null,
       internal: "x",
     });
@@ -72,8 +73,14 @@ describe("serializers — whitelist stricte (aucune fuite)", () => {
       organization_id: "org-1",
       name: "État civil",
       icon: "FileText",
+      // Schéma possédé, transmis tel quel.
+      translations: { en: { name: "Civil status" } },
       created_at: null,
     });
+  });
+
+  it("catégorie : une colonne de traductions absente ne casse rien", () => {
+    expect(serializeCategory({ id: "c1", name: "État civil" }).translations).toBeNull();
   });
 
   it("démarche : transmet les blocs JSON possédés et normalise keywords", () => {
@@ -473,13 +480,14 @@ describe("serializeTenant — la whitelist la plus étroite (page publique)", ()
     parent_id: null,
   };
 
-  it("n'expose que id, name, slug et le domaine résolu", () => {
-    const dto = serializeTenant(row, "nantes.edilumen.fr");
+  it("n'expose que id, name, slug, le domaine résolu et les langues", () => {
+    const dto = serializeTenant(row, "nantes.edilumen.fr", ["fr", "br"]);
     expect(dto).toEqual({
       id: "org-1",
       name: "Ville de Nantes",
       slug: "nantes",
       hostname: "nantes.edilumen.fr",
+      languages: ["fr", "br"],
     });
   });
 
@@ -487,11 +495,27 @@ describe("serializeTenant — la whitelist la plus étroite (page publique)", ()
     // Le portail normalise son entrée, la base stocke la forme canonique : la
     // réponse porte celle de la BASE, pour que le portail sache sur quelle clé
     // le tenant a été trouvé sans refaire la normalisation.
-    expect(serializeTenant(row, "demarches.nantes.fr").hostname).toBe("demarches.nantes.fr");
+    expect(serializeTenant(row, "demarches.nantes.fr", null).hostname).toBe("demarches.nantes.fr");
   });
 
   it("tolère un slug absent", () => {
-    expect(serializeTenant({ ...row, slug: null }, "nantes.edilumen.fr").slug).toBeNull();
+    expect(serializeTenant({ ...row, slug: null }, "nantes.edilumen.fr", null).slug).toBeNull();
+  });
+
+  it("sert toujours le français, en tête, quoi qu'il arrive", () => {
+    // Une résolution qui échoue ou une collectivité sans réglage ne doivent pas
+    // fermer le portail : il reste la langue dont on est certain.
+    expect(serializeTenant(row, "n.fr", null).languages).toEqual(["fr"]);
+    expect(serializeTenant(row, "n.fr", "br").languages).toEqual(["fr"]);
+    expect(serializeTenant(row, "n.fr", ["br"]).languages).toEqual(["fr", "br"]);
+  });
+
+  it("écarte ce qui n'est pas un code de langue, et les doublons", () => {
+    expect(serializeTenant(row, "n.fr", [" BR ", "br", 42, "", "!!", "en"]).languages).toEqual([
+      "fr",
+      "br",
+      "en",
+    ]);
   });
 });
 
@@ -502,6 +526,7 @@ describe("serializePortalProcedure — le paramétrage d'instruction ne sort pas
     short_description: "En quelques minutes.",
     user_description: "Adressée au service état civil.",
     input_duration_minutes: 5,
+    translations: { br: { name: "Testeni ganedigezh" } },
     // Tout ce qui suit sert à INSTRUIRE la demande, pas à la proposer. Un
     // portail public n'a rien à en faire, et le seul fait de le lui transmettre
     // le publierait.
@@ -516,14 +541,29 @@ describe("serializePortalProcedure — le paramétrage d'instruction ne sort pas
     category_id: "cat-1",
   };
 
-  it("n'expose que les cinq champs publics", () => {
+  it("n'expose que les sept champs publics", () => {
     expect(serializePortalProcedure(row)).toEqual({
       id: "proc-1",
       name: "Demande d'acte de naissance",
       short_description: "En quelques minutes.",
       user_description: "Adressée au service état civil.",
       input_duration_minutes: 5,
+      organizations: [],
+      // Des libellés, pas du paramétrage : le portail en a besoin pour servir
+      // la démarche dans la langue choisie par l'usager.
+      translations: { br: { name: "Testeni ganedigezh" } },
     });
+  });
+
+  it("recopie les organismes qui proposent la démarche, dans l'ordre reçu, et rien d'autre d'eux", () => {
+    const dto = serializePortalProcedure(row, [
+      { id: "accm", name: "ACCM", status: "active", email: "x@y" } as never,
+      { id: "arles", name: "Mairie d'Arles" },
+    ]);
+    expect(dto.organizations).toEqual([
+      { id: "accm", name: "ACCM" },
+      { id: "arles", name: "Mairie d'Arles" },
+    ]);
   });
 
   it("ne laisse fuir aucun élément d'instruction", () => {

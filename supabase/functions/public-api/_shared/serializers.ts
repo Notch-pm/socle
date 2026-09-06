@@ -12,6 +12,7 @@ import type {
   ProcedureDocumentDto,
   ProcedureDocumentsDto,
   OrganizationDto,
+  PortalOrganizationRefDto,
   PortalProcedureDto,
   OrganizationProcedureDto,
   ProcedureDto,
@@ -60,6 +61,9 @@ export function serializeCategory(row: Row): CategoryDto {
     organization_id: nullableStr(row.organization_id),
     name: str(row.name),
     icon: nullableStr(row.icon),
+    // Schéma possédé, transmis tel quel (comme `form_schema` ou `translations`
+    // sur une démarche) : la forme est décrite dans l'OpenAPI.
+    translations: row.translations ?? null,
     created_at: nullableStr(row.created_at),
   };
 }
@@ -319,27 +323,60 @@ export function serializeBranding(organizationId: string, row: Row | null): Bran
  * une page publique : tout champ ajouté ici devient lisible par n'importe quel
  * visiteur du portail.
  */
-export function serializeTenant(row: Row, hostname: string): TenantDto {
+export function serializeTenant(row: Row, hostname: string, languages: unknown): TenantDto {
   return {
     id: str(row.id),
     name: str(row.name),
     slug: nullableStr(row.slug),
     hostname,
+    languages: readLanguages(languages),
   };
 }
 
 /**
- * Démarche pour le portail usagers. Cinq champs — aucun élément du paramétrage
- * d'instruction ne franchit. Le filtrage de PUBLICATION est fait en amont
- * (`isPubliclyPublished`) : ce sérialiseur ne décide pas ce qui est publié, il
- * décide ce qui est montré.
+ * Langues servies au portail. La résolution (remontée jusqu'à la racine) est
+ * faite en base par `resolve_org_languages` ; il reste à se prémunir de ce qui
+ * n'est pas une liste de codes, et à garantir la seule chose sur laquelle un
+ * consommateur peut s'appuyer sans réfléchir : **le français est là, en tête**.
+ * Une collectivité sans réglage n'est pas une collectivité sans langue.
+ *
+ * ⚠️ **Miroir volontaire** de `parseEnabledLanguages`
+ * (`src/features/languages/languages.ts`) : une edge function ne peut rien
+ * importer de `src/`. Les tests des deux côtés épinglent les mêmes règles.
  */
-export function serializePortalProcedure(row: Row): PortalProcedureDto {
+const LANGUAGE_CODE_RE = /^[a-z]{2,3}(-[a-z0-9]{2,8})*$/;
+
+function readLanguages(value: unknown): string[] {
+  const out = ["fr"];
+  if (!Array.isArray(value)) return out;
+  for (const item of value) {
+    if (typeof item !== "string") continue;
+    const code = item.trim().toLowerCase();
+    if (!LANGUAGE_CODE_RE.test(code) || out.includes(code)) continue;
+    out.push(code);
+  }
+  return out;
+}
+
+/**
+ * Démarche pour le portail usagers. Six champs — aucun élément du paramétrage
+ * d'instruction ne franchit. Le filtrage de PUBLICATION est fait en amont
+ * (`publishedCatalogue`) : ce sérialiseur ne décide pas ce qui est publié, il
+ * décide ce qui est montré. Les organismes qui proposent la démarche arrivent
+ * déjà résolus, dans l'ordre de l'arbre ; ils sont recopiés champ par champ,
+ * comme tout le reste.
+ */
+export function serializePortalProcedure(
+  row: Row,
+  organizations: PortalOrganizationRefDto[] = [],
+): PortalProcedureDto {
   return {
     id: str(row.id),
     name: str(row.name),
     short_description: nullableStr(row.short_description),
     user_description: nullableStr(row.user_description),
     input_duration_minutes: nullableNum(row.input_duration_minutes),
+    organizations: organizations.map((org) => ({ id: str(org.id), name: str(org.name) })),
+    translations: row.translations ?? null,
   };
 }

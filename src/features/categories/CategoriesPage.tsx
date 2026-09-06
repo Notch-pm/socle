@@ -22,6 +22,8 @@ import {
   type Category,
 } from "@/features/categories/useCategories";
 import { CategoryFormDialog, type CategoryFormValues } from "@/features/categories/CategoryFormDialog";
+import { TranslatedIn } from "@/features/languages/TranslatedIn";
+import type { Json } from "@/types/database.types";
 
 export function CategoriesPage() {
   const { data: categories, isLoading, isError } = useCategoriesQuery();
@@ -44,13 +46,15 @@ export function CategoriesPage() {
   }
 
   function handleSubmit(values: CategoryFormValues) {
+    // Traductions typées de l'app → colonne JSONB générique de Supabase.
+    const payload = { ...values, translations: values.translations as unknown as Json };
     if (editing) {
       updateCategory.mutate(
-        { id: editing.id, ...values },
+        { id: editing.id, ...payload },
         { onSuccess: () => setFormOpen(false) },
       );
     } else {
-      createCategory.mutate(values, { onSuccess: () => setFormOpen(false) });
+      createCategory.mutate(payload, { onSuccess: () => setFormOpen(false) });
     }
   }
 
@@ -102,7 +106,10 @@ export function CategoriesPage() {
                         <Icon className="size-4" />
                       </span>
                     </td>
-                    <td className="px-4 py-3 font-medium">{category.name}</td>
+                    <td className="px-4 py-3 font-medium">
+                      {category.name}
+                      <TranslatedIn translations={category.translations} className="ml-2" />
+                    </td>
                     <td className="px-4 py-3">
                       <div className="flex justify-end gap-1">
                         <Button

@@ -1,6 +1,6 @@
 import * as React from "react";
 import { useParams, useNavigate, useSearchParams } from "react-router-dom";
-import { ArrowLeft, Settings2, Users as UsersIcon, ListChecks, FileCheck2, FileSignature, MapPin, Mail, Palette, Globe, LayoutTemplate, KeyRound, Gauge, type LucideIcon } from "lucide-react";
+import { ArrowLeft, Settings2, Users as UsersIcon, ListChecks, FileCheck2, FileSignature, MapPin, Mail, Palette, Globe, Languages, LayoutTemplate, KeyRound, Gauge, type LucideIcon } from "lucide-react";
 import { Card, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { EmptyState } from "@/components/shared/EmptyState";
@@ -10,6 +10,7 @@ import { SmtpSettingsSection } from "@/features/superadmin/organizations/section
 import { OrganizationsManager } from "@/features/organizations/OrganizationsManager";
 import { BrandingSection } from "@/features/organizations/BrandingSection";
 import { DomainsSection } from "@/features/organizations/DomainsSection";
+import { LanguagesSection } from "@/features/languages/LanguagesSection";
 import { ApiKeysSection } from "@/features/superadmin/organizations/sections/ApiKeysSection";
 import { AiUsageSection } from "@/features/superadmin/organizations/sections/AiUsageSection";
 import { UsersManagementPage } from "@/features/users/UsersManagementPage";
@@ -22,6 +23,7 @@ type Section =
   | "menu"
   | "general"
   | "charte"
+  | "langues"
   | "domaines"
   | "utilisateurs"
   | "demarches"
@@ -35,6 +37,7 @@ type Section =
 const SECTIONS: { key: Section; title: string; description: string; icon: LucideIcon }[] = [
   { key: "general", title: "Informations générales", description: "Nom, slug, type, organisation parente", icon: Settings2 },
   { key: "charte", title: "Charte graphique", description: "Logos et couleurs repris par les applications de la gamme", icon: Palette },
+  { key: "langues", title: "Langues", description: "Langues activées pour les libellés des démarches et des catégories", icon: Languages },
   { key: "domaines", title: "Domaines du portail", description: "Adresses par lesquelles les usagers atteignent les démarches en ligne", icon: Globe },
   { key: "utilisateurs", title: "Utilisateurs", description: "Membres et rôles de cette organisation", icon: UsersIcon },
   { key: "demarches", title: "Catalogue de démarches", description: "Démarches de l'organisation principale", icon: ListChecks },
@@ -60,13 +63,14 @@ const SECTIONS: { key: Section; title: string; description: string; icon: Lucide
  * (le composant reste monté d'une organisation à l'autre) n'a plus lieu d'être.
  */
 const SECTION_KEYS = new Set<string>([
-  "general", "charte", "domaines", "utilisateurs", "demarches", "types-pieces", "documents", "quartiers", "smtp", "api", "ia",
+  "general", "charte", "langues", "domaines", "utilisateurs", "demarches", "types-pieces", "documents", "quartiers", "smtp", "api", "ia",
 ]);
 
 const SECTION_LABELS: Record<Section, string> = {
   menu: "",
   general: "Informations générales",
   charte: "Charte graphique",
+  langues: "Langues",
   domaines: "Domaines du portail",
   utilisateurs: "Utilisateurs",
   demarches: "Catalogue de démarches",
@@ -131,6 +135,8 @@ export function OrgSettingsPage() {
 
         {activeSection === "general" && <GeneralInfoSection organization={organization} />}
         {activeSection === "charte" && <BrandingSection organization={organization} />}
+        {/* Le composant dit lui-même qu'une sous-organisation suit sa racine. */}
+        {activeSection === "langues" && <LanguagesSection organization={organization} />}
         {activeSection === "domaines" && <DomainsSection organizationId={organization.id} />}
         {activeSection === "utilisateurs" && <UsersManagementPage organizationId={organization.id} />}
         {activeSection === "demarches" &&

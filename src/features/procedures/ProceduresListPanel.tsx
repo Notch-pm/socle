@@ -16,6 +16,7 @@ import {
   AlertDialogAction,
 } from "@/components/ui/alert-dialog";
 import { useCategoriesQuery } from "@/features/categories/useCategories";
+import { TranslatedIn } from "@/features/languages/TranslatedIn";
 import {
   useProceduresForOrg,
   useDeleteProcedure,
@@ -111,6 +112,7 @@ export function ProceduresListPanel({
                             Brouillon
                           </Badge>
                         ) : null}
+                        <TranslatedIn translations={proc.translations} />
                       </div>
                     </td>
                     <td className="px-4 py-3 text-muted-foreground">

@@ -13,11 +13,16 @@ import {
 import { EmptyState } from "@/components/shared/EmptyState";
 import { PageHeader } from "@/components/shared/PageHeader";
 import { Field } from "@/components/ui/field";
-import { useOrganization, type Organization } from "@/features/superadmin/organizations/useOrganizationsAdmin";
+import {
+  useAllOrganizations,
+  useOrganization,
+  type Organization,
+} from "@/features/superadmin/organizations/useOrganizationsAdmin";
 import { useAdminRootOrganizations } from "@/features/ai-usage/useAdminRootOrganizations";
 import { useProceduresForOrg } from "@/features/procedures/useProcedures";
+import { useEnabledProcedureBindings } from "@/features/organizations/useOrganizationProcedures";
 import { PortalEditor } from "@/features/portal/PortalEditor";
-import { isoDay, toCatalogueEntry } from "@/features/portal/catalogue";
+import { buildCatalogue, isoDay, portalTreeOrganizations } from "@/features/portal/catalogue";
 import { parsePortalPage, type PortalPage } from "@/features/portal/portalPage";
 import {
   useDiscardDraft,
@@ -183,6 +188,15 @@ function LoadedEditor({
   onClose: () => void;
 }) {
   const { data: procedures } = useProceduresForOrg(organization.id);
+  // L'arbre que le portail sert — la racine et ses sous-organisations actives —
+  // et qui y propose quoi : le canevas rend la liste réelle, avec les
+  // organismes de chaque démarche, exactement comme le portail.
+  const { data: allOrganizations } = useAllOrganizations();
+  const tree = React.useMemo(
+    () => portalTreeOrganizations(allOrganizations ?? [], organization.id),
+    [allOrganizations, organization.id],
+  );
+  const { data: bindings } = useEnabledProcedureBindings(tree.map((org) => org.id));
   const saveDraft = useSaveDraft();
   const publish = usePublishPortalPage();
   const discard = useDiscardDraft();
@@ -228,8 +242,8 @@ function LoadedEditor({
 
   const today = isoDay();
   const catalogue = React.useMemo(
-    () => (procedures ?? []).map((p) => toCatalogueEntry(p, today)),
-    [procedures, today],
+    () => buildCatalogue(procedures ?? [], bindings ?? [], tree, today),
+    [procedures, bindings, tree, today],
   );
 
   const contact = {

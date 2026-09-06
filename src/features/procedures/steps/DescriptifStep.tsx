@@ -3,6 +3,14 @@ import { Input } from "@/components/ui/input";
 import { Field } from "@/components/ui/field";
 import { parseKeywords } from "@/features/procedures/keywords";
 import { useCategoriesQuery } from "@/features/categories/useCategories";
+import { TranslationFields } from "@/features/languages/TranslationFields";
+import { useOrganizationLanguages } from "@/features/languages/useOrganizationLanguages";
+import {
+  translationInput,
+  translationsForWrite,
+  type TranslationInput,
+  type TranslationMap,
+} from "@/features/languages/translations";
 import {
   PROCEDURE_TYPES,
   useNextProcedureRank,
@@ -18,6 +26,8 @@ export interface DescriptifValues {
   short_description: string | null;
   input_duration_minutes: number | null;
   order_index: number;
+  /** Libellé traduit dans les langues actives de l'organisation principale. */
+  translations: TranslationMap;
 }
 
 const selectClass =
@@ -38,6 +48,9 @@ export function DescriptifStep({
   const { data: categories, isLoading: loadingCategories } = useCategoriesQuery();
   // Rang par défaut (création uniquement).
   const { data: nextRank } = useNextProcedureRank(isEdit ? undefined : organizationId);
+  // Langues activées par l'organisation principale : ce sont elles qui décident
+  // des champs de traduction proposés.
+  const { data: enabledLanguages } = useOrganizationLanguages(organizationId);
 
   const orgCategories = (categories ?? []).filter((c) => c.organization_id === organizationId);
 
@@ -53,6 +66,9 @@ export function DescriptifStep({
   );
   const [rankText, setRankText] = React.useState(
     procedure?.order_index != null ? String(procedure.order_index) : "",
+  );
+  const [translations, setTranslations] = React.useState<TranslationInput>(() =>
+    translationInput(procedure?.translations),
   );
 
   // En création, pré-remplir le rang dès que le prochain rang est connu.
@@ -72,6 +88,13 @@ export function DescriptifStep({
       short_description: shortDescription.trim() || null,
       input_duration_minutes: durationText.trim() ? Number(durationText) : null,
       order_index: rankText.trim() ? Number(rankText) : (nextRank ?? 0),
+      // Fusion avec l'existant : une traduction faite dans une langue depuis
+      // désactivée est conservée (voir `translationsForWrite`).
+      translations: translationsForWrite(
+        procedure?.translations,
+        translations,
+        enabledLanguages ?? [],
+      ),
     });
   }
 
@@ -91,6 +114,14 @@ export function DescriptifStep({
           placeholder="Ex. Demande d'acte de naissance"
         />
       </Field>
+
+      <TranslationFields
+        enabled={enabledLanguages ?? []}
+        value={translations}
+        onChange={(code, value) => setTranslations((current) => ({ ...current, [code]: value }))}
+        idPrefix="proc-translation"
+        className="sm:col-span-2"
+      />
 
       <Field
         label="Catégorie"

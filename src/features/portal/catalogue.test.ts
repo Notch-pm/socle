@@ -1,6 +1,17 @@
 import { describe, expect, it } from "vitest";
 import type { Procedure } from "@/features/procedures/useProcedures";
-import { CATALOGUE_VISIBILITY_LABELS, catalogueVisibility, isoDay, toCatalogueEntry } from "./catalogue";
+import type { Organization } from "@/features/superadmin/organizations/orgTree";
+import {
+  CATALOGUE_VISIBILITY_LABELS,
+  buildCatalogue,
+  catalogueOrganizations,
+  catalogueVisibility,
+  isoDay,
+  offersByProcedure,
+  portalTreeOrganizations,
+  toCatalogueEntry,
+  type CatalogueBinding,
+} from "./catalogue";
 
 const TODAY = "2026-09-05";
 
@@ -30,26 +41,37 @@ function procedure(over: Partial<Procedure> = {}): Procedure {
   } as Procedure;
 }
 
+function organization(id: string, name: string, parent_id: string | null, status = "active"): Organization {
+  return { id, name, parent_id, status } as Organization;
+}
+
+function binding(procedure_id: string, organization_id: string, is_enabled = true): CatalogueBinding {
+  return { procedure_id, organization_id, is_enabled };
+}
+
+/** Un organisme qui propose la démarche : le cas ordinaire des tests de visibilité. */
+const ACCM = { id: "accm", name: "ACCM" };
+
 describe("catalogueVisibility — les règles du Socle, dans leur ordre", () => {
-  it("visible : prête, externe, sans période", () => {
-    expect(catalogueVisibility(procedure(), TODAY)).toBe("visible");
+  it("visible : prête, externe, sans période, proposée par au moins un organisme", () => {
+    expect(catalogueVisibility(procedure(), TODAY, [ACCM])).toBe("visible");
     // Jamais passée par l'étape Communication : le défaut du contrat est VISIBLE.
-    expect(catalogueVisibility(procedure({ communication_config: null }), TODAY)).toBe("visible");
+    expect(catalogueVisibility(procedure({ communication_config: null }), TODAY, [ACCM])).toBe("visible");
   });
 
   it("brouillon passe avant tout le reste", () => {
-    expect(catalogueVisibility(procedure({ status: "brouillon", type: "interne" }), TODAY)).toBe("brouillon");
+    expect(catalogueVisibility(procedure({ status: "brouillon", type: "interne" }), TODAY, [])).toBe("brouillon");
     // Fail closed : un statut inattendu est un brouillon.
-    expect(catalogueVisibility(procedure({ status: "bizarre" }), TODAY)).toBe("brouillon");
+    expect(catalogueVisibility(procedure({ status: "bizarre" }), TODAY, [ACCM])).toBe("brouillon");
   });
 
   it("interne : pas de guichet en ligne", () => {
-    expect(catalogueVisibility(procedure({ type: "interne" }), TODAY)).toBe("interne");
+    expect(catalogueVisibility(procedure({ type: "interne" }), TODAY, [ACCM])).toBe("interne");
   });
 
   it("masquée : retirée du portail par le bloc communication", () => {
     const config = { visibility: { portalVisible: false } };
-    expect(catalogueVisibility(procedure({ communication_config: config }), TODAY)).toBe("masquee");
+    expect(catalogueVisibility(procedure({ communication_config: config }), TODAY, [ACCM])).toBe("masquee");
   });
 
   it("hors période : bornes incluses, dans les deux sens", () => {
@@ -59,9 +81,9 @@ describe("catalogueVisibility — les règles du Socle, dans leur ordre", () => 
           visibility: { publicationPeriodEnabled: true, publicationStart, publicationEnd },
         },
       });
-    expect(catalogueVisibility(period("2026-09-06", null), TODAY)).toBe("hors-periode");
-    expect(catalogueVisibility(period(null, "2026-09-04"), TODAY)).toBe("hors-periode");
-    expect(catalogueVisibility(period("2026-09-05", "2026-09-05"), TODAY)).toBe("visible");
+    expect(catalogueVisibility(period("2026-09-06", null), TODAY, [ACCM])).toBe("hors-periode");
+    expect(catalogueVisibility(period(null, "2026-09-04"), TODAY, [ACCM])).toBe("hors-periode");
+    expect(catalogueVisibility(period("2026-09-05", "2026-09-05"), TODAY, [ACCM])).toBe("visible");
   });
 
   it("ignore les dates quand la période est désactivée", () => {
@@ -70,26 +92,97 @@ describe("catalogueVisibility — les règles du Socle, dans leur ordre", () => 
     const config = {
       visibility: { publicationPeriodEnabled: false, publicationStart: "2020-01-01", publicationEnd: "2020-12-31" },
     };
-    expect(catalogueVisibility(procedure({ communication_config: config }), TODAY)).toBe("visible");
+    expect(catalogueVisibility(procedure({ communication_config: config }), TODAY, [ACCM])).toBe("visible");
+  });
+
+  it("non activée : parfaitement publiable, mais aucun organisme ne la propose — la règle vient en dernier", () => {
+    expect(catalogueVisibility(procedure(), TODAY, [])).toBe("non-activee");
+    // Une raison de paramétrage prime : elle se corrige dans l'outil Démarches.
+    expect(catalogueVisibility(procedure({ type: "interne" }), TODAY, [])).toBe("interne");
   });
 });
 
 describe("toCatalogueEntry / libellés", () => {
   it("ne porte de badge que sur les cas anormaux", () => {
     expect(CATALOGUE_VISIBILITY_LABELS.visible).toBeNull();
-    for (const key of ["brouillon", "interne", "masquee", "hors-periode"] as const) {
+    for (const key of ["brouillon", "interne", "masquee", "hors-periode", "non-activee"] as const) {
       expect(CATALOGUE_VISIBILITY_LABELS[key]).toBeTruthy();
     }
   });
 
-  it("recopie l'essentiel, et rien du paramétrage d'instruction", () => {
-    const entry = toCatalogueEntry(procedure({ form_schema: { secret: true } }), TODAY);
+  it("recopie l'essentiel, les organismes, et rien du paramétrage d'instruction", () => {
+    const entry = toCatalogueEntry(procedure({ form_schema: { secret: true } }), TODAY, [ACCM]);
     expect(entry).toEqual({
       id: "p1",
       name: "Acte de naissance",
       shortDescription: "En ligne, sous 3 jours.",
       visibility: "visible",
+      organizations: [ACCM],
     });
+  });
+});
+
+describe("portalTreeOrganizations — l'arbre que le portail sert", () => {
+  const all = [
+    organization("autre", "Autre client", null),
+    organization("cabinet", "Direction du Cabinet", "crau"),
+    organization("crau", "Mairie de Saint-Martin", "accm"),
+    organization("arles", "Mairie d'Arles", "accm"),
+    organization("old", "Ancienne mairie", "accm", "obsolete"),
+    organization("accm", "ACCM", null),
+  ];
+
+  it("garde la racine et ses descendantes actives, dans l'ordre de l'arbre", () => {
+    expect(portalTreeOrganizations(all, "accm").map((o) => o.id)).toEqual(["accm", "arles", "crau", "cabinet"]);
+  });
+
+  it("ne mélange pas les clients : une autre racine n'y figure pas", () => {
+    expect(portalTreeOrganizations(all, "accm").map((o) => o.id)).not.toContain("autre");
+  });
+});
+
+describe("offersByProcedure / buildCatalogue — qui propose quoi", () => {
+  const tree = [
+    { id: "accm", name: "ACCM" },
+    { id: "arles", name: "Mairie d'Arles" },
+    { id: "crau", name: "Mairie de Saint-Martin" },
+  ];
+
+  it("liste les organismes de chaque démarche dans l'ordre de l'arbre, sans les liaisons désactivées", () => {
+    const offers = offersByProcedure(
+      [binding("p1", "crau"), binding("p1", "accm"), binding("p1", "arles", false), binding("p2", "ailleurs")],
+      tree,
+    );
+    expect(offers.get("p1")).toEqual([
+      { id: "accm", name: "ACCM" },
+      { id: "crau", name: "Mairie de Saint-Martin" },
+    ]);
+    // Une organisation hors de l'arbre ne propose rien sur ce portail.
+    expect(offers.has("p2")).toBe(false);
+  });
+
+  it("marque « non activée » la démarche que personne ne propose, et garde l'ordre du catalogue", () => {
+    const catalogue = buildCatalogue(
+      [procedure({ id: "p1" }), procedure({ id: "p2", name: "Voirie" })],
+      [binding("p2", "arles")],
+      tree,
+      TODAY,
+    );
+    expect(catalogue.map((entry) => [entry.id, entry.visibility])).toEqual([
+      ["p1", "non-activee"],
+      ["p2", "visible"],
+    ]);
+    expect(catalogue[1].organizations).toEqual([{ id: "arles", name: "Mairie d'Arles" }]);
+  });
+
+  it("catalogueOrganizations : l'union dédoublonnée, dans l'ordre de première apparition", () => {
+    const catalogue = buildCatalogue(
+      [procedure({ id: "p1" }), procedure({ id: "p2", name: "Voirie" })],
+      [binding("p1", "crau"), binding("p2", "crau"), binding("p2", "accm")],
+      tree,
+      TODAY,
+    );
+    expect(catalogueOrganizations(catalogue).map((o) => o.id)).toEqual(["crau", "accm"]);
   });
 });
 

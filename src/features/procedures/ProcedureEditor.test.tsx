@@ -72,6 +72,9 @@ vi.mock("@/features/procedures/useProcedures", () => ({
 vi.mock("@/features/categories/useCategories", () => ({
   useCategoriesQuery: () => ({ data: [], isLoading: false }),
 }));
+vi.mock("@/features/languages/useOrganizationLanguages", () => ({
+  useOrganizationLanguages: () => ({ data: ["fr"] }),
+}));
 vi.mock("@/features/document-types/useDocumentTypes", () => ({
   useDocumentTypesForOrg: () => ({ data: [] }),
 }));

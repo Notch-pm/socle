@@ -2,7 +2,7 @@
 
 > **Public** : tous (devs Socle, équipes consommatrices) · **Question traitée** : quelles
 > évolutions sont envisagées, et lesquelles ont déjà été livrées ? · **Dernière mise à jour** :
-> 2026-09-05
+> 2026-09-06
 
 Liste d'**intentions**, pas d'engagements — sauf mention explicite d'une date de livraison.
 Née du chantier « Clara délègue ses usagers au Socle » (2026-07-16), enrichie depuis. Pour ce qui
@@ -132,6 +132,18 @@ suppose la précédente.
 - **2026-09-05 — Rendu au portail** : `GET /v1/portal/page` (1.8.0, pied de page en 1.9.0),
   composition publiée rendue par Nora avec recherche réelle sur le catalogue, charte graphique de
   la collectivité injectée (`/v1/organizations/{id}/branding`, décorative : jamais bloquante).
+- **2026-09-06 — Les démarches réelles : qui propose quoi.** Le catalogue du portail applique
+  l'**activation par organisation** sur tout l'arbre du tenant (`publishedCatalogue`, contrat
+  1.10.0) : une démarche activée par une seule commune apparaît sur le portail de
+  l'agglomération, une démarche que personne n'active n'est pas servie. Chaque démarche porte ses
+  organismes ; Nora et le canevas de l'éditeur les affichent sur la carte et filtrent par
+  organisme ; badge « Non activée » dans la liste d'épinglage.
+- **2026-09-06 — Les langues, et les libellés traduits.** L'organisation principale active les
+  langues dans lesquelles elle s'adresse à ses usagers (catalogue figé dans le code : langues
+  mondiales + langues régionales de France, codes BCP 47) ; les libellés des **démarches** et des
+  **catégories** se traduisent dans chacune. `enabled_languages` sur la racine,
+  `translations` sur `procedures` et `categories`, `resolve_org_languages` pour la remontée,
+  contrat 1.11.0 (`Tenant.languages`, `translations` sur `Category` et `PortalProcedure`).
 
 ### Envisagé, dans l'ordre
 
@@ -142,11 +154,16 @@ suppose la précédente.
    la **création de la demande** — vers Iris (traitement) via API, avec un accusé à l'usager.
    Prérequis Socle : une route de démarche détaillée sous `/v1/portal/*` (le contrat portail
    reste séparé du contrat référentiel), et le statut de la demande consultable.
-2. **Multilingue.** Le Socle porte déjà `translations` sur les démarches (JSON possédé, transmis
-   tel quel). À faire : la langue de l'interface du portail (français par défaut, sélecteur), les
-   textes des sections de la page composée (le schéma `PortalPage` gagnera une couche par langue,
-   version 2 du schéma — parse tolérant oblige, la version 1 restera lisible), et les démarches
-   dans la langue choisie avec repli sur le français.
+2. **Multilingue.** Fait côté référentiel (2026-09-06) : les langues activées par la collectivité
+   et les **libellés** traduits des démarches et des catégories, servis au portail
+   (`Tenant.languages`, `translations`). Reste à faire : la langue de l'interface du portail
+   (français par défaut, sélecteur bâti sur `languages`), les **textes** des sections de la page
+   composée (le schéma `PortalPage` gagnera une couche par langue, version 2 du schéma — parse
+   tolérant oblige, la version 1 restera lisible), et les autres champs d'une démarche que
+   l'usager lit (descriptif court, descriptif usager, libellés du formulaire) : le schéma
+   `translations` les accueille en clés voisines de `name`, sans reprise. Enfin, les langues de
+   France sans code ISO (gallo, poitevin-saintongeais, francique lorrain) attendent une convention
+   de nommage — voir l'en-tête de `src/features/languages/languages.ts`.
 3. **Les autres templates.** L'onglet « Thème » (grisé) : gabarits de page et variantes de mise en
    page au-delà de la composition libre ; d'autres pages que l'accueil (`portal_pages.slug` est
    prêt : « Contact », « Mentions légales », « Accessibilité » — obligatoires pour un site

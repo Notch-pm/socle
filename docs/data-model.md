@@ -1,7 +1,7 @@
 # Modèle de données
 
 > **Public** : développeurs, ops · **Question traitée** : qu'est-ce qui existe en base (tables,
-> contraintes, RLS, fonctions, storage) ? · **Dernière mise à jour** : 2026-09-05
+> contraintes, RLS, fonctions, storage) ? · **Dernière mise à jour** : 2026-09-06
 
 Pour le rôle de Socle dans la gamme et les décisions d'architecture, voir [../CLAUDE.md](../CLAUDE.md)
 et [./architecture.md](./architecture.md). Pour les endpoints, schémas de requête/réponse et la
@@ -61,6 +61,7 @@ aucun endpoint, il décrit ce qui existe **en base**.
 | `status` | text NOT NULL défaut `active`, CHECK `active`\|`obsolete` (réversible) |
 | `email_sender_override` | bool NOT NULL défaut false |
 | `email_sender_name` | text nullable |
+| `enabled_languages` | `text[]` NOT NULL défaut `{fr}`, CHECK `organizations_enabled_languages_check` (fonction `is_valid_language_set`) — **racine uniquement** |
 | `created_at` | timestamp sans fuseau, `now()` |
 
 - **Trigger** `trg_enforce_org_depth` (BEFORE INSERT/UPDATE OF `parent_id`) → profondeur
@@ -76,6 +77,15 @@ aucun endpoint, il décrit ce qui existe **en base**.
   au lieu d'être refusée — la colonne vaut `true` par défaut, aucun appelant créant une racine n'a
   à le savoir. ⚠️ Les valeurs propres sont **conservées** quand l'organisation hérite (le
   commutateur gouverne l'usage, pas la donnée — motif `email_sender_name`).
+- **Langues de la collectivité** (2026-09-06) : `enabled_languages` porte les codes BCP 47 dans
+  lesquels la collectivité s'adresse à ses usagers. Le CHECK garantit la **forme** (au moins `fr`,
+  pas de doublon, codes bien formés) et non la liste : le catalogue des langues proposées vit dans
+  le code (`src/features/languages/languages.ts`), ajouter une langue ne doit pas demander une
+  migration. Trigger `enforce_languages_root_org` (BEFORE INSERT/UPDATE) : poser des langues sur
+  une **sous-organisation est refusé** (un second réglage serait un second endroit où chercher la
+  vérité), mais **rattacher** une organisation sous une autre est accepté — sa liste revient au
+  défaut plutôt que de bloquer une réorganisation. Résolution à la lecture par
+  `resolve_org_languages`, jamais de recopie (motif `resolve_branding`).
 - ⚠️ **`parent_id` en CASCADE, et tous les `organization_id` des autres tables également en
   CASCADE** : supprimer une organisation supprime récursivement tout son sous-arbre **et**
   l'intégralité de ses données (catégories, démarches, contacts, quartiers, clés API, SMTP…).
@@ -165,7 +175,9 @@ aucun endpoint, il décrit ce qui existe **en base**.
 
 ### `categories`
 
-- `organization_id` **nullable**, FK CASCADE ; `name` NOT NULL ; `icon` ; `created_at`.
+- `organization_id` **nullable**, FK CASCADE ; `name` NOT NULL ; `icon` ; `created_at` ;
+  `translations` jsonb NOT NULL défaut `{}`, CHECK `categories_translations_object_check`
+  (`jsonb_typeof = 'object'`) — voir [Contrats JSONB possédés](#contrats-jsonb-possédés).
 - **Aucun trigger de rattachement racine, aucun index d'unicité de nom, aucun index sur
   `organization_id`** — seule table métier scopée organisation à déroger aux deux motifs
   transverses (voir Points de vigilance).
@@ -185,7 +197,7 @@ aucun endpoint, il décrit ce qui existe **en base**.
 | `input_duration_minutes` | int, CHECK `NULL OR >= 0` |
 | `order_index` | int, défaut 0 |
 | `is_active_global` | bool défaut true |
-| `translations` | jsonb, défaut `{}` |
+| `translations` | jsonb nullable, défaut `{}`, CHECK `procedures_translations_object_check` — contrat possédé depuis le 2026-09-06 |
 | `requester_config`, `form_schema`, `knowledge_base`, `communication_config` | jsonb — contrats possédés, voir [Contrats JSONB possédés](#contrats-jsonb-possédés) |
 | `created_at`, `updated_at` | timestamp sans fuseau, **pas de trigger `set_updated_at`** |
 
@@ -526,6 +538,19 @@ Calquées trait pour trait sur les deux RPC SMTP ci-dessus.
   sous-organisation choisirait d'hériter sans jamais voir de quoi. Renvoie 0 ligne sur une racine.
   `configured` = au moins un des quatre éléments renseigné au-dessus.
 
+### RPC et fonction langues
+
+- `resolve_org_languages(p_org_id) → text[]` — SQL `STABLE`, `SECURITY INVOKER`, CTE ascendante
+  jusqu'à la racine (garde 20 niveaux) : les langues **applicables** à une organisation, c'est-à-dire
+  celles de son organisation principale. **Seule implémentation de la remontée** (motif
+  `resolve_branding`), servie par `public-api` (`GET /v1/portal/tenant`, champ `languages`) —
+  EXECUTE **réservé à `service_role`** : elle traverse des organisations que l'appelant n'a pas le
+  droit de lire. Les écrans du Socle n'en ont pas besoin : ils lisent la colonne de la racine,
+  qu'ils connaissent déjà.
+- `is_valid_language_set(codes text[]) → bool` — SQL `IMMUTABLE`, support du CHECK sur
+  `organizations.enabled_languages` : au moins `fr`, pas de doublon, codes de la forme
+  `^[a-z]{2,3}(-[a-z0-9]{2,8})*$`. Miroir de `LANGUAGE_CODE_RE` côté application.
+
 ### `match_contacts(...)` — rapprochement d'identités
 
 `match_contacts(p_org_id, p_contact_type, p_first_name, p_last_name, p_usage_name, p_legal_name,
@@ -623,7 +648,8 @@ seulement) — voir `smtp_settings.password` plus haut.
 ## Contrats JSONB possédés
 
 `procedures.form_schema`, `procedures.requester_config`, `procedures.knowledge_base`,
-`procedures.communication_config` (ainsi que `translations` et `metadata`) portent des
+`procedures.communication_config`, `procedures.translations` et `categories.translations` (ainsi
+que `metadata`) portent des
 commentaires SQL en base les qualifiant de **contrats possédés**, consommés en aval par
 Ariane/Clara. `public-api` les **transmet tels quels**
 (pass-through), sans les interpréter.
@@ -639,6 +665,14 @@ Leur structure n'est **pas** décrite ici (propriété du code applicatif et de 
 - ⚠️ Le bloc `communication_config.documents` référence `document_templates` **sans clé
   étrangère** : une sélection survit à la suppression de son document. L'UI comme `public-api`
   écartent ces références mortes ; un consommateur SQL direct doit joindre, pas faire confiance.
+- ⚠️ `translations` (sur `procedures` **et** `categories`) a une forme depuis le 2026-09-06 :
+  `{ "<code de langue>": { "name": "…" } }`, code faisant foi
+  `src/features/languages/translations.ts` (testé). Deux règles portent tout le reste : **jamais de
+  clé `fr`** (le libellé français est la colonne `name` — l'y écrire créerait une seconde source de
+  vérité) et une **langue absente = repli sur `name`**, pas un libellé vide. Les traductions d'une
+  langue **désactivée** sont **conservées** (le réglage gouverne l'usage, pas la donnée — motif
+  `email_sender_name`) : elles restent donc lisibles en base alors que la collectivité ne les
+  affiche plus.
 - Contrat publié : `/api-doc` (Redoc, `public-api/openapi.json`).
 
 La sérialisation des deux Edge Functions applique une **whitelist stricte** : aucune colonne

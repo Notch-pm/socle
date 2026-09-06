@@ -30,7 +30,7 @@ export function buildOpenApiDocument(serverUrl: string): Record<string, unknown>
     openapi: "3.1.0",
     info: {
       title: "API Socle — Référentiel de la gamme",
-      version: "1.9.0",
+      version: "1.11.0",
       description: [
         "API **en lecture seule** exposant le référentiel central de la gamme : les",
         "**organisations** (et sous-organisations) avec l'intégralité de leur configuration,",
@@ -66,6 +66,15 @@ export function buildOpenApiDocument(serverUrl: string): Record<string, unknown>
         "Les blocs de configuration possédés (`form_schema`, `requester_config`,",
         "`knowledge_base`, `communication_config`) sont des objets JSON dont la structure est",
         "décrite dans les schémas.",
+        "",
+        "## Langues",
+        "Le référentiel est saisi **en français** : `name` porte toujours le libellé français.",
+        "Une collectivité peut activer d'autres langues ; les libellés traduits des **démarches**",
+        "et des **catégories** arrivent alors dans `translations`, indexés par code de langue",
+        "(BCP 47 : `en`, `br`, `oc`, `gcr`…). Il n'y a **jamais** de clé `fr` — le français est",
+        "`name` — et une langue absente n'est pas un trou : **repliez sur `name`**.",
+        "Les langues activées par une collectivité sont servies par",
+        "`GET /v1/portal/tenant` (champ `languages`, héritage résolu).",
         "",
         "## Erreurs",
         "Toute erreur renvoie `{ \"error\": { \"code\": \"...\", \"message\": \"...\" } }` avec un",
@@ -167,13 +176,18 @@ export function buildOpenApiDocument(serverUrl: string): Record<string, unknown>
           description:
             "Renvoie les démarches qu'un **usager** doit voir sur le portail de la " +
             "collectivité, déjà filtrées par le Socle. Une démarche est publiée quand les " +
-            "**trois** conditions sont réunies :\n\n" +
+            "**quatre** conditions sont réunies :\n\n" +
             "- son paramétrage est en `production` (une démarche `brouillon` n'est proposée " +
             "nulle part) ;\n" +
             "- elle est de type `externe` (une démarche `interne` n'a pas de guichet en ligne) ;\n" +
             "- son bloc `communication_config.visibility` la dit visible sur le portail et, si " +
             "une période de publication est active, le jour courant est dans ses bornes " +
-            "(incluses, **heure de Paris**).\n\n" +
+            "(incluses, **heure de Paris**) ;\n" +
+            "- elle est **activée** pour au moins un organisme actif de l'arbre de la " +
+            "collectivité — la collectivité elle-même ou l'une de ses sous-organisations. Une " +
+            "démarche proposée par une seule commune de l'agglomération apparaît donc sur le " +
+            "portail de l'agglomération ; `organizations` dit qui la propose, dans l'ordre de " +
+            "l'arbre, et n'est jamais vide.\n\n" +
             "**N'appliquez pas ces règles vous-même** à partir de `GET /v1/procedures` : elles " +
             "évoluent avec le paramétrage, et un consommateur qui les recopie finit par publier " +
             "ce qui ne devait pas l'être.\n\n" +
@@ -758,6 +772,17 @@ export function buildOpenApiDocument(serverUrl: string): Record<string, unknown>
               description: "Domaine tel que résolu (forme normalisée stockée).",
               examples: ["nantes.edilumen.fr"],
             },
+            languages: {
+              type: "array",
+              items: { type: "string" },
+              description:
+                "Langues activées par la collectivité (BCP 47), **français toujours compris " +
+                "et en tête** : de quoi bâtir un sélecteur de langue. Le réglage vit sur " +
+                "l'organisation principale, l'héritage est **déjà résolu** — la liste est " +
+                "celle de la collectivité même quand le domaine désigne une " +
+                "sous-organisation.",
+              examples: [["fr", "en", "br"]],
+            },
           },
         },
         PortalProcedure: {
@@ -765,7 +790,7 @@ export function buildOpenApiDocument(serverUrl: string): Record<string, unknown>
           description:
             "Démarche telle qu'un usager la voit. Whitelist beaucoup plus étroite que " +
             "`Procedure` : le paramétrage d'instruction n'y figure pas.",
-          required: ["id", "name"],
+          required: ["id", "name", "organizations"],
           properties: {
             id: { type: "string", format: "uuid" },
             name: { type: "string", description: "Intitulé de la démarche." },
@@ -784,6 +809,24 @@ export function buildOpenApiDocument(serverUrl: string): Record<string, unknown>
               type: ["integer", "null"],
               description: "Durée de saisie estimée, en minutes.",
             },
+            organizations: {
+              type: "array",
+              description:
+                "Organismes de l'arbre de la collectivité qui proposent la démarche " +
+                "(activation par organisation), dans l'ordre de l'arbre : la collectivité, " +
+                "puis ses sous-organisations. Jamais vide.",
+              items: { $ref: "#/components/schemas/PortalOrganizationRef" },
+            },
+            translations: { $ref: "#/components/schemas/Translations" },
+          },
+        },
+        PortalOrganizationRef: {
+          type: "object",
+          description: "Un organisme qui propose une démarche : de quoi le nommer, rien de plus.",
+          required: ["id", "name"],
+          properties: {
+            id: { type: "string", format: "uuid" },
+            name: { type: "string" },
           },
         },
         PortalPage: {
@@ -1095,11 +1138,12 @@ export function buildOpenApiDocument(serverUrl: string): Record<string, unknown>
           properties: {
             id: { type: "string", format: "uuid" },
             organization_id: { type: ["string", "null"], format: "uuid" },
-            name: { type: "string", description: "Libellé de la catégorie." },
+            name: { type: "string", description: "Libellé de la catégorie, en français." },
             icon: {
               type: ["string", "null"],
               description: "Icône (identifiant d'icône lucide-react, ex. \"FileText\").",
             },
+            translations: { $ref: "#/components/schemas/Translations" },
             created_at: { type: ["string", "null"], format: "date-time" },
           },
           example: {
@@ -1107,6 +1151,7 @@ export function buildOpenApiDocument(serverUrl: string): Record<string, unknown>
             organization_id: "d5227d25-f327-493a-a9a2-278397531e33",
             name: "État civil",
             icon: "FileText",
+            translations: { en: { name: "Civil status" } },
             created_at: "2026-01-20T10:00:00Z",
           },
         },
@@ -1150,14 +1195,25 @@ export function buildOpenApiDocument(serverUrl: string): Record<string, unknown>
             knowledge_base: { $ref: "#/components/schemas/KnowledgeBase" },
             communication_config: { $ref: "#/components/schemas/CommunicationConfig" },
             documents: { $ref: "#/components/schemas/ProcedureDocuments" },
-            translations: {
-              type: ["object", "null"],
-              additionalProperties: true,
-              description: "Traductions éventuelles (structure libre).",
-            },
+            translations: { $ref: "#/components/schemas/Translations" },
             created_at: { type: ["string", "null"], format: "date-time" },
             updated_at: { type: ["string", "null"], format: "date-time" },
           },
+        },
+        Translations: {
+          type: ["object", "null"],
+          description:
+            "Libellés traduits, indexés par **code de langue** (BCP 47 : ISO 639-1 quand il " +
+            "existe, ISO 639-3 sinon). Deux règles à connaître avant d'afficher quoi que ce " +
+            "soit : il n'y a **jamais** de clé `fr` (le libellé français est le champ `name`), " +
+            "et une langue **absente** n'est pas un libellé vide, c'est un **repli sur " +
+            "`name`**. Les langues qu'une collectivité a activées sont servies par " +
+            "`GET /v1/portal/tenant` (`languages`).",
+          additionalProperties: {
+            type: "object",
+            properties: { name: { type: "string", description: "Libellé dans cette langue." } },
+          },
+          example: { en: { name: "Birth certificate" }, br: { name: "Testeni ganedigezh" } },
         },
         RequesterConfig: {
           type: ["object", "null"],

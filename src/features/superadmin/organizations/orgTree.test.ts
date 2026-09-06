@@ -21,6 +21,7 @@ function org(id: string, name: string, parent_id: string | null = null): Organiz
     email: null,
     email_sender_name: null,
     email_sender_override: false,
+    enabled_languages: ["fr"],
     logo_url: null,
     logo_white_url: null,
     primary_color: null,

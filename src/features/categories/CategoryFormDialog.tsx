@@ -13,12 +13,22 @@ import { Field } from "@/components/ui/field";
 import { IconPicker } from "@/features/categories/IconPicker";
 import { useWritableOrganizations } from "@/features/categories/useWritableOrganizations";
 import { useAllOrganizations } from "@/features/superadmin/organizations/useOrganizationsAdmin";
+import { TranslationFields } from "@/features/languages/TranslationFields";
+import { useOrganizationLanguages } from "@/features/languages/useOrganizationLanguages";
+import {
+  translationInput,
+  translationsForWrite,
+  type TranslationInput,
+  type TranslationMap,
+} from "@/features/languages/translations";
 import type { Category } from "@/features/categories/useCategories";
 
 export interface CategoryFormValues {
   name: string;
   icon: string | null;
   organization_id: string;
+  /** Libellé traduit dans les langues actives de l'organisation. */
+  translations: TranslationMap;
 }
 
 export function CategoryFormDialog({
@@ -41,6 +51,11 @@ export function CategoryFormDialog({
   const [name, setName] = React.useState("");
   const [icon, setIcon] = React.useState<string | null>(null);
   const [organizationId, setOrganizationId] = React.useState("");
+  const [translations, setTranslations] = React.useState<TranslationInput>({});
+
+  // Les langues sont celles de l'organisation choisie : changer d'organisation
+  // change les champs de traduction proposés.
+  const { data: enabledLanguages } = useOrganizationLanguages(organizationId || undefined);
 
   // Première organisation inscriptible qui est aussi une organisation principale (racine).
   const rootIds = React.useMemo(
@@ -59,6 +74,7 @@ export function CategoryFormDialog({
     setName(category?.name ?? "");
     setIcon(category?.icon ?? null);
     setOrganizationId(category?.organization_id ?? "");
+    setTranslations(translationInput(category?.translations));
   }, [open, category]);
 
   // En création, pré-sélectionner l'organisation principale dès qu'elle est connue.
@@ -73,7 +89,18 @@ export function CategoryFormDialog({
   function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     if (!canSubmit) return;
-    onSubmit({ name: name.trim(), icon, organization_id: organizationId });
+    onSubmit({
+      name: name.trim(),
+      icon,
+      organization_id: organizationId,
+      // Fusion avec l'existant : une traduction faite dans une langue depuis
+      // désactivée est conservée (voir `translationsForWrite`).
+      translations: translationsForWrite(
+        category?.translations,
+        translations,
+        enabledLanguages ?? [],
+      ),
+    });
   }
 
   return (
@@ -129,6 +156,16 @@ export function CategoryFormDialog({
           <Field label="Icône">
             <IconPicker value={icon} onChange={setIcon} />
           </Field>
+
+          <TranslationFields
+            enabled={enabledLanguages ?? []}
+            value={translations}
+            onChange={(code, value) =>
+              setTranslations((current) => ({ ...current, [code]: value }))
+            }
+            idPrefix="category-translation"
+            className="border-t border-border pt-4"
+          />
 
           <DialogFooter>
             <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>

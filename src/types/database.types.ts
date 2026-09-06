@@ -280,6 +280,7 @@ export type Database = {
           id: string
           name: string
           organization_id: string | null
+          translations: Json
         }
         Insert: {
           created_at?: string | null
@@ -287,6 +288,7 @@ export type Database = {
           id?: string
           name: string
           organization_id?: string | null
+          translations?: Json
         }
         Update: {
           created_at?: string | null
@@ -294,6 +296,7 @@ export type Database = {
           id?: string
           name?: string
           organization_id?: string | null
+          translations?: Json
         }
         Relationships: [
           {
@@ -749,6 +752,7 @@ export type Database = {
           email: string | null
           email_sender_name: string | null
           email_sender_override: boolean
+          enabled_languages: string[]
           id: string
           logo_url: string | null
           logo_white_url: string | null
@@ -769,6 +773,7 @@ export type Database = {
           email?: string | null
           email_sender_name?: string | null
           email_sender_override?: boolean
+          enabled_languages?: string[]
           id?: string
           logo_url?: string | null
           logo_white_url?: string | null
@@ -789,6 +794,7 @@ export type Database = {
           email?: string | null
           email_sender_name?: string | null
           email_sender_override?: boolean
+          enabled_languages?: string[]
           id?: string
           logo_url?: string | null
           logo_white_url?: string | null
@@ -1145,6 +1151,7 @@ export type Database = {
       }
       is_org_admin: { Args: { org_id: string }; Returns: boolean }
       is_super_admin: { Args: never; Returns: boolean }
+      is_valid_language_set: { Args: { codes: string[] }; Returns: boolean }
       list_quartiers_geojson: {
         Args: { p_org_id: string }
         Returns: {
@@ -1263,6 +1270,7 @@ export type Database = {
           source_organization_id: string
         }[]
       }
+      resolve_org_languages: { Args: { p_org_id: string }; Returns: string[] }
       resolve_smtp_settings: {
         Args: { p_org_id: string }
         Returns: {
