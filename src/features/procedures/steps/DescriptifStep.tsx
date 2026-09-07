@@ -121,6 +121,9 @@ export function DescriptifStep({
         onChange={(code, value) => setTranslations((current) => ({ ...current, [code]: value }))}
         idPrefix="proc-translation"
         className="sm:col-span-2"
+        organizationId={organizationId}
+        sourceLabel={name}
+        kind="procedure"
       />
 
       <Field

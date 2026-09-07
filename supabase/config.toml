@@ -52,3 +52,11 @@ verify_jwt = true
 
 [functions.send-test-email]
 verify_jwt = true
+
+# Traduction automatique d'un libellé, déclenchée depuis l'écran de
+# paramétrage. Appelée avec le JWT de session ; l'autorisation fine
+# (`is_org_admin`) est vérifiée dans le code, avec les droits de l'appelant.
+# Elle n'appelle pas le fournisseur LLM : elle appelle `ai-api`, avec la clé
+# plateforme du Socle (`SOCLE_AI_API_KEY`).
+[functions.translate-labels]
+verify_jwt = true

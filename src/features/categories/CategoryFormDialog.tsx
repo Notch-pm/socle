@@ -165,6 +165,9 @@ export function CategoryFormDialog({
             }
             idPrefix="category-translation"
             className="border-t border-border pt-4"
+            organizationId={organizationId || undefined}
+            sourceLabel={name}
+            kind="category"
           />
 
           <DialogFooter>

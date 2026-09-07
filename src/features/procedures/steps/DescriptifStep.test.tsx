@@ -19,6 +19,16 @@ vi.mock("@/features/procedures/useProcedures", async (importOriginal) => ({
 vi.mock("@/features/languages/useOrganizationLanguages", () => ({
   useOrganizationLanguages: () => ({ data: ["fr", "en", "br"] }),
 }));
+// Traduction automatique : le bouton est ici, son comportement est testé dans
+// `TranslationFields.test.tsx`. Ce qui compte ici, c'est ce qui est ENREGISTRÉ.
+vi.mock("@/features/languages/useTranslateLabels", () => ({
+  useTranslateLabels: () => ({
+    mutate: vi.fn(),
+    isPending: false,
+    isError: false,
+    error: null,
+  }),
+}));
 
 const procedure = {
   id: "proc-1",

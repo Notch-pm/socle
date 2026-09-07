@@ -441,6 +441,29 @@ service — motif du catalogue de démarches, des quartiers, du plafond IA.
   `TranslationFields` (partagé) affiche un champ par langue active dans l'étape **Descriptif** d'une
   démarche et dans le **dialogue de catégorie** ; `TranslatedIn` montre dans les deux listes les
   langues déjà traduites.
+- **Traduction automatique** (2026-09-06) : bouton **« Traduire automatiquement »** dans
+  `TranslationFields` — donc dans les **deux** écrans, démarches et catégories, puisque c'est le
+  même geste sur le même type de libellé. Edge function **`translate-labels`** (JWT de session,
+  `verify_jwt = true`), qui **appelle `ai-api`** avec la clé plateforme `SOCLE_AI_API_KEY`
+  (consommateur `socle`, scope `ai`) : le Socle est ici sa propre application consommatrice, sous
+  le plafond et la cadence de la collectivité, visible dans sa ventilation. ⚠️ Ne jamais la
+  « simplifier » en lisant `MISTRAL_API_KEY` directement — ce serait un **second appelant du
+  fournisseur**, donc un second endroit où plafond, cadence et journal peuvent diverger.
+  ⚠️ **Elle ne remplit que les champs vides** : une traduction relue par un agent ne se distingue
+  pas à l'écran de celle qu'il vient de recevoir, l'écraser en silence lui ferait perdre un travail
+  qu'il ne saurait même pas avoir perdu. « Tout retraduire » existe, sous `AlertDialog`.
+  ⚠️ **Rien n'est persisté par la fonction** : la proposition se pose dans les champs, c'est
+  l'enregistrement du formulaire qui l'écrit — l'agent garde le dernier mot (d'où « relisez avant
+  d'enregistrer »). ⚠️ **Une traduction identique au français est écartée** (`parseTranslationAnswer`,
+  et le prompt le demande au modèle) : stockée, elle serait **gelée** — le jour où le libellé
+  français change, elle continuerait de s'afficher à sa place, alors que l'absence retombe toujours
+  sur le français à jour. ⚠️ **Autorisation = `is_org_admin`**, évaluée avec les droits de
+  l'appelant : le miroir exact du RLS d'écriture de `procedures`/`categories` — traduire pour une
+  organisation où l'on ne pourrait rien enregistrer se paierait sur son crédit pour rien. ⚠️ Les
+  langues demandées sont **recoupées côté serveur** avec `enabled_languages` ; le **libellé** de
+  chaque langue, lui, vient du front, seul propriétaire du catalogue (le dupliquer dans la fonction
+  ferait deux listes pour un seul contrat de nommage). Sans le secret, la fonction répond
+  `503 not_configured` et l'écran le dit — voir `docs/operations.md`.
 - **En aval** (contrat 1.11.0) : `GET /v1/portal/tenant` porte `languages` (héritage **résolu** par
   la RPC `resolve_org_languages`, EXECUTE réservé au service role — motif `resolve_branding`), et
   `translations` est servi **tel quel** sur `Category`, `Procedure` et `PortalProcedure` (schéma
@@ -450,9 +473,13 @@ service — motif du catalogue de démarches, des quartiers, du plafond IA.
 - Code : `src/features/languages/` — `languages.ts` (catalogue + `parseEnabledLanguages`,
   `enabledLanguagesForWrite`, `sortLanguageCodes`), `translations.ts` (`parseTranslations`,
   `translationsForWrite`, `localizedName`) — les deux **purs et testés** —,
-  `useOrganizationLanguages.ts`, `LanguagesSection.tsx` (testé), `TranslationFields.tsx`,
-  `TranslatedIn.tsx`. Miroir côté edge function : `readLanguages` dans
-  `public-api/_shared/serializers.ts` (testé des deux côtés, motif `readDocumentIds`).
+  `useOrganizationLanguages.ts`, `LanguagesSection.tsx` (testé), `TranslationFields.tsx` (**testé** :
+  ce qu'il complète et ce qu'il n'écrase pas), `TranslatedIn.tsx`, `useTranslateLabels.ts`. Miroir
+  côté edge function : `readLanguages` dans `public-api/_shared/serializers.ts` (testé des deux
+  côtés, motif `readDocumentIds`). Traduction automatique :
+  `supabase/functions/translate-labels/` — `index.ts` + `_shared/translate.ts` (pur, **testé** :
+  whitelist du payload, recoupement des langues, prompt, parseur tolérant de la réponse) et
+  `_shared/passthrough.test.ts` (le libellé traverse, il n'est jamais journalisé — motif `ai-api`).
 - Migration : `langues_et_traductions`.
 
 ## Feature : types de pièce justificative (`document_types`)
@@ -862,7 +889,10 @@ est portée par la fonction). Permet de **consulter, créer, modifier, archiver*
 Troisième edge function, `{SUPABASE_URL}/functions/v1/ai-api/…`, `verify_jwt = false`. **Le
 Socle détient la clé du fournisseur LLM, compte les jetons et refuse au-delà du plafond** ; les
 applications de la gamme composent leur prompt et le lui confient (décision PO du 2026-08-29,
-première consommatrice : Iris).
+première consommatrice : Iris). Depuis le 2026-09-06, **le Socle en est lui-même consommateur**
+(`consumer = 'socle'`, clé plateforme `SOCLE_AI_API_KEY`) pour la traduction automatique des
+libellés — par `translate-labels`, jamais en appelant le fournisseur directement (voir la feature
+« Langues et libellés traduits »).
 
 **La frontière tombe là : l'application décide CE QUI EST DIT, le Socle décide SI ÇA PEUT
 L'ÊTRE et CE QUE ÇA A COÛTÉ.** Le Socle ne sait pas ce qu'est une demande, un courrier ou un

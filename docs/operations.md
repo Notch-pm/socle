@@ -21,9 +21,12 @@ Ce document est un runbook. Pour le « pourquoi » des choix, voir
 
 ## Edge functions
 
-Six fonctions Deno dans `supabase/functions/`. Il n'y a **pas de `supabase/config.toml`** dans
-ce repo : le déploiement passe par l'outil MCP `deploy_edge_function` (ou la CLI équivalente),
-avec un `verify_jwt` fixé par fonction au déploiement.
+Sept fonctions Deno dans `supabase/functions/`. Le déploiement passe par l'outil MCP
+`deploy_edge_function` (ou la CLI équivalente), avec un `verify_jwt` fixé par fonction au
+déploiement. ⚠️ **`supabase/config.toml` gouverne ce réglage pour la CLI** (ajouté le 2026-09-05,
+après l'incident où un redéploiement de `public-api` sans lui a remis le défaut `true` et coupé
+tous les consommateurs) : toute fonction nouvelle doit y déclarer son `verify_jwt`, y compris
+quand la valeur voulue est le défaut.
 
 | Fonction | `verify_jwt` | Pourquoi |
 |---|---|---|
@@ -33,6 +36,7 @@ avec un `verify_jwt` fixé par fonction au déploiement.
 | `auth-email-hook` | `false` | Appelée par Supabase Auth (hook « Send Email »), authentifiée par **signature Standard Webhooks** (`AUTH_HOOK_SECRET`), pas par JWT |
 | `invite-user` | `true` | Appelée depuis l'UI Socle avec le JWT de l'utilisateur connecté ; l'autorisation fine (`is_org_admin`) est vérifiée en plus, dans le code |
 | `send-test-email` | `true` | Idem : JWT utilisateur + `is_org_admin(organization_id)` |
+| `translate-labels` | `true` | Idem : JWT utilisateur + `is_org_admin(organization_id)`. Traduit un libellé **en appelant `ai-api`** avec la clé plateforme du Socle (`SOCLE_AI_API_KEY`) — elle n'appelle jamais le fournisseur directement |
 
 ⚠️ **Piège de déploiement** : le tableau `files` passé à `deploy_edge_function` doit inclure
 `index.ts` **et tout `_shared/*.ts`** de la fonction. `public-api` et `contacts-api` colocalisent
@@ -66,6 +70,27 @@ fichiers casse la fonction en production alors que les tests passent en local.
   dette assumée, pas un modèle à imiter**. Absente, `ai-api` répond `503 not_configured` — après
   l'authentification, pour qu'un appelant non authentifié n'apprenne pas si la plateforme est
   équipée.
+- **`SOCLE_AI_API_KEY`** (2026-09-06) : la clé par laquelle **le Socle s'appelle lui-même**, secret
+  d'edge function de `translate-labels`. C'est une clé `api_keys` ordinaire, **plateforme**
+  (`organization_id` NULL), portant le scope **`ai`** et le consommateur **`socle`** —
+  exactement ce qu'on donnerait à Iris ou à Clara. Le Socle est ici une application de la gamme
+  comme les autres : sa dépense de traduction apparaît dans la ventilation de la collectivité au
+  nom de `socle`, sous le même plafond et la même cadence.
+
+  **À poser une fois par plateforme**, sinon le bouton « Traduire automatiquement » répond
+  `503 not_configured` (l'écran affiche « La traduction automatique n'est pas configurée sur
+  cette plateforme. ») :
+
+  1. `/superadmin/cles-plateforme` → **Nouvelle clé** : nom libre (« Socle — traduction »), scope
+     **Assistant IA**, application imputable **`socle`**, case « périmètre global » cochée ;
+  2. copier le secret **affiché une seule fois** ;
+  3. `supabase secrets set SOCLE_AI_API_KEY=<secret>` (ou Dashboard → Edge Functions → Secrets).
+
+  ⚠️ **Révoquer cette clé coupe la traduction automatique**, rien d'autre : les écrans continuent
+  de fonctionner, les traductions déjà saisies restent. C'est le levier d'arrêt d'urgence si la
+  fonctionnalité dérape. ⚠️ Elle porte le scope `ai` **et lui seul** : une clé qui porterait aussi
+  `read` ou `contacts` donnerait à une fonction de traduction un accès au référentiel et aux
+  usagers, que rien dans son travail ne justifie.
 - **`MISTRAL_AGENT_<ALIAS>`** (optionnel) : identifiant d'un agent Mistral créé en console, pour
   l'alias correspondant (`assistant-instruction` → `MISTRAL_AGENT_ASSISTANT_INSTRUCTION`).
   Absent, `ai-api` retombe sur `chat/completions` avec un modèle par défaut — le service

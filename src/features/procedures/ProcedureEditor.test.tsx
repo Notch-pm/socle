@@ -75,6 +75,14 @@ vi.mock("@/features/categories/useCategories", () => ({
 vi.mock("@/features/languages/useOrganizationLanguages", () => ({
   useOrganizationLanguages: () => ({ data: ["fr"] }),
 }));
+vi.mock("@/features/languages/useTranslateLabels", () => ({
+  useTranslateLabels: () => ({
+    mutate: vi.fn(),
+    isPending: false,
+    isError: false,
+    error: null,
+  }),
+}));
 vi.mock("@/features/document-types/useDocumentTypes", () => ({
   useDocumentTypesForOrg: () => ({ data: [] }),
 }));
