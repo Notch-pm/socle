@@ -1,9 +1,13 @@
 /**
- * Traduction automatique d'un libellé — la fonction appelée par l'écran.
+ * Traduction automatique des textes d'une ligne — la fonction appelée par
+ * l'écran.
  *
- * L'agent tape « Demande d'acte de naissance », clique sur « Traduire
- * automatiquement », et les champs des langues activées par sa collectivité se
- * remplissent. Cette fonction est ce qu'il y a entre les deux.
+ * L'agent tape « Demande d'acte de naissance » et son descriptif court, clique
+ * sur « Traduire automatiquement », et les champs des langues activées par sa
+ * collectivité se remplissent. Cette fonction est ce qu'il y a entre les deux.
+ * Elle traduit TOUS les textes d'une ligne en un seul appel — un seul débit,
+ * un seul coup de cadence, et un descriptif traduit en sachant de quelle
+ * démarche il parle (voir `_shared/translate.ts`).
  *
  * POURQUOI ELLE EXISTE PLUTÔT QU'UN APPEL DIRECT DEPUIS LE NAVIGATEUR :
  * `ai-api` s'authentifie par CLÉ API, et une clé dans un navigateur est une clé
@@ -28,9 +32,10 @@
  * avec la service role. Traduire pour une organisation où l'on ne pourrait
  * rien enregistrer n'aurait aucun sens — et se paierait sur son crédit.
  *
- * ⚠️ PASSE-PLAT, ICI AUSSI : le libellé traverse cette fonction, il n'y est
- * jamais journalisé. Aucun `console.*` ne doit porter le libellé, les cibles ou
- * la réponse du modèle — `passthrough.test.ts` lit ce fichier pour le vérifier.
+ * ⚠️ PASSE-PLAT, ICI AUSSI : les textes traversent cette fonction, ils n'y sont
+ * jamais journalisés. Aucun `console.*` ne doit porter les textes, les cibles
+ * ou la réponse du modèle — `passthrough.test.ts` lit ce fichier pour le
+ * vérifier.
  *
  * ⚠️ CHAÎNE DE DÉLAIS : fournisseur 55 s < `ai-api` 60 s < cette fonction 75 s.
  * Inversée, l'écran abandonnerait des appels que le Socle termine et facture.
@@ -224,7 +229,7 @@ Deno.serve(async (req: Request) => {
       return errorResponse("not_configured", NOT_CONFIGURED_MESSAGE);
     }
 
-    const answer = parseTranslationAnswer(body?.answer, targets, request.label);
+    const answer = parseTranslationAnswer(body?.answer, targets, request.fields);
     return jsonResponse(200, {
       translations: answer.translations,
       missing: answer.missing,

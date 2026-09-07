@@ -152,8 +152,17 @@ describe("buildOpenApiDocument", () => {
 describe("contrat — documents et courriers", () => {
   const doc = buildOpenApiDocument("https://example.supabase.co/functions/v1/public-api") as any;
 
-  it("annonce la version 1.12.0 du contrat", () => {
-    expect(doc.info.version).toBe("1.12.0");
+  it("annonce la version 1.13.0 du contrat", () => {
+    expect(doc.info.version).toBe("1.13.0");
+  });
+
+  it("décrit les DEUX textes traduisibles, et le repli champ par champ", () => {
+    // Ajout du 2026-09-07 : `short_description` rejoint `name` sous chaque
+    // langue. Un consommateur qui replierait la langue entière au lieu du champ
+    // masquerait un libellé traduit sous prétexte que le descriptif manque.
+    const props = doc.components.schemas.Translations.additionalProperties.properties;
+    expect(Object.keys(props)).toEqual(["name", "short_description"]);
+    expect(doc.components.schemas.Translations.description).toContain("champ par champ");
   });
 
   it("sert les schémas de saisie sur le détail, jamais sur la liste", () => {

@@ -666,13 +666,16 @@ Leur structure n'est **pas** décrite ici (propriété du code applicatif et de 
   étrangère** : une sélection survit à la suppression de son document. L'UI comme `public-api`
   écartent ces références mortes ; un consommateur SQL direct doit joindre, pas faire confiance.
 - ⚠️ `translations` (sur `procedures` **et** `categories`) a une forme depuis le 2026-09-06 :
-  `{ "<code de langue>": { "name": "…" } }`, code faisant foi
-  `src/features/languages/translations.ts` (testé). Deux règles portent tout le reste : **jamais de
-  clé `fr`** (le libellé français est la colonne `name` — l'y écrire créerait une seconde source de
-  vérité) et une **langue absente = repli sur `name`**, pas un libellé vide. Les traductions d'une
-  langue **désactivée** sont **conservées** (le réglage gouverne l'usage, pas la donnée — motif
-  `email_sender_name`) : elles restent donc lisibles en base alors que la collectivité ne les
-  affiche plus.
+  `{ "<code de langue>": { "name": "…", "short_description": "…" } }`, code faisant foi
+  `src/features/languages/translations.ts` (testé). Les clés sous une langue sont celles des
+  **colonnes françaises** correspondantes ; `short_description` n'existe que sur `procedures`
+  (ajouté le 2026-09-07 — une catégorie n'a pas de descriptif). Trois règles portent tout le
+  reste : **jamais de clé `fr`** (le texte français est la colonne — l'y écrire créerait une
+  seconde source de vérité) ; un **champ absent = repli sur la colonne française**, pas un texte
+  vide ; et ce repli se fait **champ par champ**, une langue pouvant légitimement porter le
+  libellé traduit sans le descriptif. Les traductions d'une langue **désactivée** sont
+  **conservées** (le réglage gouverne l'usage, pas la donnée — motif `email_sender_name`) : elles
+  restent donc lisibles en base alors que la collectivité ne les affiche plus.
 - Contrat publié : `/api-doc` (Redoc, `public-api/openapi.json`).
 
 La sérialisation des deux Edge Functions applique une **whitelist stricte** : aucune colonne

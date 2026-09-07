@@ -6,14 +6,14 @@ import { describe, expect, it } from "vitest";
  *
  * `ai-api` promet de ne conserver ni le prompt ni la réponse, et quatre
  * mécanismes l'y tiennent (voir son `passthrough.test.ts`). Cette fonction-ci
- * est en amont du guichet : le libellé de la démarche la traverse, et la
- * traduction en revient. La promesse ne vaudrait rien si le texte s'arrêtait
+ * est en amont du guichet : les textes de la démarche la traversent (libellé,
+ * descriptif court), et leurs traductions en reviennent. La promesse ne vaudrait rien si le texte s'arrêtait
  * ici en chemin.
  *
  * Deux règles, vérifiées sur le SOURCE parce que c'est là que la régression
  * arrive — le `console.log` ajouté un soir d'incident, jamais retiré :
  *
- *  1. aucun journal ne porte le libellé, les langues demandées ou la réponse ;
+ *  1. aucun journal ne porte les textes, les langues demandées ou la réponse ;
  *  2. cette fonction n'appelle PAS le fournisseur. Elle appelle `ai-api`, sans
  *     quoi le plafond, la cadence et le journal auraient deux implémentations.
  */
@@ -29,14 +29,16 @@ function stripComments(source: string): string {
 
 const index = stripComments(readFileSync(new URL("../index.ts", import.meta.url), "utf8"));
 
-describe("le libellé traverse, il ne s'arrête pas", () => {
-  it("aucun journal ne mentionne le libellé, les cibles ou la traduction", () => {
+describe("les textes traversent, ils ne s'arrêtent pas", () => {
+  it("aucun journal ne mentionne les textes, les cibles ou la traduction", () => {
     const calls = index.match(/console\.[a-z]+\([\s\S]*?\);/g) ?? [];
     expect(calls.length).toBeGreaterThan(0);
     for (const call of calls) {
       for (
         const forbidden of [
           "request.label",
+          "request.fields",
+          "field.value",
           "request.targets",
           "prompt.",
           "targets",

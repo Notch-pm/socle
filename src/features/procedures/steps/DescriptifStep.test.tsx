@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import { describe, it, expect, vi } from "vitest";
-import { render, screen, fireEvent } from "@testing-library/react";
+import { render, screen, fireEvent, within } from "@testing-library/react";
 import { DescriptifStep } from "./DescriptifStep";
 import type { Procedure } from "@/features/procedures/useProcedures";
 
@@ -67,27 +67,39 @@ function renderStep() {
   return onSubmit;
 }
 
-describe("DescriptifStep — traductions du libellé", () => {
-  it("propose un champ par langue active, sauf le français", () => {
+/** Les champs d'une langue vivent dans son groupe : « Libellé » y est unique. */
+function cell(language: string, field: string): HTMLInputElement | HTMLTextAreaElement {
+  return within(screen.getByRole("group", { name: language })).getByLabelText(field) as
+    | HTMLInputElement
+    | HTMLTextAreaElement;
+}
+
+describe("DescriptifStep — traductions", () => {
+  it("propose le libellé ET le descriptif court par langue active, sauf le français", () => {
     renderStep();
 
-    expect((screen.getByLabelText("Anglais") as HTMLInputElement).value).toBe("Birth certificate");
-    expect((screen.getByLabelText("Breton") as HTMLInputElement).value).toBe("");
-    // Le français est le champ « Libellé de la démarche », pas une traduction.
-    expect(screen.queryByLabelText("Français")).toBeNull();
+    expect(cell("Anglais", "Libellé").value).toBe("Birth certificate");
+    expect(cell("Anglais", "Descriptif court").value).toBe("");
+    expect(cell("Breton", "Libellé").value).toBe("");
+    // Le français, ce sont les champs du dessus, pas une traduction.
+    expect(screen.queryByRole("group", { name: "Français" })).toBeNull();
   });
 
   it("enregistre les traductions saisies et conserve celles d'une langue désactivée", () => {
     const onSubmit = renderStep();
 
-    fireEvent.change(screen.getByLabelText("Breton"), {
-      target: { value: "Testeni ganedigezh" },
+    fireEvent.change(cell("Breton", "Libellé"), { target: { value: "Testeni ganedigezh" } });
+    fireEvent.change(cell("Anglais", "Descriptif court"), {
+      target: { value: "To get a copy of your birth certificate." },
     });
     fireEvent.submit(document.querySelector("form")!);
 
     expect(onSubmit).toHaveBeenCalledTimes(1);
     expect(onSubmit.mock.calls[0][0].translations).toEqual({
-      en: { name: "Birth certificate" },
+      en: {
+        name: "Birth certificate",
+        short_description: "To get a copy of your birth certificate.",
+      },
       br: { name: "Testeni ganedigezh" },
       oc: { name: "Acte de naissença" },
     });
@@ -96,7 +108,7 @@ describe("DescriptifStep — traductions du libellé", () => {
   it("ne stocke pas une traduction effacée", () => {
     const onSubmit = renderStep();
 
-    fireEvent.change(screen.getByLabelText("Anglais"), { target: { value: "  " } });
+    fireEvent.change(cell("Anglais", "Libellé"), { target: { value: "  " } });
     fireEvent.submit(document.querySelector("form")!);
 
     expect(onSubmit.mock.calls[0][0].translations).toEqual({

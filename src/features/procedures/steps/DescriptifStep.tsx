@@ -8,6 +8,7 @@ import { useOrganizationLanguages } from "@/features/languages/useOrganizationLa
 import {
   translationInput,
   translationsForWrite,
+  type TranslatableField,
   type TranslationInput,
   type TranslationMap,
 } from "@/features/languages/translations";
@@ -26,9 +27,19 @@ export interface DescriptifValues {
   short_description: string | null;
   input_duration_minutes: number | null;
   order_index: number;
-  /** Libellé traduit dans les langues actives de l'organisation principale. */
+  /**
+   * Libellé **et descriptif court** traduits dans les langues actives de
+   * l'organisation principale.
+   */
   translations: TranslationMap;
 }
+
+/**
+ * Les deux textes que cette étape traduit — et les deux seuls qu'elle a le
+ * droit d'effacer (dernier argument de `translationsForWrite`). Un champ traduit
+ * ailleurs un jour ne sera pas emporté par un enregistrement d'ici.
+ */
+const PROCEDURE_TRANSLATABLE_FIELDS: TranslatableField[] = ["name", "short_description"];
 
 const selectClass =
   "h-11 w-full rounded-lg border border-input bg-background px-3 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring";
@@ -94,6 +105,7 @@ export function DescriptifStep({
         procedure?.translations,
         translations,
         enabledLanguages ?? [],
+        PROCEDURE_TRANSLATABLE_FIELDS,
       ),
     });
   }
@@ -114,17 +126,6 @@ export function DescriptifStep({
           placeholder="Ex. Demande d'acte de naissance"
         />
       </Field>
-
-      <TranslationFields
-        enabled={enabledLanguages ?? []}
-        value={translations}
-        onChange={(code, value) => setTranslations((current) => ({ ...current, [code]: value }))}
-        idPrefix="proc-translation"
-        className="sm:col-span-2"
-        organizationId={organizationId}
-        sourceLabel={name}
-        kind="procedure"
-      />
 
       <Field
         label="Catégorie"
@@ -190,6 +191,36 @@ export function DescriptifStep({
           className="w-full rounded-lg border border-input bg-background px-3 py-2 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
         />
       </Field>
+
+      {/*
+        Sous les deux textes qu'il traduit, jamais avant : la traduction
+        automatique part du français, et un agent à qui l'on demande les
+        traductions d'un descriptif qu'il n'a pas encore écrit ne peut que les
+        laisser vides.
+      */}
+      <TranslationFields
+        enabled={enabledLanguages ?? []}
+        value={translations}
+        onChange={(code, field, value) =>
+          setTranslations((current) => ({
+            ...current,
+            [code]: { ...current[code], [field]: value },
+          }))
+        }
+        idPrefix="proc-translation"
+        className="sm:col-span-2"
+        organizationId={organizationId}
+        fields={[
+          { key: "name", label: "Libellé", source: name },
+          {
+            key: "short_description",
+            label: "Descriptif court",
+            source: shortDescription,
+            multiline: true,
+          },
+        ]}
+        kind="procedure"
+      />
 
       <Field label="Durée de saisie (minutes)" htmlFor="proc-duration">
         <Input

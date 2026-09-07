@@ -1,7 +1,7 @@
 # Journal des évolutions des API publiques
 
 > **Public** : équipes consommatrices (Ariane, Clara, Iris, partenaires) · **Question traitée** :
-> quand un contrat d'API a-t-il changé, et comment ? · **Dernière mise à jour** : 2026-09-06
+> quand un contrat d'API a-t-il changé, et comment ? · **Dernière mise à jour** : 2026-09-07
 
 Journal **append-only** : chaque évolution de la surface de contrat des API publiques
 (`public-api`, `contacts-api`, `ai-api`) — endpoint, paramètre, champ de réponse, comportement
@@ -12,6 +12,28 @@ consommateur : [integration.md](./integration.md#politique-de-compatibilité-v1)
 Format d'une entrée : `## AAAA-MM-JJ — <api> — ajout|correctif|rupture`
 
 ---
+
+## 2026-09-07 — public-api — ajout
+
+**Le descriptif court se traduit lui aussi.** `translations` ne portait que le libellé ; une
+démarche y met désormais **son descriptif court**, sous la même langue. Version du contrat :
+**1.13.0**. Ajout additif — aucune entrée existante ne bouge, aucune clé ne change de sens.
+
+- Schéma `Translations` (servi sur `Category`, `Procedure`, `PortalProcedure` et
+  `PortalProcedureDetail`) : chaque langue portait `{ "name": "…" }`, elle porte maintenant
+  `{ "name": "…", "short_description": "…" }`. **Les deux champs sont facultatifs**, et les clés
+  sont celles des colonnes françaises correspondantes.
+- ⚠️ **LE REPLI SE FAIT CHAMP PAR CHAMP, jamais langue par langue.** Une langue peut porter le
+  libellé traduit sans le descriptif : c'est le cas normal, pas une traduction inachevée. Un
+  consommateur qui, voyant `short_description` absent, replierait la langue entière sur le
+  français masquerait un libellé traduit que la collectivité a écrit — et qu'elle voit à son
+  écran. La règle inchangée reste : champ absent ⇒ champ français de même nom.
+- ⚠️ **Une catégorie n'a pas de descriptif court** — la table n'en porte pas. Son `translations`
+  ne contiendra jamais que `name` ; l'attendre ailleurs n'a pas de sens.
+- Toujours **jamais de clé `fr`** : le français est la colonne, pas une traduction (inchangé).
+- Rien à faire pour un consommateur déjà en place : lire `translations[lang]?.name` continue de
+  fonctionner à l'identique. Ceux qui affichent un résumé aux usagers ont maintenant de quoi le
+  servir dans la langue choisie.
 
 ## 2026-09-06 — public-api — ajout
 

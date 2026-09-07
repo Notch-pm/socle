@@ -42,8 +42,8 @@ Trois grandes zones, une seule base de données :
 Quatre autres Edge Functions ne sont **pas** des APIs de gamme, uniquement des besoins internes à
 l'UI Socle ou à Supabase Auth : `send-test-email` et `invite-user` (JWT utilisateur +
 `is_org_admin`), `translate-labels` (JWT utilisateur + `is_org_admin` ; traduction automatique
-d'un libellé, **par `ai-api`** — le Socle y est sa propre application consommatrice, jamais un
-second appelant du fournisseur), `auth-email-hook` (webhook Supabase Auth, signature Standard
+des textes d'une démarche ou d'une catégorie, **par `ai-api`** — le Socle y est sa propre
+application consommatrice, jamais un second appelant du fournisseur), `auth-email-hook` (webhook Supabase Auth, signature Standard
 Webhooks). Détail des fonctions → [`./operations.md`](./operations.md).
 
 ## 2. Principe fondateur : la sécurité vit dans le RLS

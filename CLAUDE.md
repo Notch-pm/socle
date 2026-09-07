@@ -129,7 +129,7 @@ exécutables par `authenticated` : le RLS les évalue avec les droits de l'appel
 - `organizations` — hiérarchie auto-référencée via `parent_id` (voir feature ci-dessous) ; `enabled_languages` (langues de la collectivité, **racine uniquement** — voir feature « langues »).
 - `users`, `user_organizations` (jointure user↔org + `role`).
 - `categories`, `procedures`, `organization_procedures` (catalogue de démarches) — la colonne
-  `translations` des deux premières porte les **libellés traduits** (voir feature « langues »).
+  `translations` des deux premières porte les **textes traduits** (voir feature « langues »).
 - `smtp_settings` (SMTP par organisation, **hérité du parent** sauf configuration propre —
   voir feature).
 - `api_keys` (clés d'API rattachées à une racine, ou **clé plateforme** — `organization_id` NULL, périmètre global, liaison unique avec Clara — voir feature ; `consumer` = application imputable des appels facturés).
@@ -295,8 +295,9 @@ est fonctionnelle (voir feature « Édition d'organisation » ci-dessous). Param
   Logique pure `procedureStatus.ts` (testée : au moindre doute, **brouillon** — le doute ne publie rien).
 - **Descriptif** → colonnes `procedures` : `name` (obligatoire), `category_id` (obligatoire, catégories
   de la racine), `type` (`interne`/`externe`), `keywords` (text[], CSV), `short_description`,
-  `input_duration_minutes`, `order_index` (rang, défaut max+1), + `translations` (libellé traduit
-  dans chaque langue activée par la racine — voir feature « Langues et libellés traduits »).
+  `input_duration_minutes`, `order_index` (rang, défaut max+1), + `translations` (libellé **et
+  descriptif court** traduits dans chaque langue activée par la racine — voir feature « Langues et
+  libellés traduits »).
 - **Informations demandeur** → colonne `procedures.requester_config` (JSONB). Publics
   citoyen/entreprise/association activables ; par public, chaque donnée vaut `masque`/`visible`/
   `obligatoire`. Logique pure + parseur robuste `requesterFields.ts` (testé), UI `steps/DemandeurStep.tsx`.
@@ -402,14 +403,15 @@ l'isolation est portée par le **RLS de `storage.objects`**, pas par une colonne
 ## Feature : langues et libellés traduits (`enabled_languages`, `translations`)
 
 Une collectivité choisit les langues dans lesquelles elle s'adresse à ses usagers ; les libellés
-des **démarches** et des **catégories** se traduisent dans chacune. Le réglage vit sur
+des **démarches** et des **catégories** se traduisent dans chacune, et depuis le 2026-09-07 le
+**descriptif court** d'une démarche avec eux. Le réglage vit sur
 l'**organisation principale** (racine) : les langues d'une collectivité ne se découpent pas par
 service — motif du catalogue de démarches, des quartiers, du plafond IA.
 
-- **Le français est la langue pivot** : c'est lui que portent les colonnes `name`. Il est toujours
-  actif, ne se retire pas, et n'a **jamais** d'entrée dans `translations` — l'y écrire créerait une
-  seconde source de vérité pour un même libellé, et rien ne dirait laquelle fait foi le jour où
-  elles divergent.
+- **Le français est la langue pivot** : c'est lui que portent les colonnes (`name`,
+  `short_description`). Il est toujours actif, ne se retire pas, et n'a **jamais** d'entrée dans
+  `translations` — l'y écrire créerait une seconde source de vérité pour un même texte, et rien ne
+  dirait laquelle fait foi le jour où elles divergent.
 - **Catalogue figé dans le code** (`src/features/languages/languages.ts`), comme
   `documentVariables.ts` : c'est un **contrat de nommage** consommé en aval (le portail en fait son
   sélecteur, les clés de `translations` sont ces codes), pas une donnée de client. Deux groupes —
@@ -427,31 +429,56 @@ service — motif du catalogue de démarches, des quartiers, du plafond IA.
   bloquerait une réorganisation sans rien protéger.
 - **Traductions** : `procedures.translations` (colonne préexistante, jamais utilisée, qui prend ici
   une forme possédée) et `categories.translations` (nouvelle). Forme
-  `{ "<code>": { "name": "…" } }` — un objet par langue, pour que les champs traduits à venir
-  (descriptif court, descriptif usager) s'ajoutent en clés voisines sans déplacer l'existant.
-  CHECK `jsonb_typeof = 'object'` des deux côtés.
+  `{ "<code>": { "name": "…", "short_description": "…" } }` — un objet par langue, dont les clés
+  sont celles des **colonnes françaises** correspondantes. C'est ce choix qui a permis au
+  descriptif court de rejoindre le libellé le 2026-09-07 **sans déplacer une seule entrée** ; le
+  descriptif usager s'ajoutera de la même façon. `short_description` n'existe que sur `procedures`
+  (une catégorie n'a pas de descriptif) ; les champs traduisibles sont déclarés une fois pour
+  toutes dans `TRANSLATABLE_FIELDS` (front) et `FIELD_SPECS` (fonction). CHECK
+  `jsonb_typeof = 'object'` des deux côtés.
+- ⚠️ **CHAQUE CHAMP EST INDÉPENDANT, ET LE REPLI SE FAIT CHAMP PAR CHAMP** : une langue peut
+  porter le libellé traduit sans le descriptif — c'est le cas normal, pas une traduction
+  inachevée. Un consommateur qui replierait la **langue entière** parce qu'un champ manque
+  masquerait un libellé que la collectivité a bel et bien écrit, et qu'elle voit à son écran.
+- ⚠️ **Un écran n'efface que les champs qu'il affiche** : `translationsForWrite` reçoit la liste
+  des champs gouvernés (dernier argument). Sans elle, enregistrer une catégorie — qui n'affiche
+  que le libellé — effacerait tout descriptif traduit vivant dans la même colonne.
 - ⚠️ **Désactiver une langue n'efface pas ses traductions** (le réglage gouverne l'usage, pas la
   donnée — motif `email_sender_name`, `publicationPeriodEnabled`) : `translationsForWrite` part de
   l'existant et ne touche qu'aux langues **actives**. La réactiver rend le travail déjà fait.
 - ⚠️ **Une traduction vide n'est pas stockée** : c'est l'absence de traduction. Un consommateur qui
-  lirait `""` afficherait un libellé vide là où il devait **retomber sur le français**.
+  lirait la chaîne vide afficherait un texte vide là où il devait **retomber sur le français**. Une
+  langue dont plus aucun champ n'est rempli **disparaît** de la colonne : une entrée vide se
+  compterait comme « traduit en anglais » alors que rien ne l'est.
 - **UI** : `LanguagesSection` (onglet « Langues » de `OrganizationEditorPage` côté admin, section
   `?section=langues` d'`OrgSettingsPage` côté superadmin — motif `BrandingSection`) : deux groupes
   de cases à cocher, recherche, français coché et verrouillé, récapitulatif des langues actives.
-  `TranslationFields` (partagé) affiche un champ par langue active dans l'étape **Descriptif** d'une
-  démarche et dans le **dialogue de catégorie** ; `TranslatedIn` montre dans les deux listes les
-  langues déjà traduites.
-- **Traduction automatique** (2026-09-06) : bouton **« Traduire automatiquement »** dans
-  `TranslationFields` — donc dans les **deux** écrans, démarches et catégories, puisque c'est le
-  même geste sur le même type de libellé. Edge function **`translate-labels`** (JWT de session,
+  `TranslationFields` (partagé) affiche, par langue active, un champ par texte traduisible
+  (`fields`) : libellé **et** descriptif court dans l'étape **Descriptif** d'une démarche, libellé
+  seul dans le **dialogue de catégorie**. Avec deux textes, chaque langue devient un groupe
+  (`fieldset`/`legend`) ; avec un seul, le nom de la langue reste l'étiquette du champ — encadrer
+  un champ unique n'ajouterait qu'une boîte. ⚠️ Le bloc est placé **sous** les textes français
+  qu'il traduit : demander à un agent la traduction d'un descriptif qu'il n'a pas encore écrit ne
+  peut donner que des cases vides. `TranslatedIn` montre dans les deux listes les langues déjà
+  traduites.
+- **Traduction automatique** (2026-09-06, étendue au descriptif court le 2026-09-07) : bouton
+  **« Traduire automatiquement »** dans `TranslationFields` — donc dans les **deux** écrans,
+  démarches et catégories, puisque c'est le même geste sur le même type de texte. ⚠️ **Un seul
+  appel pour tous les textes d'une ligne**, jamais un par champ : un seul débit sur le crédit de
+  la collectivité, un seul coup de cadence, et le modèle traduit le descriptif en sachant de
+  quelle démarche il parle. Edge function **`translate-labels`** (JWT de session,
   `verify_jwt = true`), qui **appelle `ai-api`** avec la clé plateforme `SOCLE_AI_API_KEY`
   (consommateur `socle`, scope `ai`) : le Socle est ici sa propre application consommatrice, sous
   le plafond et la cadence de la collectivité, visible dans sa ventilation. ⚠️ Ne jamais la
   « simplifier » en lisant `MISTRAL_API_KEY` directement — ce serait un **second appelant du
   fournisseur**, donc un second endroit où plafond, cadence et journal peuvent diverger.
-  ⚠️ **Elle ne remplit que les champs vides** : une traduction relue par un agent ne se distingue
-  pas à l'écran de celle qu'il vient de recevoir, l'écraser en silence lui ferait perdre un travail
-  qu'il ne saurait même pas avoir perdu. « Tout retraduire » existe, sous `AlertDialog`.
+  ⚠️ **Elle ne remplit que les cases vides**, langue par langue **et champ par champ** : une
+  traduction relue par un agent ne se distingue pas à l'écran de celle qu'il vient de recevoir,
+  l'écraser en silence lui ferait perdre un travail qu'il ne saurait même pas avoir perdu. La
+  garde est évaluée **à l'arrivée de la réponse** (`valueRef`), pas au clic : une case saisie
+  pendant l'appel est protégée elle aussi. L'appel ne demande d'ailleurs que ce qui manque — les
+  textes absents quelque part, les langues incomplètes. « Tout retraduire » existe, sous
+  `AlertDialog`.
   ⚠️ **Rien n'est persisté par la fonction** : la proposition se pose dans les champs, c'est
   l'enregistrement du formulaire qui l'écrit — l'agent garde le dernier mot (d'où « relisez avant
   d'enregistrer »). ⚠️ **Une traduction identique au français est écartée** (`parseTranslationAnswer`,
@@ -464,15 +491,17 @@ service — motif du catalogue de démarches, des quartiers, du plafond IA.
   chaque langue, lui, vient du front, seul propriétaire du catalogue (le dupliquer dans la fonction
   ferait deux listes pour un seul contrat de nommage). Sans le secret, la fonction répond
   `503 not_configured` et l'écran le dit — voir `docs/operations.md`.
-- **En aval** (contrat 1.11.0) : `GET /v1/portal/tenant` porte `languages` (héritage **résolu** par
+- **En aval** (contrat 1.11.0 ; `short_description` traduit servi en **1.13.0**) :
+  `GET /v1/portal/tenant` porte `languages` (héritage **résolu** par
   la RPC `resolve_org_languages`, EXECUTE réservé au service role — motif `resolve_branding`), et
   `translations` est servi **tel quel** sur `Category`, `Procedure` et `PortalProcedure` (schéma
   OpenAPI partagé `Translations`). ⚠️ `enabled_languages` n'est **pas** exposé sur
   `OrganizationDto` : brute, la colonne d'une sous-organisation vaut `{fr}` et ferait croire à une
   collectivité monolingue — même piège que les colonnes de charte graphique.
 - Code : `src/features/languages/` — `languages.ts` (catalogue + `parseEnabledLanguages`,
-  `enabledLanguagesForWrite`, `sortLanguageCodes`), `translations.ts` (`parseTranslations`,
-  `translationsForWrite`, `localizedName`) — les deux **purs et testés** —,
+  `enabledLanguagesForWrite`, `sortLanguageCodes`), `translations.ts` (`TRANSLATABLE_FIELDS`,
+  `parseTranslations`, `translationsForWrite`, `localizedField`/`localizedName`) — les deux
+  **purs et testés** —,
   `useOrganizationLanguages.ts`, `LanguagesSection.tsx` (testé), `TranslationFields.tsx` (**testé** :
   ce qu'il complète et ce qu'il n'écrase pas), `TranslatedIn.tsx`, `useTranslateLabels.ts`. Miroir
   côté edge function : `readLanguages` dans `public-api/_shared/serializers.ts` (testé des deux

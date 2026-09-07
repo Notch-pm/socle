@@ -18,6 +18,7 @@ import { useOrganizationLanguages } from "@/features/languages/useOrganizationLa
 import {
   translationInput,
   translationsForWrite,
+  type TranslatableField,
   type TranslationInput,
   type TranslationMap,
 } from "@/features/languages/translations";
@@ -30,6 +31,14 @@ export interface CategoryFormValues {
   /** Libellé traduit dans les langues actives de l'organisation. */
   translations: TranslationMap;
 }
+
+/**
+ * Une catégorie n'a qu'un libellé à traduire — pas de descriptif, la table n'en
+ * porte pas. C'est aussi le seul champ que cet écran a le droit d'effacer
+ * (dernier argument de `translationsForWrite`) : ce qu'il n'affiche pas, il n'y
+ * touche pas.
+ */
+const CATEGORY_TRANSLATABLE_FIELDS: TranslatableField[] = ["name"];
 
 export function CategoryFormDialog({
   open,
@@ -99,6 +108,7 @@ export function CategoryFormDialog({
         category?.translations,
         translations,
         enabledLanguages ?? [],
+        CATEGORY_TRANSLATABLE_FIELDS,
       ),
     });
   }
@@ -160,13 +170,16 @@ export function CategoryFormDialog({
           <TranslationFields
             enabled={enabledLanguages ?? []}
             value={translations}
-            onChange={(code, value) =>
-              setTranslations((current) => ({ ...current, [code]: value }))
+            onChange={(code, field, value) =>
+              setTranslations((current) => ({
+                ...current,
+                [code]: { ...current[code], [field]: value },
+              }))
             }
             idPrefix="category-translation"
             className="border-t border-border pt-4"
             organizationId={organizationId || undefined}
-            sourceLabel={name}
+            fields={[{ key: "name", label: "Libellé", source: name }]}
             kind="category"
           />
 

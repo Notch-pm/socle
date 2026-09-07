@@ -36,7 +36,7 @@ quand la valeur voulue est le défaut.
 | `auth-email-hook` | `false` | Appelée par Supabase Auth (hook « Send Email »), authentifiée par **signature Standard Webhooks** (`AUTH_HOOK_SECRET`), pas par JWT |
 | `invite-user` | `true` | Appelée depuis l'UI Socle avec le JWT de l'utilisateur connecté ; l'autorisation fine (`is_org_admin`) est vérifiée en plus, dans le code |
 | `send-test-email` | `true` | Idem : JWT utilisateur + `is_org_admin(organization_id)` |
-| `translate-labels` | `true` | Idem : JWT utilisateur + `is_org_admin(organization_id)`. Traduit un libellé **en appelant `ai-api`** avec la clé plateforme du Socle (`SOCLE_AI_API_KEY`) — elle n'appelle jamais le fournisseur directement |
+| `translate-labels` | `true` | Idem : JWT utilisateur + `is_org_admin(organization_id)`. Traduit les textes d'une ligne (libellé, descriptif court) **en appelant `ai-api`** avec la clé plateforme du Socle (`SOCLE_AI_API_KEY`) — elle n'appelle jamais le fournisseur directement |
 
 ⚠️ **Piège de déploiement** : le tableau `files` passé à `deploy_edge_function` doit inclure
 `index.ts` **et tout `_shared/*.ts`** de la fonction. `public-api` et `contacts-api` colocalisent

@@ -30,7 +30,7 @@ export function buildOpenApiDocument(serverUrl: string): Record<string, unknown>
     openapi: "3.1.0",
     info: {
       title: "API Socle — Référentiel de la gamme",
-      version: "1.12.0",
+      version: "1.13.0",
       description: [
         "API **en lecture seule** exposant le référentiel central de la gamme : les",
         "**organisations** (et sous-organisations) avec l'intégralité de leur configuration,",
@@ -1306,17 +1306,32 @@ export function buildOpenApiDocument(serverUrl: string): Record<string, unknown>
         Translations: {
           type: ["object", "null"],
           description:
-            "Libellés traduits, indexés par **code de langue** (BCP 47 : ISO 639-1 quand il " +
-            "existe, ISO 639-3 sinon). Deux règles à connaître avant d'afficher quoi que ce " +
-            "soit : il n'y a **jamais** de clé `fr` (le libellé français est le champ `name`), " +
-            "et une langue **absente** n'est pas un libellé vide, c'est un **repli sur " +
-            "`name`**. Les langues qu'une collectivité a activées sont servies par " +
-            "`GET /v1/portal/tenant` (`languages`).",
+            "Textes traduits, indexés par **code de langue** (BCP 47 : ISO 639-1 quand il " +
+            "existe, ISO 639-3 sinon). Chaque langue porte un objet dont les clés sont celles " +
+            "des colonnes françaises correspondantes : `name`, et — sur une démarche — " +
+            "`short_description`. Trois règles à connaître avant d'afficher quoi que ce " +
+            "soit : il n'y a **jamais** de clé `fr` (le texte français est le champ de même " +
+            "nom) ; un texte **absent** n'est pas un texte vide, c'est un **repli sur le " +
+            "champ français** ; et le repli se fait **champ par champ** — une langue peut " +
+            "porter le libellé traduit et pas le descriptif, c'est le cas normal. Les langues " +
+            "qu'une collectivité a activées sont servies par `GET /v1/portal/tenant` " +
+            "(`languages`).",
           additionalProperties: {
             type: "object",
-            properties: { name: { type: "string", description: "Libellé dans cette langue." } },
+            properties: {
+              name: { type: "string", description: "Libellé dans cette langue." },
+              short_description: {
+                type: "string",
+                description:
+                  "Descriptif court dans cette langue (démarches uniquement — une catégorie " +
+                  "n'en a pas).",
+              },
+            },
           },
-          example: { en: { name: "Birth certificate" }, br: { name: "Testeni ganedigezh" } },
+          example: {
+            en: { name: "Birth certificate", short_description: "To get a copy of your record." },
+            br: { name: "Testeni ganedigezh" },
+          },
         },
         RequesterConfig: {
           type: ["object", "null"],

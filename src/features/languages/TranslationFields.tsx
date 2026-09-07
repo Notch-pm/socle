@@ -20,24 +20,39 @@ import {
   type TranslateLabelKind,
   type TranslateLabelsResult,
 } from "@/features/languages/useTranslateLabels";
-import type { TranslationInput } from "@/features/languages/translations";
+import type { TranslatableField, TranslationInput } from "@/features/languages/translations";
+
+/** Un texte français à traduire, et la clé qu'il porte dans `translations`. */
+export interface TranslationFieldSpec {
+  key: TranslatableField;
+  /** Étiquette affichée — « Libellé », « Descriptif court ». */
+  label: string;
+  /** Le texte français, tel qu'il est en train d'être saisi au-dessus. */
+  source: string;
+  /** Un résumé se saisit sur plusieurs lignes, un intitulé non. */
+  multiline?: boolean;
+}
 
 /**
- * Saisie du libellé dans chacune des langues activées par la collectivité —
- * partagée par les catégories et par les démarches, pour que les deux écrans
- * disent la même chose de la même façon.
+ * Les champs de traduction d'une ligne — un par langue **activée par
+ * l'organisation principale**, moins le français.
  *
- * Le français n'y figure pas : il est déjà saisi dans le champ « libellé », dont
- * il est la langue. Un champ laissé vide n'est pas une traduction vide, c'est
- * l'absence de traduction — le consommateur retombera sur le français.
+ * Le français n'y figure pas : il est déjà saisi dans les champs du dessus,
+ * dont il est la langue. Un champ laissé vide n'est pas une traduction vide,
+ * c'est l'absence de traduction — le consommateur retombera sur le français.
+ *
+ * Plusieurs textes peuvent être traduits pour une même ligne (`fields`) : une
+ * démarche y met son libellé ET son descriptif court, une catégorie son seul
+ * libellé. Chaque case est indépendante — une langue peut porter le libellé
+ * sans le descriptif, et c'est le cas normal, pas une anomalie.
  *
  * **Traduction automatique** (bouton « Traduire automatiquement ») :
  *
- * ⚠️ ELLE NE REMPLIT QUE LES CHAMPS VIDES. Une traduction relue par un agent
- * vaut mieux que celle d'un modèle, et rien ne la distingue à l'écran de celle
- * qu'il vient de recevoir : l'écraser en silence lui ferait perdre un travail
- * qu'il ne saurait même pas avoir perdu. Reprendre tout est possible, mais
- * c'est un second geste, et il se confirme.
+ * ⚠️ ELLE NE REMPLIT QUE LES CASES VIDES, champ par champ et langue par langue.
+ * Une traduction relue par un agent vaut mieux que celle d'un modèle, et rien
+ * ne la distingue à l'écran de celle qu'il vient de recevoir : l'écraser en
+ * silence lui ferait perdre un travail qu'il ne saurait même pas avoir perdu.
+ * Reprendre tout est possible, mais c'est un second geste, et il se confirme.
  *
  * ⚠️ ELLE NE PERSISTE RIEN : la proposition se pose dans les champs, et c'est
  * l'enregistrement de la démarche ou de la catégorie qui l'écrit. L'agent garde
@@ -50,13 +65,13 @@ export function TranslationFields({
   idPrefix,
   className,
   organizationId,
-  sourceLabel,
+  fields,
   kind,
 }: {
   /** Langues activées par l'organisation (français compris). */
   enabled: readonly string[];
   value: TranslationInput;
-  onChange: (code: string, name: string) => void;
+  onChange: (code: string, field: TranslatableField, value: string) => void;
   /** Préfixe des `id` de champs — deux formulaires peuvent coexister. */
   idPrefix: string;
   className?: string;
@@ -65,8 +80,8 @@ export function TranslationFields({
    * automatique : c'est elle qui active les langues et dont le crédit paie.
    */
   organizationId?: string;
-  /** Le libellé français à traduire — la langue pivot. */
-  sourceLabel: string;
+  /** Les textes français traduisibles, dans l'ordre d'affichage. */
+  fields: readonly TranslationFieldSpec[];
   /** Ce qu'on traduit : le modèle n'écrit pas pareil pour une catégorie. */
   kind: TranslateLabelKind;
 }) {
@@ -75,22 +90,63 @@ export function TranslationFields({
   const [confirmAll, setConfirmAll] = React.useState(false);
   const [result, setResult] = React.useState<TranslateLabelsResult | null>(null);
 
-  const label = sourceLabel.trim();
-  const missing = codes.filter((code) => (value[code] ?? "").trim() === "");
-  const alreadyFilled = codes.filter((code) => (value[code] ?? "").trim() !== "");
-  const ready = Boolean(organizationId) && label !== "" && codes.length > 0;
+  // La saisie AU MOMENT OÙ LA RÉPONSE ARRIVE, pas au moment du clic : un agent
+  // qui traduit une case à la main pendant l'appel ne doit pas la voir écrasée
+  // par la proposition qui revient.
+  const valueRef = React.useRef(value);
+  valueRef.current = value;
 
-  function translateInto(targets: string[]) {
-    if (!organizationId || targets.length === 0) return;
+  const isEmpty = (code: string, field: TranslatableField) =>
+    (valueRef.current[code]?.[field] ?? "").trim() === "";
+
+  // Un texte français vide n'a rien à faire traduire — et rien à faire payer.
+  const translatable = fields
+    .map((field) => ({ ...field, source: field.source.trim() }))
+    .filter((field) => field.source !== "");
+
+  const missingFields = translatable.filter((field) =>
+    codes.some((code) => isEmpty(code, field.key)),
+  );
+  const missingCodes = codes.filter((code) =>
+    translatable.some((field) => isEmpty(code, field.key)),
+  );
+  const filledCodes = codes.filter((code) => fields.some((field) => !isEmpty(code, field.key)));
+  const ready = Boolean(organizationId) && translatable.length > 0 && codes.length > 0;
+  const noSource = translatable.length === 0 ? "Saisissez d'abord le texte français." : undefined;
+  // Tant qu'aucun texte français n'est saisi, le bouton reste AFFICHÉ mais
+  // désactivé : le faire disparaître laisserait croire que la traduction
+  // automatique n'existe pas sur cet écran, au lieu de dire ce qui manque.
+  const canFill = missingFields.length > 0;
+
+  /**
+   * `vides` ne demande que ce qui manque (les textes encore absents quelque
+   * part, les langues encore incomplètes) ; `tout` demande tout ce qui est
+   * traduisible. Dans les deux cas, l'application de la réponse est gardée
+   * case par case juste en dessous.
+   */
+  function translateInto(mode: "vides" | "tout") {
+    const askedFields = mode === "tout" ? translatable : missingFields;
+    const askedCodes = mode === "tout" ? codes : missingCodes;
+    if (!organizationId || askedFields.length === 0 || askedCodes.length === 0) return;
     setResult(null);
     translate.mutate(
-      { organizationId, label, kind, codes: targets },
+      {
+        organizationId,
+        kind,
+        codes: askedCodes,
+        fields: askedFields.map((field) => ({ key: field.key, value: field.source })),
+      },
       {
         onSuccess: (answer) => {
-          // Les deux appelants posent leur état par fonction
-          // (`setState((current) => …)`) : la boucle compose sans écraser.
-          for (const [code, name] of Object.entries(answer.translations)) {
-            onChange(code, name);
+          for (const [code, entry] of Object.entries(answer.translations)) {
+            for (const field of askedFields) {
+              const proposal = entry[field.key];
+              if (!proposal) continue;
+              if (mode === "vides" && !isEmpty(code, field.key)) continue;
+              // Les deux appelants posent leur état par fonction
+              // (`setState((current) => …)`) : la boucle compose sans écraser.
+              onChange(code, field.key, proposal);
+            }
           }
           setResult(answer);
         },
@@ -100,29 +156,30 @@ export function TranslationFields({
 
   const translatedNames = result ? Object.keys(result.translations).map(languageLabel) : [];
   const missingNames = result ? result.missing.map(languageLabel) : [];
+  const single = fields.length === 1 ? fields[0] : null;
 
   return (
     <div className={cn("flex flex-col gap-3", className)}>
       <div className="flex flex-wrap items-start justify-between gap-2">
         <div>
-          <h3 className="text-sm font-semibold">Traductions du libellé</h3>
+          <h3 className="text-sm font-semibold">Traductions</h3>
           <p className="text-xs text-muted-foreground">
             {codes.length === 0
               ? "Aucune autre langue n'est activée pour cette organisation — voir « Langues » dans son paramétrage."
-              : "Un champ vide laisse le libellé français s'afficher."}
+              : "Un champ vide laisse le texte français s'afficher."}
           </p>
         </div>
 
         {codes.length === 0 ? null : (
           <div className="flex items-center gap-1">
-            {missing.length > 0 ? (
+            {canFill || translatable.length === 0 ? (
               <Button
                 type="button"
                 variant="outline"
                 size="sm"
-                disabled={!ready || translate.isPending}
-                title={label === "" ? "Saisissez d'abord le libellé français." : undefined}
-                onClick={() => translateInto(missing)}
+                disabled={!ready || !canFill || translate.isPending}
+                title={noSource}
+                onClick={() => translateInto("vides")}
               >
                 {translate.isPending ? (
                   <Loader2 className="animate-spin" aria-hidden />
@@ -132,13 +189,13 @@ export function TranslationFields({
                 Traduire automatiquement
               </Button>
             ) : null}
-            {alreadyFilled.length > 0 ? (
+            {filledCodes.length > 0 ? (
               <Button
                 type="button"
                 variant="ghost"
                 size="sm"
                 disabled={!ready || translate.isPending}
-                title={label === "" ? "Saisissez d'abord le libellé français." : undefined}
+                title={noSource}
                 onClick={() => setConfirmAll(true)}
               >
                 Tout retraduire
@@ -150,16 +207,43 @@ export function TranslationFields({
 
       {codes.length === 0 ? null : (
         <div className="grid gap-4 sm:grid-cols-2">
-          {codes.map((code) => (
-            <Field key={code} label={languageLabel(code)} htmlFor={`${idPrefix}-${code}`}>
-              <Input
-                id={`${idPrefix}-${code}`}
-                lang={code}
-                value={value[code] ?? ""}
-                onChange={(e) => onChange(code, e.target.value)}
-              />
-            </Field>
-          ))}
+          {codes.map((code) =>
+            // Un seul texte traduisible : le nom de la langue EST son étiquette.
+            // Encadrer un champ unique n'ajouterait qu'une boîte.
+            single ? (
+              <Field key={code} label={languageLabel(code)} htmlFor={`${idPrefix}-${code}`}>
+                <TranslationControl
+                  id={`${idPrefix}-${code}`}
+                  code={code}
+                  field={single}
+                  value={value[code]?.[single.key] ?? ""}
+                  onChange={(next) => onChange(code, single.key, next)}
+                />
+              </Field>
+            ) : (
+              <fieldset
+                key={code}
+                className="flex flex-col gap-3 rounded-lg border border-border bg-muted/20 p-3"
+              >
+                <legend className="px-1 text-xs font-semibold">{languageLabel(code)}</legend>
+                {fields.map((field) => (
+                  <Field
+                    key={field.key}
+                    label={field.label}
+                    htmlFor={`${idPrefix}-${code}-${field.key}`}
+                  >
+                    <TranslationControl
+                      id={`${idPrefix}-${code}-${field.key}`}
+                      code={code}
+                      field={field}
+                      value={value[code]?.[field.key] ?? ""}
+                      onChange={(next) => onChange(code, field.key, next)}
+                    />
+                  </Field>
+                ))}
+              </fieldset>
+            ),
+          )}
         </div>
       )}
 
@@ -194,14 +278,14 @@ export function TranslationFields({
           <AlertDialogHeader>
             <AlertDialogTitle>Retraduire toutes les langues ?</AlertDialogTitle>
             <AlertDialogDescription>
-              Les traductions déjà saisies ({alreadyFilled.map(languageLabel).join(", ")}) seront
+              Les traductions déjà saisies ({filledCodes.map(languageLabel).join(", ")}) seront
               remplacées par celles proposées automatiquement. Rien n'est enregistré tant que vous
               n'avez pas validé le formulaire.
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
             <AlertDialogCancel>Annuler</AlertDialogCancel>
-            <AlertDialogAction onClick={() => translateInto(codes)}>
+            <AlertDialogAction onClick={() => translateInto("tout")}>
               Tout retraduire
             </AlertDialogAction>
           </AlertDialogFooter>
@@ -209,4 +293,33 @@ export function TranslationFields({
       </AlertDialog>
     </div>
   );
+}
+
+/** La case de saisie : une ligne, ou un pavé quand le texte en est un. */
+function TranslationControl({
+  id,
+  code,
+  field,
+  value,
+  onChange,
+}: {
+  id: string;
+  code: string;
+  field: TranslationFieldSpec;
+  value: string;
+  onChange: (value: string) => void;
+}) {
+  if (field.multiline) {
+    return (
+      <textarea
+        id={id}
+        lang={code}
+        rows={3}
+        value={value}
+        onChange={(e) => onChange(e.target.value)}
+        className="w-full rounded-lg border border-input bg-background px-3 py-2 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+      />
+    );
+  }
+  return <Input id={id} lang={code} value={value} onChange={(e) => onChange(e.target.value)} />;
 }
