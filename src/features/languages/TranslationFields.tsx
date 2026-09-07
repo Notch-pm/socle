@@ -69,6 +69,7 @@ export function TranslationFields({
   kind,
   reviewHint,
   overwriteHint,
+  dense = false,
 }: {
   /** Langues activées par l'organisation (français compris). */
   enabled: readonly string[];
@@ -98,6 +99,16 @@ export function TranslationFields({
   reviewHint?: string;
   /** Même raison, pour la confirmation de « Tout retraduire ». */
   overwriteHint?: string;
+  /**
+   * Mise en page pour une COLONNE ÉTROITE (l'inspecteur de l'éditeur fait
+   * 306 px, marges comprises), et non pour la largeur d'un formulaire.
+   *
+   * ⚠️ Ce n'est pas un réglage de goût : sans lui, les deux boutons se posent
+   * côte à côte (~330 px à eux deux) et la grille passe à deux colonnes — le
+   * point de rupture `sm:` regarde la fenêtre, pas le conteneur. Les deux
+   * débordent du panneau.
+   */
+  dense?: boolean;
 }) {
   const codes = translatableLanguages(enabled);
   const review = reviewHint ?? "relisez avant d'enregistrer.";
@@ -177,7 +188,12 @@ export function TranslationFields({
 
   return (
     <div className={cn("flex flex-col gap-3", className)}>
-      <div className="flex flex-wrap items-start justify-between gap-2">
+      <div
+        className={cn(
+          "flex flex-wrap items-start justify-between gap-2",
+          dense && "flex-col items-stretch",
+        )}
+      >
         <div>
           <h3 className="text-sm font-semibold">Traductions</h3>
           <p className="text-xs text-muted-foreground">
@@ -188,7 +204,7 @@ export function TranslationFields({
         </div>
 
         {codes.length === 0 ? null : (
-          <div className="flex items-center gap-1">
+          <div className={cn("flex items-center gap-1", dense && "flex-wrap")}>
             {canFill || translatable.length === 0 ? (
               <Button
                 type="button"
@@ -223,7 +239,7 @@ export function TranslationFields({
       </div>
 
       {codes.length === 0 ? null : (
-        <div className="grid gap-4 sm:grid-cols-2">
+        <div className={cn("grid gap-4", dense ? "grid-cols-1" : "sm:grid-cols-2")}>
           {codes.map((code) =>
             // Un seul texte traduisible : le nom de la langue EST son étiquette.
             // Encadrer un champ unique n'ajouterait qu'une boîte.

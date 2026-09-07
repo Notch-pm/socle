@@ -88,6 +88,9 @@ export function SectionTranslations({
           }
           idPrefix={idPrefix}
           organizationId={organizationId}
+          // Le panneau fait 306 px : les boutons s'empilent et les langues
+          // tiennent sur une colonne.
+          dense
           fields={fields}
           kind="portal_section"
           // ⚠️ Ici, il n'y a pas de formulaire à valider : le brouillon
