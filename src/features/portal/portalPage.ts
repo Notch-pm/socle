@@ -14,9 +14,9 @@
  * écartée au rendu — pas au parse, qui n'a pas le catalogue sous la main.
  */
 import { z } from "zod";
+import { PIVOT_LANGUAGE } from "@/features/languages/languages";
 import {
   PORTAL_SECTION_FIELDS,
-  translationsForWrite,
   type PortalSectionField,
   type TranslationMap,
 } from "@/features/languages/translations";
@@ -361,12 +361,18 @@ export function sectionText(section: PortalSection, field: PortalSectionField): 
 }
 
 /**
- * Pose (ou efface) la traduction d'un texte, frappe par frappe.
+ * Pose (ou efface) la traduction d'un texte, **frappe par frappe**.
  *
- * ⚠️ Passe par `translationsForWrite` plutôt que d'écrire dans l'objet : les
- * trois règles — jamais de clé `fr`, un texte vide est une absence, pas
- * d'entrée de langue vide — sont écrites UNE fois, dans le module des langues.
- * Les réécrire ici en ferait une seconde version à tenir d'accord.
+ * ⚠️ NE PASSE PAS PAR `translationsForWrite`, et c'est tout l'objet de cette
+ * fonction : celui-là ÉLAGUE la valeur (`.trim()`), ce qui est juste au moment
+ * d'enregistrer un formulaire — et faux à chaque frappe. Ici l'état EST le
+ * JSON : élaguer en cours de saisie supprime l'espace au moment même où on le
+ * tape, et rend les espaces impossibles (vu en vrai le 2026-09-07). La valeur
+ * est donc stockée telle qu'elle est saisie ; `parseTranslations` élaguera à la
+ * lecture, comme partout.
+ *
+ * Les trois règles restent celles de la maison : jamais de clé `fr`, un texte
+ * VIDE est une absence, et une langue sans aucun texte disparaît.
  */
 export function setSectionTranslation(
   translations: SectionTranslations,
@@ -374,13 +380,38 @@ export function setSectionTranslation(
   field: PortalSectionField,
   value: string,
 ): SectionTranslations {
-  return translationsForWrite(
-    translations,
-    { [code]: { [field]: value } },
-    [code],
-    [field],
-    PORTAL_SECTION_FIELDS,
-  );
+  if (code === PIVOT_LANGUAGE) return translations;
+  const out: SectionTranslations = { ...translations };
+  const entry = { ...out[code] };
+  if (value.trim() === "") delete entry[field];
+  else entry[field] = value;
+  if (Object.keys(entry).length === 0) delete out[code];
+  else out[code] = entry;
+  return out;
+}
+
+/**
+ * Applique une réponse de traduction ENTIÈRE, en une fois.
+ *
+ * ⚠️ EN UNE FOIS, ET PAS CHAMP PAR CHAMP. Le parent possède la page entière :
+ * chaque appel repart de l'état du rendu courant, donc trois appels dans le
+ * même tick écrivent trois fois par-dessus le même état et seul le dernier
+ * survit — c'est ainsi que le titre et le sous-titre se perdaient, ne laissant
+ * que le placeholder (vu en vrai le 2026-09-07).
+ */
+export function applySectionTranslations(
+  translations: SectionTranslations,
+  patch: Record<string, Partial<Record<string, string>>>,
+): SectionTranslations {
+  let out = translations;
+  for (const [code, entry] of Object.entries(patch)) {
+    for (const [field, value] of Object.entries(entry)) {
+      if (typeof value !== "string") continue;
+      if (!(PORTAL_SECTION_FIELDS as readonly string[]).includes(field)) continue;
+      out = setSectionTranslation(out, code, field as PortalSectionField, value);
+    }
+  }
+  return out;
 }
 
 /** Cette section porte-t-elle déjà une traduction ? (ouverture du bloc de saisie) */

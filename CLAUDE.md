@@ -463,6 +463,10 @@ service — motif du catalogue de démarches, des quartiers, du plafond IA.
 - **UI** : `LanguagesSection` (onglet « Langues » de `OrganizationEditorPage` côté admin, section
   `?section=langues` d'`OrgSettingsPage` côté superadmin — motif `BrandingSection`) : deux groupes
   de cases à cocher, recherche, français coché et verrouillé, récapitulatif des langues actives.
+  ⚠️ Une réponse de traduction s'applique **d'un seul geste** (`onApply`), jamais case par case :
+  un appelant qui possède un objet plus gros (la page composée) repart de l'état de son rendu à
+  chaque appel, et trois cases écrites dans le même tick n'en laisseraient qu'une (bogue du
+  2026-09-07 : titre et sous-titre perdus, seul le placeholder rempli).
   `TranslationFields` (partagé) affiche, par langue active, un champ par texte traduisible
   (`fields`) : libellé **et** descriptif court dans l'étape **Descriptif** d'une démarche, libellé
   seul dans le **dialogue de catégorie**. Avec deux textes, chaque langue devient un groupe
@@ -491,10 +495,16 @@ service — motif du catalogue de démarches, des quartiers, du plafond IA.
   `AlertDialog`.
   ⚠️ **Rien n'est persisté par la fonction** : la proposition se pose dans les champs, c'est
   l'enregistrement du formulaire qui l'écrit — l'agent garde le dernier mot (d'où « relisez avant
-  d'enregistrer »). ⚠️ **Une traduction identique au français est écartée** (`parseTranslationAnswer`,
-  et le prompt le demande au modèle) : stockée, elle serait **gelée** — le jour où le libellé
-  français change, elle continuerait de s'afficher à sa place, alors que l'absence retombe toujours
-  sur le français à jour. ⚠️ **Autorisation = `is_org_admin`**, évaluée avec les droits de
+  d'enregistrer »). ⚠️ **Un texte qui ne se traduit pas est RECOPIÉ, pas écarté** (décision du 2026-09-07, après
+  usage — la règle inverse tenait jusque-là). Un bandeau intitulé « ACCM » avec une adresse pour
+  texte revenait entièrement vide : le modèle avait raison, mais à l'écran ça se lit comme un
+  échec, et l'agent ne sait pas si son bloc est traité ou oublié. ⚠️ **Ce que ça coûte, et qui est
+  assumé** : une copie stockée est **gelée** — le jour où le français change, elle continue de
+  s'afficher à sa place, là où une absence serait retombée sur le français à jour. ⚠️ La
+  distinction que tient le prompt : un **texte** intraduisible se recopie, une **langue** que le
+  modèle ne maîtrise pas s'omet — recopier du français dans un champ breton ne dirait pas
+  « identique », mais « pas fait ». Le français est par ailleurs affiché **en filigrane** de chaque
+  case : le repli cesse d'être une règle à connaître pour devenir quelque chose qu'on voit. ⚠️ **Autorisation = `is_org_admin`**, évaluée avec les droits de
   l'appelant : le miroir exact du RLS d'écriture de `procedures`/`categories` — traduire pour une
   organisation où l'on ne pourrait rien enregistrer se paierait sur son crédit pour rien. ⚠️ Les
   langues demandées sont **recoupées côté serveur** avec `enabled_languages` ; le **libellé** de
@@ -763,7 +773,10 @@ démarches ». Ajouter une collectivité au portail = une ligne de domaine, aucu
   marge sous lui, « Ajouter une section » passe au-dessus, et `appendIndex` glisse tout bloc
   ajouté « en fin de page » au-dessus de lui (un second pied de page s'ajoute après).
 - **Multilingue (2026-09-07)** : chaque bloc porte ses textes traduits (`translations` sur la
-  section — voir feature « Langues »). L'inspecteur propose **un seul bloc de traduction par
+  section — voir feature « Langues »). ⚠️ `setSectionTranslation` **n'élague pas** la valeur,
+  contrairement à `translationsForWrite` : ici l'état EST le JSON, et élaguer à chaque frappe
+  supprime l'espace au moment où on le tape — les espaces devenaient impossibles à saisir.
+  L'élagage se fait à la lecture (`parseTranslations`), comme partout. L'inspecteur propose **un seul bloc de traduction par
   section**, replié (`<details>`), en bas du panneau donc **sous les textes français qu'il
   traduit** ; un bloc par sous-bloc du pied de page. ⚠️ Un bloc par CHAMP produirait un appel au
   guichet IA par champ, contre la règle « un seul appel pour tous les textes d'une ligne ».

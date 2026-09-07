@@ -85,6 +85,15 @@ function Harness({
       onChange={(code, field, next) =>
         setValue((current) => ({ ...current, [code]: { ...current[code], [field]: next } }))
       }
+      onApply={(patch) =>
+        setValue((current) => {
+          const next = { ...current };
+          for (const [code, entry] of Object.entries(patch)) {
+            next[code] = { ...next[code], ...entry };
+          }
+          return next;
+        })
+      }
       idPrefix="t"
       organizationId="org-1"
       fields={fields}

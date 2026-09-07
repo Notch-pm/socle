@@ -62,6 +62,7 @@ export function TranslationFields({
   enabled,
   value,
   onChange,
+  onApply,
   idPrefix,
   className,
   organizationId,
@@ -74,7 +75,18 @@ export function TranslationFields({
   /** Langues activées par l'organisation (français compris). */
   enabled: readonly string[];
   value: TranslationInput<AnyTranslatableField>;
+  /** Une frappe dans une case. */
   onChange: (code: string, field: AnyTranslatableField, value: string) => void;
+  /**
+   * Une réponse de traduction, appliquée EN UNE FOIS.
+   *
+   * ⚠️ ELLE NE PEUT PAS PASSER PAR `onChange` case par case. Un appelant qui
+   * possède un objet plus gros (la page composée, par exemple) repart de l'état
+   * de son rendu à chaque appel : trois cases écrites dans le même tick, et
+   * seule la dernière survit. Une réponse est donc un seul geste, et l'appelant
+   * n'a qu'un seul état à composer.
+   */
+  onApply: (patch: Record<string, Partial<Record<AnyTranslatableField, string>>>) => void;
   /** Préfixe des `id` de champs — deux formulaires peuvent coexister. */
   idPrefix: string;
   className?: string;
@@ -166,16 +178,19 @@ export function TranslationFields({
       },
       {
         onSuccess: (answer) => {
+          // On compose la proposition ENTIÈRE, puis on l'applique d'un geste :
+          // voir `onApply`. La garde « on ne remplit que le vide » se fait ici,
+          // case par case, sur la saisie la plus récente.
+          const patch: Record<string, Partial<Record<AnyTranslatableField, string>>> = {};
           for (const [code, entry] of Object.entries(answer.translations)) {
             for (const field of askedFields) {
               const proposal = entry[field.key];
               if (!proposal) continue;
               if (mode === "vides" && !isEmpty(code, field.key)) continue;
-              // Les deux appelants posent leur état par fonction
-              // (`setState((current) => …)`) : la boucle compose sans écraser.
-              onChange(code, field.key, proposal);
+              patch[code] = { ...patch[code], [field.key]: proposal };
             }
           }
+          if (Object.keys(patch).length > 0) onApply(patch);
           setResult(answer);
         },
       },
@@ -327,7 +342,13 @@ export function TranslationFields({
   );
 }
 
-/** La case de saisie : une ligne, ou un pavé quand le texte en est un. */
+/**
+ * La case de saisie : une ligne, ou un pavé quand le texte en est un.
+ *
+ * Le texte français est en filigrane (`placeholder`) : c'est exactement ce que
+ * le visiteur lira si la case reste vide. Le repli cesse d'être une règle à
+ * connaître pour devenir quelque chose qu'on voit.
+ */
 function TranslationControl({
   id,
   code,
@@ -347,11 +368,20 @@ function TranslationControl({
         id={id}
         lang={code}
         rows={3}
+        placeholder={field.source}
         value={value}
         onChange={(e) => onChange(e.target.value)}
         className="w-full rounded-lg border border-input bg-background px-3 py-2 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
       />
     );
   }
-  return <Input id={id} lang={code} value={value} onChange={(e) => onChange(e.target.value)} />;
+  return (
+    <Input
+      id={id}
+      lang={code}
+      value={value}
+      placeholder={field.source}
+      onChange={(e) => onChange(e.target.value)}
+    />
+  );
 }

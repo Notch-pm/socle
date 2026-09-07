@@ -2,6 +2,7 @@ import { ChevronRight } from "lucide-react";
 import { TranslationFields } from "@/features/languages/TranslationFields";
 import { translatableLanguages } from "@/features/languages/languages";
 import {
+  applySectionTranslations,
   fieldsForKind,
   hasTranslations,
   sectionText,
@@ -84,6 +85,14 @@ export function SectionTranslations({
                 field as PortalSectionField,
                 value,
               ),
+            } as PortalSection)
+          }
+          // Une réponse = un seul geste : le parent possède la page entière,
+          // et trois écritures dans le même tick n'en laisseraient qu'une.
+          onApply={(patch) =>
+            onChange({
+              ...section,
+              translations: applySectionTranslations(section.translations, patch),
             } as PortalSection)
           }
           idPrefix={idPrefix}

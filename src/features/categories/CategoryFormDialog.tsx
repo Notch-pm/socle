@@ -176,6 +176,15 @@ export function CategoryFormDialog({
                 [code]: { ...current[code], [field]: value },
               }))
             }
+            onApply={(patch) =>
+              setTranslations((current) => {
+                const next = { ...current };
+                for (const [code, entry] of Object.entries(patch)) {
+                  next[code] = { ...next[code], ...entry };
+                }
+                return next;
+              })
+            }
             idPrefix="category-translation"
             className="border-t border-border pt-4"
             organizationId={organizationId || undefined}

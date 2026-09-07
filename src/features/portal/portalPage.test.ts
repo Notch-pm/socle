@@ -5,10 +5,12 @@ import {
   SECTION_KINDS,
   createContactSection,
   createSection,
+  applySectionTranslations,
   defaultPortalPage,
   fieldsForKind,
   hasTranslations,
   isDarkColor,
+  setSectionTranslation,
   parsePortalPage,
   type PortalPage,
 } from "./portalPage";
@@ -330,5 +332,67 @@ describe("les traductions survivent au parse", () => {
       ...footer,
       children: [{ ...vierge, translations: { en: { title: "T" } } }],
     })).toBe(true);
+  });
+});
+
+/**
+ * Les deux bogues de l'éditeur, vus en vrai le 2026-09-07.
+ *
+ * Aucun n'était visible dans un test : le premier ne se manifeste qu'à la
+ * frappe, le second qu'en appliquant plusieurs champs dans le même tick. Ils
+ * vivent maintenant ici.
+ */
+describe("les traductions d'une section, à la frappe et à l'application", () => {
+  it("garde les espaces qu'on tape", () => {
+    // ⚠️ Le bogue : `translationsForWrite` élague, ce qui est juste au moment
+    // d'enregistrer un formulaire et faux à chaque frappe — l'espace était
+    // supprimé au moment même où on le tapait, rendant les espaces impossibles.
+    let t = setSectionTranslation({}, "en", "title", "Find");
+    t = setSectionTranslation(t, "en", "title", "Find ");
+    expect(t.en.title).toBe("Find ");
+    t = setSectionTranslation(t, "en", "title", "Find your service");
+    expect(t.en.title).toBe("Find your service");
+  });
+
+  it("traite une case blanche comme une absence, et vide la langue", () => {
+    const t = setSectionTranslation({ en: { title: "Find" } }, "en", "title", "   ");
+    expect(t).toEqual({});
+  });
+
+  it("n'écrit jamais le français", () => {
+    expect(setSectionTranslation({}, "fr", "title", "Trouvez")).toEqual({});
+  });
+
+  it("applique TOUS les champs d'une réponse, pas seulement le dernier", () => {
+    // ⚠️ Le bogue : appliqués un par un, les trois champs repartaient du même
+    // état et seul le dernier survivait — le titre et le sous-titre se
+    // perdaient, il ne restait que le placeholder.
+    const t = applySectionTranslations({}, {
+      en: {
+        title: "Find your service",
+        subtitle: "One search box for all your requests",
+        placeholder: "Search for a service",
+      },
+    });
+    expect(t).toEqual({
+      en: {
+        title: "Find your service",
+        subtitle: "One search box for all your requests",
+        placeholder: "Search for a service",
+      },
+    });
+  });
+
+  it("compose avec ce qui est déjà traduit, sans l'écraser", () => {
+    const t = applySectionTranslations({ en: { title: "Relu par un agent" } }, {
+      en: { subtitle: "One search box" },
+    });
+    expect(t.en).toEqual({ title: "Relu par un agent", subtitle: "One search box" });
+  });
+
+  it("écarte un champ qui n'est pas un texte de section", () => {
+    expect(applySectionTranslations({}, { en: { name: "Birth", title: "T" } })).toEqual({
+      en: { title: "T" },
+    });
   });
 });

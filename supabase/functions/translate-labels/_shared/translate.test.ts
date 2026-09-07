@@ -205,8 +205,10 @@ describe("buildTranslationPrompt", () => {
     expect(labelOnly).not.toContain("est le RÉSUMÉ");
   });
 
-  it("dit au modèle d'omettre plutôt que de recopier le français", () => {
-    expect(buildTranslationPrompt(request).system).toContain("omets la clé");
+  it("dit au modèle de RECOPIER un texte intraduisible, et d'omettre une langue inconnue", () => {
+    const system = buildTranslationPrompt(request).system;
+    expect(system).toContain("RECOPIE-LE à l'identique");
+    expect(system).toContain("omets la clé d'une LANGUE");
   });
 
   it("distingue une catégorie d'une démarche", () => {
@@ -283,14 +285,34 @@ describe("parseTranslationAnswer", () => {
     expect(answer.missing).toEqual(["es"]);
   });
 
-  it("écarte une traduction identique au français — elle gèlerait le repli", () => {
+  it("CONSERVE une traduction identique au français : c'est une réponse", () => {
+    // Règle inversée le 2026-09-07, après usage. Un bandeau « ACCM » avec une
+    // adresse pour texte revenait entièrement vide : le modèle avait raison, il
+    // n'y avait rien à traduire — mais à l'écran ça se lit comme une panne, et
+    // l'agent ne sait pas si son bloc est traité ou oublié.
+    //
+    // ⚠️ Ce que ça coûte, et qui est assumé : la copie est GELÉE. Le jour où le
+    // français change, elle continue de s'afficher à sa place, là où une absence
+    // serait retombée sur le français à jour. C'est le prix d'un champ rempli,
+    // et il se paie surtout sur les textes qui bougent — pas sur les noms
+    // propres et les adresses, qui sont le cas visé.
     const answer = parseTranslationAnswer(
-      `{"en": {"name": "Birth", "short_description": "  ${DESC.toUpperCase()} "},` +
-        ` "es": {"name": " ${LABEL} "}}`,
+      `{"en": {"name": "Birth", "short_description": "${DESC}"}, "es": {"name": "${LABEL}"}}`,
       targets,
       fields,
     );
-    expect(answer.translations).toEqual({ en: { name: "Birth" } });
+    expect(answer.translations).toEqual({
+      en: { name: "Birth", short_description: DESC },
+      es: { name: LABEL },
+    });
+    expect(answer.missing).toEqual([]);
+  });
+
+  it("laisse le modèle OMETTRE une langue qu'il ne maîtrise pas", () => {
+    // La distinction que tient le prompt : un TEXTE intraduisible se recopie,
+    // une LANGUE inconnue s'omet. Recopier du français dans un champ breton ne
+    // dirait pas « identique », mais « pas fait ».
+    const answer = parseTranslationAnswer('{"en": {"name": "Birth"}}', targets, fields);
     expect(answer.missing).toEqual(["es"]);
   });
 

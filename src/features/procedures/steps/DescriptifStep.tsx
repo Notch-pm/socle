@@ -207,6 +207,15 @@ export function DescriptifStep({
             [code]: { ...current[code], [field]: value },
           }))
         }
+        onApply={(patch) =>
+          setTranslations((current) => {
+            const next = { ...current };
+            for (const [code, entry] of Object.entries(patch)) {
+              next[code] = { ...next[code], ...entry };
+            }
+            return next;
+          })
+        }
         idPrefix="proc-translation"
         className="sm:col-span-2"
         organizationId={organizationId}
