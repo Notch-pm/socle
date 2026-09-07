@@ -50,6 +50,12 @@ vi.mock("@/features/organizations/useOrganizationProcedures", () => ({
   useEnabledProcedureBindings: () => ({ data: [] }),
 }));
 
+// Les langues de la collectivité : elles ne servent qu'à l'éditeur, qui est
+// simulé ici — mais le hook part quand même en requête sans ce mock.
+vi.mock("@/features/languages/useOrganizationLanguages", () => ({
+  useOrganizationLanguages: () => ({ data: ["fr"] }),
+}));
+
 vi.mock("@/features/portal/usePortalPage", () => ({
   HOME_SLUG: "accueil",
   usePortalPage: () => ({ data: h.row, isLoading: false }),

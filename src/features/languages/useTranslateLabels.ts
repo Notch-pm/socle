@@ -1,7 +1,7 @@
 import { useMutation } from "@tanstack/react-query";
 import { supabase } from "@/lib/supabase";
 import { languageLabel } from "@/features/languages/languages";
-import { TRANSLATABLE_FIELDS, type TranslatableField } from "@/features/languages/translations";
+import type { AnyTranslatableField } from "@/features/languages/translations";
 
 /**
  * Traduction automatique des textes d'une ligne — l'appel depuis l'écran.
@@ -23,11 +23,16 @@ import { TRANSLATABLE_FIELDS, type TranslatableField } from "@/features/language
  * en sachant de quelle démarche il parle.
  */
 
-export type TranslateLabelKind = "procedure" | "category";
+/**
+ * Ce qu'on traduit. Le modèle n'écrit pas dans le même registre selon les cas :
+ * un intitulé de démarche, un libellé de catégorie, ou les textes d'un bloc de
+ * page d'accueil.
+ */
+export type TranslateLabelKind = "procedure" | "category" | "portal_section";
 
 /** Un texte français à traduire, sous la clé qu'il portera dans `translations`. */
 export interface TranslateLabelsField {
-  key: TranslatableField;
+  key: AnyTranslatableField;
   value: string;
 }
 
@@ -43,7 +48,7 @@ export interface TranslateLabelsInput {
 
 export interface TranslateLabelsResult {
   /** Traductions proposées : par code de langue, un texte par champ. */
-  translations: Record<string, Partial<Record<TranslatableField, string>>>;
+  translations: Record<string, Partial<Record<AnyTranslatableField, string>>>;
   /** Langues demandées restées sans aucune proposition — l'écran le dit à l'agent. */
   missing: string[];
 }
@@ -71,15 +76,24 @@ async function messageFromError(error: unknown): Promise<string> {
   return "La traduction automatique a échoué. Réessayez dans un instant.";
 }
 
-/** La réponse du serveur, ramenée à ce que l'écran sait poser dans ses champs. */
-function readTranslations(raw: unknown): TranslateLabelsResult["translations"] {
+/**
+ * La réponse du serveur, ramenée à ce que l'écran sait poser dans ses champs.
+ *
+ * ⚠️ ON NE RETIENT QUE LES CHAMPS DEMANDÉS, et c'est un filtre à ne pas figer
+ * sur un jeu : le lire sur les seuls champs des démarches ferait un bouton qui
+ * s'exécute, qui COÛTE, et qui ne remplit rien sur une page composée.
+ */
+function readTranslations(
+  raw: unknown,
+  asked: readonly AnyTranslatableField[],
+): TranslateLabelsResult["translations"] {
   if (!raw || typeof raw !== "object" || Array.isArray(raw)) return {};
   const out: TranslateLabelsResult["translations"] = {};
   for (const [code, entry] of Object.entries(raw as Record<string, unknown>)) {
     if (!entry || typeof entry !== "object" || Array.isArray(entry)) continue;
     const source = entry as Record<string, unknown>;
-    const kept: Partial<Record<TranslatableField, string>> = {};
-    for (const field of TRANSLATABLE_FIELDS) {
+    const kept: Partial<Record<AnyTranslatableField, string>> = {};
+    for (const field of asked) {
       const value = source[field];
       if (typeof value === "string" && value.trim() !== "") kept[field] = value;
     }
@@ -105,7 +119,7 @@ export function useTranslateLabels() {
       if (error) throw new Error(await messageFromError(error));
       if (!data) throw new Error("Réponse invalide du serveur.");
       return {
-        translations: readTranslations(data.translations),
+        translations: readTranslations(data.translations, input.fields.map((f) => f.key)),
         missing: Array.isArray(data.missing) ? data.missing : [],
       };
     },

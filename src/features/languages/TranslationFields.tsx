@@ -20,11 +20,11 @@ import {
   type TranslateLabelKind,
   type TranslateLabelsResult,
 } from "@/features/languages/useTranslateLabels";
-import type { TranslatableField, TranslationInput } from "@/features/languages/translations";
+import type { AnyTranslatableField, TranslationInput } from "@/features/languages/translations";
 
 /** Un texte français à traduire, et la clé qu'il porte dans `translations`. */
 export interface TranslationFieldSpec {
-  key: TranslatableField;
+  key: AnyTranslatableField;
   /** Étiquette affichée — « Libellé », « Descriptif court ». */
   label: string;
   /** Le texte français, tel qu'il est en train d'être saisi au-dessus. */
@@ -67,11 +67,13 @@ export function TranslationFields({
   organizationId,
   fields,
   kind,
+  reviewHint,
+  overwriteHint,
 }: {
   /** Langues activées par l'organisation (français compris). */
   enabled: readonly string[];
-  value: TranslationInput;
-  onChange: (code: string, field: TranslatableField, value: string) => void;
+  value: TranslationInput<AnyTranslatableField>;
+  onChange: (code: string, field: AnyTranslatableField, value: string) => void;
   /** Préfixe des `id` de champs — deux formulaires peuvent coexister. */
   idPrefix: string;
   className?: string;
@@ -84,8 +86,23 @@ export function TranslationFields({
   fields: readonly TranslationFieldSpec[];
   /** Ce qu'on traduit : le modèle n'écrit pas pareil pour une catégorie. */
   kind: TranslateLabelKind;
+  /**
+   * Ce qu'il reste à faire pour que la proposition existe vraiment.
+   *
+   * ⚠️ CE N'EST PAS UN DÉTAIL DE FORMULATION. Le défaut dit « enregistrer »,
+   * ce qui est vrai d'un formulaire qu'on valide — et FAUX dans l'éditeur du
+   * portail, où le brouillon s'enregistre tout seul et où le dernier mot est
+   * « Publier ». Une phrase qui décrit un geste que l'écran ne propose pas
+   * apprend à ne plus lire les phrases.
+   */
+  reviewHint?: string;
+  /** Même raison, pour la confirmation de « Tout retraduire ». */
+  overwriteHint?: string;
 }) {
   const codes = translatableLanguages(enabled);
+  const review = reviewHint ?? "relisez avant d'enregistrer.";
+  const overwrite = overwriteHint
+    ?? "Rien n'est enregistré tant que vous n'avez pas validé le formulaire.";
   const translate = useTranslateLabels();
   const [confirmAll, setConfirmAll] = React.useState(false);
   const [result, setResult] = React.useState<TranslateLabelsResult | null>(null);
@@ -96,7 +113,7 @@ export function TranslationFields({
   const valueRef = React.useRef(value);
   valueRef.current = value;
 
-  const isEmpty = (code: string, field: TranslatableField) =>
+  const isEmpty = (code: string, field: AnyTranslatableField) =>
     (valueRef.current[code]?.[field] ?? "").trim() === "";
 
   // Un texte français vide n'a rien à faire traduire — et rien à faire payer.
@@ -265,7 +282,7 @@ export function TranslationFields({
       {result && !translate.isPending && !translate.isError ? (
         <p className="text-xs text-muted-foreground" role="status">
           {translatedNames.length > 0
-            ? `Traduit en ${translatedNames.join(", ")} — relisez avant d'enregistrer.`
+            ? `Traduit en ${translatedNames.join(", ")} — ${review}`
             : "Aucune traduction n'a pu être proposée."}
           {translatedNames.length > 0 && missingNames.length > 0
             ? ` Aucune proposition pour ${missingNames.join(", ")}.`
@@ -279,8 +296,7 @@ export function TranslationFields({
             <AlertDialogTitle>Retraduire toutes les langues ?</AlertDialogTitle>
             <AlertDialogDescription>
               Les traductions déjà saisies ({filledCodes.map(languageLabel).join(", ")}) seront
-              remplacées par celles proposées automatiquement. Rien n'est enregistré tant que vous
-              n'avez pas validé le formulaire.
+              remplacées par celles proposées automatiquement. {overwrite}
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>

@@ -26,10 +26,20 @@ function entry(over: Partial<PortalCatalogueEntry> = {}): PortalCatalogueEntry {
   };
 }
 
+// La traduction automatique passe par TanStack Query ; son comportement est
+// testé dans `TranslationFields.test.tsx`. Ici, on ne vérifie que sa PRÉSENCE.
+vi.mock("@/features/languages/useTranslateLabels", () => ({
+  useTranslateLabels: () => ({ mutate: vi.fn(), isPending: false, isError: false, error: null }),
+}));
+
 // Pas de `@testing-library/jest-dom` dans ce dépôt : assertions sur le DOM brut.
 const isDisabled = (el: HTMLElement) => (el as HTMLButtonElement).disabled;
 
-function renderInspector(section: PortalSection, catalogue: PortalCatalogueEntry[] = [entry()]) {
+function renderInspector(
+  section: PortalSection,
+  catalogue: PortalCatalogueEntry[] = [entry()],
+  languages: readonly string[] = ["fr"],
+) {
   const onChange = vi.fn();
   const onClose = vi.fn();
   render(
@@ -38,6 +48,8 @@ function renderInspector(section: PortalSection, catalogue: PortalCatalogueEntry
       index={1}
       total={4}
       contact={CONTACT}
+      languages={languages}
+      organizationId="org-1"
         onRemove={h.remove}
         catalogue={catalogue}
       onChange={onChange}
@@ -141,6 +153,8 @@ describe("SectionInspector — retirer la section", () => {
         total={1}
         catalogue={[]}
         contact={CONTACT}
+        languages={["fr"]}
+        organizationId="org-1"
         onChange={vi.fn()}
         onRemove={h.remove}
         onClose={vi.fn()}
@@ -148,5 +162,34 @@ describe("SectionInspector — retirer la section", () => {
     );
     fireEvent.click(screen.getByRole("button", { name: /Supprimer la section/ }));
     expect(h.remove).toHaveBeenCalledTimes(1);
+  });
+});
+
+/**
+ * La traduction des textes d'un bloc.
+ *
+ * Le comportement du composant de saisie (ne remplit que le vide, ne persiste
+ * rien) est testé dans `TranslationFields.test.tsx` ; ce qui compte ici, c'est
+ * qu'il n'apparaisse QUE là où il a du sens.
+ */
+describe("SectionInspector — traductions des textes", () => {
+  it("n'affiche rien quand la collectivité est monolingue", () => {
+    // Le garde est ici, pas dans `TranslationFields` : un canevas n'explique
+    // pas un réglage qui vit ailleurs, il n'affiche rien.
+    renderInspector(createSection("texte"), [], ["fr"]);
+    expect(screen.queryByText(/Traductions/)).toBeNull();
+  });
+
+  it("propose la traduction dès qu'une seconde langue est activée", () => {
+    renderInspector(createSection("texte"), [], ["fr", "en", "br"]);
+    expect(screen.getByText("Traductions — 2 langues")).not.toBeNull();
+  });
+
+  it("ne propose que les textes que le bloc porte vraiment", () => {
+    // Une grille de démarches n'a qu'un titre : proposer un paragraphe
+    // demanderait de traduire un champ français qui n'existe pas.
+    renderInspector(createSection("demarches"), [], ["fr", "en"]);
+    expect(screen.getByText("Traductions — 1 langue")).not.toBeNull();
+    expect(screen.queryByLabelText("Paragraphe")).toBeNull();
   });
 });

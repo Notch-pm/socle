@@ -14,6 +14,7 @@
 import type {
   PortalPageDto,
   PortalSectionDto,
+  PortalSectionTranslationsDto,
   PortalTexteSectionDto,
 } from "./dto.ts";
 
@@ -52,6 +53,38 @@ function references(value: unknown, publishedIds: Set<string>): string[] {
   return out;
 }
 
+/**
+ * Les textes traduits de la section, **par whitelist de champs du kind** — même
+ * discipline que le reste de ce fichier.
+ *
+ * Trois règles, les mêmes que pour `Procedure.translations` :
+ *  • jamais de clé `fr` — le français est le champ de même nom ;
+ *  • une chaîne vide est une **absence**, pas un texte vide (le Socle
+ *    n'en stocke pas, mais la règle appartient au lecteur) ;
+ *  • une langue dont aucun texte ne reste ne laisse pas d'entrée vide.
+ *
+ * ⚠️ Un `body` égaré sur une section `recherche` ne sort pas : il n'a pas de
+ * français à replier, et le consommateur n'aurait rien à en faire.
+ * Toujours émis, `{}` quand il n'y a rien : le consommateur écrit
+ * `s.translations[lang]?.title ?? s.title` sans tester la présence.
+ */
+function translations(value: unknown, fields: readonly string[]): PortalSectionTranslationsDto {
+  const out: PortalSectionTranslationsDto = {};
+  if (!value || typeof value !== "object" || Array.isArray(value)) return out;
+  for (const [rawCode, rawEntry] of Object.entries(value as Row)) {
+    const code = rawCode.trim().toLowerCase();
+    if (code === "" || code === "fr") continue;
+    if (!rawEntry || typeof rawEntry !== "object" || Array.isArray(rawEntry)) continue;
+    const entry: Record<string, string> = {};
+    for (const field of fields) {
+      const text = (rawEntry as Row)[field];
+      if (typeof text === "string" && text.trim() !== "") entry[field] = text;
+    }
+    if (Object.keys(entry).length > 0) out[code] = entry;
+  }
+  return out;
+}
+
 function serializeSection(raw: unknown, publishedIds: Set<string>): PortalSectionDto | null {
   if (!raw || typeof raw !== "object") return null;
   const row = raw as Row;
@@ -69,6 +102,7 @@ function serializeSection(raw: unknown, publishedIds: Set<string>): PortalSectio
         placeholder: str(row.placeholder),
         show_shortcuts: bool(row.showShortcuts, false),
         shortcuts: references(row.shortcuts, publishedIds),
+        translations: translations(row.translations, ["title", "subtitle", "placeholder"]),
       };
     case "demarches":
       return {
@@ -78,6 +112,7 @@ function serializeSection(raw: unknown, publishedIds: Set<string>): PortalSectio
         columns: columns(row.columns),
         pinned_first: bool(row.pinnedFirst, false),
         pinned: references(row.pinned, publishedIds),
+        translations: translations(row.translations, ["title"]),
       };
     case "actus":
       return {
@@ -87,9 +122,16 @@ function serializeSection(raw: unknown, publishedIds: Set<string>): PortalSectio
         layout: row.layout === "grid" ? "grid" : "list",
         count: columns(row.count),
         show_dates: bool(row.showDates, true),
+        translations: translations(row.translations, ["title"]),
       };
     case "compte":
-      return { id, kind: "compte", title, subtitle: str(row.subtitle) };
+      return {
+        id,
+        kind: "compte",
+        title,
+        subtitle: str(row.subtitle),
+        translations: translations(row.translations, ["title", "subtitle"]),
+      };
     case "texte":
       return {
         id,
@@ -97,6 +139,7 @@ function serializeSection(raw: unknown, publishedIds: Set<string>): PortalSectio
         title,
         body: str(row.body),
         align: row.align === "center" ? "center" : "left",
+        translations: translations(row.translations, ["title", "body"]),
       };
     case "footer": {
       // Les sous-blocs sont lus un par un, et seuls les bandeaux texte
@@ -116,6 +159,7 @@ function serializeSection(raw: unknown, publishedIds: Set<string>): PortalSectio
         background: HEX_COLOR.test(background) ? background : DEFAULT_FOOTER_BACKGROUND,
         columns: row.columns === 1 || row.columns === 2 ? row.columns : 3,
         children,
+        translations: translations(row.translations, ["title"]),
       };
     }
     default:

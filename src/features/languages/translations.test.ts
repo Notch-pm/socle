@@ -189,3 +189,63 @@ describe("localizedName / localizedField", () => {
     expect(localizedField(null, {}, "br", "short_description")).toBe("");
   });
 });
+
+/**
+ * Le second jeu de champs : les textes d'une section de page composée.
+ *
+ * Les trois règles sont écrites une seule fois dans ce module ; ce qui suit
+ * vérifie qu'elles valent aussi pour ce jeu-là, et surtout que les deux ne se
+ * mélangent pas.
+ */
+describe("deux jeux de champs, une seule implémentation", () => {
+  const SECTION = ["title", "subtitle", "placeholder", "body"] as const;
+
+  it("lit les textes d'une section", () => {
+    expect(
+      parseTranslations({ en: { title: "Our services", body: "Open Monday to Friday." } }, SECTION),
+    ).toEqual({ en: { title: "Our services", body: "Open Monday to Friday." } });
+  });
+
+  it("écarte ce que la colonne ne porte pas", () => {
+    // Un `name` égaré dans les traductions d'une section n'y a pas plus sa
+    // place qu'une colonne inconnue — et réciproquement.
+    expect(parseTranslations({ en: { title: "T", name: "N" } }, SECTION)).toEqual({
+      en: { title: "T" },
+    });
+    expect(parseTranslations({ en: { title: "T", name: "N" } })).toEqual({ en: { name: "N" } });
+  });
+
+  it("ne lit PAS la forme plate là où `name` n'existe pas", () => {
+    // `{"br": "Breizh"}` est un libellé — pour une section, ce serait fabriquer
+    // un champ que rien n'affiche.
+    expect(parseTranslations({ br: "Breizh" }, SECTION)).toEqual({});
+    expect(parseTranslations({ br: "Breizh" })).toEqual({ br: { name: "Breizh" } });
+  });
+
+  it("n'efface que les champs gouvernés, et relit la colonne EN ENTIER", () => {
+    // ⚠️ C'est la garde qui distingue `known` de `fields` : une section
+    // `recherche` gouverne trois champs, et ne doit pas emporter un `body` que
+    // la colonne porterait (composition importée, ou kind changé en chemin).
+    expect(
+      translationsForWrite(
+        { en: { title: "Old", body: "Kept" } },
+        { en: { title: "New" } },
+        ["fr", "en"],
+        ["title", "subtitle", "placeholder"],
+        SECTION,
+      ),
+    ).toEqual({ en: { title: "New", body: "Kept" } });
+  });
+
+  it("supprime la langue quand plus aucun texte ne reste", () => {
+    expect(
+      translationsForWrite({ en: { title: "T" } }, { en: { title: "  " } }, ["fr", "en"], SECTION, SECTION),
+    ).toEqual({});
+  });
+
+  it("replie un texte de section sur son français", () => {
+    const translations = { en: { title: "Our services" } };
+    expect(localizedField("Nos démarches", translations, "en", "title")).toBe("Our services");
+    expect(localizedField("Un paragraphe.", translations, "en", "body")).toBe("Un paragraphe.");
+  });
+});

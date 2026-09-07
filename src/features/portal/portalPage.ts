@@ -14,6 +14,12 @@
  * écartée au rendu — pas au parse, qui n'a pas le catalogue sous la main.
  */
 import { z } from "zod";
+import {
+  PORTAL_SECTION_FIELDS,
+  translationsForWrite,
+  type PortalSectionField,
+  type TranslationMap,
+} from "@/features/languages/translations";
 
 export const SECTION_KINDS = ["recherche", "demarches", "actus", "compte", "texte", "footer"] as const;
 export type SectionKind = (typeof SECTION_KINDS)[number];
@@ -54,7 +60,29 @@ interface SectionCommon {
   id: string;
   /** « Titre affiché » — chaque section en a un. */
   title: string;
+  /**
+   * Les textes de cette section dans les autres langues de la collectivité —
+   * `{ "<code>": { "title": "…", "body": "…" } }`, exactement la forme de
+   * `procedures.translations`.
+   *
+   * ⚠️ ELLE VIT SUR LA SECTION, et pas dans une couche par langue au niveau de
+   * la page : une traduction VOYAGE alors avec son bloc. Déplacer, dupliquer ou
+   * supprimer une section n'a rien à resynchroniser, et les sous-blocs du pied
+   * de page en héritent sans une ligne — ce sont des sections.
+   *
+   * Mêmes trois règles que partout : jamais de clé `fr` (le français est le
+   * champ de même nom), un texte vide est une **absence**, et le repli se fait
+   * **champ par champ**.
+   */
+  translations: SectionTranslations;
 }
+
+/**
+ * Les textes d'une section qui se traduisent. Le jeu est déclaré dans
+ * `src/features/languages/translations.ts`, avec celui des démarches : les
+ * trois règles n'y sont écrites qu'une fois.
+ */
+export type SectionTranslations = TranslationMap<PortalSectionField>;
 
 export interface RechercheSection extends SectionCommon {
   kind: "recherche";
@@ -157,6 +185,7 @@ const BUILDERS: { [K in SectionKind]: (id: string) => SectionOf<K> } = {
   recherche: (id) => ({
     id,
     kind: "recherche",
+    translations: {},
     title: "Trouvez votre démarche",
     subtitle: "Un seul champ pour toutes vos demandes",
     placeholder: "Rechercher une démarche",
@@ -166,6 +195,7 @@ const BUILDERS: { [K in SectionKind]: (id: string) => SectionOf<K> } = {
   demarches: (id) => ({
     id,
     kind: "demarches",
+    translations: {},
     title: "Nos démarches",
     columns: 3,
     pinnedFirst: false,
@@ -174,6 +204,7 @@ const BUILDERS: { [K in SectionKind]: (id: string) => SectionOf<K> } = {
   actus: (id) => ({
     id,
     kind: "actus",
+    translations: {},
     title: "Dernières actualités",
     layout: "list",
     count: 3,
@@ -182,12 +213,14 @@ const BUILDERS: { [K in SectionKind]: (id: string) => SectionOf<K> } = {
   compte: (id) => ({
     id,
     kind: "compte",
+    translations: {},
     title: "Votre espace personnel",
     subtitle: "Connectez-vous pour suivre vos démarches",
   }),
   texte: (id) => ({
     id,
     kind: "texte",
+    translations: {},
     title: "Titre du bandeau",
     body: "Un paragraphe court à destination des usagers.",
     align: "left",
@@ -197,6 +230,7 @@ const BUILDERS: { [K in SectionKind]: (id: string) => SectionOf<K> } = {
   footer: (id) => ({
     id,
     kind: "footer",
+    translations: {},
     title: "",
     background: DEFAULT_FOOTER_BACKGROUND,
     columns: 3,
@@ -234,6 +268,7 @@ export function createContactSection(org: ContactSource): TexteSection {
   return {
     id: genId(),
     kind: "texte",
+    translations: {},
     title: org.name.trim() || "Nous contacter",
     body: parts.length > 0 ? parts.join(" · ") : "Coordonnées et horaires d'ouverture.",
     align: "left",
@@ -284,9 +319,91 @@ export function defaultPortalPage(): PortalPage {
   };
 }
 
+/**
+ * Les textes traduisibles d'une section, dans l'ordre où ils se saisissent.
+ *
+ * C'est la liste que l'inspecteur propose ET celle qu'il a le droit d'effacer
+ * (`translationsForWrite`). Un kind qui n'a qu'un titre ne doit pas proposer un
+ * paragraphe : le champ français n'existe pas, la traduction n'aurait rien à
+ * traduire.
+ */
+export function fieldsForKind(kind: SectionKind): readonly PortalSectionField[] {
+  switch (kind) {
+    case "recherche":
+      return ["title", "subtitle", "placeholder"];
+    case "compte":
+      return ["title", "subtitle"];
+    case "texte":
+      return ["title", "body"];
+    default:
+      // `demarches`, `actus`, `footer` : un titre, et rien d'autre. Les
+      // sous-blocs du pied de page ont chacun les leurs.
+      return ["title"];
+  }
+}
+
+/**
+ * Le texte français d'un champ, quel que soit le kind. Rend `""` pour un champ
+ * que ce kind ne porte pas — il n'y a alors rien à traduire, et
+ * `TranslationFields` écarte de lui-même une source vide.
+ */
+export function sectionText(section: PortalSection, field: PortalSectionField): string {
+  switch (field) {
+    case "title":
+      return section.title;
+    case "subtitle":
+      return section.kind === "recherche" || section.kind === "compte" ? section.subtitle : "";
+    case "placeholder":
+      return section.kind === "recherche" ? section.placeholder : "";
+    case "body":
+      return section.kind === "texte" ? section.body : "";
+  }
+}
+
+/**
+ * Pose (ou efface) la traduction d'un texte, frappe par frappe.
+ *
+ * ⚠️ Passe par `translationsForWrite` plutôt que d'écrire dans l'objet : les
+ * trois règles — jamais de clé `fr`, un texte vide est une absence, pas
+ * d'entrée de langue vide — sont écrites UNE fois, dans le module des langues.
+ * Les réécrire ici en ferait une seconde version à tenir d'accord.
+ */
+export function setSectionTranslation(
+  translations: SectionTranslations,
+  code: string,
+  field: PortalSectionField,
+  value: string,
+): SectionTranslations {
+  return translationsForWrite(
+    translations,
+    { [code]: { [field]: value } },
+    [code],
+    [field],
+    PORTAL_SECTION_FIELDS,
+  );
+}
+
+/** Cette section porte-t-elle déjà une traduction ? (ouverture du bloc de saisie) */
+export function hasTranslations(section: PortalSection): boolean {
+  if (Object.keys(section.translations).length > 0) return true;
+  return section.kind === "footer" && section.children.some(hasTranslations);
+}
+
 // ---- Validation / parsing --------------------------------------------------
 
-const common = { id: z.string().min(1), title: z.string().default("") };
+/**
+ * ⚠️ `translations` DOIT ÊTRE DÉCLARÉ ICI. Zod strippe les clés inconnues : sans
+ * cette ligne, une traduction saisie survivrait à la frappe puis disparaîtrait
+ * au rechargement de l'éditeur — pire qu'une perte franche, l'agent croirait
+ * avoir enregistré. `.catch({})` plutôt que `.default({})` : une table abîmée
+ * est écartée sans emporter la section, comme partout ailleurs dans ce fichier.
+ */
+const translations = z
+  .record(z.string(), z.record(z.string(), z.string()))
+  .catch({})
+  .default({});
+
+const common = { id: z.string().min(1), title: z.string().default(""), translations };
 const columns = z.union([z.literal(2), z.literal(3), z.literal(4)]).default(3);
 
 const rechercheSchema = z.object({

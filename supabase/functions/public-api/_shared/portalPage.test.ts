@@ -53,6 +53,7 @@ describe("serializePortalPage — tolérance, comme l'éditeur", () => {
     expect(dto.sections[0]).toEqual({
       id: "g",
       kind: "demarches",
+      translations: {},
       title: "",
       columns: 3,
       pinned_first: false,
@@ -86,6 +87,7 @@ describe("serializePortalPage — tolérance, comme l'éditeur", () => {
     expect(dto.sections[0]).toEqual({
       id: "n",
       kind: "actus",
+      translations: {},
       title: "Actus",
       layout: "grid",
       count: 2,
@@ -118,12 +120,13 @@ describe("serializePortalPage — pied de page", () => {
     expect(dto.sections[0]).toEqual({
       id: "f",
       kind: "footer",
+      translations: {},
       title: "",
       background: "#1f2937",
       columns: 2,
       children: [
-        { id: "c1", kind: "texte", title: "Contact", body: "1 place", align: "left" },
-        { id: "c2", kind: "texte", title: "Horaires", body: "9h-17h", align: "center" },
+        { id: "c1", kind: "texte", title: "Contact", body: "1 place", align: "left", translations: {} },
+        { id: "c2", kind: "texte", title: "Horaires", body: "9h-17h", align: "center", translations: {} },
       ],
     });
   });
@@ -146,5 +149,79 @@ describe("serializePortalPage — pied de page", () => {
     );
     expect(dto.sections[0]).toMatchObject({ background: "#0f1f18", columns: 3 });
     expect((dto.sections[0] as { children: { id: string }[] }).children.map((c) => c.id)).toEqual(["t"]);
+  });
+});
+
+/**
+ * Les textes traduits d'une section (contrat 1.14.0).
+ *
+ * Même whitelist que le reste du fichier : on sert ce que le kind porte, et
+ * rien d'autre — c'est ce qui distingue une sérialisation d'un pass-through.
+ */
+describe("serializePortalPage — traductions des sections", () => {
+  const page = (section: Record<string, unknown>) =>
+    serializePortalPage({ sections: [section] }, META, PUBLISHED).sections[0];
+
+  it("sert les textes traduits du kind", () => {
+    const dto = page({
+      id: "t",
+      kind: "texte",
+      title: "Nos horaires",
+      body: "Du lundi au vendredi.",
+      translations: { en: { title: "Opening hours", body: "Monday to Friday." } },
+    });
+    expect(dto.translations).toEqual({
+      en: { title: "Opening hours", body: "Monday to Friday." },
+    });
+  });
+
+  it("écarte un texte que le kind ne porte pas", () => {
+    // Un `body` égaré sur une recherche n'a pas de français à replier.
+    const dto = page({
+      id: "r",
+      kind: "recherche",
+      title: "Trouvez votre démarche",
+      translations: { en: { title: "Find your service", body: "Perdu" } },
+    });
+    expect(dto.translations).toEqual({ en: { title: "Find your service" } });
+  });
+
+  it("n'émet jamais de clé `fr` : le français est le champ de même nom", () => {
+    const dto = page({ id: "t", kind: "texte", title: "Titre", translations: { fr: { title: "Autre" } } });
+    expect(dto.translations).toEqual({});
+  });
+
+  it("traite une chaîne vide comme une absence, et n'émet pas de langue vide", () => {
+    const dto = page({
+      id: "t",
+      kind: "texte",
+      title: "Titre",
+      translations: { en: { title: "  " }, br: { title: "Titl" } },
+    });
+    expect(dto.translations).toEqual({ br: { title: "Titl" } });
+  });
+
+  it("émet toujours la clé, `{}` quand rien n'est traduit", () => {
+    // Le consommateur écrit `s.translations[lang]?.title ?? s.title` sans avoir
+    // à tester la présence du champ.
+    expect(page({ id: "t", kind: "texte", title: "Titre" }).translations).toEqual({});
+    expect(page({ id: "t", kind: "texte", title: "T", translations: "abîmé" }).translations)
+      .toEqual({});
+  });
+
+  it("sert aussi celles des sous-blocs du pied de page", () => {
+    const dto = page({
+      id: "f",
+      kind: "footer",
+      title: "",
+      background: "#0f1f18",
+      columns: 3,
+      children: [
+        { id: "c", kind: "texte", title: "Contact", body: "1 place", translations: { en: { title: "Contact us" } } },
+      ],
+    });
+    expect(dto.kind).toBe("footer");
+    if (dto.kind !== "footer") return;
+    expect(dto.children[0].translations).toEqual({ en: { title: "Contact us" } });
   });
 });

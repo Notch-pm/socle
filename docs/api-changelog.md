@@ -15,6 +15,33 @@ Format d'une entrée : `## AAAA-MM-JJ — <api> — ajout|correctif|rupture`
 
 ## 2026-09-07 — public-api — ajout
 
+**La page d'accueil composée se traduit.** Les libellés des démarches et des catégories l'étaient
+déjà ; les textes que la collectivité **écrit elle-même** dans son éditeur — titres de blocs,
+sous-titres, texte du champ de recherche, paragraphes, pied de page — le sont maintenant aussi.
+Version du contrat : **1.14.0**. Ajout additif.
+
+- Les six sections de `GET /v1/portal/page` (`PortalRechercheSection`, `PortalDemarchesSection`,
+  `PortalActusSection`, `PortalCompteSection`, `PortalTexteSection`, `PortalFooterSection`, ainsi
+  que les sous-blocs du pied de page) portent un champ **`translations`**, décrit par le nouveau
+  schéma **`PortalSectionTranslations`**. Toujours présent, `{}` quand rien n'est traduit : on
+  écrit `s.translations[lang]?.title ?? s.title` sans tester la présence du champ.
+- ⚠️ **Un schéma à part, et pas un élargissement de `Translations`.** Ce dernier est servi sur
+  `Category`, `Procedure` et `PortalProcedure`, où les clés sont `name` et `short_description` ;
+  y ajouter `title`/`body` dirait qu'elles peuvent y apparaître, ce qui est faux. Deux formes
+  voisines, un seul jeu de règles.
+- ⚠️ **Une section ne porte que les clés de son `kind`** : `title` partout, plus `subtitle` et
+  `placeholder` sur la recherche, `subtitle` sur l'espace usager, `body` sur un bandeau texte. Un
+  `body` égaré sur une section `recherche` **ne sort pas** — il n'aurait aucun français à replier.
+- ⚠️ **Le repli se fait champ par champ, jamais langue par langue** (inchangé, et c'est la règle
+  qu'on voit le plus souvent mal appliquée) : une langue peut porter le titre traduit sans le
+  paragraphe. C'est le cas normal, pas une traduction inachevée.
+- Toujours **jamais de clé `fr`** : le français est le champ de même nom.
+- Rien à faire pour un consommateur en place : une section se lit exactement comme avant, en
+  français. Ceux qui servent déjà un sélecteur de langue ont maintenant de quoi traduire la page
+  entière, et plus seulement les noms de démarches.
+
+## 2026-09-07 — public-api — ajout
+
 **Le descriptif court se traduit lui aussi.** `translations` ne portait que le libellé ; une
 démarche y met désormais **son descriptif court**, sous la même langue. Version du contrat :
 **1.13.0**. Ajout additif — aucune entrée existante ne bouge, aucune clé ne change de sens.

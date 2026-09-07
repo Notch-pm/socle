@@ -24,6 +24,7 @@ const sections = [
 function renderCanvas(over: Partial<PortalCanvasProps> = {}) {
   const props: PortalCanvasProps = {
     organizationName: "ACCM",
+    languages: ["fr"],
     sections,
     device: "bureau",
     selectedId: null,
@@ -92,5 +93,35 @@ describe("PortalCanvas — l'ombre de dépôt", () => {
   it("nomme ce qui va tomber, pas seulement où", () => {
     renderCanvas({ dropIndex: 0, dropLabel: "Grille de démarches" });
     expect(screen.getByText("Grille de démarches — déposer ici")).toBeTruthy();
+  });
+});
+
+/**
+ * La place du sélecteur de langue dans la maquette.
+ *
+ * ⚠️ Il est DÉCORATIF, comme la nav et « Mon compte » : le canevas montre où il
+ * se placera pour l'usager, il ne bascule pas la langue de l'aperçu.
+ */
+describe("PortalCanvas — la place du sélecteur de langue", () => {
+  it("ne montre rien quand la collectivité n'a que le français", () => {
+    // Montrer un sélecteur que ses usagers ne verront jamais serait un mensonge
+    // de maquette.
+    renderCanvas({ languages: ["fr"] });
+    expect(screen.queryByTitle(/Fran\u00e7ais/)).toBeNull();
+  });
+
+  it("montre la pastille dès qu'une seconde langue est activée", () => {
+    renderCanvas({ languages: ["fr", "en", "ar"] });
+    const pill = screen.getByTitle("Français, Anglais, Arabe");
+    expect(pill.textContent).toContain("Français");
+    // Décoratif : pas un contrôle, donc rien à activer.
+    expect(pill.tagName).toBe("SPAN");
+  });
+
+  it("la garde visible en mobile, contrairement à la nav", () => {
+    // C'est le seul élément qu'un visiteur non francophone doit pouvoir
+    // atteindre, et il le cherche d'abord sur son téléphone.
+    renderCanvas({ languages: ["fr", "en"], device: "mobile" });
+    expect(screen.getByTitle("Français, Anglais")).not.toBeNull();
   });
 });

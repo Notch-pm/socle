@@ -75,6 +75,44 @@ export const FIELD_SPECS = {
       "« short_description » est le RÉSUMÉ affiché sous l'intitulé : même longueur et " +
       "même ton que le français, phrases complètes, sans rien ajouter ni retirer ;",
   },
+  title: {
+    maxSource: 120,
+    maxTranslation: 200,
+    multiline: false,
+    cost: 50,
+    rule:
+      "« title » est le TITRE d'un bloc de page d'accueil : court, même registre, " +
+      "sans phrase d'explication ni ponctuation finale ;",
+  },
+  subtitle: {
+    maxSource: 250,
+    maxTranslation: 350,
+    multiline: false,
+    cost: 80,
+    rule:
+      "« subtitle » est l'accroche affichée sous le titre : UNE seule phrase, de même " +
+      "longueur que le français, sur le ton d'un accueil au public ;",
+  },
+  placeholder: {
+    maxSource: 100,
+    maxTranslation: 150,
+    multiline: false,
+    cost: 40,
+    rule:
+      "« placeholder » est le texte gris d'un champ de saisie vide : très court, groupe " +
+      "nominal ou exemple comme en français, jamais une phrase complète, jamais de " +
+      "ponctuation finale ;",
+  },
+  body: {
+    maxSource: 1500,
+    maxTranslation: 1800,
+    multiline: true,
+    cost: 380,
+    rule:
+      "« body » est le PARAGRAPHE que lisent les usagers : conserve les retours à la ligne " +
+      "et la structure ; NE TRADUIS PAS les adresses postales, les numéros de téléphone, " +
+      "les adresses électroniques ni les noms d'organismes — recopie-les à l'identique ;",
+  },
 } as const;
 
 export type TranslatableField = keyof typeof FIELD_SPECS;
@@ -95,8 +133,22 @@ const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/
  */
 const LANGUAGE_CODE_RE = /^[a-z]{2,3}(-[a-z0-9]{2,8})*$/;
 
-/** Ce qu'on traduit : les textes d'une démarche, ou d'une catégorie. */
-export type LabelKind = "procedure" | "category";
+/** Ce qu'on traduit : une démarche, une catégorie, ou un bloc de page d'accueil. */
+export type LabelKind = "procedure" | "category" | "portal_section";
+
+/**
+ * Quelles clés chaque type de ligne peut porter.
+ *
+ * ⚠️ Une catégorie n'a pas de descriptif, une section de page n'a pas de
+ * `name` : demander un champ que la ligne ne porte pas, c'est demander une
+ * traduction que personne n'affichera — et la faire payer. Le refus est donc
+ * ici, pas dans l'écran appelant.
+ */
+export const KIND_FIELDS: Record<LabelKind, readonly TranslatableField[]> = {
+  procedure: ["name", "short_description"],
+  category: ["name"],
+  portal_section: ["title", "subtitle", "placeholder", "body"],
+};
 
 export interface TranslationTarget {
   code: string;
@@ -183,10 +235,14 @@ export function parseTranslatePayload(raw: unknown): ParseResult {
     return fail("« organization_id » : UUID de l'organisation principale attendu.");
   }
 
-  if (raw.kind !== undefined && raw.kind !== "category" && raw.kind !== "procedure") {
-    return fail("« kind » : « procedure » ou « category » attendus.");
+  // La liste des kinds vit dans `KIND_FIELDS` : une seule table à tenir, et
+  // c'est elle qui dit aussi quels champs chacun porte.
+  if (raw.kind !== undefined && !(typeof raw.kind === "string" && raw.kind in KIND_FIELDS)) {
+    return fail(
+      "« kind » : " + Object.keys(KIND_FIELDS).map((k) => `« ${k} »`).join(", ") + " attendus.",
+    );
   }
-  const kind: LabelKind = raw.kind === "category" ? "category" : "procedure";
+  const kind: LabelKind = (raw.kind as LabelKind) ?? "procedure";
 
   if (!Array.isArray(raw.fields) || raw.fields.length === 0) {
     return fail("« fields » : au moins un texte français à traduire est attendu.");
@@ -194,6 +250,7 @@ export function parseTranslatePayload(raw: unknown): ParseResult {
 
   const fields: TranslateField[] = [];
   const seenFields = new Set<TranslatableField>();
+  const allowed = KIND_FIELDS[kind];
   for (const entry of raw.fields) {
     if (!isRecord(entry)) return fail("« fields » : objets { key, value } attendus.");
     const key = typeof entry.key === "string" ? entry.key.trim() : "";
@@ -201,6 +258,9 @@ export function parseTranslatePayload(raw: unknown): ParseResult {
       return fail(`« fields » : champ inconnu (${key || "vide"}).`);
     }
     const field = key as TranslatableField;
+    if (!allowed.includes(field)) {
+      return fail(`« fields » : « ${field} » n'existe pas sur « ${kind} ».`);
+    }
     // Un champ envoyé deux fois : le premier fait foi, aucun refus à la clé —
     // la demande reste exécutable, et la seconde valeur n'apporte rien.
     if (seenFields.has(field)) continue;
@@ -267,6 +327,43 @@ export function allowedTargets(
   return out;
 }
 
+/**
+ * Le plafond de sortie du GUICHET (`ai-api`, `MAX_OUTPUT_TOKENS`). Il écrête
+ * ce qu'on lui demande : réclamer davantage n'a aucun effet, sinon d'obtenir
+ * une réponse tronquée — donc un JSON illisible, donc un appel payé pour rien.
+ * On découpe l'appel en lots de langues plutôt que de dépasser.
+ */
+export const GUICHET_MAX_OUTPUT = 2000;
+
+/** Ce que coûte le prompt lui-même, hors traductions. */
+const PROMPT_OVERHEAD = 80;
+
+/** Ce qu'une langue coûte en sortie, pour les textes demandés. */
+function perLanguageCost(fields: readonly TranslateField[]): number {
+  return fields.reduce((sum, field) => sum + FIELD_SPECS[field.key].cost, 0);
+}
+
+/**
+ * Les langues, découpées en lots qui tiennent sous le plafond du guichet.
+ *
+ * Un paragraphe coûte cher : au-delà de cinq langues, un seul appel dépasserait
+ * et reviendrait coupé au milieu d'un JSON. Mieux vaut deux appels complets
+ * qu'un appel tronqué — c'est le même crédit dépensé, et une réponse
+ * exploitable au bout.
+ */
+export function targetBatches(
+  targets: readonly TranslationTarget[],
+  fields: readonly TranslateField[],
+): TranslationTarget[][] {
+  const cost = perLanguageCost(fields);
+  const perCall = Math.max(1, Math.floor((GUICHET_MAX_OUTPUT - PROMPT_OVERHEAD) / Math.max(cost, 1)));
+  const batches: TranslationTarget[][] = [];
+  for (let i = 0; i < targets.length; i += perCall) {
+    batches.push(targets.slice(i, i + perCall));
+  }
+  return batches;
+}
+
 export interface TranslationPrompt {
   system: string;
   messages: { role: "user"; content: string }[];
@@ -294,6 +391,8 @@ export interface TranslationPrompt {
 export function buildTranslationPrompt(request: TranslateRequest): TranslationPrompt {
   const what = request.kind === "category"
     ? "d'une catégorie de démarches administratives"
+    : request.kind === "portal_section"
+    ? "d'un bloc de la page d'accueil du site de démarches en ligne d'une collectivité"
     : "d'une démarche administrative";
 
   const shape = `{"${request.targets[0]?.code ?? "en"}": {` +
@@ -325,14 +424,16 @@ export function buildTranslationPrompt(request: TranslateRequest): TranslationPr
     ...request.targets.map((target) => `- ${target.code} (${target.label})`),
   ].join("\n");
 
-  const perLanguage = request.fields.reduce((sum, field) => sum + FIELD_SPECS[field.key].cost, 0);
-
   return {
     system,
     messages: [{ role: "user", content }],
     // `ai-api` borne de toute façon à sa propre limite — c'est lui l'autorité
-    // sur le coût, pas cet appelant.
-    maxOutput: Math.min(2000, 80 + request.targets.length * perLanguage),
+    // sur le coût, pas cet appelant. `targetBatches` a déjà fait en sorte que
+    // ce lot de langues tienne dessous.
+    maxOutput: Math.min(
+      GUICHET_MAX_OUTPUT,
+      PROMPT_OVERHEAD + request.targets.length * perLanguageCost(request.fields),
+    ),
   };
 }
 

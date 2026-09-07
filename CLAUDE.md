@@ -436,6 +436,16 @@ service — motif du catalogue de démarches, des quartiers, du plafond IA.
   (une catégorie n'a pas de descriptif) ; les champs traduisibles sont déclarés une fois pour
   toutes dans `TRANSLATABLE_FIELDS` (front) et `FIELD_SPECS` (fonction). CHECK
   `jsonb_typeof = 'object'` des deux côtés.
+- **Troisième porteur (2026-09-07)** : les **textes de la page composée** du portail
+  (`portal_pages.draft/published`), sous la même forme, avec le jeu de champs
+  `PORTAL_SECTION_FIELDS` (`title`, `subtitle`, `placeholder`, `body`). La traduction vit **sur la
+  section** — elle voyage donc avec son bloc au glisser-déposer, à la duplication, à la
+  suppression, et les sous-blocs du pied de page en héritent (ce sont des sections). ⚠️ Le schéma
+  **reste en `version: 1`** : l'ajout est purement additif, et `parsePortalPage` refuse tout autre
+  numéro — écrire un `2` ferait retomber la page entière sur `defaultPortalPage()`, c'est-à-dire
+  perdre la composition d'une collectivité. ⚠️ **Zod strippe les clés inconnues** : `translations`
+  doit être déclaré dans les six schémas de section, sans quoi une traduction saisie survit à la
+  frappe puis disparaît au rechargement de l'éditeur (test d'aller-retour dédié).
 - ⚠️ **CHAQUE CHAMP EST INDÉPENDANT, ET LE REPLI SE FAIT CHAMP PAR CHAMP** : une langue peut
   porter le libellé traduit sans le descriptif — c'est le cas normal, pas une traduction
   inachevée. Un consommateur qui replierait la **langue entière** parce qu'un champ manque
@@ -500,8 +510,11 @@ service — motif du catalogue de démarches, des quartiers, du plafond IA.
   collectivité monolingue — même piège que les colonnes de charte graphique.
 - Code : `src/features/languages/` — `languages.ts` (catalogue + `parseEnabledLanguages`,
   `enabledLanguagesForWrite`, `sortLanguageCodes`), `translations.ts` (`TRANSLATABLE_FIELDS`,
-  `parseTranslations`, `translationsForWrite`, `localizedField`/`localizedName`) — les deux
-  **purs et testés** —,
+  `PORTAL_SECTION_FIELDS`, `parseTranslations`, `translationsForWrite`,
+  `localizedField`/`localizedName`) — les deux **purs et testés**, et les trois règles n'y sont
+  écrites **qu'une fois** : `parseTranslations` et `translationsForWrite` prennent un paramètre
+  `known` (ce que la colonne peut porter) distinct de `fields` (ce que l'écran a le droit
+  d'effacer) — les confondre ferait effacer précisément ce que `fields` protège —,
   `useOrganizationLanguages.ts`, `LanguagesSection.tsx` (testé), `TranslationFields.tsx` (**testé** :
   ce qu'il complète et ce qu'il n'écrase pas), `TranslatedIn.tsx`, `useTranslateLabels.ts`. Miroir
   côté edge function : `readLanguages` dans `public-api/_shared/serializers.ts` (testé des deux
@@ -749,6 +762,21 @@ démarches ». Ajouter une collectivité au portail = une ligne de domaine, aucu
   colonnes de sous-blocs `texte`. **En dernière position, il EST le bas de la page** : pas de
   marge sous lui, « Ajouter une section » passe au-dessus, et `appendIndex` glisse tout bloc
   ajouté « en fin de page » au-dessus de lui (un second pied de page s'ajoute après).
+- **Multilingue (2026-09-07)** : chaque bloc porte ses textes traduits (`translations` sur la
+  section — voir feature « Langues »). L'inspecteur propose **un seul bloc de traduction par
+  section**, replié (`<details>`), en bas du panneau donc **sous les textes français qu'il
+  traduit** ; un bloc par sous-bloc du pied de page. ⚠️ Un bloc par CHAMP produirait un appel au
+  guichet IA par champ, contre la règle « un seul appel pour tous les textes d'une ligne ».
+  ⚠️ **Rien ne s'affiche si la collectivité est monolingue** — le garde est dans l'inspecteur, pas
+  dans `TranslationFields` (les écrans de paramétrage gardent leur phrase explicative ; un canevas
+  n'explique pas un réglage qui vit ailleurs). ⚠️ `TranslationFields` reçoit ici `reviewHint` /
+  `overwriteHint` : ses phrases par défaut parlent d'« enregistrer » et de « valider le
+  formulaire », deux gestes qui **n'existent pas dans l'éditeur** (le brouillon s'autosauvegarde,
+  le dernier mot est **Publier**). Le canevas montre en outre **la place du sélecteur de langue**
+  de l'usager dans son chrome de page — décoratif comme la nav, affiché seulement au-delà d'une
+  langue, et **visible même en mobile** : c'est le seul élément qu'un visiteur non francophone
+  doit pouvoir atteindre. Les langues viennent de `useOrganizationLanguages(racine)`, **jamais**
+  des clés de `translations` (une langue activée mais pas encore traduite doit apparaître).
 - **Grisé, pas caché** : le bloc « Actualités » (palette et inspecteur) et les vues « Contenus »
   / « Thème » — aucune route, `aria-disabled`, « Bientôt disponible ». Le parse accepte quand
   même `actus` : une composition importée plus tard ne sera pas amputée.
@@ -765,15 +793,20 @@ démarches ». Ajouter une collectivité au portail = une ligne de domaine, aucu
   donc **404** pour une démarche non publiée, et son `form_schema` n'est pas même lu.
   ⚠️ clé machine d'un champ = `key` ; l'`id` ne sert qu'aux conditions),
   `GET /v1/portal/page?tenant_id=&slug=`
-  (`published` seulement, références résolues sur ce même catalogue). La charte vient de
+  (`published` seulement, références résolues sur ce même catalogue ; chaque section porte
+  `translations` depuis le contrat **1.14.0** — schéma `PortalSectionTranslations`, **distinct** de
+  `Translations` qui décrit `name`/`short_description`, et servi **par whitelist des champs du
+  kind** : un `body` égaré sur une `recherche` ne sort pas). La charte vient de
   `GET /v1/organizations/{id}/branding` (résolue). ⚠️ `supabase/config.toml` déclare
   `verify_jwt = false` pour `public-api` : un déploiement sans ce fichier remet le défaut `true`
   et coupe **tous** les consommateurs (incident du 2026-09-05).
-- Code : `src/features/portal/` — `portalPage.ts`, `portalReorder.ts`, `catalogue.ts` (purs,
+- Code : `src/features/portal/` — `portalPage.ts` (+ `fieldsForKind`, `sectionText`,
+  `setSectionTranslation`, `hasTranslations`), `portalReorder.ts`, `catalogue.ts` (purs,
   **testés**), `usePortalPage.ts` (`usePortalPage`, `useEnsurePortalPage`, `useSaveDraft`,
   `usePublishPortalPage`, `useDiscardDraft`), `PortalEditorPage.tsx` (chargement, autosave,
   publier / annuler — **testé**), `PortalEditor.tsx` (shell, état du glisser), `editor/`
-  (`PortalCanvas`, `SectionBlock`, `SectionInspector`, `SectionPalette`, `ProcedurePickList`,
+  (`PortalCanvas`, `SectionBlock`, `SectionInspector`, `SectionTranslations`, `SectionPalette`,
+  `ProcedurePickList`,
   `sections/*` — l'implémentation **de référence** du rendu de chaque kind ; Nora est le rendu
   réel). `src/components/ui/segmented-control.tsx` (promu pour l'éditeur ; `TabButton` /
   `ModeButton` restent à y rallier). Domaines : `src/features/organizations/{organizationDomains.ts,

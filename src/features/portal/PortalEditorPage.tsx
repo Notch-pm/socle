@@ -21,6 +21,7 @@ import {
 import { useAdminRootOrganizations } from "@/features/ai-usage/useAdminRootOrganizations";
 import { useProceduresForOrg } from "@/features/procedures/useProcedures";
 import { useEnabledProcedureBindings } from "@/features/organizations/useOrganizationProcedures";
+import { useOrganizationLanguages } from "@/features/languages/useOrganizationLanguages";
 import { PortalEditor } from "@/features/portal/PortalEditor";
 import { buildCatalogue, isoDay, portalTreeOrganizations } from "@/features/portal/catalogue";
 import { parsePortalPage, type PortalPage } from "@/features/portal/portalPage";
@@ -197,6 +198,9 @@ function LoadedEditor({
     [allOrganizations, organization.id],
   );
   const { data: bindings } = useEnabledProcedureBindings(tree.map((org) => org.id));
+  // Les langues de la collectivité. L'éditeur est toujours sur une racine (voir
+  // la garde ci-dessus) : la colonne suffit, pas besoin de la RPC de résolution.
+  const { data: enabledLanguages } = useOrganizationLanguages(organization.id);
   const saveDraft = useSaveDraft();
   const publish = usePublishPortalPage();
   const discard = useDiscardDraft();
@@ -303,6 +307,8 @@ function LoadedEditor({
     <>
       <PortalEditor
         organizationName={organization.name}
+        organizationId={organization.id}
+        languages={enabledLanguages ?? []}
         page={page}
         onChange={handleChange}
         catalogue={catalogue}

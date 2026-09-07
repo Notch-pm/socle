@@ -156,16 +156,22 @@ suppose la précédente.
 
 ### Envisagé, dans l'ordre
 
-1. **Multilingue.** Fait côté référentiel (2026-09-06) : les langues activées par la collectivité
-   et les **libellés** traduits des démarches et des catégories, servis au portail
-   (`Tenant.languages`, `translations`). Reste à faire : la langue de l'interface du portail
-   (français par défaut, sélecteur bâti sur `languages`), les **textes** des sections de la page
-   composée (le schéma `PortalPage` gagnera une couche par langue, version 2 du schéma — parse
-   tolérant oblige, la version 1 restera lisible), et les autres champs d'une démarche que
-   l'usager lit (descriptif court, descriptif usager, libellés du formulaire) : le schéma
-   `translations` les accueille en clés voisines de `name`, sans reprise. Enfin, les langues de
-   France sans code ISO (gallo, poitevin-saintongeais, francique lorrain) attendent une convention
-   de nommage — voir l'en-tête de `src/features/languages/languages.ts`.
+1. **Multilingue.** En cours. Fait : les langues activées par la collectivité et les **libellés**
+   traduits des démarches et des catégories (2026-09-06), leur **descriptif court** (2026-09-07,
+   contrat 1.13.0), et **le choix de la langue par l'usager** au portail (2026-09-07) : sélecteur
+   bâti sur `Tenant.languages`, langue portée par l'URL (`/en/…`, le français sans préfixe —
+   c'est le pivot, pas une traduction) et mémorisée, résolue **côté `portal-api`** qui rend un
+   modèle déjà localisé. Reste à faire : les **textes des sections de la page composée** — ils
+   se traduisent dans l'éditeur, la traduction vivant **sur la section** (`translations`, même
+   forme que `procedures.translations`) et non dans une couche par langue au niveau de la page,
+   pour qu'elle voyage avec son bloc au glisser-déposer ; ⚠️ le schéma **reste en version 1**,
+   l'ajout étant purement additif (écrire un `version: 2` que le parse actuel refuse ferait
+   retomber la page entière sur `defaultPortalPage()`) —, les **~100 chaînes propres au portail**
+   (dictionnaire statique à la manière d'Ariane, jeu de langues couvertes déclaré et repli
+   français **par clé**), et le **descriptif usager** (`user_description`), qui rejoindra
+   `translations` en clé voisine sans reprise. Enfin, les langues de France sans code ISO (gallo,
+   poitevin-saintongeais, francique lorrain) attendent une convention de nommage — voir l'en-tête
+   de `src/features/languages/languages.ts`.
 2. **Les autres templates.** L'onglet « Thème » (grisé) : gabarits de page et variantes de mise en
    page au-delà de la composition libre ; d'autres pages que l'accueil (`portal_pages.slug` est
    prêt : « Contact », « Mentions légales », « Accessibilité » — obligatoires pour un site

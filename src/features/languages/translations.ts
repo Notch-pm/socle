@@ -39,14 +39,44 @@ export const TRANSLATABLE_FIELDS = ["name", "short_description"] as const;
 
 export type TranslatableField = (typeof TRANSLATABLE_FIELDS)[number];
 
-/** Ce qui est traduit pour une langue. Tout y est facultatif — voir l'en-tête. */
-export type TranslatedEntry = Partial<Record<TranslatableField, string>>;
+/**
+ * Les textes libres d'une section de page composée — l'autre jeu de champs
+ * traduisibles, possédé par `src/features/portal/portalPage.ts`.
+ *
+ * ⚠️ IL VIT ICI, avec l'autre, parce que les trois règles de la maison (jamais
+ * de clé `fr`, vide = absence, repli champ par champ) sont écrites **une seule
+ * fois** dans ce module. Un second jeu de champs devait pouvoir s'en servir
+ * sans les recopier — c'est ce qui les fait tenir ensemble.
+ */
+export const PORTAL_SECTION_FIELDS = ["title", "subtitle", "placeholder", "body"] as const;
+
+export type PortalSectionField = (typeof PORTAL_SECTION_FIELDS)[number];
+
+/**
+ * N'importe quel champ traduisible, tous jeux confondus. C'est ce que
+ * manipulent les pièces PARTAGÉES — le composant de saisie, l'appel au guichet
+ * de traduction — qui n'ont pas à savoir de quelle table vient la ligne.
+ */
+export type AnyTranslatableField = TranslatableField | PortalSectionField;
+
+/**
+ * Ce qui est traduit pour une langue. Tout y est facultatif — voir l'en-tête.
+ * Le paramètre dit QUELS champs cette colonne peut porter : `name` et
+ * `short_description` pour une démarche, les textes d'une section pour une page.
+ */
+export type TranslatedEntry<F extends string = TranslatableField> = Partial<Record<F, string>>;
 
 /** Traductions d'une ligne, indexées par code de langue. */
-export type TranslationMap = Record<string, TranslatedEntry>;
+export type TranslationMap<F extends string = TranslatableField> = Record<
+  string,
+  TranslatedEntry<F>
+>;
 
 /** Saisie de l'écran : par langue, une chaîne par champ (vide = pas de traduction). */
-export type TranslationInput = Record<string, TranslatedEntry>;
+export type TranslationInput<F extends string = TranslatableField> = Record<
+  string,
+  TranslatedEntry<F>
+>;
 
 /**
  * Colonne `translations` (contenu inconnu) → traductions exploitables.
@@ -61,29 +91,44 @@ export type TranslationInput = Record<string, TranslatedEntry>;
  * ⚠️ Une langue dont **aucun** champ n'est lisible ne laisse pas d'entrée vide :
  * `{"en": {}}` se lirait comme « traduit en anglais » partout où l'on compte les
  * langues traduites (`TranslatedIn`), alors que rien ne l'est.
+ *
+ * `known` dit CE QUE LA COLONNE PEUT PORTER — les champs d'une démarche par
+ * défaut, ceux d'une section de page quand on le précise. Tout le reste est
+ * écarté : un `body` égaré dans les traductions d'une catégorie n'y a pas plus
+ * sa place qu'une colonne inconnue.
  */
-export function parseTranslations(value: unknown): TranslationMap {
+export function parseTranslations(value: unknown): TranslationMap;
+export function parseTranslations<F extends string>(
+  value: unknown,
+  known: readonly F[],
+): TranslationMap<F>;
+export function parseTranslations(
+  value: unknown,
+  known: readonly string[] = TRANSLATABLE_FIELDS,
+): TranslationMap<string> {
   if (!value || typeof value !== "object" || Array.isArray(value)) return {};
-  const out: TranslationMap = {};
+  const out: TranslationMap<string> = {};
   for (const [rawCode, rawEntry] of Object.entries(value as Record<string, unknown>)) {
     const code = rawCode.trim().toLowerCase();
     if (!code || code === PIVOT_LANGUAGE) continue;
-    const entry = readEntry(rawEntry);
+    const entry = readEntry(rawEntry, known);
     if (entry) out[code] = entry;
   }
   return out;
 }
 
-function readEntry(entry: unknown): TranslatedEntry | null {
-  // Forme courte : la chaîne est le libellé, le champ historique.
+function readEntry(entry: unknown, known: readonly string[]): TranslatedEntry<string> | null {
+  // Forme courte : la chaîne est le libellé, le champ historique. ⚠️ Elle n'a
+  // de sens QUE là où `name` existe : une section de page n'en porte pas, et
+  // lire sa chaîne comme un libellé y fabriquerait un champ que rien n'affiche.
   if (typeof entry === "string") {
     const trimmed = entry.trim();
-    return trimmed === "" ? null : { name: trimmed };
+    return trimmed === "" || !known.includes("name") ? null : { name: trimmed };
   }
   if (!entry || typeof entry !== "object" || Array.isArray(entry)) return null;
   const source = entry as Record<string, unknown>;
-  const out: TranslatedEntry = {};
-  for (const field of TRANSLATABLE_FIELDS) {
+  const out: TranslatedEntry<string> = {};
+  for (const field of known) {
     const value = source[field];
     if (typeof value !== "string") continue;
     const trimmed = value.trim();
@@ -101,9 +146,17 @@ function readEntry(entry: unknown): TranslatedEntry | null {
  * l'écriture ne touche qu'à elles (`translationsForWrite`) — le reste voyage
  * sans être vu.
  */
-export function translationInput(translations: unknown): TranslationInput {
-  const input: TranslationInput = {};
-  for (const [code, entry] of Object.entries(parseTranslations(translations))) {
+export function translationInput(translations: unknown): TranslationInput;
+export function translationInput<F extends string>(
+  translations: unknown,
+  known: readonly F[],
+): TranslationInput<F>;
+export function translationInput(
+  translations: unknown,
+  known: readonly string[] = TRANSLATABLE_FIELDS,
+): TranslationInput<string> {
+  const input: TranslationInput<string> = {};
+  for (const [code, entry] of Object.entries(parseTranslations(translations, known))) {
     input[code] = { ...entry };
   }
   return input;
@@ -119,17 +172,36 @@ export function translationInput(translations: unknown): TranslationInput {
  * n'affiche pas n'est jamais effacé par cet écran. Écrire la seule saisie
  * visible effacerait ce travail sans que personne ne l'ait demandé — et le
  * geste de désactivation ne serait plus réversible.
+ *
+ * ⚠️ `known` N'EST PAS `fields`, et les confondre casse la garde ci-dessus :
+ * `known` est ce que la colonne peut porter (elle est **relue en entier**),
+ * `fields` ce que cet écran a le droit d'effacer. Une lecture amputée effacerait
+ * précisément les champs que le quatrième paramètre existe pour protéger.
  */
 export function translationsForWrite(
   existing: unknown,
   input: TranslationInput,
   enabled: readonly string[],
   fields: readonly TranslatableField[],
-): TranslationMap {
-  const out = parseTranslations(existing);
+): TranslationMap;
+export function translationsForWrite<F extends string>(
+  existing: unknown,
+  input: TranslationInput<F>,
+  enabled: readonly string[],
+  fields: readonly F[],
+  known: readonly F[],
+): TranslationMap<F>;
+export function translationsForWrite(
+  existing: unknown,
+  input: TranslationInput<string>,
+  enabled: readonly string[],
+  fields: readonly string[],
+  known: readonly string[] = TRANSLATABLE_FIELDS,
+): TranslationMap<string> {
+  const out = parseTranslations(existing, known);
   for (const code of enabled) {
     if (code === PIVOT_LANGUAGE) continue;
-    const entry: TranslatedEntry = { ...out[code] };
+    const entry: TranslatedEntry<string> = { ...out[code] };
     for (const field of fields) {
       const value = (input[code]?.[field] ?? "").trim();
       if (value === "") delete entry[field];
@@ -142,8 +214,11 @@ export function translationsForWrite(
 }
 
 /** Codes portant au moins une traduction, dans l'ordre du catalogue. */
-export function translatedLanguageCodes(translations: unknown): string[] {
-  return sortLanguageCodes(Object.keys(parseTranslations(translations)));
+export function translatedLanguageCodes(
+  translations: unknown,
+  known: readonly string[] = TRANSLATABLE_FIELDS,
+): string[] {
+  return sortLanguageCodes(Object.keys(parseTranslations(translations, known)));
 }
 
 /**
@@ -155,11 +230,13 @@ export function localizedField(
   source: string | null,
   translations: unknown,
   code: string,
-  field: TranslatableField,
+  field: TranslatableField | PortalSectionField,
 ): string {
   const fallback = source ?? "";
   if (code === PIVOT_LANGUAGE) return fallback;
-  const translated = parseTranslations(translations)[code]?.[field];
+  // On ne lit QUE le champ demandé : inutile de connaître le jeu auquel il
+  // appartient pour rendre un texte.
+  const translated = parseTranslations(translations, [field])[code]?.[field];
   return translated && translated.trim() !== "" ? translated : fallback;
 }
 

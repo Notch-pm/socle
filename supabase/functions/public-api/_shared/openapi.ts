@@ -30,7 +30,7 @@ export function buildOpenApiDocument(serverUrl: string): Record<string, unknown>
     openapi: "3.1.0",
     info: {
       title: "API Socle — Référentiel de la gamme",
-      version: "1.13.0",
+      version: "1.14.0",
       description: [
         "API **en lecture seule** exposant le référentiel central de la gamme : les",
         "**organisations** (et sous-organisations) avec l'intégralité de leur configuration,",
@@ -975,7 +975,7 @@ export function buildOpenApiDocument(serverUrl: string): Record<string, unknown>
         PortalRechercheSection: {
           type: "object",
           description: "Champ de recherche de démarche, avec raccourcis facultatifs.",
-          required: ["id", "kind", "title", "subtitle", "placeholder", "show_shortcuts", "shortcuts"],
+          required: ["id", "kind", "title", "subtitle", "placeholder", "show_shortcuts", "shortcuts", "translations"],
           properties: {
             id: { type: "string" },
             kind: { type: "string", enum: ["recherche"] },
@@ -988,12 +988,13 @@ export function buildOpenApiDocument(serverUrl: string): Record<string, unknown>
               items: { type: "string", format: "uuid" },
               description: "Démarches en raccourci — identifiants de démarches publiées, 4 au plus.",
             },
+            translations: { $ref: "#/components/schemas/PortalSectionTranslations" },
           },
         },
         PortalDemarchesSection: {
           type: "object",
           description: "Grille de démarches ; le catalogue vient de `GET /v1/portal/procedures`.",
-          required: ["id", "kind", "title", "columns", "pinned_first", "pinned"],
+          required: ["id", "kind", "title", "columns", "pinned_first", "pinned", "translations"],
           properties: {
             id: { type: "string" },
             kind: { type: "string", enum: ["demarches"] },
@@ -1008,12 +1009,13 @@ export function buildOpenApiDocument(serverUrl: string): Record<string, unknown>
               items: { type: "string", format: "uuid" },
               description: "Démarches à la une — identifiants de démarches publiées.",
             },
+            translations: { $ref: "#/components/schemas/PortalSectionTranslations" },
           },
         },
         PortalActusSection: {
           type: "object",
           description: "Bloc actualités. Servi pour la complétude du contrat ; sans contenu à ce jour.",
-          required: ["id", "kind", "title", "layout", "count", "show_dates"],
+          required: ["id", "kind", "title", "layout", "count", "show_dates", "translations"],
           properties: {
             id: { type: "string" },
             kind: { type: "string", enum: ["actus"] },
@@ -1021,29 +1023,32 @@ export function buildOpenApiDocument(serverUrl: string): Record<string, unknown>
             layout: { type: "string", enum: ["grid", "list"] },
             count: { type: "integer", enum: [2, 3, 4] },
             show_dates: { type: "boolean" },
+            translations: { $ref: "#/components/schemas/PortalSectionTranslations" },
           },
         },
         PortalCompteSection: {
           type: "object",
           description: "Bandeau « espace usager ».",
-          required: ["id", "kind", "title", "subtitle"],
+          required: ["id", "kind", "title", "subtitle", "translations"],
           properties: {
             id: { type: "string" },
             kind: { type: "string", enum: ["compte"] },
             title: { type: "string" },
             subtitle: { type: "string" },
+            translations: { $ref: "#/components/schemas/PortalSectionTranslations" },
           },
         },
         PortalTexteSection: {
           type: "object",
           description: "Bandeau texte libre.",
-          required: ["id", "kind", "title", "body", "align"],
+          required: ["id", "kind", "title", "body", "align", "translations"],
           properties: {
             id: { type: "string" },
             kind: { type: "string", enum: ["texte"] },
             title: { type: "string" },
             body: { type: "string" },
             align: { type: "string", enum: ["left", "center"] },
+            translations: { $ref: "#/components/schemas/PortalSectionTranslations" },
           },
         },
         PortalFooterSection: {
@@ -1052,7 +1057,7 @@ export function buildOpenApiDocument(serverUrl: string): Record<string, unknown>
             "Pied de page : bandeau **pleine largeur** à la couleur de fond choisie, dont les " +
             "sous-blocs (des bandeaux texte — coordonnées, horaires, mentions) se répartissent sur " +
             "une à trois colonnes, dans l'ordre. Le texte se lit en clair sur un fond sombre.",
-          required: ["id", "kind", "title", "background", "columns", "children"],
+          required: ["id", "kind", "title", "background", "columns", "children", "translations"],
           properties: {
             id: { type: "string" },
             kind: { type: "string", enum: ["footer"] },
@@ -1068,6 +1073,7 @@ export function buildOpenApiDocument(serverUrl: string): Record<string, unknown>
               type: "array",
               items: { $ref: "#/components/schemas/PortalTexteSection" },
             },
+            translations: { $ref: "#/components/schemas/PortalSectionTranslations" },
           },
         },
         Organization: {
@@ -1331,6 +1337,33 @@ export function buildOpenApiDocument(serverUrl: string): Record<string, unknown>
           example: {
             en: { name: "Birth certificate", short_description: "To get a copy of your record." },
             br: { name: "Testeni ganedigezh" },
+          },
+        },
+        PortalSectionTranslations: {
+          type: "object",
+          description:
+            "Textes de la section traduits, indexés par **code de langue** (BCP 47). Les clés " +
+            "d'une langue sont celles des textes de la section : `title`, et selon le `kind` " +
+            "`subtitle`, `placeholder`, `body` — attendre `body` sur une section `recherche` " +
+            "n'a pas de sens. Mêmes trois règles que `Translations` : il n'y a **jamais** de " +
+            "clé `fr` (le français est le champ de même nom) ; un texte **absent** n'est pas " +
+            "un texte vide, c'est un **repli sur le champ français** ; et ce repli se fait " +
+            "**champ par champ** — une langue peut porter le titre traduit sans le paragraphe, " +
+            "c'est le cas normal. Toujours présent, `{}` quand rien n'est traduit. Les langues " +
+            "qu'une collectivité a activées sont servies par `GET /v1/portal/tenant` " +
+            "(`languages`).",
+          additionalProperties: {
+            type: "object",
+            properties: {
+              title: { type: "string" },
+              subtitle: { type: "string" },
+              placeholder: { type: "string" },
+              body: { type: "string" },
+            },
+          },
+          example: {
+            en: { title: "Our services", body: "Open Monday to Friday." },
+            br: { title: "Hor c'hefridi" },
           },
         },
         RequesterConfig: {

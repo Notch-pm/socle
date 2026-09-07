@@ -6,6 +6,8 @@ import {
   MAX_TARGETS,
   parseTranslatePayload,
   parseTranslationAnswer,
+  targetBatches,
+  GUICHET_MAX_OUTPUT,
   sanitizeLine,
   sanitizeText,
   type TranslateField,
@@ -355,5 +357,114 @@ describe("sanitizeLine / sanitizeText", () => {
   it("rend une chaîne vide pour ce qui n'est pas une chaîne", () => {
     expect(sanitizeLine(42, 50)).toBe("");
     expect(sanitizeText(undefined, 50)).toBe("");
+  });
+});
+
+/**
+ * Les textes d'un bloc de page d'accueil — le troisième `kind`.
+ */
+describe("portal_section", () => {
+  const page = (fields: unknown[], overrides: Record<string, unknown> = {}) => ({
+    organization_id: ORG,
+    kind: "portal_section",
+    fields,
+    targets: [{ code: "en", label: "Anglais" }],
+    ...overrides,
+  });
+
+  it("accepte les quatre textes d'une section", () => {
+    const parsed = parseTranslatePayload(
+      page([
+        { key: "title", value: "Nos démarches" },
+        { key: "subtitle", value: "Un seul champ pour toutes vos demandes" },
+        { key: "placeholder", value: "Rechercher une démarche" },
+        { key: "body", value: "Un paragraphe court." },
+      ]),
+    );
+    expect(parsed.ok).toBe(true);
+    if (!parsed.ok) return;
+    expect(parsed.value.fields.map((f) => f.key)).toEqual([
+      "title",
+      "subtitle",
+      "placeholder",
+      "body",
+    ]);
+  });
+
+  it("refuse un champ que le kind ne porte pas", () => {
+    // Une section n'a pas de `name`, une catégorie pas de `body` : demander un
+    // champ que la ligne ne porte pas, c'est faire payer une traduction que
+    // personne n'affichera.
+    expect(parseTranslatePayload(page([{ key: "name", value: "x" }])).ok).toBe(false);
+    expect(parseTranslatePayload(payload({ fields: [{ key: "body", value: "x" }] })).ok).toBe(false);
+    expect(
+      parseTranslatePayload(
+        payload({ kind: "category", fields: [{ key: "short_description", value: "x" }] }),
+      ).ok,
+    ).toBe(false);
+  });
+
+  it("dit au modèle de quoi il s'agit, et interdit de traduire des coordonnées", () => {
+    const parsed = parseTranslatePayload(page([{ key: "body", value: "1 place de la Mairie" }]));
+    expect(parsed.ok).toBe(true);
+    if (!parsed.ok) return;
+    const prompt = buildTranslationPrompt(parsed.value);
+    expect(prompt.system).toContain("page d'accueil");
+    // Le preset « Contact et horaires » fabrique un `body` fait d'une adresse,
+    // d'un téléphone et d'un courriel. Un modèle non bridé traduit volontiers
+    // « place de la Mairie ».
+    expect(prompt.system).toContain("NE TRADUIS PAS les adresses postales");
+  });
+
+  it("garde les retours à la ligne d'un paragraphe", () => {
+    const parsed = parseTranslatePayload(
+      page([{ key: "body", value: "Première ligne.\n\nSeconde ligne." }]),
+    );
+    expect(parsed.ok).toBe(true);
+    if (!parsed.ok) return;
+    expect(parsed.value.fields[0].value).toBe("Première ligne.\n\nSeconde ligne.");
+  });
+});
+
+/**
+ * ⚠️ LE PLAFOND DE SORTIE APPARTIENT AU GUICHET.
+ *
+ * `ai-api` écrête à `MAX_OUTPUT_TOKENS` : lui en demander plus n'a aucun effet,
+ * sinon de recevoir un JSON coupé en deux — donc illisible, donc un appel payé
+ * pour rien. On découpe les langues plutôt que de dépasser.
+ */
+describe("targetBatches", () => {
+  const targets = (n: number) =>
+    Array.from({ length: n }, (_, i) => ({ code: `l${i}`.slice(0, 3), label: "L" }));
+
+  it("tient en un seul appel quand les textes sont courts", () => {
+    const batches = targetBatches(targets(8), [{ key: "name", value: LABEL }]);
+    expect(batches).toHaveLength(1);
+    expect(batches[0]).toHaveLength(8);
+  });
+
+  it("découpe quand un paragraphe multiplie le coût par langue", () => {
+    const batches = targetBatches(targets(12), [
+      { key: "title", value: "T" },
+      { key: "body", value: "Un paragraphe." },
+    ]);
+    expect(batches.length).toBeGreaterThan(1);
+    // Chaque lot doit tenir sous le plafond du guichet.
+    for (const batch of batches) {
+      const prompt = buildTranslationPrompt({
+        organizationId: ORG,
+        kind: "portal_section",
+        fields: [{ key: "title", value: "T" }, { key: "body", value: "Un paragraphe." }],
+        targets: batch,
+      });
+      expect(prompt.maxOutput).toBeLessThanOrEqual(GUICHET_MAX_OUTPUT);
+    }
+    // Et aucune langue ne se perd en chemin.
+    expect(batches.flat()).toHaveLength(12);
+  });
+
+  it("ne rend jamais un lot vide, même pour un texte hors normes", () => {
+    expect(targetBatches(targets(1), [{ key: "body", value: "x" }])).toHaveLength(1);
+    expect(targetBatches([], [{ key: "name", value: "x" }])).toEqual([]);
   });
 });

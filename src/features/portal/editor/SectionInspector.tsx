@@ -26,6 +26,7 @@ import {
 } from "@/features/portal/portalPage";
 import type { PortalCatalogueEntry } from "@/features/portal/catalogue";
 import { ProcedurePickList } from "./ProcedurePickList";
+import { SectionTranslations } from "./SectionTranslations";
 
 export interface SectionInspectorProps {
   section: PortalSection;
@@ -35,6 +36,13 @@ export interface SectionInspectorProps {
   catalogue: PortalCatalogueEntry[];
   /** Pour pré-remplir un sous-bloc « Contact et horaires » dans un pied de page. */
   contact: ContactSource;
+  /**
+   * Les langues activées par l'organisation principale, français compris. Une
+   * seule langue : aucun bloc de traduction n'apparaît.
+   */
+  languages: readonly string[];
+  /** L'organisation dont le crédit paie la traduction automatique. */
+  organizationId: string;
   onChange: (section: PortalSection) => void;
   /** Retire la section de la page. Sans confirmation : c'est un brouillon, « Annuler » le rend. */
   onRemove: () => void;
@@ -52,7 +60,18 @@ const TEXT_ALIGN_OPTIONS: { value: TextAlign; label: string }[] = [
  * `PortalSection` complet à chaque frappe — le parent l'enregistre via
  * `replaceSection`.
  */
-export function SectionInspector({ section, index, total, catalogue, contact, onChange, onRemove, onClose }: SectionInspectorProps) {
+export function SectionInspector({
+  section,
+  index,
+  total,
+  catalogue,
+  contact,
+  languages,
+  organizationId,
+  onChange,
+  onRemove,
+  onClose,
+}: SectionInspectorProps) {
   const isActus = section.kind === "actus";
 
   return (
@@ -105,8 +124,23 @@ export function SectionInspector({ section, index, total, catalogue, contact, on
           ) : null}
           {section.kind === "texte" ? <TexteFields section={section} onChange={onChange} /> : null}
           {section.kind === "footer" ? (
-            <FooterFields section={section} contact={contact} onChange={onChange} />
+            <FooterFields
+              section={section}
+              contact={contact}
+              languages={languages}
+              organizationId={organizationId}
+              onChange={onChange}
+            />
           ) : null}
+
+          {/* En bas : sous tous les textes français que ce bloc traduit. */}
+          <SectionTranslations
+            section={section}
+            languages={languages}
+            organizationId={organizationId}
+            idPrefix={`insp-tr-${section.id}`}
+            onChange={onChange}
+          />
         </div>
 
         {isActus ? (
@@ -371,10 +405,14 @@ function ColorField({
 function FooterFields({
   section,
   contact,
+  languages,
+  organizationId,
   onChange,
 }: {
   section: FooterSection;
   contact: ContactSource;
+  languages: readonly string[];
+  organizationId: string;
   onChange: (section: PortalSection) => void;
 }) {
   const children = section.children;
@@ -454,6 +492,17 @@ function FooterFields({
               onChange={(e) => replaceChild({ ...child, body: e.target.value })}
               rows={3}
               className="w-full rounded-lg border border-input bg-background px-3 py-2 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+            />
+            {/* Chaque sous-bloc a ses propres textes, donc ses propres
+                traductions — et son propre appel : traduire une colonne de pied
+                de page en même temps que le titre du bandeau ferait un prompt
+                qui parle de deux choses. */}
+            <SectionTranslations
+              section={child}
+              languages={languages}
+              organizationId={organizationId}
+              idPrefix={`insp-tr-${child.id}`}
+              onChange={(next) => replaceChild(next as TexteSection)}
             />
           </div>
         ))}

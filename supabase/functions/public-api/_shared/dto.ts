@@ -365,6 +365,21 @@ export interface PortalProcedureDetailDto extends PortalProcedureDto {
  * que des démarches publiées. Un consommateur doit néanmoins **ignorer** un
  * kind qu'il ne connaît pas : le serveur peut en apprendre avant lui.
  */
+/**
+ * Textes d'une section traduits, indexés par code de langue.
+ *
+ * Les clés d'une langue sont celles des textes de la section — `title`, et
+ * selon le `kind` `subtitle`, `placeholder`, `body`. ⚠️ Trois règles, les
+ * mêmes que pour `Translations` : jamais de clé `fr` (le français est le champ
+ * de même nom) ; un texte absent est un **repli sur le champ français**, pas un
+ * texte vide ; et le repli se fait **champ par champ** — une langue peut porter
+ * le titre traduit sans le paragraphe, c'est le cas normal.
+ */
+export type PortalSectionTranslationsDto = Record<
+  string,
+  Partial<Record<"title" | "subtitle" | "placeholder" | "body", string>>
+>;
+
 export interface PortalRechercheSectionDto {
   id: string;
   kind: "recherche";
@@ -374,6 +389,7 @@ export interface PortalRechercheSectionDto {
   show_shortcuts: boolean;
   /** Démarches en raccourci (identifiants de démarches publiées). */
   shortcuts: string[];
+  translations: PortalSectionTranslationsDto;
 }
 
 export interface PortalDemarchesSectionDto {
@@ -384,6 +400,7 @@ export interface PortalDemarchesSectionDto {
   pinned_first: boolean;
   /** Démarches à la une (identifiants de démarches publiées). */
   pinned: string[];
+  translations: PortalSectionTranslationsDto;
 }
 
 export interface PortalActusSectionDto {
@@ -393,6 +410,7 @@ export interface PortalActusSectionDto {
   layout: "grid" | "list";
   count: 2 | 3 | 4;
   show_dates: boolean;
+  translations: PortalSectionTranslationsDto;
 }
 
 export interface PortalCompteSectionDto {
@@ -400,6 +418,7 @@ export interface PortalCompteSectionDto {
   kind: "compte";
   title: string;
   subtitle: string;
+  translations: PortalSectionTranslationsDto;
 }
 
 export interface PortalTexteSectionDto {
@@ -408,6 +427,7 @@ export interface PortalTexteSectionDto {
   title: string;
   body: string;
   align: "left" | "center";
+  translations: PortalSectionTranslationsDto;
 }
 
 export type PortalSectionDto =
@@ -438,4 +458,5 @@ export interface PortalFooterSectionDto {
   background: string;
   columns: 1 | 2 | 3;
   children: PortalTexteSectionDto[];
+  translations: PortalSectionTranslationsDto;
 }

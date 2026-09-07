@@ -42,6 +42,18 @@ import { SectionPalette } from "@/features/portal/editor/SectionPalette";
 
 export interface PortalEditorProps {
   organizationName: string;
+  /** Id de l'organisation principale — la traduction automatique s'y impute. */
+  organizationId: string;
+  /**
+   * Les langues activées par la collectivité, français compris.
+   *
+   * ⚠️ CE N'EST PAS UNE DONNÉE DE LA PAGE : comme l'appareil prévisualisé, c'est
+   * un contexte d'édition. Elles viennent du paramétrage de l'organisation, pas
+   * du brouillon — et surtout pas des clés de `translations` : une langue
+   * activée mais pas encore traduite doit apparaître, c'est même le cas de
+   * départ.
+   */
+  languages: readonly string[];
   /** Le brouillon courant — possédé par le parent, pas par l'éditeur. */
   page: PortalPage;
   /** Toute modification : ajout, déplacement, édition, retrait d'une section. */
@@ -88,6 +100,8 @@ const collisionDetection: CollisionDetection = (args) => {
  */
 export function PortalEditor({
   organizationName,
+  organizationId,
+  languages,
   page,
   onChange,
   catalogue,
@@ -259,6 +273,7 @@ export function PortalEditor({
         >
           <PortalCanvas
             organizationName={organizationName}
+            languages={languages}
             sections={sections}
             device={device}
             selectedId={selectedId}
@@ -289,6 +304,8 @@ export function PortalEditor({
               total={sections.length}
               catalogue={catalogue}
               contact={contact}
+              languages={languages}
+              organizationId={organizationId}
               onChange={(next) => setSections(replaceSection(sections, next))}
               onRemove={() => handleRemove(selected.id)}
               onClose={() => setSelectedId(null)}

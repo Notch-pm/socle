@@ -152,8 +152,28 @@ describe("buildOpenApiDocument", () => {
 describe("contrat — documents et courriers", () => {
   const doc = buildOpenApiDocument("https://example.supabase.co/functions/v1/public-api") as any;
 
-  it("annonce la version 1.13.0 du contrat", () => {
-    expect(doc.info.version).toBe("1.13.0");
+  it("annonce la version 1.14.0 du contrat", () => {
+    expect(doc.info.version).toBe("1.14.0");
+  });
+
+  it("décrit les textes traduits d'une section, dans un schéma à PART", () => {
+    // ⚠️ Pas un élargissement de `Translations` : celui-là est servi sur
+    // `Category` et `Procedure`, où `title`/`body` n'existent pas. Y ajouter ces
+    // clés dirait au consommateur qu'elles peuvent y apparaître — c'est faux.
+    const section = doc.components.schemas.PortalSectionTranslations;
+    expect(Object.keys(section.additionalProperties.properties))
+      .toEqual(["title", "subtitle", "placeholder", "body"]);
+    expect(section.description).toContain("champ par champ");
+    expect(Object.keys(doc.components.schemas.Translations.additionalProperties.properties))
+      .toEqual(["name", "short_description"]);
+
+    for (const kind of ["Recherche", "Demarches", "Actus", "Compte", "Texte", "Footer"]) {
+      const schema = doc.components.schemas[`Portal${kind}Section`];
+      expect(schema.properties.translations, kind).toEqual({
+        $ref: "#/components/schemas/PortalSectionTranslations",
+      });
+      expect(schema.required, kind).toContain("translations");
+    }
   });
 
   it("décrit les DEUX textes traduisibles, et le repli champ par champ", () => {

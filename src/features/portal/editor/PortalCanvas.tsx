@@ -1,8 +1,9 @@
 import * as React from "react";
 import { useDroppable } from "@dnd-kit/core";
 import { SortableContext, type SortingStrategy } from "@dnd-kit/sortable";
-import { Menu, Plus } from "lucide-react";
+import { ChevronDown, Globe, Menu, Plus } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { languageLabel } from "@/features/languages/languages";
 import type { PortalSection } from "@/features/portal/portalPage";
 import type { PortalCatalogueEntry } from "@/features/portal/catalogue";
 import { DEVICE_PAGE_WIDTH, type Device } from "./device";
@@ -20,6 +21,12 @@ const noShift: SortingStrategy = () => null;
 
 export interface PortalCanvasProps {
   organizationName: string;
+  /**
+   * Les langues activées par la collectivité, français compris. Elles ne
+   * servent ici qu'à MONTRER où le sélecteur de langue se placera pour
+   * l'usager — le canevas est une maquette, pas le portail.
+   */
+  languages: readonly string[];
   sections: PortalSection[];
   device: Device;
   selectedId: string | null;
@@ -61,6 +68,7 @@ function DropShadow({ label }: { label: string }) {
  */
 export function PortalCanvas({
   organizationName,
+  languages,
   sections,
   device,
   selectedId,
@@ -187,6 +195,23 @@ export function PortalCanvas({
                 <span className="whitespace-nowrap text-[12.5px] text-muted-foreground">Actualités</span>
                 <span className="whitespace-nowrap text-[12.5px] text-muted-foreground">Contact</span>
               </nav>
+              {/* ⚠️ DÉCORATIF, comme la nav et « Mon compte » : c'est la place
+                  du sélecteur que verra l'usager, pas un contrôle. Affiché
+                  seulement si la collectivité a plus d'une langue — sinon on
+                  montrerait un élément que ses usagers ne verront jamais — et
+                  visible même en mobile, contrairement à la nav : c'est le seul
+                  élément qu'un visiteur non francophone doit pouvoir atteindre
+                  sur un téléphone. */}
+              {languages.length > 1 ? (
+                <span
+                  className="flex items-center gap-1 whitespace-nowrap rounded-md border border-border px-2 py-1 text-[12.5px] text-muted-foreground"
+                  title={languages.map(languageLabel).join(", ")}
+                >
+                  <Globe className="size-3.5" />
+                  Français
+                  <ChevronDown className="size-3" />
+                </span>
+              ) : null}
               <span className="whitespace-nowrap rounded-full border border-primary px-2.5 py-1 text-[12.5px] font-bold text-primary">
                 Mon compte
               </span>

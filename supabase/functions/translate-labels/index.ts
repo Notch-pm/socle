@@ -5,9 +5,11 @@
  * L'agent tape « Demande d'acte de naissance » et son descriptif court, clique
  * sur « Traduire automatiquement », et les champs des langues activées par sa
  * collectivité se remplissent. Cette fonction est ce qu'il y a entre les deux.
- * Elle traduit TOUS les textes d'une ligne en un seul appel — un seul débit,
- * un seul coup de cadence, et un descriptif traduit en sachant de quelle
- * démarche il parle (voir `_shared/translate.ts`).
+ * Elle traduit TOUS les textes d'une ligne ensemble — un descriptif traduit en
+ * sachant de quelle démarche il parle, un paragraphe en sachant de quel bloc de
+ * page. Les LANGUES, elles, sont découpées en lots quand elles sont nombreuses :
+ * le plafond de sortie appartient au guichet, et une réponse tronquée est un
+ * appel payé pour rien (voir `_shared/translate.ts`).
  *
  * POURQUOI ELLE EXISTE PLUTÔT QU'UN APPEL DIRECT DEPUIS LE NAVIGATEUR :
  * `ai-api` s'authentifie par CLÉ API, et une clé dans un navigateur est une clé
@@ -51,6 +53,9 @@ import {
   buildTranslationPrompt,
   parseTranslationAnswer,
   parseTranslatePayload,
+  targetBatches,
+  type TranslatedEntry,
+  type TranslationTarget,
 } from "./_shared/translate.ts";
 
 const corsHeaders = {
@@ -173,66 +178,90 @@ Deno.serve(async (req: Request) => {
       return errorResponse("not_configured", NOT_CONFIGURED_MESSAGE);
     }
 
-    const prompt = buildTranslationPrompt({ ...request, targets });
+    /** Un appel au guichet pour un lot de langues. */
+    async function askGuichet(batch: TranslationTarget[]): Promise<Response | Record<string, TranslatedEntry>> {
+      const prompt = buildTranslationPrompt({ ...request, targets: batch });
 
-    let res: Response;
-    try {
-      res = await fetch(AI_API_URL, {
-        method: "POST",
-        headers: {
-          Authorization: `Bearer ${socleKey}`,
-          // Clé PLATEFORME : c'est cet en-tête qui dit quelle collectivité
-          // paie. `ai-api` remonte lui-même à la racine.
-          "X-Organization-Id": request.organizationId,
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          feature: "traduction-libelles",
-          system: prompt.system,
-          messages: prompt.messages,
-          response_format: "json",
-          max_output_tokens: prompt.maxOutput,
-          // L'acteur, c'est l'agent : la cadence se compte par personne, pas
-          // par collectivité (voir le garde-fou de débit de `ai-api`).
-          actor_id: user.id,
-          reference: { kind: request.kind },
-        }),
-        signal: AbortSignal.timeout(AI_API_TIMEOUT_MS),
-      });
-    } catch (_) {
-      console.error("translate-labels: aucune réponse du guichet IA");
-      return errorResponse(
-        "ai_unavailable",
-        "La traduction automatique est momentanément indisponible — réessayez dans un instant.",
-      );
-    }
-
-    const body = await res.json().catch(() => null) as
-      | { answer?: unknown; error?: { code?: string; message?: string } }
-      | null;
-
-    if (!res.ok) {
-      const code = body?.error?.code ?? "";
-      // Le refus du guichet est journalisé par SON code, jamais par ce qu'on
-      // lui a envoyé.
-      console.warn(`translate-labels: guichet IA refuse — status=${res.status} code=${code || "-"}`);
-      if (RELAYED_CODES.has(code)) {
-        const retryAfter = res.headers.get("Retry-After");
+      let res: Response;
+      try {
+        res = await fetch(AI_API_URL, {
+          method: "POST",
+          headers: {
+            Authorization: `Bearer ${socleKey}`,
+            // Clé PLATEFORME : c'est cet en-tête qui dit quelle collectivité
+            // paie. `ai-api` remonte lui-même à la racine.
+            "X-Organization-Id": request.organizationId,
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            feature: "traduction-libelles",
+            system: prompt.system,
+            messages: prompt.messages,
+            response_format: "json",
+            max_output_tokens: prompt.maxOutput,
+            // L'acteur, c'est l'agent : la cadence se compte par personne, pas
+            // par collectivité (voir le garde-fou de débit de `ai-api`).
+            actor_id: user.id,
+            reference: { kind: request.kind },
+          }),
+          signal: AbortSignal.timeout(AI_API_TIMEOUT_MS),
+        });
+      } catch (_) {
+        console.error("translate-labels: aucune réponse du guichet IA");
         return errorResponse(
-          code,
-          body?.error?.message ?? "La traduction automatique est momentanément indisponible.",
-          retryAfter ? { "Retry-After": retryAfter } : {},
+          "ai_unavailable",
+          "La traduction automatique est momentanément indisponible — réessayez dans un instant.",
         );
       }
-      // Tout le reste parle de notre configuration : clé révoquée, scope
-      // manquant, payload refusé. L'agent n'y peut rien, l'exploitant si.
-      return errorResponse("not_configured", NOT_CONFIGURED_MESSAGE);
+
+      const body = await res.json().catch(() => null) as
+        | { answer?: unknown; error?: { code?: string; message?: string } }
+        | null;
+
+      if (!res.ok) {
+        const code = body?.error?.code ?? "";
+        // Le refus du guichet est journalisé par SON code, jamais par ce qu'on
+        // lui a envoyé.
+        console.warn(`translate-labels: guichet IA refuse — status=${res.status} code=${code || "-"}`);
+        if (RELAYED_CODES.has(code)) {
+          const retryAfter = res.headers.get("Retry-After");
+          return errorResponse(
+            code,
+            body?.error?.message ?? "La traduction automatique est momentanément indisponible.",
+            retryAfter ? { "Retry-After": retryAfter } : {},
+          );
+        }
+        // Tout le reste parle de notre configuration : clé révoquée, scope
+        // manquant, payload refusé. L'agent n'y peut rien, l'exploitant si.
+        return errorResponse("not_configured", NOT_CONFIGURED_MESSAGE);
+      }
+
+      return parseTranslationAnswer(body?.answer, batch, request.fields).translations;
     }
 
-    const answer = parseTranslationAnswer(body?.answer, targets, request.fields);
+    // ⚠️ UN APPEL PAR LOT DE LANGUES. Le plafond de sortie appartient au
+    // guichet : lui en demander plus n'a aucun effet, sinon de recevoir un JSON
+    // coupé en deux — un appel payé pour rien. `targetBatches` taille les lots
+    // d'après ce que les textes demandés coûtent (un paragraphe pèse lourd).
+    const translations: Record<string, TranslatedEntry> = {};
+    const batches = targetBatches(targets, request.fields);
+    for (const batch of batches) {
+      const result = await askGuichet(batch);
+      if (result instanceof Response) {
+        // ⚠️ Le premier lot qui échoue emporte tout : il n'y a rien à montrer,
+        // et le refus (crédit épuisé, cadence) doit être lu. Un lot suivant qui
+        // échoue, en revanche, n'annule pas ce qui est déjà traduit ET PAYÉ :
+        // on rend ce qu'on a, les langues manquantes se voient à leurs cases
+        // vides.
+        if (Object.keys(translations).length === 0) return result;
+        break;
+      }
+      Object.assign(translations, result);
+    }
+
     return jsonResponse(200, {
-      translations: answer.translations,
-      missing: answer.missing,
+      translations,
+      missing: targets.map((t) => t.code).filter((code) => !(code in translations)),
     });
   } catch (error) {
     console.error("translate-labels: erreur interne", error instanceof Error ? error.message : "");

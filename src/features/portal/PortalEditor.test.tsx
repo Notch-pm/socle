@@ -34,6 +34,8 @@ function renderEditor(overrides: Partial<ComponentProps<typeof PortalEditor>> = 
   render(
     <PortalEditor
       organizationName="Ville de Sainte-Colombe"
+      organizationId="org-1"
+      languages={["fr"]}
       page={defaultPortalPage()}
       onChange={onChange}
       catalogue={[]}

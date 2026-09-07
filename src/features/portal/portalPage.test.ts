@@ -6,6 +6,8 @@ import {
   createContactSection,
   createSection,
   defaultPortalPage,
+  fieldsForKind,
+  hasTranslations,
   isDarkColor,
   parsePortalPage,
   type PortalPage,
@@ -133,6 +135,7 @@ describe("parsePortalPage", () => {
     expect(page.sections[0]).toEqual({
       id: "g",
       kind: "demarches",
+      translations: {},
       title: "",
       columns: 3,
       pinnedFirst: false,
@@ -231,5 +234,101 @@ describe("isDarkColor", () => {
     expect(isDarkColor("#ffcd57")).toBe(false);
     // Illisible = sombre : le défaut du pied de page l'est.
     expect(isDarkColor("rouge")).toBe(true);
+  });
+});
+
+/**
+ * ⚠️ LE TEST QUI ATTRAPE LE STRIP ZOD.
+ *
+ * `z.object` supprime les clés qu'il ne déclare pas. Tant que `translations`
+ * n'était pas au schéma, une traduction saisie survivait à la frappe (l'état
+ * local n'est pas reparsé) puis disparaissait au RECHARGEMENT de l'éditeur, qui
+ * amorce son état par `parsePortalPage(row.draft)`. Pire qu'une perte franche :
+ * l'agent croyait avoir enregistré, et l'autosauvegarde réécrivait ensuite la
+ * page sans ses traductions.
+ */
+describe("les traductions survivent au parse", () => {
+  it("fait l'aller-retour sans rien perdre", () => {
+    const stored = {
+      version: 1,
+      sections: [
+        {
+          id: "t",
+          kind: "texte",
+          title: "Nos horaires",
+          body: "Du lundi au vendredi.",
+          align: "left",
+          translations: { en: { title: "Opening hours", body: "Monday to Friday." } },
+        },
+      ],
+    };
+    const page = parsePortalPage(stored);
+    expect(page.sections[0].translations).toEqual({
+      en: { title: "Opening hours", body: "Monday to Friday." },
+    });
+    // Et une seconde fois : c'est ce que fait un rechargement après autosave.
+    expect(parsePortalPage(page).sections[0].translations).toEqual({
+      en: { title: "Opening hours", body: "Monday to Friday." },
+    });
+  });
+
+  it("garde celles des sous-blocs du pied de page", () => {
+    const page = parsePortalPage({
+      version: 1,
+      sections: [
+        {
+          id: "f",
+          kind: "footer",
+          title: "",
+          background: "#0f1f18",
+          columns: 3,
+          children: [
+            {
+              id: "c",
+              kind: "texte",
+              title: "Contact",
+              body: "1 place de la Mairie",
+              align: "left",
+              translations: { en: { title: "Contact us" } },
+            },
+          ],
+        },
+      ],
+    });
+    const footer = page.sections[0];
+    expect(footer.kind).toBe("footer");
+    if (footer.kind !== "footer") return;
+    expect(footer.children[0].translations).toEqual({ en: { title: "Contact us" } });
+  });
+
+  it("écarte une table de traductions abîmée sans emporter la section", () => {
+    const page = parsePortalPage({
+      version: 1,
+      sections: [{ id: "t", kind: "texte", title: "Titre", translations: "n'importe quoi" }],
+    });
+    expect(page.sections).toHaveLength(1);
+    expect(page.sections[0].title).toBe("Titre");
+    expect(page.sections[0].translations).toEqual({});
+  });
+
+  it("dit quels textes une section propose à la traduction", () => {
+    // La liste que l'inspecteur affiche EST celle qu'il a le droit d'effacer.
+    expect(fieldsForKind("recherche")).toEqual(["title", "subtitle", "placeholder"]);
+    expect(fieldsForKind("compte")).toEqual(["title", "subtitle"]);
+    expect(fieldsForKind("texte")).toEqual(["title", "body"]);
+    expect(fieldsForKind("demarches")).toEqual(["title"]);
+    expect(fieldsForKind("footer")).toEqual(["title"]);
+  });
+
+  it("repère une section déjà traduite, sous-blocs compris", () => {
+    const vierge = createSection("texte");
+    expect(hasTranslations(vierge)).toBe(false);
+    expect(hasTranslations({ ...vierge, translations: { en: { title: "T" } } })).toBe(true);
+
+    const footer = createSection("footer");
+    expect(hasTranslations({
+      ...footer,
+      children: [{ ...vierge, translations: { en: { title: "T" } } }],
+    })).toBe(true);
   });
 });
