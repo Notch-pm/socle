@@ -12,7 +12,6 @@ import type {
   ProcedureDocumentDto,
   ProcedureDocumentsDto,
   OrganizationDto,
-  PortalOrganizationRefDto,
   PortalProcedureDetailDto,
   PortalProcedureDto,
   OrganizationProcedureDto,
@@ -49,6 +48,7 @@ export function serializeOrganization(row: Row): OrganizationDto {
     phone: nullableStr(row.phone),
     email: nullableStr(row.email),
     logo_url: nullableStr(row.logo_url),
+    is_internal_service: Boolean(row.is_internal_service),
     email_sender_override: Boolean(row.email_sender_override),
     email_sender_name: nullableStr(row.email_sender_name),
     metadata: row.metadata ?? null,
@@ -403,9 +403,21 @@ export function readAudiences(raw: unknown): Array<"citoyen" | "entreprise" | "a
  * n'est pas une entorse à la whitelist, c'en est l'application — on sert les
  * noms des publics, pas la configuration qui les porte.
  */
+/**
+ * Ce que `publishedCatalogue` produit pour chaque organisme : la forme
+ * INTERNE (camelCase), que ce sérialiseur convertit en DTO. Les deux sont
+ * volontairement distinctes — le nommage du contrat public ne suit pas celui
+ * du code qui le calcule.
+ */
+export interface PortalOrganizationInput {
+  id: string;
+  name: string;
+  handlingOrganizationId: string | null;
+}
+
 export function serializePortalProcedure(
   row: Row,
-  organizations: PortalOrganizationRefDto[] = [],
+  organizations: PortalOrganizationInput[] = [],
 ): PortalProcedureDto {
   return {
     id: str(row.id),
@@ -413,7 +425,11 @@ export function serializePortalProcedure(
     short_description: nullableStr(row.short_description),
     user_description: nullableStr(row.user_description),
     input_duration_minutes: nullableNum(row.input_duration_minutes),
-    organizations: organizations.map((org) => ({ id: str(org.id), name: str(org.name) })),
+    organizations: organizations.map((org) => ({
+      id: str(org.id),
+      name: str(org.name),
+      handling_organization_id: nullableStr(org.handlingOrganizationId),
+    })),
     audiences: readAudiences(row.requester_config),
     translations: row.translations ?? null,
   };
@@ -431,7 +447,7 @@ export function serializePortalProcedure(
  */
 export function serializePortalProcedureDetail(
   row: Row,
-  organizations: PortalOrganizationRefDto[] = [],
+  organizations: PortalOrganizationInput[] = [],
   detail: Row | null = null,
   category: Row | null = null,
 ): PortalProcedureDetailDto {

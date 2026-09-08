@@ -21,7 +21,7 @@ function entry(over: Partial<PortalCatalogueEntry> = {}): PortalCatalogueEntry {
     name: "Acte de naissance",
     shortDescription: "Délai 3 jours",
     visibility: "visible",
-    organizations: [{ id: "org-1", name: "ACCM" }],
+    organizations: [{ id: "org-1", name: "ACCM", handlingOrganizationId: null }],
     audiences: ["citoyen"],
     ...over,
   };

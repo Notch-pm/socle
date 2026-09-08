@@ -166,7 +166,7 @@ describe("PortalCanvas — les filtres de la grille de démarches", () => {
     name: `Démarche ${id}`,
     shortDescription: null,
     visibility: "visible",
-    organizations: orgs.map((name) => ({ id: name, name })),
+    organizations: orgs.map((name) => ({ id: name, name, handlingOrganizationId: null })),
     audiences,
   });
 

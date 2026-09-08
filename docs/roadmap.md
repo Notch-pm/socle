@@ -2,7 +2,7 @@
 
 > **Public** : tous (devs Socle, équipes consommatrices) · **Question traitée** : quelles
 > évolutions sont envisagées, et lesquelles ont déjà été livrées ? · **Dernière mise à jour** :
-> 2026-09-06
+> 2026-09-08
 
 Liste d'**intentions**, pas d'engagements — sauf mention explicite d'une date de livraison.
 Née du chantier « Clara délègue ses usagers au Socle » (2026-07-16), enrichie depuis. Pour ce qui
@@ -144,6 +144,14 @@ suppose la précédente.
   **catégories** se traduisent dans chacune. `enabled_languages` sur la racine,
   `translations` sur `procedures` et `categories`, `resolve_org_languages` pour la remontée,
   contrat 1.11.0 (`Tenant.languages`, `translations` sur `Category` et `PortalProcedure`).
+- **2026-09-08 — Les services internes : instruire sans apparaître.** Une collectivité marque une
+  sous-organisation « service interne » (`organizations.is_internal_service`) : elle instruit, mais
+  le portail la présente sous le nom de son **porteur** — le premier ancêtre qui n'en est pas un.
+  Un usager s'adresse à sa mairie, pas à son service d'état civil. Contrat **1.16.0** :
+  `handling_organization_id` sur chaque organisme (l'identifiant du service instructeur, **jamais
+  son nom**), de quoi router la demande en aval ; `is_internal_service` sur `Organization`. Le
+  Socle refuse qu'une même démarche soit activée par deux organisations d'un même porteur — sans
+  quoi une demande déposée au nom de la mairie n'aurait pas de destinataire déterminé.
 - **2026-09-06 — Les démarches « pour de vrai » : une page, un formulaire, une demande.** Le
   portail sert désormais une démarche au lieu de la lister : `GET /v1/portal/procedures/{id}`
   (contrat **1.12.0**) ajoute la catégorie et les deux schémas de SAISIE (`form_schema`,

@@ -73,6 +73,46 @@ export function visibleRootOrganizations<
     .sort((a, b) => a.name.localeCompare(b.name));
 }
 
+/**
+ * L'organisme qui REPRÉSENTE chaque organisation au portail usagers — son
+ * « porteur ». Une organisation ordinaire est son propre porteur ; un
+ * **service interne** (`is_internal_service`) s'efface derrière le premier
+ * ancêtre qui n'en est pas un. Un usager du portail s'adresse à sa mairie, pas
+ * à son service d'état civil.
+ *
+ * ⚠️ **La remontée ne sort jamais de la liste fournie** : une organisation dont
+ * le parent n'y figure pas est son propre porteur, fût-elle marquée interne.
+ * C'est ce qui protège le cas du tenant — un portail servi par une
+ * sous-organisation ne doit pas être résolu vers un ancêtre hors de son arbre,
+ * dont le nom ne le concerne pas.
+ *
+ * La remontée se termine toujours quand la liste part d'une racine : une
+ * racine n'est jamais un service interne (trigger `enforce_internal_service_not_root`).
+ * Le garde anti-cycle n'est qu'une ceinture — `enforce_org_depth` bloque déjà les cycles.
+ *
+ * ⚠️ Miroir volontaire de `bearerByOrganization` dans
+ * `supabase/functions/public-api/_shared/portalCatalogue.ts` : une edge
+ * function n'importe rien de `src/`. Les tests des deux côtés l'épinglent.
+ */
+export function bearerByOrganization<
+  T extends Pick<Organization, "id" | "parent_id" | "is_internal_service">,
+>(orgs: T[]): Map<string, T> {
+  const byId = new Map(orgs.map((o) => [o.id, o]));
+  const bearers = new Map<string, T>();
+  for (const org of orgs) {
+    let current = org;
+    const seen = new Set<string>([org.id]);
+    while (current.is_internal_service) {
+      const parent = current.parent_id ? byId.get(current.parent_id) : undefined;
+      if (!parent || seen.has(parent.id)) break;
+      seen.add(parent.id);
+      current = parent;
+    }
+    bearers.set(org.id, current);
+  }
+  return bearers;
+}
+
 /** All ids strictly below `node` — used to forbid re-parenting an org under its own descendant. */
 export function collectDescendantIds(node: OrgNode): string[] {
   const ids: string[] = [];

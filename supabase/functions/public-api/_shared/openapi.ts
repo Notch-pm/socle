@@ -30,7 +30,7 @@ export function buildOpenApiDocument(serverUrl: string): Record<string, unknown>
     openapi: "3.1.0",
     info: {
       title: "API Socle — Référentiel de la gamme",
-      version: "1.15.0",
+      version: "1.16.0",
       description: [
         "API **en lecture seule** exposant le référentiel central de la gamme : les",
         "**organisations** (et sous-organisations) avec l'intégralité de leur configuration,",
@@ -894,11 +894,33 @@ export function buildOpenApiDocument(serverUrl: string): Record<string, unknown>
         },
         PortalOrganizationRef: {
           type: "object",
-          description: "Un organisme qui propose une démarche : de quoi le nommer, rien de plus.",
-          required: ["id", "name"],
+          description:
+            "Un organisme qui propose une démarche : de quoi le nommer, et de quoi router la " +
+            "demande. ⚠️ `id`/`name` désignent l'organisme **AFFICHÉ**, qui n'est pas forcément " +
+            "celui qui a activé la démarche : un **service interne** de la collectivité ne " +
+            "s'affiche jamais au portail, c'est son porteur (premier ancêtre qui n'est pas un " +
+            "service interne) qui est nommé à sa place. Recouper cette liste avec les " +
+            "activations brutes donnerait donc un écart, et c'est normal.",
+          required: ["id", "name", "handling_organization_id"],
           properties: {
             id: { type: "string", format: "uuid" },
             name: { type: "string" },
+            handling_organization_id: {
+              type: ["string", "null"],
+              format: "uuid",
+              description:
+                "L'organisation qui **instruit** réellement, quand ce n'est pas l'organisme " +
+                "affiché — `null` sinon. ⚠️ C'est un identifiant et rien d'autre : le **nom** du " +
+                "service interne n'est pas servi, la collectivité a choisi de ne pas le " +
+                "montrer. Ne l'affichez pas à un usager ; transmettez-le avec la demande, pour " +
+                "qu'elle arrive au bon service. Il y en a **au plus un** : le Socle refuse " +
+                "qu'une même démarche soit activée par deux organisations d'un même porteur.",
+            },
+          },
+          example: {
+            id: "d5227d25-f327-493a-a9a2-278397531e33",
+            name: "Mairie de Saint-Martin-de-Crau",
+            handling_organization_id: "3f2a1b9c-0d4e-4a6b-9c8d-1e2f3a4b5c6d",
           },
         },
         PortalProcedureDetail: {
@@ -1173,6 +1195,15 @@ export function buildOpenApiDocument(serverUrl: string): Record<string, unknown>
             phone: { type: ["string", "null"] },
             email: { type: ["string", "null"], format: "email" },
             logo_url: { type: ["string", "null"], format: "uri" },
+            is_internal_service: {
+              type: "boolean",
+              description:
+                "`true` = l'organisation n'est **pas un guichet usager**. Elle instruit des " +
+                "demandes, mais le portail la présente sous le nom de son premier ancêtre qui " +
+                "n'est pas un service interne (son « porteur »). Ne la proposez pas à un usager " +
+                "final. Toujours `false` sur une organisation principale, qui n'a personne " +
+                "au-dessus d'elle pour la porter.",
+            },
             email_sender_override: {
               type: "boolean",
               description: "Si vrai, un nom d'expéditeur propre à l'organisation est utilisé.",
@@ -1192,6 +1223,7 @@ export function buildOpenApiDocument(serverUrl: string): Record<string, unknown>
             phone: "0490000000",
             email: "contact@accm.fr",
             logo_url: null,
+            is_internal_service: false,
             email_sender_override: false,
             email_sender_name: null,
             metadata: null,

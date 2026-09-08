@@ -22,6 +22,15 @@ export interface OrganizationDto {
   phone: string | null;
   email: string | null;
   logo_url: string | null;
+  /**
+   * `true` = l'organisation n'est pas un guichet usager : elle instruit, mais
+   * le portail la présente sous le nom de son premier ancêtre qui n'est pas un
+   * service interne. À ne pas proposer à un usager final.
+   *
+   * Contrairement aux colonnes de charte graphique, la valeur brute ne ment
+   * pas : il n'y a pas d'héritage à résoudre.
+   */
+  is_internal_service: boolean;
   email_sender_override: boolean;
   email_sender_name: string | null;
   metadata: unknown;
@@ -324,10 +333,29 @@ export interface PortalProcedureDto {
   translations: unknown;
 }
 
-/** Un organisme qui propose une démarche sur le portail : de quoi le nommer, rien de plus. */
+/**
+ * Un organisme qui propose une démarche sur le portail : de quoi le nommer, et
+ * de quoi router la demande.
+ *
+ * ⚠️ `id`/`name` désignent l'organisme **AFFICHÉ**, qui n'est pas forcément
+ * celui qui a activé la démarche : un **service interne** de la collectivité ne
+ * s'affiche jamais, c'est son porteur (premier ancêtre non interne) qui est
+ * nommé à sa place. Recouper cette liste avec les activations brutes donnerait
+ * un écart, et c'est normal.
+ */
 export interface PortalOrganizationRefDto {
   id: string;
   name: string;
+  /**
+   * L'organisation qui **instruit** réellement, quand ce n'est pas l'organisme
+   * affiché — `null` sinon. C'est un UUID et rien d'autre : le **nom** du
+   * service interne ne sort pas, la collectivité a choisi de ne pas le montrer.
+   *
+   * Il y en a au plus un : le Socle refuse qu'une même démarche soit activée
+   * par deux organisations d'un même porteur — sans quoi on ne saurait pas à
+   * quel service rattacher la demande.
+   */
+  handling_organization_id: string | null;
 }
 
 /** Catégorie d'une démarche, telle qu'un usager la lit : de quoi la nommer. */

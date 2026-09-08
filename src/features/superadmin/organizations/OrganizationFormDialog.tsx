@@ -9,6 +9,7 @@ import {
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Field } from "@/components/ui/field";
+import { Switch } from "@/components/ui/switch";
 import { useAllOrganizations, type Organization } from "@/features/superadmin/organizations/useOrganizationsAdmin";
 
 export interface OrganizationFormValues {
@@ -19,6 +20,7 @@ export interface OrganizationFormValues {
   address: string | null;
   phone: string | null;
   email: string | null;
+  is_internal_service: boolean;
 }
 
 function slugify(name: string) {
@@ -58,6 +60,7 @@ export function OrganizationFormDialog({
   const [address, setAddress] = React.useState("");
   const [phone, setPhone] = React.useState("");
   const [email, setEmail] = React.useState("");
+  const [isInternalService, setIsInternalService] = React.useState(false);
 
   React.useEffect(() => {
     if (!open) return;
@@ -68,6 +71,7 @@ export function OrganizationFormDialog({
     setAddress(organization?.address ?? "");
     setPhone(organization?.phone ?? "");
     setEmail(organization?.email ?? "");
+    setIsInternalService(organization?.is_internal_service ?? false);
   }, [open, organization, fixedParentId]);
 
   const excluded = new Set([organization?.id, ...excludeIds].filter(Boolean) as string[]);
@@ -87,6 +91,9 @@ export function OrganizationFormDialog({
       address: address.trim() || null,
       phone: phone.trim() || null,
       email: email.trim() || null,
+      // Une racine n'est jamais un service interne : la base le corrigerait de
+      // toute façon, autant ne pas l'envoyer.
+      is_internal_service: parentId ? isInternalService : false,
     });
   }
 
@@ -176,6 +183,23 @@ export function OrganizationFormDialog({
               placeholder="mairie-de-cahors"
             />
           </Field>
+
+          {parentId ? (
+            <div className="flex items-center justify-between gap-3 rounded-lg border border-border p-3">
+              <div>
+                <p className="text-sm font-medium">Service interne</p>
+                <p className="text-xs text-muted-foreground">
+                  N'apparaît pas sur le site de démarches : ses démarches y sont présentées au nom
+                  de l'organisme parent.
+                </p>
+              </div>
+              <Switch
+                checked={isInternalService}
+                aria-label="Service interne"
+                onCheckedChange={setIsInternalService}
+              />
+            </div>
+          ) : null}
 
           <DialogFooter>
             <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>

@@ -11,6 +11,7 @@ import {
   useChildOrganizations,
   useCreateOrganization,
   useUpdateOrganization,
+  bearerByOrganization,
   collectDescendantIdsFlat,
   type Organization,
 } from "@/features/superadmin/organizations/useOrganizationsAdmin";
@@ -18,6 +19,9 @@ import {
   OrganizationFormDialog,
   type OrganizationFormValues,
 } from "@/features/superadmin/organizations/OrganizationFormDialog";
+
+/** Exporté pour que le test cible l'interrupteur par son nom accessible. */
+export const INTERNAL_SERVICE_SWITCH_LABEL = "Service interne";
 
 export function OrganizationInfoTab({ organization }: { organization: Organization }) {
   return (
@@ -45,6 +49,9 @@ function GeneralInfoForm({ organization }: { organization: Organization }) {
   const [emailSenderName, setEmailSenderName] = React.useState(
     organization.email_sender_name ?? "",
   );
+  const [isInternalService, setIsInternalService] = React.useState(
+    organization.is_internal_service,
+  );
 
   // On ne peut pas rattacher une org à elle-même ni à l'un de ses descendants.
   const excluded = new Set([
@@ -54,6 +61,14 @@ function GeneralInfoForm({ organization }: { organization: Organization }) {
   const parentOptions = (allOrgs ?? []).filter(
     (o) => !excluded.has(o.id) && o.status !== "obsolete",
   );
+
+  // Le porteur se résout depuis le PARENT, jamais depuis l'organisation
+  // elle-même : tant que la case n'est pas cochée, elle est encore son propre
+  // porteur et l'aperçu annoncerait son propre nom (même piège que
+  // `parent_branding`, qui résout depuis le parent pour la même raison).
+  const bearer = organization.parent_id
+    ? bearerByOrganization(allOrgs ?? []).get(organization.parent_id)
+    : undefined;
 
   function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -69,6 +84,7 @@ function GeneralInfoForm({ organization }: { organization: Organization }) {
       slug: slug.trim() || null,
       email_sender_override: emailSenderOverride,
       email_sender_name: emailSenderName.trim() || null,
+      is_internal_service: isInternalService,
     });
   }
 
@@ -174,6 +190,38 @@ function GeneralInfoForm({ organization }: { organization: Organization }) {
           </Field>
         ) : null}
       </div>
+
+      {organization.parent_id !== null ? (
+        <div className="flex flex-col gap-3 rounded-lg border border-border p-3">
+          <div className="flex items-center justify-between gap-3">
+            <div>
+              <p className="text-sm font-medium">{INTERNAL_SERVICE_SWITCH_LABEL}</p>
+              <p className="text-xs text-muted-foreground">
+                Ce service n'apparaît pas sur le site de démarches
+                {bearer ? (
+                  <>
+                    {" "}
+                    : les démarches qu'il instruit y sont présentées au nom de{" "}
+                    <span className="font-medium text-foreground">{bearer.name}</span>
+                  </>
+                ) : null}
+                .
+              </p>
+            </div>
+            <Switch
+              checked={isInternalService}
+              aria-label={INTERNAL_SERVICE_SWITCH_LABEL}
+              onCheckedChange={setIsInternalService}
+            />
+          </div>
+          {isInternalService ? (
+            <p className="text-xs text-muted-foreground">
+              Une même démarche ne peut être activée que dans un seul service interne d'un même
+              organisme : sinon, on ne saurait pas à qui adresser la demande.
+            </p>
+          ) : null}
+        </div>
+      ) : null}
 
       {updateOrg.error ? (
         <p className="text-sm text-destructive">{(updateOrg.error as Error).message}</p>

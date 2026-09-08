@@ -1,7 +1,7 @@
 # Journal des évolutions des API publiques
 
 > **Public** : équipes consommatrices (Ariane, Clara, Iris, partenaires) · **Question traitée** :
-> quand un contrat d'API a-t-il changé, et comment ? · **Dernière mise à jour** : 2026-09-07
+> quand un contrat d'API a-t-il changé, et comment ? · **Dernière mise à jour** : 2026-09-08
 
 Journal **append-only** : chaque évolution de la surface de contrat des API publiques
 (`public-api`, `contacts-api`, `ai-api`) — endpoint, paramètre, champ de réponse, comportement
@@ -12,6 +12,47 @@ consommateur : [integration.md](./integration.md#politique-de-compatibilité-v1)
 Format d'une entrée : `## AAAA-MM-JJ — <api> — ajout|correctif|rupture`
 
 ---
+
+## 2026-09-08 — public-api — ajout
+
+**Les services internes : qui instruit n'est pas toujours qui s'affiche.** Une collectivité peut
+désormais marquer une sous-organisation « service interne » : elle instruit des demandes, mais
+n'apparaît pas sur le portail usagers — c'est son **porteur** (le premier ancêtre qui n'est pas un
+service interne) qui est nommé à sa place. Un usager s'adresse à sa mairie, pas à son service
+d'état civil. Version du contrat : **1.16.0**. Ajout additif **sur la forme** ; le contenu d'une
+liste change, voir le premier ⚠️.
+
+**1. `handling_organization_id` sur `PortalOrganizationRef`** (`GET /v1/portal/procedures`,
+`GET /v1/portal/procedures/{id}`).
+
+- ⚠️ **Le contenu de `organizations` change.** `id`/`name` désignent l'organisme **AFFICHÉ**, qui
+  n'est plus forcément celui qui a activé la démarche : pour une collectivité qui utilise le
+  réglage, c'est le porteur. Un consommateur qui recoupait cette liste avec les activations brutes
+  (`organization_procedures`) trouvera un écart — c'est attendu, pas une anomalie. Tant qu'aucune
+  organisation n'est marquée « service interne », rien ne bouge.
+- `handling_organization_id` porte l'organisation qui **instruit** réellement, `null` quand c'est
+  l'organisme affiché lui-même. **Transmettez-le avec la demande** : c'est ce qui la fait arriver
+  au bon service. Sans lui, une demande déposée « à la Mairie de X » ne dirait pas lequel de ses
+  services la traite.
+- ⚠️ **C'est un identifiant, et rien d'autre.** Le **nom** du service interne n'est pas servi : la
+  collectivité a choisi de ne pas le montrer à ses usagers. Ne l'affichez pas, ne le devinez pas
+  par un autre appel pour le remettre à l'écran.
+- ⚠️ **Il y en a au plus un.** Le Socle refuse qu'une même démarche soit activée par deux
+  organisations d'un même porteur — sans quoi on ne saurait pas à qui adresser la demande. Vous
+  pouvez vous appuyer sur cette unicité.
+- Rien à faire pour un consommateur en place qui se contente d'afficher `name`.
+
+**2. `is_internal_service` sur `Organization`** (`GET /v1/organizations`, `/{id}`,
+`?tree=true`).
+
+- `true` = l'organisation **n'est pas un guichet usager**. Ne la proposez pas dans une liste
+  offerte à un usager final ; elle reste une organisation ordinaire pour tout le reste (agents,
+  hiérarchie, activation de démarches).
+- Toujours `false` sur une organisation principale (racine) : elle n'a personne au-dessus d'elle
+  pour la porter. Le Socle **corrige** la valeur plutôt que de refuser, pour ne pas bloquer une
+  réorganisation qui promeut un service en racine.
+- ⚠️ Contrairement aux colonnes de charte graphique, **la valeur brute ne ment pas** : il n'y a
+  aucun héritage à résoudre. Elle décrit l'organisation, pas ce qui s'applique à elle.
 
 ## 2026-09-07 — public-api — ajout
 

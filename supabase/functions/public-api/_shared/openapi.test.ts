@@ -152,8 +152,8 @@ describe("buildOpenApiDocument", () => {
 describe("contrat — documents et courriers", () => {
   const doc = buildOpenApiDocument("https://example.supabase.co/functions/v1/public-api") as any;
 
-  it("annonce la version 1.15.0 du contrat", () => {
-    expect(doc.info.version).toBe("1.15.0");
+  it("annonce la version 1.16.0 du contrat", () => {
+    expect(doc.info.version).toBe("1.16.0");
   });
 
   it("décrit les textes traduits d'une section, dans un schéma à PART", () => {

@@ -6,12 +6,18 @@ import { Switch } from "@/components/ui/switch";
 import { EmptyState } from "@/components/shared/EmptyState";
 import {
   useAllOrganizations,
+  bearerByOrganization,
   findRootAncestor,
 } from "@/features/superadmin/organizations/useOrganizationsAdmin";
 import { useProceduresForOrg } from "@/features/procedures/useProcedures";
 import { useCategoriesQuery } from "@/features/categories/useCategories";
-import { buildEnabledProcedureIds } from "./organizationProcedures";
 import {
+  bearerGroupSiblings,
+  buildEnabledProcedureIds,
+  offersHeldBySiblings,
+} from "./organizationProcedures";
+import {
+  useEnabledProcedureBindings,
   useOrganizationProcedureBindings,
   useSetProcedureEnabled,
 } from "./useOrganizationProcedures";
@@ -34,6 +40,27 @@ export function OrganizationProceduresTab({ organizationId }: { organizationId: 
   const setEnabled = useSetProcedureEnabled();
 
   const enabledIds = React.useMemo(() => buildEnabledProcedureIds(bindings ?? []), [bindings]);
+
+  // Qui d'autre instruit au nom du même porteur — le porteur lui-même et ses
+  // services internes. Une démarche déjà prise par l'un d'eux ne peut pas
+  // l'être ici : on le montre, plutôt que de laisser la base refuser.
+  const siblings = React.useMemo(
+    () => bearerGroupSiblings(allOrgs ?? [], organizationId),
+    [allOrgs, organizationId],
+  );
+  const { data: siblingBindings } = useEnabledProcedureBindings(siblings.map((org) => org.id));
+  const heldBySiblings = React.useMemo(
+    () => offersHeldBySiblings(siblingBindings ?? [], siblings),
+    [siblingBindings, siblings],
+  );
+
+  // Le porteur, quand cette organisation est un service interne : c'est son nom
+  // que le site de démarches affichera à la place du sien.
+  const self = (allOrgs ?? []).find((org) => org.id === organizationId);
+  const bearer =
+    self?.is_internal_service && self.parent_id
+      ? bearerByOrganization(allOrgs ?? []).get(self.parent_id)
+      : undefined;
   const categoryName = new Map((categories ?? []).map((c) => [c.id, c.name]));
   const activeCount = (procedures ?? []).filter((p) => enabledIds.has(p.id)).length;
 
@@ -57,6 +84,14 @@ export function OrganizationProceduresTab({ organizationId }: { organizationId: 
           </Badge>
         ) : null}
       </div>
+
+      {bearer ? (
+        <p className="rounded-lg border border-border bg-muted/30 px-4 py-2 text-sm text-muted-foreground">
+          Ce service est interne : sur le site de démarches, ces démarches sont présentées au nom
+          de <span className="font-medium text-foreground">{bearer.name}</span>. C'est ici qu'elles
+          sont instruites.
+        </p>
+      ) : null}
 
       {setEnabled.error ? (
         <p className="rounded-lg border border-destructive/30 bg-destructive/5 px-4 py-2 text-sm text-destructive">
@@ -94,6 +129,9 @@ export function OrganizationProceduresTab({ organizationId }: { organizationId: 
               <tbody>
                 {procedures.map((proc) => {
                   const checked = enabledIds.has(proc.id);
+                  // Déjà prise ailleurs dans le groupe. On ne verrouille jamais
+                  // une démarche déjà activée ici : il faut pouvoir la relâcher.
+                  const heldBy = checked ? undefined : heldBySiblings.get(proc.id);
                   return (
                     <tr key={proc.id} className="border-t border-border hover:bg-muted/30">
                       <td className="px-4 py-3 font-medium">
@@ -111,9 +149,10 @@ export function OrganizationProceduresTab({ organizationId }: { organizationId: 
                         </Badge>
                       </td>
                       <td className="px-4 py-3">
-                        <div className="flex justify-end">
+                        <div className="flex flex-col items-end gap-1">
                           <Switch
                             checked={checked}
+                            disabled={Boolean(heldBy)}
                             aria-label={`Activer « ${proc.name} »`}
                             onCheckedChange={(next) =>
                               setEnabled.mutate({
@@ -123,6 +162,11 @@ export function OrganizationProceduresTab({ organizationId }: { organizationId: 
                               })
                             }
                           />
+                          {heldBy ? (
+                            <span className="text-right text-xs text-muted-foreground">
+                              Déjà activée par « {heldBy} »
+                            </span>
+                          ) : null}
                         </div>
                       </td>
                     </tr>

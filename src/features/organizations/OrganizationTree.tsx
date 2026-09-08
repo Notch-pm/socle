@@ -132,6 +132,17 @@ function TreeRow({
                 Obsolète
               </Badge>
             ) : null}
+            {node.is_internal_service ? (
+              // L'organigramme est ce qu'on lit ici : le réglage doit s'y voir
+              // sans ouvrir chaque fiche.
+              <Badge
+                variant="muted"
+                className="shrink-0"
+                title="N'apparaît pas sur le site de démarches : ses démarches y sont présentées au nom de l'organisme parent."
+              >
+                Service interne
+              </Badge>
+            ) : null}
           </div>
           {(node.phone || node.email || node.address) && (
             <div className="mt-0.5 flex flex-wrap items-center gap-x-3 gap-y-0.5 text-xs text-muted-foreground">

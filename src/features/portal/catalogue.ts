@@ -21,6 +21,7 @@ import { parseProcedureStatus } from "@/features/procedures/procedureStatus";
 import { AUDIENCES, enabledAudiences, type Audience } from "@/features/procedures/requesterFields";
 import type { Procedure } from "@/features/procedures/useProcedures";
 import {
+  bearerByOrganization,
   buildOrgTree,
   collectDescendantIdsFlat,
   type Organization,
@@ -63,6 +64,25 @@ export const AUDIENCE_FILTER_LABELS: Record<Audience, string> = {
 export interface CatalogueOrganization {
   id: string;
   name: string;
+  /**
+   * Le **service interne** qui instruit réellement, quand ce n'est pas
+   * l'organisme affiché — `null` sinon. Le portail ne le montre pas ; c'est
+   * l'aval (Iris) qui en a besoin pour router la demande.
+   */
+  handlingOrganizationId: string | null;
+}
+
+/**
+ * Ce qu'il faut d'une organisation de l'arbre pour savoir qui la représente
+ * au portail. `Organization` la satisfait ; le type reste étroit pour que les
+ * tests n'aient pas à fabriquer une ligne entière.
+ */
+export interface CatalogueTreeOrganization {
+  id: string;
+  name: string;
+  parent_id: string | null;
+  is_internal_service: boolean;
+  status: string;
 }
 
 export interface PortalCatalogueEntry {
@@ -95,14 +115,20 @@ export function isoDay(date: Date = new Date()): string {
 }
 
 /**
- * L'arbre que le portail sert : la racine et ses sous-organisations
- * **actives**, dans l'ordre de l'arbre (la racine, puis chaque niveau, frères
- * par nom — l'ordre de `buildOrgTree`). Une organisation obsolète ne propose
- * plus rien, elle n'y figure pas.
+ * L'arbre que le portail sert : la racine et **toute** sa descendance, dans
+ * l'ordre de l'arbre (la racine, puis chaque niveau, frères par nom — l'ordre
+ * de `buildOrgTree`).
+ *
+ * ⚠️ Les organisations **obsolètes y figurent**, et c'est `offersByProcedure`
+ * qui les écarte. Les retirer ici couperait la chaîne des parents : un service
+ * interne dont la mairie est obsolète deviendrait un sommet de la liste, donc
+ * son propre porteur, et réapparaîtrait au portail sous son propre nom —
+ * exactement ce que le réglage sert à empêcher. C'est aussi ce qui rend cette
+ * fonction littéralement identique à son miroir edge.
  */
 export function portalTreeOrganizations(all: Organization[], rootId: string): Organization[] {
   const ids = new Set([rootId, ...collectDescendantIdsFlat(all, rootId)]);
-  const subtree = all.filter((org) => ids.has(org.id) && org.status === "active");
+  const subtree = all.filter((org) => ids.has(org.id));
   const flat: Organization[] = [];
   const walk = (nodes: OrgNode[]) => {
     for (const node of nodes) {
@@ -115,14 +141,32 @@ export function portalTreeOrganizations(all: Organization[], rootId: string): Or
 }
 
 /**
- * Qui propose quoi : pour chaque démarche, les organismes qui l'ont activée,
- * dans l'ordre reçu (celui de l'arbre). Une liaison désactivée ou portée par
- * une organisation hors de la liste ne compte pas.
+ * Qui propose quoi : pour chaque démarche, les organismes **affichés**, dans
+ * l'ordre reçu (celui de l'arbre). Une liaison désactivée ou portée par une
+ * organisation hors de la liste ne compte pas.
+ *
+ * L'organisation qui a activé la démarche n'est pas forcément celle qu'on
+ * nomme : un **service interne** s'efface derrière son porteur, et c'est le
+ * porteur qui entre dans la liste — l'usager s'adresse à sa mairie. Le service
+ * reste porté par `handlingOrganizationId`, pour l'aval.
+ *
+ * ⚠️ **Une organisation obsolète n'apparaît ni comme instructeur, ni comme
+ * porteur** : une démarche activée par un service interne dont la mairie est
+ * obsolète n'est proposée par personne. La faire remonter d'un cran de plus la
+ * rattacherait à une agglomération qui ne l'instruit pas.
+ *
+ * ⚠️ **Dédoublonnage** : deux organisations d'un même porteur ne le nomment
+ * qu'une fois. Le paramétrage l'interdit déjà (une démarche, un instructeur
+ * par porteur), mais un doublon rendrait deux cartes identiques au portail.
  */
 export function offersByProcedure(
   bindings: CatalogueBinding[],
-  organizations: CatalogueOrganization[],
+  organizations: CatalogueTreeOrganization[],
 ): Map<string, CatalogueOrganization[]> {
+  const bearers = bearerByOrganization(organizations);
+  const active = new Set(
+    organizations.filter((org) => org.status === "active").map((org) => org.id),
+  );
   const enabledBy = new Map<string, Set<string>>();
   for (const binding of bindings) {
     if (binding.is_enabled !== true || !binding.organization_id || !binding.procedure_id) continue;
@@ -132,11 +176,19 @@ export function offersByProcedure(
   }
   const offers = new Map<string, CatalogueOrganization[]>();
   for (const org of organizations) {
+    if (!active.has(org.id)) continue;
+    const bearer = bearers.get(org.id);
+    if (!bearer || !active.has(bearer.id)) continue;
     const procedureIds = enabledBy.get(org.id);
     if (!procedureIds) continue;
     for (const procedureId of procedureIds) {
       const list = offers.get(procedureId) ?? [];
-      list.push({ id: org.id, name: org.name });
+      if (list.some((entry) => entry.id === bearer.id)) continue;
+      list.push({
+        id: bearer.id,
+        name: bearer.name,
+        handlingOrganizationId: bearer.id === org.id ? null : org.id,
+      });
       offers.set(procedureId, list);
     }
   }
@@ -192,7 +244,7 @@ export function toCatalogueEntry(
 export function buildCatalogue(
   procedures: Procedure[],
   bindings: CatalogueBinding[],
-  organizations: CatalogueOrganization[],
+  organizations: CatalogueTreeOrganization[],
   today: string,
 ): PortalCatalogueEntry[] {
   const offers = offersByProcedure(bindings, organizations);

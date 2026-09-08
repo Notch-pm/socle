@@ -17,6 +17,11 @@
  * puis chaque niveau, frères par nom) : c'est ce que la carte affiche et ce
  * sur quoi l'usager filtre. Une démarche que personne n'active n'est pas
  * servie — le catalogue de la racine est un référentiel, pas une offre.
+ *
+ * Un organisme de cette liste n'est pas forcément celui qui a activé la
+ * démarche : un **service interne** ne s'affiche jamais au portail, c'est son
+ * porteur qui est nommé à sa place (`bearerByOrganization`). L'usager
+ * s'adresse à sa mairie ; le service, lui, instruit.
  */
 import { isPubliclyPublished } from "./publication.ts";
 
@@ -26,6 +31,13 @@ type Row = Record<string, unknown>;
 export interface PortalOrganizationRef {
   id: string;
   name: string;
+  /**
+   * Le **service interne** qui instruit réellement, quand ce n'est pas
+   * l'organisme affiché — `null` sinon. Le portail ne le montre pas : la
+   * collectivité a choisi de ne pas le montrer. Il voyage pour que l'aval
+   * sache où router la demande, sans refaire la résolution.
+   */
+  handlingOrganizationId: string | null;
 }
 
 /** Une organisation de l'arbre du tenant, telle que lue en base. */
@@ -34,6 +46,7 @@ export interface TreeOrganization {
   name: string;
   parent_id: string | null;
   status: string;
+  is_internal_service: boolean;
 }
 
 /** Une ligne d'`organization_procedures`. */
@@ -82,15 +95,68 @@ export function orderTreeOrganizations<T extends TreeOrganization>(organizations
 }
 
 /**
- * Qui propose quoi : pour chaque démarche, les organismes actifs de l'arbre
- * qui l'ont activée, dans l'ordre de l'arbre. Une liaison désactivée, ou
- * portée par une organisation obsolète ou hors de l'arbre, ne compte pas.
+ * L'organisme qui REPRÉSENTE chaque organisation au portail — son « porteur ».
+ * Une organisation ordinaire est son propre porteur ; un **service interne**
+ * (`is_internal_service`) s'efface derrière le premier ancêtre qui n'en est
+ * pas un. Un usager s'adresse à sa mairie, pas à son service d'état civil.
+ *
+ * ⚠️ **La remontée ne sort jamais de la liste fournie** : une organisation dont
+ * le parent n'y figure pas est son propre porteur, fût-elle marquée interne.
+ * C'est ce qui protège le tenant — l'arbre servi descend de lui
+ * (`org_subtree_ids`), son parent n'y est pas, et son nom est bien celui que
+ * le portail doit porter.
+ *
+ * La remontée se termine toujours quand l'arbre part d'une racine : une racine
+ * n'est jamais un service interne (trigger `enforce_internal_service_not_root`).
+ *
+ * ⚠️ Miroir volontaire de `bearerByOrganization` dans
+ * `src/features/superadmin/organizations/orgTree.ts` — testé des deux côtés.
+ */
+export function bearerByOrganization<T extends TreeOrganization>(organizations: T[]): Map<string, T> {
+  const byId = new Map(organizations.map((org) => [org.id, org]));
+  const bearers = new Map<string, T>();
+  for (const org of organizations) {
+    let current = org;
+    const seen = new Set<string>([org.id]);
+    while (current.is_internal_service) {
+      const parent = current.parent_id ? byId.get(current.parent_id) : undefined;
+      if (!parent || seen.has(parent.id)) break;
+      seen.add(parent.id);
+      current = parent;
+    }
+    bearers.set(org.id, current);
+  }
+  return bearers;
+}
+
+/**
+ * Qui propose quoi : pour chaque démarche, les organismes **affichés**, dans
+ * l'ordre de l'arbre. Une liaison désactivée, ou portée par une organisation
+ * hors de l'arbre, ne compte pas.
+ *
+ * L'organisation qui active n'est pas forcément celle qu'on nomme : un service
+ * interne s'efface derrière son porteur, et c'est le porteur qui entre dans la
+ * liste. Le service reste porté par `handlingOrganizationId`, pour l'aval.
+ *
+ * ⚠️ **Une organisation obsolète n'apparaît ni comme instructeur, ni comme
+ * porteur** — mais elle reste dans la liste dont on part, parce qu'elle est un
+ * maillon de la chaîne des parents. La retirer avant de résoudre ferait d'un
+ * service interne son propre porteur, et le remettrait au portail sous son
+ * propre nom.
+ *
+ * ⚠️ **Dédoublonnage** : deux organisations d'un même porteur ne le nomment
+ * qu'une fois. Le paramétrage l'interdit déjà (une démarche, un instructeur
+ * par porteur), mais un doublon rendrait deux cartes identiques.
  */
 export function offersByProcedure(
   bindings: ProcedureBinding[],
   organizations: TreeOrganization[],
 ): Map<string, PortalOrganizationRef[]> {
-  const ordered = orderTreeOrganizations(organizations.filter((org) => org.status === "active"));
+  const bearers = bearerByOrganization(organizations);
+  const active = new Set(
+    organizations.filter((org) => org.status === "active").map((org) => org.id),
+  );
+  const ordered = orderTreeOrganizations(organizations);
   const enabledBy = new Map<string, Set<string>>();
   for (const binding of bindings) {
     if (binding.is_enabled !== true) continue;
@@ -100,11 +166,19 @@ export function offersByProcedure(
   }
   const offers = new Map<string, PortalOrganizationRef[]>();
   for (const org of ordered) {
+    if (!active.has(org.id)) continue;
+    const bearer = bearers.get(org.id);
+    if (!bearer || !active.has(bearer.id)) continue;
     const procedureIds = enabledBy.get(org.id);
     if (!procedureIds) continue;
     for (const procedureId of procedureIds) {
       const list = offers.get(procedureId) ?? [];
-      list.push({ id: org.id, name: org.name });
+      if (list.some((entry) => entry.id === bearer.id)) continue;
+      list.push({
+        id: bearer.id,
+        name: bearer.name,
+        handlingOrganizationId: bearer.id === org.id ? null : org.id,
+      });
       offers.set(procedureId, list);
     }
   }

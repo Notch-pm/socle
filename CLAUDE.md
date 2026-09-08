@@ -126,7 +126,7 @@ exécutables par `authenticated` : le RLS les évalue avec les droits de l'appel
 
 ### Modèle de données (principales tables)
 
-- `organizations` — hiérarchie auto-référencée via `parent_id` (voir feature ci-dessous) ; `enabled_languages` (langues de la collectivité, **racine uniquement** — voir feature « langues »).
+- `organizations` — hiérarchie auto-référencée via `parent_id` (voir feature ci-dessous) ; `enabled_languages` (langues de la collectivité, **racine uniquement** — voir feature « langues ») ; `is_internal_service` (l'organisme instruit mais ne s'affiche pas au portail — voir feature « services internes »).
 - `users`, `user_organizations` (jointure user↔org + `role`).
 - `categories`, `procedures`, `organization_procedures` (catalogue de démarches) — la colonne
   `translations` des deux premières porte les **textes traduits** (voir feature « langues »).
@@ -162,6 +162,60 @@ migration doit y avoir son fichier miroir `{version}_{nom}.sql`.
 - RLS `organizations` : SELECT `has_org_access(id) OR is_admin_of_self_or_ancestor(id)` ·
   INSERT super_admin ou (parent défini ET admin d'un ancêtre) · UPDATE admin self/ancêtre ·
   DELETE `is_super_admin() AND parent_id IS NOT NULL`.
+
+### Services internes (`is_internal_service`) — instruire sans apparaître
+
+Une collectivité découpe son organigramme plus finement que ce qu'elle montre à ses usagers.
+« État civil », « Direction du Cabinet » instruisent des demandes, mais un usager du portail n'a
+pas à choisir entre eux : il s'adresse à **sa mairie**. Le commutateur **« Service interne »**
+(colonne `organizations.is_internal_service`, sous-organisations uniquement) retire l'organisme du
+**site de démarches** ; c'est son **porteur** — le premier ancêtre (elle comprise) qui n'est pas un
+service interne — qui est nommé à sa place, **même s'il n'a pas activé la démarche lui-même**.
+
+- ⚠️ **Une racine n'est jamais un service interne** : elle n'a personne au-dessus d'elle pour la
+  porter. Le trigger `enforce_internal_service_not_root` la **corrige** à `false` au lieu de
+  refuser (motif `enforce_branding_root_no_inherit`) — promouvoir un service en racine est une
+  réorganisation légitime. C'est l'invariant qui garantit que **tout service interne a un
+  porteur**, donc que la remontée se termine.
+- ⚠️ Le réglage **gouverne l'usage, pas la donnée** (motif `email_sender_name`,
+  `branding_inherit_parent`) : le décocher rend l'organisme au portail sans que rien n'ait été
+  perdu ; les activations restent en place.
+- ⚠️ **UNE DÉMARCHE, UN SEUL INSTRUCTEUR PAR PORTEUR** — le porteur lui-même compris. Deux services
+  internes de la même mairie ne peuvent pas activer la même démarche, ni un service et sa mairie :
+  une demande déposée au nom de la mairie n'aurait pas de destinataire déterminé. La règle est
+  écrite **une seule fois** en base (`internal_service_offer_conflicts`) et appliquée par **deux
+  triggers AFTER** — l'un à l'activation (`organization_procedures`), l'autre quand on coche la
+  case ou qu'on déplace un service (`organizations`) : le conflit peut naître sans qu'aucune
+  activation ne bouge. Détail : [docs/data-model.md](docs/data-model.md).
+- ⚠️ **Le statut n'entre pas dans la règle d'unicité** (cohérence du paramétrage, pas affichage) —
+  mais il entre dans le **catalogue** : une activation ne compte que si l'organisation **et son
+  porteur** sont actifs. Un service interne sous une mairie obsolète n'est proposé par personne ;
+  le faire remonter d'un cran de plus le rattacherait à une agglomération qui ne l'instruit pas.
+- **UI** : commutateur dans l'onglet « Informations de base » (`OrganizationInfoTab`, rendu
+  seulement si `parent_id !== null`) et dans l'`OrganizationFormDialog` du superadmin (rendu
+  seulement si un parent est choisi) ; **badge « Service interne »** en lecture dans
+  `OrganizationTree`, à côté d'« Obsolète » — l'organigramme est ce qu'on lit là.
+  ⚠️ L'aperçu du porteur se résout **depuis le PARENT**, jamais depuis l'organisation elle-même :
+  tant que la case n'est pas enregistrée elle est encore son propre porteur, et l'écran
+  annoncerait son propre nom (même piège que `parent_branding`).
+- **Onglet « Démarches »** : les démarches déjà portées ailleurs dans le groupe ont leur
+  interrupteur **désactivé**, avec la mention « Déjà activée par « Urbanisme » ».
+  ⚠️ **Confort, pas garantie** (motif `document_types`) : un administrateur qui n'a pas le droit de
+  lire le service frère ne verra rien de désactivé et recevra le message du trigger, déjà en
+  français, par le bandeau d'erreur existant. La base reste la seule barrière.
+  ⚠️ Une démarche activée **ici** n'est jamais verrouillée : il faut pouvoir la relâcher.
+- **En aval** (contrat 1.16.0) : `PortalOrganizationRef` porte `handling_organization_id` — l'UUID
+  du service qui instruit, `null` quand le porteur instruit lui-même. ⚠️ **Le NOM du service ne
+  sort pas** : la collectivité a choisi de ne pas le montrer. L'identifiant sert à router (Nora
+  dépose dans Iris), pas à afficher. `is_internal_service` est aussi exposé sur `OrganizationDto` —
+  contrairement aux colonnes de charte, la valeur brute ne ment pas, il n'y a pas d'héritage à
+  résoudre.
+- Code : `bearerByOrganization` dans `src/features/superadmin/organizations/orgTree.ts` (pur,
+  testé), `bearerGroupSiblings` / `offersHeldBySiblings` dans
+  `src/features/organizations/organizationProcedures.ts` (purs, testés),
+  `OrganizationProceduresTab.test.tsx`. Miroir edge : `bearerByOrganization` dans
+  `public-api/_shared/portalCatalogue.ts` (une edge function n'importe rien de `src/` — testé des
+  deux côtés, motif `readDocumentIds`). Migration `organizations_service_interne`.
 
 ### Où est le code
 
@@ -237,6 +291,9 @@ garde sa modale (`OrganizationsManager` reçoit `onEditOrganization` seulement c
   `organization_procedures` existe avec `is_enabled = true` (helper pur `buildEnabledProcedureIds`,
   testé). Écriture par **upsert** sur la contrainte unique `(organization_id, procedure_id)`
   (`useSetProcedureEnabled`), lecture via `useOrganizationProcedureBindings`.
+  ⚠️ Une démarche déjà portée par le **porteur ou un service interne frère** a son interrupteur
+  désactivé (« Déjà activée par « X » ») : un seul instructeur par porteur — voir la feature
+  « Services internes ».
 - RLS `organization_procedures` : lecture `has_org_access(organization_id) OR
   is_admin_of_self_or_ancestor(organization_id)` · écriture (INSERT/UPDATE/DELETE)
   `is_admin_of_self_or_ancestor(organization_id)` — un admin active les démarches sur **tout son
@@ -289,7 +346,9 @@ est fonctionnelle (voir feature « Édition d'organisation » ci-dessous). Param
   ⚠️ Ne pas confondre avec les deux autres notions qui s'y cumulent : `organization_procedures.
   is_enabled` (quelles organisations la proposent) et `communication_config.visibility` (où et
   quand). `status` dit si le **paramétrage est fini** ; une démarche en brouillon n'est proposée
-  nulle part, quelles que soient les deux autres. ⚠️ Les démarches **antérieures au 2026-08-30 sont
+  nulle part, quelles que soient les deux autres. Une quatrième s'y ajoute sans s'y substituer :
+  `organizations.is_internal_service` ne dit pas SI la démarche est proposée, mais **sous quel nom**
+  — celui du porteur — et il borne l'activation (un seul instructeur par porteur). ⚠️ Les démarches **antérieures au 2026-08-30 sont
   toutes en brouillon** (la notion n'existait pas — rien n'a été affirmé à leur place) : un
   consommateur qui filtre sur `production` n'obtient rien tant que le catalogue n'a pas été basculé.
   Logique pure `procedureStatus.ts` (testée : au moindre doute, **brouillon** — le doute ne publie rien).
@@ -759,6 +818,13 @@ démarches ». Ajouter une collectivité au portail = une ligne de domaine, aucu
   l'en-tête dès que deux organismes proposent quelque chose. ⚠️ Une démarche que **personne**
   n'active n'est pas servie par le portail, même en `production` : c'est le badge « Non activée ».
   La règle est le **miroir volontaire** de `public-api/_shared/portalCatalogue.ts`.
+  ⚠️ **L'organisme affiché n'est pas toujours celui qui a activé** : un **service interne**
+  s'efface derrière son porteur (voir la feature « Services internes »), et c'est le porteur qui
+  entre dans la liste — dédoublonné, sans quoi deux cartes identiques apparaîtraient.
+  ⚠️ `portalTreeOrganizations` renvoie **tout** le sous-arbre, obsolètes comprises, et c'est
+  `offersByProcedure` qui les écarte : filtrer avant couperait la chaîne des parents, et un service
+  interne deviendrait un sommet de liste — donc son propre porteur — et réapparaîtrait sous son
+  propre nom. C'est aussi ce qui rend les deux miroirs littéralement identiques.
 - **Texte et image** (`texte-image`, 2026-09-07) : un paragraphe et une illustration, côte à côte
   et **empilés sur mobile**. `layout` (`text-first` / `image-first`) est un **ordre de lecture**,
   pas une position : porté par un seul `order-first`, il vaut dans les deux dispositions — « image
@@ -853,7 +919,9 @@ démarches ». Ajouter une collectivité au portail = une ligne de domaine, aucu
   `translations` depuis le contrat **1.14.0** — schéma `PortalSectionTranslations`, **distinct** de
   `Translations` qui décrit `name`/`short_description`, et servi **par whitelist des champs du
   kind** : un `body` égaré sur une `recherche` ne sort pas ; en **1.15.0** s'ajoutent la section
-  `PortalTexteImageSection` (avec la clé traduisible `alt`) et `audience_filter` sur la grille). La charte vient de
+  `PortalTexteImageSection` (avec la clé traduisible `alt`) et `audience_filter` sur la grille ; en **1.16.0** chaque organisme porte
+  `handling_organization_id` — le service interne qui instruit, **identifiant seul, jamais son
+  nom**). La charte vient de
   `GET /v1/organizations/{id}/branding` (résolue). ⚠️ `supabase/config.toml` déclare
   `verify_jwt = false` pour `public-api` : un déploiement sans ce fichier remet le défaut `true`
   et coupe **tous** les consommateurs (incident du 2026-09-05).

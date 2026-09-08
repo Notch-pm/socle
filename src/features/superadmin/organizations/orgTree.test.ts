@@ -1,5 +1,6 @@
 import { describe, it, expect } from "vitest";
 import {
+  bearerByOrganization,
   buildOrgTree,
   collectDescendantIds,
   collectDescendantIdsFlat,
@@ -11,11 +12,17 @@ import {
 } from "./orgTree";
 
 /** Fabrique un enregistrement `organizations` minimal mais complet pour les tests. */
-function org(id: string, name: string, parent_id: string | null = null): Organization {
+function org(
+  id: string,
+  name: string,
+  parent_id: string | null = null,
+  over: Partial<Organization> = {},
+): Organization {
   return {
     id,
     name,
     parent_id,
+    is_internal_service: false,
     address: null,
     created_at: null,
     email: null,
@@ -32,6 +39,7 @@ function org(id: string, name: string, parent_id: string | null = null): Organiz
     slug: null,
     status: "active",
     type: null,
+    ...over,
   };
 }
 
@@ -215,5 +223,47 @@ describe("visibleRootOrganizations", () => {
   it("ne promeut pas un enfant dont le parent EST visible", () => {
     const flat = [org("racine", "Racine"), org("enfant", "Enfant", "racine")];
     expect(visibleRootOrganizations(flat).map((o) => o.id)).toEqual(["racine"]);
+  });
+});
+
+describe("bearerByOrganization — qui représente qui au portail", () => {
+  const interne = (id: string, name: string, parent: string) =>
+    org(id, name, parent, { is_internal_service: true });
+
+  it("une organisation ordinaire est son propre porteur", () => {
+    const flat = [org("accm", "ACCM"), org("crau", "Mairie", "accm")];
+    const bearers = bearerByOrganization(flat);
+    expect(bearers.get("crau")?.id).toBe("crau");
+    expect(bearers.get("accm")?.id).toBe("accm");
+  });
+
+  it("un service interne s'efface derrière son parent", () => {
+    const flat = [org("accm", "ACCM"), org("crau", "Mairie", "accm"), interne("ec", "État civil", "crau")];
+    expect(bearerByOrganization(flat).get("ec")?.name).toBe("Mairie");
+  });
+
+  it("remonte une chaîne de services internes jusqu'au premier qui n'en est pas un", () => {
+    const flat = [
+      org("accm", "ACCM"),
+      org("crau", "Mairie", "accm"),
+      interne("ec", "État civil", "crau"),
+      interne("bureau", "Bureau des actes", "ec"),
+    ];
+    expect(bearerByOrganization(flat).get("bureau")?.id).toBe("crau");
+  });
+
+  it("s'arrête au sommet de la liste : un service interne dont le parent n'y est pas se porte lui-même", () => {
+    // Le cas du tenant : l'arbre servi descend de lui, son parent n'y figure
+    // pas, et c'est son nom que le portail doit porter.
+    const flat = [interne("crau", "Mairie", "accm"), interne("ec", "État civil", "crau")];
+    expect(bearerByOrganization(flat).get("ec")?.id).toBe("crau");
+    expect(bearerByOrganization(flat).get("crau")?.id).toBe("crau");
+  });
+
+  it("ne boucle pas si la chaîne se referme sur elle-même", () => {
+    // `enforce_org_depth` bloque déjà les cycles en base ; le garde évite
+    // qu'une donnée abîmée fige l'écran.
+    const flat = [interne("a", "A", "b"), interne("b", "B", "a")];
+    expect(bearerByOrganization(flat).get("a")?.id).toBe("b");
   });
 });

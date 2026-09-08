@@ -754,6 +754,7 @@ export type Database = {
           email_sender_override: boolean
           enabled_languages: string[]
           id: string
+          is_internal_service: boolean
           logo_url: string | null
           logo_white_url: string | null
           metadata: Json | null
@@ -775,6 +776,7 @@ export type Database = {
           email_sender_override?: boolean
           enabled_languages?: string[]
           id?: string
+          is_internal_service?: boolean
           logo_url?: string | null
           logo_white_url?: string | null
           metadata?: Json | null
@@ -796,6 +798,7 @@ export type Database = {
           email_sender_override?: boolean
           enabled_languages?: string[]
           id?: string
+          is_internal_service?: boolean
           logo_url?: string | null
           logo_white_url?: string | null
           metadata?: Json | null
@@ -1145,6 +1148,17 @@ export type Database = {
       }
       has_org_access: { Args: { org_id: string }; Returns: boolean }
       immutable_unaccent: { Args: { value: string }; Returns: string }
+      internal_service_bearer: { Args: { p_org_id: string }; Returns: string }
+      internal_service_offer_conflicts: {
+        Args: { p_org_id: string }
+        Returns: {
+          bearer_id: string
+          bearer_name: string
+          organization_names: string[]
+          procedure_id: string
+          procedure_name: string
+        }[]
+      }
       is_admin_of_self_or_ancestor: {
         Args: { org_id: string }
         Returns: boolean

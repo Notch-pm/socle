@@ -7,6 +7,7 @@ import type { OrgStatus } from "./orgTree";
 // Ré-exportée ici pour préserver les imports existants.
 export {
   MAX_ORG_DEPTH,
+  bearerByOrganization,
   buildOrgTree,
   collectDescendantIds,
   collectDescendantIdsFlat,

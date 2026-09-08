@@ -43,8 +43,19 @@ function procedure(over: Partial<Procedure> = {}): Procedure {
   } as Procedure;
 }
 
-function organization(id: string, name: string, parent_id: string | null, status = "active"): Organization {
-  return { id, name, parent_id, status } as Organization;
+function organization(
+  id: string,
+  name: string,
+  parent_id: string | null,
+  status = "active",
+  is_internal_service = false,
+): Organization {
+  return { id, name, parent_id, status, is_internal_service } as Organization;
+}
+
+/** Un organisme affiché sur une carte du portail. */
+function offer(id: string, name: string, handlingOrganizationId: string | null = null) {
+  return { id, name, handlingOrganizationId };
 }
 
 function binding(procedure_id: string, organization_id: string, is_enabled = true): CatalogueBinding {
@@ -52,7 +63,7 @@ function binding(procedure_id: string, organization_id: string, is_enabled = tru
 }
 
 /** Un organisme qui propose la démarche : le cas ordinaire des tests de visibilité. */
-const ACCM = { id: "accm", name: "ACCM" };
+const ACCM = { id: "accm", name: "ACCM", handlingOrganizationId: null };
 
 describe("catalogueVisibility — les règles du Socle, dans leur ordre", () => {
   it("visible : prête, externe, sans période, proposée par au moins un organisme", () => {
@@ -171,8 +182,16 @@ describe("portalTreeOrganizations — l'arbre que le portail sert", () => {
     organization("accm", "ACCM", null),
   ];
 
-  it("garde la racine et ses descendantes actives, dans l'ordre de l'arbre", () => {
-    expect(portalTreeOrganizations(all, "accm").map((o) => o.id)).toEqual(["accm", "arles", "crau", "cabinet"]);
+  it("garde la racine et TOUTE sa descendance, dans l'ordre de l'arbre", () => {
+    // L'obsolète y figure : c'est `offersByProcedure` qui l'écarte, pour ne
+    // pas couper la chaîne des parents sous elle.
+    expect(portalTreeOrganizations(all, "accm").map((o) => o.id)).toEqual([
+      "accm",
+      "old",
+      "arles",
+      "crau",
+      "cabinet",
+    ]);
   });
 
   it("ne mélange pas les clients : une autre racine n'y figure pas", () => {
@@ -182,9 +201,9 @@ describe("portalTreeOrganizations — l'arbre que le portail sert", () => {
 
 describe("offersByProcedure / buildCatalogue — qui propose quoi", () => {
   const tree = [
-    { id: "accm", name: "ACCM" },
-    { id: "arles", name: "Mairie d'Arles" },
-    { id: "crau", name: "Mairie de Saint-Martin" },
+    organization("accm", "ACCM", null),
+    organization("arles", "Mairie d'Arles", "accm"),
+    organization("crau", "Mairie de Saint-Martin", "accm"),
   ];
 
   it("liste les organismes de chaque démarche dans l'ordre de l'arbre, sans les liaisons désactivées", () => {
@@ -192,10 +211,7 @@ describe("offersByProcedure / buildCatalogue — qui propose quoi", () => {
       [binding("p1", "crau"), binding("p1", "accm"), binding("p1", "arles", false), binding("p2", "ailleurs")],
       tree,
     );
-    expect(offers.get("p1")).toEqual([
-      { id: "accm", name: "ACCM" },
-      { id: "crau", name: "Mairie de Saint-Martin" },
-    ]);
+    expect(offers.get("p1")).toEqual([offer("accm", "ACCM"), offer("crau", "Mairie de Saint-Martin")]);
     // Une organisation hors de l'arbre ne propose rien sur ce portail.
     expect(offers.has("p2")).toBe(false);
   });
@@ -211,7 +227,38 @@ describe("offersByProcedure / buildCatalogue — qui propose quoi", () => {
       ["p1", "non-activee"],
       ["p2", "visible"],
     ]);
-    expect(catalogue[1].organizations).toEqual([{ id: "arles", name: "Mairie d'Arles" }]);
+    expect(catalogue[1].organizations).toEqual([offer("arles", "Mairie d'Arles")]);
+  });
+
+  it("un service interne s'efface derrière sa mairie, qui instruit par lui", () => {
+    const tree = [
+      organization("accm", "ACCM", null),
+      organization("crau", "Mairie de Saint-Martin", "accm"),
+      organization("ec", "État civil", "crau", "active", true),
+    ];
+    const offers = offersByProcedure([binding("p1", "ec")], tree);
+    expect(offers.get("p1")).toEqual([offer("crau", "Mairie de Saint-Martin", "ec")]);
+  });
+
+  it("ne nomme la mairie qu'une fois quand elle active aussi la démarche", () => {
+    const tree = [
+      organization("accm", "ACCM", null),
+      organization("crau", "Mairie de Saint-Martin", "accm"),
+      organization("ec", "État civil", "crau", "active", true),
+    ];
+    const offers = offersByProcedure([binding("p1", "ec"), binding("p1", "crau")], tree);
+    expect(offers.get("p1")).toEqual([offer("crau", "Mairie de Saint-Martin")]);
+  });
+
+  it("un service interne dont le porteur est obsolète ne propose rien", () => {
+    // Remonter d'un cran de plus rattacherait la démarche à l'agglomération,
+    // qui ne l'instruit pas.
+    const tree = [
+      organization("accm", "ACCM", null),
+      organization("crau", "Mairie de Saint-Martin", "accm", "obsolete"),
+      organization("ec", "État civil", "crau", "active", true),
+    ];
+    expect(offersByProcedure([binding("p1", "ec")], tree).has("p1")).toBe(false);
   });
 
   it("catalogueOrganizations : l'union dédoublonnée, dans l'ordre de première apparition", () => {

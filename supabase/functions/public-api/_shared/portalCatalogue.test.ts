@@ -10,11 +10,29 @@ import {
 const TODAY = "2026-09-06";
 
 /** L'arbre d'une agglomération : la racine, deux mairies, un service sous l'une d'elles. */
-const ACCM: TreeOrganization = { id: "accm", name: "ACCM", parent_id: null, status: "active" };
-const ARLES: TreeOrganization = { id: "arles", name: "Mairie d'Arles", parent_id: "accm", status: "active" };
-const CRAU: TreeOrganization = { id: "crau", name: "Mairie de Saint-Martin", parent_id: "accm", status: "active" };
-const CABINET: TreeOrganization = { id: "cabinet", name: "Direction du Cabinet", parent_id: "crau", status: "active" };
+function org(
+  id: string,
+  name: string,
+  parent_id: string | null,
+  over: Partial<TreeOrganization> = {},
+): TreeOrganization {
+  return { id, name, parent_id, status: "active", is_internal_service: false, ...over };
+}
+
+const ACCM = org("accm", "ACCM", null);
+const ARLES = org("arles", "Mairie d'Arles", "accm");
+const CRAU = org("crau", "Mairie de Saint-Martin", "accm");
+const CABINET = org("cabinet", "Direction du Cabinet", "crau");
 const TREE = [CABINET, CRAU, ARLES, ACCM];
+
+/** Le même arbre, mais la Direction du Cabinet est un service interne. */
+const CABINET_INTERNE = org("cabinet", "Direction du Cabinet", "crau", { is_internal_service: true });
+const TREE_AVEC_SERVICE = [CABINET_INTERNE, CRAU, ARLES, ACCM];
+
+/** Un organisme affiché sur une carte du portail. */
+function offer(id: string, name: string, handlingOrganizationId: string | null = null) {
+  return { id, name, handlingOrganizationId };
+}
 
 function procedure(id: string, over: Record<string, unknown> = {}): Record<string, unknown> {
   return {
@@ -58,11 +76,9 @@ describe("offersByProcedure — qui propose quoi", () => {
       [binding("p1", "crau"), binding("p1", "accm"), binding("p2", "cabinet")],
       TREE,
     );
-    expect(offers.get("p1")).toEqual([
-      { id: "accm", name: "ACCM" },
-      { id: "crau", name: "Mairie de Saint-Martin" },
-    ]);
-    expect(offers.get("p2")).toEqual([{ id: "cabinet", name: "Direction du Cabinet" }]);
+    expect(offers.get("p1")).toEqual([offer("accm", "ACCM"), offer("crau", "Mairie de Saint-Martin")]);
+    // Un service ORDINAIRE se nomme lui-même : c'est un guichet comme un autre.
+    expect(offers.get("p2")).toEqual([offer("cabinet", "Direction du Cabinet")]);
   });
 
   it("ignore une liaison désactivée — l'activation est en opt-in", () => {
@@ -71,12 +87,52 @@ describe("offersByProcedure — qui propose quoi", () => {
   });
 
   it("ignore une organisation obsolète ou hors de l'arbre", () => {
-    const obsolete: TreeOrganization = { id: "old", name: "Ancienne mairie", parent_id: "accm", status: "obsolete" };
+    const obsolete = org("old", "Ancienne mairie", "accm", { status: "obsolete" });
     const offers = offersByProcedure(
       [binding("p1", "old"), binding("p1", "ailleurs"), binding("p1", "arles")],
       [...TREE, obsolete],
     );
-    expect(offers.get("p1")).toEqual([{ id: "arles", name: "Mairie d'Arles" }]);
+    expect(offers.get("p1")).toEqual([offer("arles", "Mairie d'Arles")]);
+  });
+});
+
+describe("offersByProcedure — les services internes s'effacent derrière leur porteur", () => {
+  it("nomme la mairie, et dit quel service instruit", () => {
+    const offers = offersByProcedure([binding("p1", "cabinet")], TREE_AVEC_SERVICE);
+    expect(offers.get("p1")).toEqual([offer("crau", "Mairie de Saint-Martin", "cabinet")]);
+  });
+
+  it("remonte une chaîne de services internes jusqu'au premier qui n'en est pas un", () => {
+    const bureau = org("bureau", "Bureau des actes", "cabinet", { is_internal_service: true });
+    const offers = offersByProcedure([binding("p1", "bureau")], [...TREE_AVEC_SERVICE, bureau]);
+    expect(offers.get("p1")).toEqual([offer("crau", "Mairie de Saint-Martin", "bureau")]);
+  });
+
+  it("ne nomme la mairie qu'une fois, quand elle active aussi la démarche", () => {
+    // Le paramétrage l'interdit (un seul instructeur par porteur), mais un
+    // doublon rendrait deux cartes identiques au portail.
+    const offers = offersByProcedure(
+      [binding("p1", "cabinet"), binding("p1", "crau")],
+      TREE_AVEC_SERVICE,
+    );
+    // La mairie l'active en propre : c'est elle qui instruit, pas le service.
+    expect(offers.get("p1")).toEqual([offer("crau", "Mairie de Saint-Martin")]);
+  });
+
+  it("n'apparaît nulle part si son porteur est obsolète", () => {
+    // Remonter d'un cran de plus rattacherait la démarche à l'agglomération,
+    // qui ne l'instruit pas.
+    const tree = [CABINET_INTERNE, org("crau", "Mairie de Saint-Martin", "accm", { status: "obsolete" }), ARLES, ACCM];
+    const offers = offersByProcedure([binding("p1", "cabinet")], tree);
+    expect(offers.has("p1")).toBe(false);
+  });
+
+  it("un tenant marqué interne reste lui-même : la remontée ne sort pas de l'arbre servi", () => {
+    // L'arbre servi descend du tenant (`org_subtree_ids`) : son parent n'y est
+    // pas, et c'est son nom que le portail doit porter.
+    const tenant = org("crau", "Mairie de Saint-Martin", "accm", { is_internal_service: true });
+    const offers = offersByProcedure([binding("p1", "crau")], [tenant, CABINET_INTERNE]);
+    expect(offers.get("p1")).toEqual([offer("crau", "Mairie de Saint-Martin")]);
   });
 });
 
@@ -89,7 +145,7 @@ describe("publishedCatalogue — les deux règles, ensemble", () => {
       today: TODAY,
     });
     expect(result).toHaveLength(1);
-    expect(result[0].organizations).toEqual([{ id: "arles", name: "Mairie d'Arles" }]);
+    expect(result[0].organizations).toEqual([offer("arles", "Mairie d'Arles")]);
   });
 
   it("écarte une démarche que personne n'active, même parfaitement publiable", () => {

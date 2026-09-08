@@ -28,6 +28,7 @@ describe("serializers — whitelist stricte (aucune fuite)", () => {
       phone: null,
       email: null,
       logo_url: null,
+      is_internal_service: true,
       email_sender_override: false,
       email_sender_name: null,
       metadata: null,
@@ -45,6 +46,7 @@ describe("serializers — whitelist stricte (aucune fuite)", () => {
         "email_sender_name",
         "email_sender_override",
         "id",
+        "is_internal_service",
         "logo_url",
         "metadata",
         "name",
@@ -601,12 +603,14 @@ describe("serializePortalProcedure — le paramétrage d'instruction ne sort pas
 
   it("recopie les organismes qui proposent la démarche, dans l'ordre reçu, et rien d'autre d'eux", () => {
     const dto = serializePortalProcedure(row, [
-      { id: "accm", name: "ACCM", status: "active", email: "x@y" } as never,
-      { id: "arles", name: "Mairie d'Arles" },
+      { id: "accm", name: "ACCM", handlingOrganizationId: null, status: "active", email: "x@y" } as never,
+      { id: "arles", name: "Mairie d'Arles", handlingOrganizationId: "service-etat-civil" },
     ]);
     expect(dto.organizations).toEqual([
-      { id: "accm", name: "ACCM" },
-      { id: "arles", name: "Mairie d'Arles" },
+      { id: "accm", name: "ACCM", handling_organization_id: null },
+      // Le service interne qui instruit voyage par son IDENTIFIANT seul : son
+      // nom ne sort pas, la collectivité a choisi de ne pas le montrer.
+      { id: "arles", name: "Mairie d'Arles", handling_organization_id: "service-etat-civil" },
     ]);
   });
 
@@ -653,14 +657,19 @@ describe("serializePortalProcedureDetail — le formulaire sort, l'instruction n
   const category = { id: "cat-1", name: "État civil", translations: { br: { name: "Stad-civil" } } };
 
   it("ajoute au public de la liste la catégorie et les deux schémas de saisie", () => {
-    const dto = serializePortalProcedureDetail(row, [{ id: "accm", name: "ACCM" }], detail, category);
+    const dto = serializePortalProcedureDetail(
+      row,
+      [{ id: "accm", name: "ACCM", handlingOrganizationId: null }],
+      detail,
+      category,
+    );
     expect(dto).toEqual({
       id: "proc-1",
       name: "Demande d'acte de naissance",
       short_description: "En quelques minutes.",
       user_description: "Adressée au service état civil.",
       input_duration_minutes: 5,
-      organizations: [{ id: "accm", name: "ACCM" }],
+      organizations: [{ id: "accm", name: "ACCM", handling_organization_id: null }],
       audiences: ["citoyen"],
       translations: { br: { name: "Testeni ganedigezh" } },
       category: { id: "cat-1", name: "État civil", translations: { br: { name: "Stad-civil" } } },

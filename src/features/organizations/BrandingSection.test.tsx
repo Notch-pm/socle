@@ -52,6 +52,7 @@ function org(over: Partial<Organization> = {}): Organization {
     id: "org-enfant",
     name: "Mairie de Fontvieille",
     parent_id: "org-racine",
+    is_internal_service: false,
     address: null,
     created_at: null,
     email: null,

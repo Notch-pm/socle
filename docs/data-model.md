@@ -1,7 +1,7 @@
 # Modèle de données
 
 > **Public** : développeurs, ops · **Question traitée** : qu'est-ce qui existe en base (tables,
-> contraintes, RLS, fonctions, storage) ? · **Dernière mise à jour** : 2026-09-06
+> contraintes, RLS, fonctions, storage) ? · **Dernière mise à jour** : 2026-09-08
 
 Pour le rôle de Socle dans la gamme et les décisions d'architecture, voir [../CLAUDE.md](../CLAUDE.md)
 et [./architecture.md](./architecture.md). Pour les endpoints, schémas de requête/réponse et la
@@ -59,6 +59,7 @@ aucun endpoint, il décrit ce qui existe **en base**.
 | `branding_inherit_parent` | bool NOT NULL défaut **true**, CHECK `organizations_branding_root_no_inherit` (false obligatoire sur une racine) |
 | `metadata` | jsonb, défaut `{}` |
 | `status` | text NOT NULL défaut `active`, CHECK `active`\|`obsolete` (réversible) |
+| `is_internal_service` | bool NOT NULL défaut **false**, CHECK `organizations_internal_service_not_root` (false obligatoire sur une racine) |
 | `email_sender_override` | bool NOT NULL défaut false |
 | `email_sender_name` | text nullable |
 | `enabled_languages` | `text[]` NOT NULL défaut `{fr}`, CHECK `organizations_enabled_languages_check` (fonction `is_valid_language_set`) — **racine uniquement** |
@@ -86,6 +87,19 @@ aucun endpoint, il décrit ce qui existe **en base**.
   vérité), mais **rattacher** une organisation sous une autre est accepté — sa liste revient au
   défaut plutôt que de bloquer une réorganisation. Résolution à la lecture par
   `resolve_org_languages`, jamais de recopie (motif `resolve_branding`).
+- **Services internes** (2026-09-08) : `is_internal_service` retire une sous-organisation du
+  **portail usagers**. Elle continue d'instruire, mais le portail la présente sous le nom de son
+  **porteur** — le premier ancêtre (elle comprise) qui n'est pas un service interne. Un usager
+  s'adresse à sa mairie, pas à son service d'état civil. Résolution à la lecture par
+  `internal_service_bearer(uuid)` (`SECURITY DEFINER`, EXECUTE révoqué : elle n'est appelée que
+  par les triggers), miroir des helpers purs `bearerByOrganization` du front et de `public-api`.
+  Trigger `enforce_internal_service_not_root` (BEFORE INSERT/UPDATE) : une racine est **corrigée**
+  à `false` plutôt que refusée — promouvoir un service en racine est une réorganisation légitime,
+  et échouer la bloquerait sans rien protéger (motif `enforce_branding_root_no_inherit`). Le CHECK
+  ne voit donc que la valeur corrigée. ⚠️ **Un service interne a toujours un porteur** : c'est ce
+  que garantit cet invariant, et c'est ce qui fait terminer la remontée.
+  ⚠️ Le réglage **gouverne l'usage, pas la donnée** : le décocher rend l'organisme au portail sans
+  que rien n'ait été perdu.
 - ⚠️ **`parent_id` en CASCADE, et tous les `organization_id` des autres tables également en
   CASCADE** : supprimer une organisation supprime récursivement tout son sous-arbre **et**
   l'intégralité de ses données (catégories, démarches, contacts, quartiers, clés API, SMTP…).
@@ -232,6 +246,25 @@ aucun endpoint, il décrit ce qui existe **en base**.
 - Sémantique : activation **opt-in** — une démarche est active pour une organisation si et
   seulement si une ligne existe avec `is_enabled = true`. Détail applicatif dans
   [../CLAUDE.md](../CLAUDE.md) (feature « Édition d'organisation »).
+- **Un seul instructeur par porteur** (2026-09-08) : une même démarche ne peut être activée que
+  par **une** organisation d'un même groupe — le porteur et ses services internes (voir
+  `organizations.is_internal_service`). Sinon, une demande déposée au nom du porteur n'aurait pas
+  de destinataire déterminé. La règle est écrite **une seule fois**, dans
+  `internal_service_offer_conflicts(uuid)` (CTE récursive : racine → sous-arbre → porteur de
+  chaque organisation → couples `(porteur, démarche)` portés par plus d'une organisation ;
+  `SECURITY DEFINER`, EXECUTE révoqué), et appliquée par **deux triggers AFTER** :
+  `enforce_single_offer_per_bearer` sur cette table (à l'activation, filtré sur la démarche
+  écrite — un conflit préexistant sur une autre démarche ne doit rien bloquer) et
+  `enforce_no_offer_conflict_on_bearer` sur `organizations` (`AFTER UPDATE OF is_internal_service,
+  parent_id` : cocher la case ou déplacer un service peut créer le conflit sans qu'aucune
+  activation ne bouge). Les deux lèvent un message français, qui **nomme** l'organisation fautive.
+  ⚠️ **AFTER et non BEFORE** : la règle est un agrégat sur la table, elle doit voir la ligne qu'on
+  vient d'écrire.
+  ⚠️ **Le statut (`active`/`obsolete`) n'entre pas dans la règle** : c'est une contrainte de
+  cohérence du paramétrage, pas d'affichage. Réactiver une organisation obsolète ne doit pas
+  révéler un conflit dormant. Le catalogue du portail, lui, filtre bien sur le statut.
+  ⚠️ Un trigger n'est pas étanche à la **concurrence** (deux activations simultanées peuvent se
+  croiser) : assumé, le geste est humain, à l'échelle du clic.
 
 ### `document_types` — catalogue de pièces justificatives
 
