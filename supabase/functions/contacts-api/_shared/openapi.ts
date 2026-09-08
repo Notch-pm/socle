@@ -39,7 +39,7 @@ export function buildOpenApiDocument(serverUrl: string): Record<string, unknown>
     openapi: "3.1.0",
     info: {
       title: "API Socle — Référentiel des usagers",
-      version: "1.0.0",
+      version: "1.1.0",
       description: [
         "API du **référentiel des usagers** de la gamme (contacts : personnes physiques,",
         "entreprises, associations, administrations). Elle permet de **consulter, créer,",
@@ -359,7 +359,10 @@ export function buildOpenApiDocument(serverUrl: string): Record<string, unknown>
           type: "http",
           scheme: "bearer",
           description:
-            "Clé API délivrée par un super administrateur Socle, portant le scope `contacts`.",
+            "Clé API délivrée par un super administrateur Socle, portant le scope `contacts`. " +
+            "Une clé PLATEFORME est rattachée à une application de la gamme et ne sert que les " +
+            "collectivités ABONNÉES à cette application : `X-Organization-Id` hors abonnement " +
+            "répond 404, comme une organisation inexistante.",
         },
       },
       parameters: {

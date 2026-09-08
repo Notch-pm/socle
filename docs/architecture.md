@@ -2,7 +2,7 @@
 
 > **Public** : développeuses et développeurs (humains et agents IA) travaillant sur Socle ·
 > **Question traitée** : comment le système est-il construit, et pourquoi · **Dernière mise à
-> jour** : 2026-09-05
+> jour** : 2026-09-08
 
 Ce document explique les frontières du système et les décisions qui les justifient. Il ne liste
 ni les tables (→ [`./data-model.md`](./data-model.md)), ni les endpoints (→ les OpenAPI, publiées
@@ -100,7 +100,9 @@ Il n'y a **pas** de route catch-all `*` (constat en §7).
 | Route | Composant |
 |---|---|
 | `/superadmin` (index) | `SuperAdminDashboardPage` |
-| `/superadmin/cles-plateforme` | `PlatformApiKeysPage` — clés API **plateforme** (`organization_id` NULL, périmètre global) |
+| `/superadmin/applications` | `ApplicationsPage` — registre des applications de la gamme, **une clé plateforme par application** (périmètre = collectivités abonnées) |
+| `/superadmin/cles-plateforme` | `<Navigate to="/superadmin/applications" replace />` — redirection de compatibilité |
+| `/superadmin/plateforme` | `PlatformSettingsPage` — réglages de plateforme (zone des sous-domaines, cible CNAME, plafond IA par défaut) et rejeu du provisioning |
 | `/superadmin/organisations` | `<Navigate to="/superadmin" replace />` — redirection de compatibilité |
 | `/superadmin/organisations/:orgId` | `OrgSettingsPage` |
 | `/superadmin/organisations/:orgId/demarches/nouveau` | `ProcedureEditorPage variant="superadmin"` |
@@ -257,6 +259,9 @@ ignore toute section qu'il ne sait pas rendre — le Socle peut apprendre un blo
 | 2026-09-05 | Le portail usagers (Nora) est une instance unique **sans base de données** : le Socle résout le domaine visité (`organization_domains`, `hostname` unique globalement) et sert catalogue, composition publiée et charte par `public-api` (tag « Portail »). Le portail ne connaît que ces routes, jamais la structure interne du Socle. | Ajouter une collectivité = une ligne au Socle, aucun déploiement ; un seul référentiel, aucune copie à resynchroniser ; un renommage de colonne au Socle ne remonte pas jusqu'aux écrans du portail (traduction en un seul endroit, côté Nora). Le nom d'hôte est une donnée non fiable : il est déterminé côté serveur (`Origin`), et inconnu / hors périmètre / obsolète reçoivent le même 404. |
 | 2026-09-05 | Composition de la page d'accueil dans `portal_pages` : deux colonnes `draft` (autosauvegardé) et `published` (publication explicite), une ligne par `(organization_id, slug)`, schéma JSON possédé et versionné, parse tolérant section par section. **Sauvegarder n'est pas publier.** | La maquette distingue exactement deux états et le public ne lira jamais que `published` ; la séparation est structurelle (deux colonnes, deux mutations) et non une option — une autosauvegarde ne peut pas publier par accident. Une table de versions aurait été prématurée. |
 | 2026-09-05 | `supabase/config.toml` déclare `verify_jwt` **fonction par fonction**, et un déploiement passe toujours par ce fichier. | Un redéploiement de `public-api` sans lui a remis le défaut `verify_jwt = true` et coupé tous les consommateurs (Iris, Clara, `/api-doc`) le temps d'un redéploiement. Le fichier gouverne le déploiement : il n'est pas de la documentation. |
+| 2026-09-08 | **Une clé par application, bornée par abonnement.** Registre `applications`, abonnements `organization_applications` par racine ; une clé plateforme est rattachée à une application et voit les seules collectivités abonnées (`application_scope_ids`). `consumer` devient une clé étrangère, `scopes` un CHECK. Remplace « clé plateforme = toutes les organisations » (2026-07-17). | Onboarder un client exigeait un secret par client et par application, transmis à la main ; ou une clé plateforme dont l'isolation vivait dans le code de chaque application (une application compromise lisait tout). Le périmètre vit désormais au Socle, et l'arrivée d'un client se réduit à cocher ses applications. Rien n'était en production : rupture assumée, racines existantes abonnées à tout par la migration. |
+| 2026-09-08 | **Une racine naît équipée** : trigger `provision_root_organization` (rôles de contact, plafond IA par défaut, sous-domaine fourni `<slug>.<zone>`), réglages de plateforme dans `platform_settings`, check-list de mise en service (`root_onboarding_status`) en tête de la page d'un client, catégories et activations accessibles au super administrateur. | Trois pièges silencieux à chaque client (rôles jamais seedés, plafond absent = illimité, SMTP absent à l'invitation) et deux écrans interdits au super administrateur (catégories, activations) obligeaient à du SQL. Le provisioning est idempotent et jamais bloquant : la création de l'organisation reste l'acte principal. |
+| 2026-09-08 | **Relais de plateforme en repli** (`PLATFORM_SMTP_*`) pour les seuls courriels d'authentification ; les courriels métier restent sur le relais de la collectivité. Les domaines du portail s'écrivent par le super administrateur seul ; les administrateurs les lisent et voient la cible CNAME. | Poule et œuf : inviter le premier administrateur exigeait un SMTP que seul un administrateur pouvait saisir. Un domaine personnalisé suppose un CNAME chez le client et un enregistrement chez l'hébergeur — un travail de l'éditeur, et l'unicité globale permettait de réserver par erreur le domaine d'un autre client. |
 
 ## 7. Risques acceptés & dette
 
@@ -293,5 +298,6 @@ Ajoutés le 2026-09-05 (éditeur du site de démarches) :
 - [`./data-model.md`](./data-model.md) — tables, contraintes, triggers, RLS, RPC, extensions, storage.
 - [`./integration.md`](./integration.md) — guide consommateurs (Ariane/Clara/Iris) : clés, scopes, garanties, compatibilité.
 - [`./operations.md`](./operations.md) — déploiement, secrets, migrations, advisors, CI.
+- [`./onboarding.md`](./onboarding.md) — mise en service : la plateforme une fois, puis chaque client sans SQL.
 - [`../CLAUDE.md`](../CLAUDE.md) — règles de développement, invariants, pièges, pointeurs de code.
 - [`../README.md`](../README.md) — porte d'entrée du projet.

@@ -1,6 +1,6 @@
 import * as React from "react";
 import { NavLink, matchPath, useLocation } from "react-router-dom";
-import { LayoutDashboard, Building2, LogOut, Plus, Globe, Sparkles, SlidersHorizontal } from "lucide-react";
+import { LayoutDashboard, Building2, LogOut, Plus, AppWindow, Sparkles, SlidersHorizontal } from "lucide-react";
 import { useAuth } from "@/features/auth/AuthProvider";
 import { cn } from "@/lib/utils";
 import {
@@ -114,9 +114,9 @@ export function SuperAdminSidebar() {
           </li>
 
           <li>
-            <NavLink to="/superadmin/cles-plateforme" className={navLinkClass}>
-              <Globe className="size-4" />
-              Clés plateforme
+            <NavLink to="/superadmin/applications" className={navLinkClass}>
+              <AppWindow className="size-4" />
+              Applications
             </NavLink>
           </li>
 

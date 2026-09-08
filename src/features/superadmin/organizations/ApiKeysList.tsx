@@ -17,17 +17,24 @@ import {
 import {
   useApiKeys,
   useRevokeApiKey,
+  type ApiKeyApplicationFilter,
   type ApiKeyListItem,
   type ApiKeyOwner,
 } from "@/features/superadmin/organizations/useApiKeys";
 import { apiKeyStatus, type ApiKeyStatus } from "@/features/superadmin/organizations/apiKeys";
 import { ApiKeyFormDialog } from "@/features/superadmin/organizations/ApiKeyFormDialog";
+import {
+  useApplications,
+  useAssignApiKeyApplication,
+} from "@/features/superadmin/applications/useApplications";
 import { useAuth } from "@/features/auth/AuthProvider";
 
-/** Libellés des scopes de clé (colonne `api_keys.scopes`). */
-const SCOPE_LABEL: Record<string, string> = {
+/** Libellés des scopes de clé (colonne `api_keys.scopes`) — les QUATRE. */
+export const SCOPE_LABEL: Record<string, string> = {
   read: "Référentiel (lecture)",
   contacts: "Usagers",
+  smtp: "Relais SMTP (mot de passe)",
+  ai: "Assistant IA (facturé)",
 };
 
 const STATUS_LABEL: Record<ApiKeyStatus, string> = {
@@ -44,27 +51,48 @@ function formatDate(iso: string | null): string {
  * Liste des clés d'un propriétaire (organisation racine, ou plateforme si
  * `owner = null`) + création (`ApiKeyFormDialog`) + révocation (`AlertDialog`).
  * Partagée entre la section « API publique » d'une organisation et la page
- * « Clés plateforme ».
+ * « Applications », qui la monte une fois par application (`application`).
+ *
+ * Une clé plateforme d'avant le registre (sans application) est refusée par
+ * les trois fonctions : la liste le dit, et propose de la rattacher.
  */
-export function ApiKeysList({ owner }: { owner: ApiKeyOwner }) {
+export function ApiKeysList({
+  owner,
+  application,
+}: {
+  owner: ApiKeyOwner;
+  application?: ApiKeyApplicationFilter;
+}) {
   const isPlatform = owner === null;
   const { profile } = useAuth();
-  const { data: keys, isLoading } = useApiKeys(owner);
+  const { data: keys, isLoading } = useApiKeys(owner, application);
+  const { data: applications } = useApplications();
   const revoke = useRevokeApiKey();
+  const assign = useAssignApiKeyApplication();
 
   const [dialogOpen, setDialogOpen] = React.useState(false);
   const [toRevoke, setToRevoke] = React.useState<ApiKeyListItem | null>(null);
+
+  const applicationName = (id: string | null) =>
+    id ? (applications ?? []).find((app) => app.id === id)?.name ?? id : null;
+  const canCreate = application !== null;
 
   return (
     <div className="flex flex-col gap-6">
       <div className="flex items-center justify-between">
         <h2 className="text-sm font-semibold text-muted-foreground">
-          {isPlatform ? "Clés plateforme existantes" : "Clés existantes"}
+          {application === null
+            ? "Clés plateforme sans application"
+            : isPlatform
+              ? "Clés existantes"
+              : "Clés existantes"}
         </h2>
-        <Button onClick={() => setDialogOpen(true)}>
-          <Plus className="size-4" />
-          {isPlatform ? "Nouvelle clé plateforme" : "Nouvelle clé"}
-        </Button>
+        {canCreate ? (
+          <Button onClick={() => setDialogOpen(true)}>
+            <Plus className="size-4" />
+            {isPlatform ? "Nouvelle clé plateforme" : "Nouvelle clé"}
+          </Button>
+        ) : null}
       </div>
 
       {isLoading ? (
@@ -73,12 +101,19 @@ export function ApiKeysList({ owner }: { owner: ApiKeyOwner }) {
         </div>
       ) : !keys || keys.length === 0 ? (
         <EmptyState
-          message={isPlatform ? "Aucune clé plateforme." : "Aucune clé API pour cette organisation."}
+          message={
+            application === null
+              ? "Aucune clé à rattacher."
+              : isPlatform
+                ? "Aucune clé pour cette application."
+                : "Aucune clé API pour cette organisation."
+          }
         />
       ) : (
         <div className="flex flex-col gap-3">
           {keys.map((key) => {
             const status = apiKeyStatus(key);
+            const orphan = isPlatform && key.consumer === null && status === "active";
             return (
               <Card key={key.id}>
                 <CardContent className="flex flex-wrap items-center justify-between gap-3 py-4">
@@ -96,10 +131,19 @@ export function ApiKeysList({ owner }: { owner: ApiKeyOwner }) {
                           {SCOPE_LABEL[scope] ?? scope}
                         </Badge>
                       ))}
-                      {isPlatform ? (
-                        <Badge variant="outline" className="border-destructive/40 text-destructive">
-                          Toutes les organisations
+                      {key.consumer ? (
+                        <Badge variant="outline" title="Application rattachée">
+                          {applicationName(key.consumer)}
                         </Badge>
+                      ) : null}
+                      {isPlatform ? (
+                        orphan ? (
+                          <Badge variant="outline" className="border-destructive/40 text-destructive">
+                            Sans application — refusée par les API
+                          </Badge>
+                        ) : (
+                          <Badge variant="outline">Collectivités abonnées</Badge>
+                        )
                       ) : null}
                     </div>
                     <code className="text-xs text-muted-foreground">{key.key_prefix}…</code>
@@ -108,6 +152,29 @@ export function ApiKeysList({ owner }: { owner: ApiKeyOwner }) {
                       {formatDate(key.last_used_at)}
                       {key.expires_at ? ` · Expire le ${formatDate(key.expires_at)}` : ""}
                     </p>
+                    {orphan ? (
+                      <label className="mt-1 flex items-center gap-2 text-xs">
+                        <span>Rattacher à</span>
+                        <select
+                          aria-label={`Rattacher « ${key.name} » à une application`}
+                          className="h-8 rounded-md border border-input bg-background px-2 text-xs"
+                          defaultValue=""
+                          disabled={assign.isPending}
+                          onChange={(e) => {
+                            if (e.target.value) {
+                              assign.mutate({ keyId: key.id, applicationId: e.target.value });
+                            }
+                          }}
+                        >
+                          <option value="">Choisir une application…</option>
+                          {(applications ?? []).map((app) => (
+                            <option key={app.id} value={app.id}>
+                              {app.name}
+                            </option>
+                          ))}
+                        </select>
+                      </label>
+                    ) : null}
                   </div>
                   {status !== "revoked" ? (
                     <Button variant="outline" size="sm" onClick={() => setToRevoke(key)}>
@@ -121,12 +188,15 @@ export function ApiKeysList({ owner }: { owner: ApiKeyOwner }) {
         </div>
       )}
 
-      <ApiKeyFormDialog
-        open={dialogOpen}
-        onOpenChange={setDialogOpen}
-        owner={owner}
-        createdBy={profile?.id}
-      />
+      {canCreate ? (
+        <ApiKeyFormDialog
+          open={dialogOpen}
+          onOpenChange={setDialogOpen}
+          owner={owner}
+          createdBy={profile?.id}
+          application={application ?? undefined}
+        />
+      ) : null}
 
       <AlertDialog open={toRevoke !== null} onOpenChange={(o) => !o && setToRevoke(null)}>
         <AlertDialogContent>
@@ -134,7 +204,7 @@ export function ApiKeysList({ owner }: { owner: ApiKeyOwner }) {
             <AlertDialogTitle>Révoquer cette clé ?</AlertDialogTitle>
             <AlertDialogDescription>
               {isPlatform
-                ? `La clé plateforme « ${toRevoke?.name ?? ""} » cessera immédiatement de fonctionner pour toutes les organisations. Cette action est irréversible.`
+                ? `La clé « ${toRevoke?.name ?? ""} » cessera immédiatement de fonctionner pour toutes les collectivités abonnées à son application. Cette action est irréversible.`
                 : `La clé « ${toRevoke?.name ?? ""} » cessera immédiatement de fonctionner. Cette action est irréversible.`}
             </AlertDialogDescription>
           </AlertDialogHeader>

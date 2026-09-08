@@ -6,10 +6,18 @@ const API_KEYS_KEY = ["api-keys"] as const;
 
 /**
  * Propriétaire d'un jeu de clés : l'id d'une organisation **racine**, ou `null`
- * pour les clés **plateforme** (`organization_id IS NULL` — périmètre = toutes
- * les organisations, toutes racines confondues).
+ * pour les clés **plateforme** (`organization_id IS NULL`). Depuis le registre
+ * des applications (2026-09-08), une clé plateforme est rattachée à une
+ * application et ne voit que les collectivités abonnées à celle-ci.
  */
 export type ApiKeyOwner = string | null;
+
+/**
+ * Filtre par application : `undefined` = toutes les clés du propriétaire ;
+ * un identifiant = les clés de cette application ; `null` = les clés SANS
+ * application (celles d'avant le registre, à rattacher).
+ */
+export type ApiKeyApplicationFilter = string | null | undefined;
 
 /** Vue liste d'une clé — **jamais** le hachage (`key_hash`) ni le secret. */
 export interface ApiKeyListItem {
@@ -17,6 +25,7 @@ export interface ApiKeyListItem {
   name: string;
   key_prefix: string;
   scopes: string[];
+  consumer: string | null;
   last_used_at: string | null;
   expires_at: string | null;
   revoked_at: string | null;
@@ -24,20 +33,22 @@ export interface ApiKeyListItem {
 }
 
 /**
- * Clés API d'une organisation racine, ou clés plateforme (`owner = null`).
- * Réservé au super admin (RLS).
+ * Clés API d'une organisation racine, ou clés plateforme (`owner = null`),
+ * éventuellement filtrées par application. Réservé au super admin (RLS).
  */
-export function useApiKeys(owner: ApiKeyOwner) {
+export function useApiKeys(owner: ApiKeyOwner, application?: ApiKeyApplicationFilter) {
   return useQuery({
-    queryKey: [...API_KEYS_KEY, owner ?? "platform"],
+    queryKey: [...API_KEYS_KEY, owner ?? "platform", application === undefined ? "*" : application ?? "none"],
     queryFn: async (): Promise<ApiKeyListItem[]> => {
-      const base = supabase
+      let query = supabase
         .from("api_keys")
-        .select("id, name, key_prefix, scopes, last_used_at, expires_at, revoked_at, created_at");
+        .select("id, name, key_prefix, scopes, consumer, last_used_at, expires_at, revoked_at, created_at");
       // Une clé plateforme n'a pas d'organisation : `eq(null)` ne matcherait rien,
       // il faut `IS NULL`.
-      const scoped = owner === null ? base.is("organization_id", null) : base.eq("organization_id", owner);
-      const { data, error } = await scoped.order("created_at", { ascending: false });
+      query = owner === null ? query.is("organization_id", null) : query.eq("organization_id", owner);
+      if (application === null) query = query.is("consumer", null);
+      else if (application !== undefined) query = query.eq("consumer", application);
+      const { data, error } = await query.order("created_at", { ascending: false });
       if (error) throw error;
       return data ?? [];
     },
@@ -57,7 +68,10 @@ export function useCreateApiKey(owner: ApiKeyOwner, createdBy: string | null | u
       name: string;
       expiresAt: string | null;
       scopes: string[];
-      /** Application imputable, exigée par le scope « ai ». Voir ApiKeyFormDialog. */
+      /**
+       * Application du registre : obligatoire pour une clé plateforme (son
+       * périmètre en dépend) et pour le scope « ai » (la dépense s'impute).
+       */
       consumer: string | null;
     }): Promise<string> => {
       const generated = await generateApiKey();

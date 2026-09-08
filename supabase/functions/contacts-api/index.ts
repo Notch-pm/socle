@@ -31,7 +31,6 @@ import {
   contactInvariantError,
   coordinatesPairError,
   escapeIlikePattern,
-  hasContactsScope,
   isUuid,
   mergeContactShape,
   normalizePhoneNumber,
@@ -43,6 +42,7 @@ import {
   type OrgParentRow,
   type RelationInput,
 } from "./_shared/validation.ts";
+import { API_KEY_COLUMNS, evaluateApiKey, type ApiKeyRow } from "./_shared/apiKeyAuth.ts";
 import {
   addressTouched,
   BAN_SEARCH_URL,
@@ -463,30 +463,27 @@ Deno.serve(async (req: Request) => {
       return errorResponse("unauthorized", "Clé API manquante (Authorization: Bearer).", corsHeaders);
     }
     const keyHash = await sha256Hex(token);
-    const { data: apiKey } = await admin
+    const { data: apiKeyRow } = await admin
       .from("api_keys")
-      .select("id, organization_id, revoked_at, expires_at, scopes")
+      .select(API_KEY_COLUMNS)
       .eq("key_hash", keyHash)
       .maybeSingle();
 
-    if (
-      !apiKey ||
-      apiKey.revoked_at !== null ||
-      (apiKey.expires_at !== null && new Date(apiKey.expires_at).getTime() < Date.now())
-    ) {
-      return errorResponse("unauthorized", "Clé API invalide, révoquée ou expirée.", corsHeaders);
-    }
-    if (!hasContactsScope(apiKey.scopes)) {
-      return errorResponse(
-        "forbidden",
-        "Cette clé ne porte pas le scope « contacts » requis pour le référentiel des usagers.",
-        corsHeaders,
-      );
-    }
+    // La décision (révoquée, expirée, scope, clé plateforme sans application)
+    // vit dans _shared/apiKeyAuth.ts, identique dans les trois fonctions.
+    const decision = evaluateApiKey(apiKeyRow as ApiKeyRow | null, {
+      requiredScope: "contacts",
+      scopeMessage: "Cette clé ne porte pas le scope « contacts » requis pour le référentiel des usagers.",
+    });
+    if (!decision.ok) return errorResponse(decision.code, decision.message, corsHeaders);
+    const apiKey = decision.key;
+
     // Périmètre : une clé LIÉE borne à son organisation (racine). Une clé
-    // PLATEFORME (organization_id NULL — liaison unique Socle↔Clara) sert le
-    // référentiel de la RACINE de l'organisation visée, portée par l'en-tête
-    // X-Organization-Id.
+    // PLATEFORME (organization_id NULL) sert le référentiel de la RACINE de
+    // l'organisation visée, portée par l'en-tête X-Organization-Id — à
+    // condition que cette racine soit ABONNÉE à l'application de la clé
+    // (`application_scope_ids`). Hors abonnement = introuvable, comme hors
+    // référentiel : on ne renseigne pas sur les clients des autres.
     let orgId: string;
     if (apiKey.organization_id !== null) {
       orgId = apiKey.organization_id;
@@ -505,6 +502,15 @@ Deno.serve(async (req: Request) => {
       if (orgRowsError) throw orgRowsError;
       const rootId = resolveRootOrgId((orgRows ?? []) as OrgParentRow[], requested);
       if (!rootId) {
+        return errorResponse("not_found", "Organisation introuvable.", corsHeaders);
+      }
+      const { data: scopeRows, error: scopeError } = await admin.rpc("application_scope_ids", {
+        p_application: apiKey.consumer,
+      });
+      if (scopeError) {
+        return errorResponse("internal_error", "Impossible de calculer le périmètre.", corsHeaders);
+      }
+      if (!(Array.isArray(scopeRows) && scopeRows.includes(rootId))) {
         return errorResponse("not_found", "Organisation introuvable.", corsHeaders);
       }
       orgId = rootId;

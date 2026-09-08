@@ -2,7 +2,7 @@
 
 > **Public** : équipes consommatrices (Ariane, Clara, Iris, partenaires) · **Question traitée** :
 > comment consommer les API de Socle correctement, sans rien casser lors d'une évolution ? ·
-> **Dernière mise à jour** : 2026-09-06
+> **Dernière mise à jour** : 2026-09-08
 
 Socle est le référentiel central de la gamme : organisations, démarches, types de pièce
 justificative, quartiers et usagers. Il expose trois API REST **versionnées** (`/v1`), en HTTPS,
@@ -26,11 +26,19 @@ routes **publiques** de l'app Socle :
 
 ## Obtenir une clé
 
-Une clé est générée par un **super admin Socle**, dans la section « API publique » de la page de
-paramétrage d'une organisation racine. Le secret (`sk_live_…`) s'affiche **une seule fois** à la
-création — Socle ne le stocke jamais en clair (haché SHA-256 en base). À conserver côté
-consommateur dès l'affichage. Une clé est révocable à tout moment et peut porter une date
-d'expiration optionnelle.
+Deux sortes de clés, générées par un **super admin Socle** :
+
+- **Application de la gamme** (Nora, Iris, Clara…) : **une clé par application**, créée sur
+  `/superadmin/applications`, posée une fois dans le projet de l'application. Son périmètre est
+  l'ensemble des collectivités **abonnées** à l'application — cochées par le super admin sur la fiche
+  de chaque client. À l'arrivée d'un client, l'application n'a rien à recevoir : elle le voit dès
+  qu'il est abonné.
+- **Partenaire** : une clé **liée à une organisation racine**, créée dans la section « API
+  publique » de la page de cette organisation ; périmètre = la racine et sa descendance.
+
+Le secret (`sk_live_…`) s'affiche **une seule fois** à la création — Socle ne le stocke jamais en
+clair (haché SHA-256 en base). À conserver côté consommateur dès l'affichage. Une clé est
+révocable à tout moment et peut porter une date d'expiration optionnelle.
 
 Utilisation : en-tête `Authorization: Bearer <clé>` sur chaque requête.
 
@@ -53,17 +61,20 @@ Une clé porte un ou plusieurs scopes :
 
 ## Modèle mental des périmètres
 
-Une clé est **liée à une organisation racine**, ou **plateforme** (aucune organisation associée).
-Le périmètre servi diffère selon l'API, car les deux référentiels n'ont pas la même granularité
-(les organisations forment un arbre, les usagers sont rattachés à une seule racine) :
+Une clé est **liée à une organisation racine**, ou **plateforme** (aucune organisation associée,
+mais une **application** du registre). Le périmètre servi diffère selon l'API, car les deux
+référentiels n'ont pas la même granularité (les organisations forment un arbre, les usagers sont
+rattachés à une seule racine) :
 
-| Type de clé | `public-api` | `contacts-api` |
+| Type de clé | `public-api` | `contacts-api` / `ai-api` |
 |---|---|---|
 | **Liée** à une organisation racine | La racine **et tout son sous-arbre** | La racine **seule** (les usagers y sont directement rattachés) |
-| **Plateforme** (`organization_id` NULL) | **Toutes** les organisations | Exige l'en-tête **`X-Organization-Id`** à chaque appel (id d'une organisation quelconque, résolu jusqu'à sa racine) |
+| **Plateforme** (`organization_id` NULL, application `X`) | Les racines **abonnées à X** et leur descendance — depuis le 2026-09-08, plus jamais « toutes » | Exige l'en-tête **`X-Organization-Id`** à chaque appel (id d'une organisation quelconque, résolu jusqu'à sa racine) ; racine **non abonnée à X** → **404** |
 
-Deux conséquences concrètes de la clé plateforme :
+Trois conséquences concrètes de la clé plateforme :
 
+- Une clé plateforme **sans application** est refusée (**403**) : sans application, pas de
+  périmètre. Une application inconnue du registre ne voit rien.
 - `contacts-api` sans `X-Organization-Id` → **400** sur tout endpoint concerné.
 - `public-api` : `GET /v1/quartiers?geometry=true` exige alors le paramètre `organization_id`
   (sinon 400) — les géométries n'ont de sens que rapportées à une organisation.
@@ -237,7 +248,8 @@ collectivité peut activer d'autres langues ; les libellés traduits des **déma
 
 ## Checklist d'intégration
 
-- [ ] Clé obtenue auprès d'un super admin Socle, avec le bon scope (`read`, `contacts`, `smtp`, `ai`)
+- [ ] Clé obtenue auprès d'un super admin Socle, avec le bon scope (`read`, `contacts`, `smtp`, `ai`) — une clé **par application**, jamais par client
+- [ ] Nouveaux clients découverts par `GET /v1/organizations` (la clé rend exactement les collectivités abonnées) plutôt que provisionnés à la main
 - [ ] `ai-api` : délai du consommateur réglé **au-dessus de 60 s** (chaîne 55 < 60 < le vôtre)
 - [ ] `ai-api` : `ai_quota_exceeded` et `ai_rate_limited` traités **séparément** (`Retry-After`)
 - [ ] `/v1/ocr` : URL signée de courte durée, émise juste avant l'appel — et réservé aux PDF

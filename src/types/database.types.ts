@@ -283,6 +283,13 @@ export type Database = {
         }
         Relationships: [
           {
+            foreignKeyName: "api_keys_consumer_fkey"
+            columns: ["consumer"]
+            isOneToOne: false
+            referencedRelation: "applications"
+            referencedColumns: ["id"]
+          },
+          {
             foreignKeyName: "api_keys_created_by_fkey"
             columns: ["created_by"]
             isOneToOne: false
@@ -297,6 +304,27 @@ export type Database = {
             referencedColumns: ["id"]
           },
         ]
+      }
+      applications: {
+        Row: {
+          created_at: string
+          id: string
+          name: string
+          scope: string
+        }
+        Insert: {
+          created_at?: string
+          id: string
+          name: string
+          scope?: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          name?: string
+          scope?: string
+        }
+        Relationships: []
       }
       categories: {
         Row: {
@@ -685,6 +713,49 @@ export type Database = {
         Relationships: [
           {
             foreignKeyName: "document_types_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      organization_applications: {
+        Row: {
+          application_id: string
+          created_at: string
+          created_by: string | null
+          organization_id: string
+        }
+        Insert: {
+          application_id: string
+          created_at?: string
+          created_by?: string | null
+          organization_id: string
+        }
+        Update: {
+          application_id?: string
+          created_at?: string
+          created_by?: string | null
+          organization_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "organization_applications_application_id_fkey"
+            columns: ["application_id"]
+            isOneToOne: false
+            referencedRelation: "applications"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "organization_applications_created_by_fkey"
+            columns: ["created_by"]
+            isOneToOne: false
+            referencedRelation: "users"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "organization_applications_organization_id_fkey"
             columns: ["organization_id"]
             isOneToOne: false
             referencedRelation: "organizations"
@@ -1214,6 +1285,10 @@ export type Database = {
           feature: string
           tokens: number
         }[]
+      }
+      application_scope_ids: {
+        Args: { p_application: string }
+        Returns: string[]
       }
       contacts_outside_quartiers: {
         Args: { p_org_id: string }

@@ -1,7 +1,7 @@
 # Exploitation & déploiement
 
 > **Public** : ops, devs déployant Socle · **Question traitée** : comment exploiter et déployer
-> Socle (edge functions, secrets, base, CI) ? · **Dernière mise à jour** : 2026-08-12
+> Socle (edge functions, secrets, base, CI) ? · **Dernière mise à jour** : 2026-09-08
 
 Ce document est un runbook. Pour le « pourquoi » des choix, voir
 [architecture.md](./architecture.md) ; pour le détail du schéma, [data-model.md](./data-model.md).
@@ -34,7 +34,7 @@ quand la valeur voulue est le défaut.
 | `contacts-api` | `false` | Idem : clé API + scope `contacts`, portée par la fonction |
 | `ai-api` | `false` | Idem : clé API + scope `ai` + **application imputable**. Guichet du fournisseur LLM — la seule fonction qui appelle un tiers **payant** |
 | `auth-email-hook` | `false` | Appelée par Supabase Auth (hook « Send Email »), authentifiée par **signature Standard Webhooks** (`AUTH_HOOK_SECRET`), pas par JWT |
-| `invite-user` | `true` | Appelée depuis l'UI Socle avec le JWT de l'utilisateur connecté ; l'autorisation fine (`is_org_admin`) est vérifiée en plus, dans le code |
+| `invite-user` | `true` | Appelée depuis l'UI Socle avec le JWT de l'utilisateur connecté ; l'autorisation fine (`is_admin_of_self_or_ancestor`, depuis le 2026-09-08 — un admin de racine invite dans ses sous-organisations) est vérifiée en plus, dans le code. Action `resend` : renvoi d'une invitation restée sans suite |
 | `send-test-email` | `true` | Idem : JWT utilisateur + `is_org_admin(organization_id)` |
 | `translate-labels` | `true` | Idem : JWT utilisateur + `is_org_admin(organization_id)`. Traduit les textes d'une ligne (libellé, descriptif court) **en appelant `ai-api`** avec la clé plateforme du Socle (`SOCLE_AI_API_KEY`) — elle n'appelle jamais le fournisseur directement |
 
@@ -52,7 +52,18 @@ fichiers casse la fonction en production alors que les tests passent en local.
 - **Redirect URLs** (Dashboard → Authentication → URL Configuration) : doivent inclure
   `/activer-compte` (activation après invitation) et `/reinitialiser-mot-de-passe` (mot de passe
   oublié), routes définies dans `src/App.tsx`.
-- **SMTP** : pas de secret SMTP global. Chaque organisation racine porte ses propres identifiants
+- **`PLATFORM_SMTP_*`** (2026-09-08) : le relais de messagerie de la **plateforme**, repli des seuls
+  courriels d'**authentification** (`invite-user`, `auth-email-hook` : invitation, activation, mot de
+  passe oublié) quand la collectivité n'a pas encore de relais résolu — et pour un compte sans
+  organisation (le super administrateur). Sept secrets : `PLATFORM_SMTP_HOST`, `PLATFORM_SMTP_PORT`
+  (défaut 587), `PLATFORM_SMTP_USERNAME`, `PLATFORM_SMTP_PASSWORD`, `PLATFORM_SMTP_FROM_EMAIL`,
+  `PLATFORM_SMTP_FROM_NAME`, `PLATFORM_SMTP_USE_TLS` (défaut vrai). Absents, le comportement
+  d'avant subsiste : sans relais de collectivité, aucun courriel d'authentification ne part (404
+  du hook, `email_sent: false` de l'invitation). ⚠️ Les courriels MÉTIER ne connaissent pas ce
+  repli — `send-test-email` et les applications de la gamme expédient par le relais de la
+  collectivité, ou pas du tout. Le journal de la fonction dit lequel a servi (`relais=collectivite`
+  / `relais=plateforme`), jamais les identifiants.
+- **SMTP** : pas de secret SMTP global pour les courriels métier. Chaque organisation racine porte ses propres identifiants
   dans la table `smtp_settings` (hôte, port, identifiant, mot de passe, expéditeur), saisis par un
   admin d'org depuis l'onglet « Emails (SMTP) ». `auth-email-hook` et `send-test-email` lisent
   cette table avec la service role.
@@ -141,6 +152,28 @@ fichiers casse la fonction en production alors que les tests passent en local.
   SELECT consumer, feature, resource_type, status, created_at
   FROM public.ai_usage_events ORDER BY created_at DESC LIMIT 10;
   ```
+
+## Réglages de plateforme et provisioning (2026-09-08)
+
+- **`/superadmin/plateforme`** (table `platform_settings`, ligne unique) : la **zone des
+  sous-domaines fournis** (ex. `demarches.edilumen.fr` — le DNS wildcard `*.<zone>` doit pointer
+  vers l'hébergeur du portail), la **cible CNAME** des domaines personnalisés (affichée dans l'écran
+  des domaines de chaque collectivité), le **plafond IA par défaut**. Aucun secret n'y vit.
+- **À la création d'une racine**, le trigger `provision_root_organization` pose les rôles de
+  contact, le plafond IA par défaut et le sous-domaine fourni (`provision_root`, idempotent, jamais
+  bloquant : un sous-domaine déjà pris fait un `raise warning`, pas un échec). ⚠️ Tout script qui
+  insère des racines en hérite — `supabase/tests/plafond-ia.test.sql` neutralise le plafond par
+  défaut en tête de transaction.
+- **« Rejouer le provisioning »** (`provision_existing_roots`, super administrateur) : après avoir
+  posé les réglages, pour les collectivités créées avant eux. Idempotent.
+- **Applications et abonnements** (`/superadmin/applications`, tables `applications` et
+  `organization_applications`) : une clé plateforme par application, dont le périmètre est la
+  liste des collectivités abonnées. ⚠️ **Ordre de déploiement d'un changement de périmètre** :
+  migration → vérifier les abonnements et rattacher les clés dans l'UI → déployer les fonctions.
+  Inverser les deux derniers coupe le portail (toutes les racines hors périmètre → 404).
+- **Tests SQL** (`supabase/tests/`) : `provisioning.test.sql`, `applications.test.sql`,
+  `plafond-ia.test.sql` — des blocs `DO` qui s'annulent d'eux-mêmes (l'exception finale « OK »
+  est le verdict), à jouer par `execute_sql` ou le SQL editor.
 
 ## Base de données
 

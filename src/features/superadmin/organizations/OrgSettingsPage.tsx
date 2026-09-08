@@ -1,6 +1,6 @@
 import * as React from "react";
 import { useParams, useNavigate, useSearchParams } from "react-router-dom";
-import { ArrowLeft, Settings2, Users as UsersIcon, ListChecks, FileCheck2, FileSignature, MapPin, Mail, Palette, Globe, Languages, LayoutTemplate, KeyRound, Gauge, Tags, ToggleRight, type LucideIcon } from "lucide-react";
+import { ArrowLeft, Settings2, Users as UsersIcon, ListChecks, FileCheck2, FileSignature, MapPin, Mail, Palette, Globe, Languages, LayoutTemplate, KeyRound, Gauge, Tags, ToggleRight, AppWindow, type LucideIcon } from "lucide-react";
 import { Card, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { EmptyState } from "@/components/shared/EmptyState";
@@ -8,6 +8,7 @@ import { useOrganization, type OrgNode } from "@/features/superadmin/organizatio
 import { GeneralInfoSection } from "@/features/superadmin/organizations/sections/GeneralInfoSection";
 import { SmtpSettingsSection } from "@/features/superadmin/organizations/sections/SmtpSettingsSection";
 import { ActivationsSection } from "@/features/superadmin/organizations/sections/ActivationsSection";
+import { ApplicationsSection } from "@/features/superadmin/organizations/sections/ApplicationsSection";
 import { OnboardingChecklistCard } from "@/features/superadmin/organizations/OnboardingChecklistCard";
 import { OrganizationsManager } from "@/features/organizations/OrganizationsManager";
 import { BrandingSection } from "@/features/organizations/BrandingSection";
@@ -29,6 +30,7 @@ type Section =
   | "langues"
   | "domaines"
   | "utilisateurs"
+  | "applications"
   | "categories"
   | "demarches"
   | "activations"
@@ -45,6 +47,7 @@ const SECTIONS: { key: Exclude<Section, "menu">; title: string; description: str
   { key: "langues", title: "Langues", description: "Langues activées pour les libellés des démarches et des catégories", icon: Languages },
   { key: "domaines", title: "Domaines du portail", description: "Adresses par lesquelles les usagers atteignent les démarches en ligne", icon: Globe },
   { key: "utilisateurs", title: "Utilisateurs", description: "Membres et rôles de cette organisation", icon: UsersIcon },
+  { key: "applications", title: "Applications souscrites", description: "Nora, Iris, Clara… — ce que cette collectivité a souscrit, et donc ce que chaque application voit", icon: AppWindow },
   { key: "categories", title: "Catégories", description: "Thématiques qui regroupent les démarches — obligatoires pour en créer", icon: Tags },
   { key: "demarches", title: "Catalogue de démarches", description: "Démarches de l'organisation principale", icon: ListChecks },
   { key: "activations", title: "Démarches activées", description: "Quel organisme de l'arbre propose quelle démarche", icon: ToggleRight },
@@ -146,6 +149,8 @@ export function OrgSettingsPage() {
         {activeSection === "langues" && <LanguagesSection organization={organization} />}
         {activeSection === "domaines" && <DomainsSection organizationId={organization.id} />}
         {activeSection === "utilisateurs" && <UsersManagementPage organizationId={organization.id} />}
+        {activeSection === "applications" &&
+          rootOnly(<ApplicationsSection organizationId={organization.id} />, "Les applications se souscrivent")}
         {activeSection === "categories" &&
           rootOnly(<CategoriesManager organizationId={organization.id} />, "Les catégories se paramètrent")}
         {activeSection === "demarches" &&

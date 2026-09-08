@@ -30,7 +30,7 @@ export function buildOpenApiDocument(serverUrl: string): Record<string, unknown>
     openapi: "3.1.0",
     info: {
       title: "API Socle — Référentiel de la gamme",
-      version: "1.17.0",
+      version: "1.18.0",
       description: [
         "API **en lecture seule** exposant le référentiel central de la gamme : les",
         "**organisations** (et sous-organisations) avec l'intégralité de leur configuration,",
@@ -771,8 +771,11 @@ export function buildOpenApiDocument(serverUrl: string): Record<string, unknown>
           type: "http",
           scheme: "bearer",
           description:
-            "Clé API délivrée par un super administrateur Socle, rattachée à une organisation " +
-            "principale. À envoyer en `Authorization: Bearer <clé>`.",
+            "Clé API délivrée par un super administrateur Socle, à envoyer en " +
+            "`Authorization: Bearer <clé>`. Deux périmètres : une clé LIÉE à une organisation " +
+            "principale voit celle-ci et sa descendance ; une clé PLATEFORME est rattachée à une " +
+            "application de la gamme (nora, iris, clara…) et voit les collectivités ABONNÉES à " +
+            "cette application — jamais « tout ». Une clé plateforme sans application est refusée (403).",
         },
       },
       responses: {

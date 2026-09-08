@@ -149,10 +149,13 @@ aucun endpoint, il décrit ce qui existe **en base**.
 - **Pas de restriction à une organisation racine**, contrairement à `quartiers` ou
   `document_templates` : un domaine appartient à qui l'exploite, et une sous-organisation qui
   tient son propre guichet doit pouvoir en porter un.
-- **RLS** : lecture `has_org_access(organization_id)` · écriture `is_org_admin(organization_id)`
-  (qui court-circuite déjà le super admin) — calqué sur `document_templates`.
+- **RLS** : lecture `has_org_access(organization_id)` · écriture **`is_super_admin()`** depuis le
+  2026-09-08 (migration `organization_domains_superadmin_write`) : le sous-domaine fourni se pose
+  par le provisioning, un domaine personnalisé suppose un CNAME chez le client et un enregistrement
+  chez l'hébergeur du portail — un geste de l'éditeur. Les administrateurs lisent.
 - Consommé par `GET /v1/portal/tenant?hostname=` de l'API publique, en service role hors RLS,
-  borné au périmètre de la clé.
+  borné au périmètre de la clé — depuis le 2026-09-08, les collectivités **abonnées à l'application
+  de la clé** (voir `applications`).
 
 ---
 
@@ -450,26 +453,401 @@ d'écriture** : INSERT/UPDATE/DELETE impossibles côté client, réservés au se
 - ⚠️ `password` stocké **en clair** ; `pgsodium` est disponible au catalogue Postgres mais
   **non installé** sur le projet.
 
+### `platform_settings` — réglages de plateforme (2026-09-08)
+
+- Ligne unique : `id boolean PK default true` + CHECK `(id)`. Insérée par la migration.
+- `portal_domain_suffix` (zone des sous-domaines fournis, CHECK FQDN, NULL = aucun sous-domaine
+  attribué), `portal_cname_target` (cible CNAME affichée aux collectivités), `default_ai_monthly_tokens`
+  (CHECK > 0, NULL = rien de posé), `updated_at`/`updated_by`. Trigger `normalize_platform_settings`
+  (minuscules, point final, vide → NULL).
+- **RLS** : lecture `authenticated` (aucun secret n'y vit — l'écran des domaines lit la cible
+  CNAME) · UPDATE `is_super_admin()` · ni INSERT ni DELETE client.
+
+### `applications` et `organization_applications` — registre et abonnements (2026-09-08)
+
+- `applications` : `id text PK` (CHECK `~ '^[a-z][a-z0-9_-]{1,31}
+
+
+### Plafond et journal d'utilisation IA
+
+Trois tables (`20260829100100`), portées depuis Iris quand la clé du fournisseur LLM et sa
+comptabilité ont été centralisées ici (2026-08-29).
+
+> **La phrase qui résume le modèle : l'application consommatrice discrimine le JOURNAL, jamais le
+> compteur, jamais le plafond.** Un budget est une affaire de collectivité ; savoir *qui* a
+> dépensé est une question d'explication, pas de comptage.
+
+- **`ai_usage_quotas`** — `organization_id` FK CASCADE, `provider text` NOT NULL,
+  `monthly_limit_tokens` bigint, `is_active` bool, UNIQUE `(organization_id, provider)`.
+  ⚠️ `provider` porte la sentinelle **`'__global__'`** et jamais NULL : deux NULL ne sont jamais
+  égaux pour un index UNIQUE, ce qui casserait `ON CONFLICT` — régression vécue chez Clara. Le
+  trigger `enforce_ai_usage_quota_root_org` impose une organisation **principale**.
+- **`ai_usage_counters`** — `(organization_id, provider, period)` UNIQUE, `used_tokens` et
+  `reserved_tokens` bigint. `period` = `to_char(now() at time zone 'utc', 'YYYY-MM')` : **tout
+  est en UTC**, sans quoi une date de renouvellement annoncée en heure locale mentirait d'un mois
+  entier deux heures par mois.
+- **`ai_usage_events`** — le journal : `consumer` NOT NULL (dénormalisé **depuis la clé**),
+  `api_key_id`, `feature` (déclaratif, étiqueté comme tel), `resource_type`, `status`,
+  `estimated_tokens`/`actual_tokens`, et des références **nues** vers l'extérieur —
+  `external_ref_kind`/`external_ref_id`/`external_actor_id`, uuid **sans FK**. Aucune FK ne
+  franchit une frontière de projet, et une cascade effacerait une consommation facturée.
+  ⚠️ **Aucune colonne ne peut porter un prompt ou une réponse**, et c'est la première preuve du
+  passe-plat : un test épingle l'ensemble exact des 17 colonnes, si bien qu'une future colonne
+  `prompt`/`content`/`answer` le casse.
+
+- **`ai_usage_rate`** (2026-08-29) — le garde-fou de **DÉBIT**, que le plafond ne couvre pas :
+  il dit *combien*, jamais *à quelle vitesse*, et une boucle accidentelle consommerait un mois
+  en quelques minutes. Clé primaire composite `(organization_id, subject_kind, subject,
+  **bucket**, window_start)`, `attempts int` ; pas de colonne `id` — la recherche EST la clé et
+  ces lignes sont éphémères, un uuid de substitution serait un second index à tenir sur le
+  chemin chaud de chaque appel. Purgée par `purge_ai_usage_rate`, enchaînée au job cron.
+  ⚠️ **`bucket` est DANS LA CLÉ, pas à côté** (`'chat'` | `'batch'`) : différencier le seuil
+  sans séparer le compteur laisserait un lot d'OCR manger le budget de QUESTIONS du même agent
+  — après vingt documents lus, sa question suivante serait refusée alors qu'il n'en a posé
+  aucune.
+  ⚠️ **Elle compte les TENTATIVES, pas les appels aboutis** : une boucle que le plafond refuse
+  déjà continue de marteler, et un compteur de succès ne la couperait jamais.
+
+**Cycle réserver → appeler → solder, et DEUX portes avant lui.** `reserve_ai_usage` vérifie
+d'abord la **cadence**, puis le **plafond**. Les seuils sont **en dur** (un garde-fou n'est pas
+un paramètre commercial) et dépendent de la NATURE de l'appel — conversationnel 20/minute par
+agent (120 sans agent), lot d'OCR 60 (360 sans agent) : un humain qui lit 150 mots entre deux
+questions n'a pas le rythme d'une machine qui enchaîne des documents.
+⚠️ La nature vient de `p_resource_type`, **dérivé côté serveur** par `ai-api` et jamais lu dans
+le corps de la requête : un appelant ne peut pas se déclarer « lot » pour obtenir la limite
+haute. Tout type inconnu retombe sur le seuil conversationnel, le plus strict. Chacune est
+**UN `UPDATE` conditionnel** : zéro ligne affectée ⇒ refus, et le fournisseur n'est jamais
+appelé. ⚠️ La porte de cadence passe **en premier**, pour trois raisons : elle doit compter les
+tentatives y compris refusées ; rien n'est encore incrémenté quand elle refuse, donc il n'y a
+aucun retour en arrière à écrire ; et elle doit protéger les collectivités **sans plafond**, qui
+sortent de la fonction par un `return` anticipé et échapperaient à toute garde placée après. C'est la porte de
+concurrence — un verrou de ligne Postgres en READ COMMITTED, pas un `select` suivi d'un `update`.
+`settle_ai_usage` corrige ensuite avec la consommation réelle ; un échec ne consomme rien.
+`release_stale_ai_reservations` (cron, 15 min) rattrape les réservations orphelines.
+
+**RLS** : `for select to authenticated using (public.is_admin_of_self_or_ancestor(organization_id))`
+sur les trois tables (`20260829110000`, élargi depuis `is_super_admin()` — la collectivité doit
+pouvoir lire sa propre consommation sans écrire à l'éditeur). Les lignes étant clés sur une
+**racine**, le prédicat coïncide avec « admin direct » : un admin de sous-organisation ne voit
+rien, le budget n'est pas son affaire. Le helper court-circuite le super admin, que la policy
+n'a donc pas à nommer.
+**Aucune policy d'écriture, aucune policy `service_role`** — les écrivains sont des RPC
+`SECURITY DEFINER`, hors RLS par construction. Les RPC de réglage (`set_ai_usage_quota`,
+`delete_ai_usage_quota`) sont gardées par `is_super_admin()`, fondée sur `auth.uid()` : ⚠️ ne
+jamais la remplacer par une garde fondée sur `current_user`, qui vaut toujours le propriétaire
+à l'intérieur d'une fonction `DEFINER`. ⚠️ **Ouvrir la lecture n'ouvre pas le réglage** : c'est
+tout l'équilibre de l'écran de consultation `/consommation-ia` — un plafond que son porteur
+pourrait lever ne serait pas un plafond.
+`ai_usage_breakdown` étant `SECURITY INVOKER`, elle suit ces policies sans changement : une
+implémentation, trois lecteurs (le service, l'éditeur, le client).
+
+---
+
+## Fonctions SQL
+
+### Helpers RLS
+
+Tous `SECURITY DEFINER`, `search_path=public`, EXECUTE ouvert à `anon`/`authenticated`
+(indispensable : la RLS les évalue avec les droits de l'appelant, pas ceux du définisseur) :
+
+- `is_super_admin()`
+- `is_org_admin(org_id)` — admin **direct**, court-circuité par super admin
+- `has_org_access(org_id)` — membre **direct**
+- `is_admin_of_self_or_ancestor(org_id)` — `STABLE`, boucle ascendante sur `parent_id` (garde
+  100 itérations), vrai si super admin
+
+### `application_scope_ids(p_application)` — périmètre d'une clé plateforme (2026-09-08)
+
+`returns uuid[]`, `STABLE`, `SECURITY INVOKER`, **EXECUTE réservé à `service_role`** (motif
+`org_subtree_ids`) : toutes les organisations pour une application de scope `plateforme`, l'union
+des `org_subtree_ids` des racines abonnées sinon, `{}` pour une application inconnue. Les trois
+fonctions d'API l'appellent pour une clé plateforme, via la décision pure de
+`_shared/apiKeyAuth.ts` (identique dans les trois, test d'identité).
+
+### Provisioning d'une racine et mise en service (2026-09-08)
+
+- **`dns_label_from_slug(text)`** IMMUTABLE : label DNS dérivé d'un slug (unaccent, minuscules,
+  `[a-z0-9-]`, 63 caractères, NULL si vide). Miroir TS `dnsLabelFromSlug`, tests jumeaux.
+- **`provision_root(p_org_id)`** SECURITY DEFINER, EXECUTE révoqué : les 8 rôles de contact, le
+  plafond IA par défaut (insert direct dans `ai_usage_quotas` — `set_ai_usage_quota` exige
+  `auth.uid()`), le sous-domaine fourni dans `organization_domains` (collision ou CHECK →
+  `raise warning`). Idempotent (`on conflict do nothing`). Rend `{roles, quota, domain}`.
+- **Trigger `provision_root_organization`** AFTER INSERT OR UPDATE OF `parent_id` sur
+  `organizations` (racines seulement, no-op si déjà racine) — `exception when others` : la
+  création de l'organisation ne doit jamais échouer à cause du provisioning.
+- **`provision_existing_roots()`** (garde `is_super_admin()`, EXECUTE `authenticated`) : rejoue
+  sur toutes les racines, rend les compteurs.
+- **`root_onboarding_status(p_org_id)`** `returns jsonb`, SECURITY DEFINER (lit
+  `resolve_smtp_settings`), garde `is_super_admin() OR is_admin_of_self_or_ancestor`, racines
+  seulement : `smtp_configured`, `admin_count`, `application_count`, `category_count`,
+  `procedure_count`, `procedure_production_count`, `activation_count` (sous-arbre),
+  `domain_count` (sous-arbre), `portal_published`, `ai_quota_decided`, `ai_quota_active`,
+  `logo_present`, `contact_role_count`. JSON pour qu'une clé s'ajoute sans `drop function`.
+
+### `org_subtree_ids(root)` — périmètre des APIs
+
+SQL `STABLE`, **`SECURITY INVOKER`**, CTE récursive sur `parent_id`. C'est le point qui borne
+chaque requête de `public-api` au sous-arbre de l'organisation de la clé appelante.
+
+`EXECUTE` **réservé à `service_role`** depuis le 2026-08-12 (migration
+`org_subtree_ids_revoke_execute`) : l'ACL historique accordait aussi `anon`/`authenticated` —
+sans impact réel (`SECURITY INVOKER` ⇒ RLS de l'appelant) — elle suit désormais le motif des
+fonctions trigger.
+
+### RPC serveur d'envoi (SMTP)
+
+- `resolve_smtp_settings(p_org_id) → SETOF smtp_settings` — SQL `STABLE`, **`SECURITY INVOKER`**,
+  CTE ascendante sur `parent_id` (garde 20 niveaux) : renvoie 0 ou 1 ligne, celle de l'ancêtre le
+  plus proche (soi compris) dont `inherit_parent = false`. **Seule implémentation de l'héritage**,
+  partagée par `public-api` (`GET /v1/organizations/{id}/smtp`) et les trois fonctions d'envoi
+  (`send-test-email`, `invite-user`, `auth-email-hook`). Elle sert le **mot de passe** : `EXECUTE`
+  **réservé à `service_role`** (motif `org_subtree_ids`).
+- `parent_smtp_settings(p_org_id) → TABLE(source_organization_id, source_organization_name,
+  configured, host, port, username, from_email, from_name, use_tls)` — `SECURITY DEFINER`, garde
+  interne `is_admin_of_self_or_ancestor(p_org_id)`, EXECUTE `authenticated` + `service_role`.
+  Aperçu de ce dont une organisation **hérite** (résolution démarrée à son parent), **sans le mot
+  de passe** : l'admin d'une sous-organisation doit voir la configuration qui s'applique chez lui
+  sans obtenir le secret de sa principale. Renvoie 0 ligne sur une racine.
+
+### RPC charte graphique
+
+Calquées trait pour trait sur les deux RPC SMTP ci-dessus.
+
+- `resolve_branding(p_org_id) → TABLE(source_organization_id, logo_url, logo_white_url,
+  primary_color, secondary_color)` — SQL `STABLE`, **`SECURITY INVOKER`**, CTE ascendante qui
+  s'arrête d'elle-même au premier ancêtre ne héritant pas (garde 20 niveaux). **Seule
+  implémentation de l'héritage.** EXECUTE **réservé à `service_role`** : elle traverse des
+  organisations que l'appelant n'a pas le droit de lire.
+- `parent_branding(p_org_id) → TABLE(source_organization_id, source_organization_name, configured,
+  logo_url, logo_white_url, primary_color, secondary_color)` — `SECURITY DEFINER`, garde interne
+  `is_admin_of_self_or_ancestor(p_org_id)`, EXECUTE `authenticated` + `service_role`. Aperçu de ce
+  dont une organisation **hérite** (résolution démarrée à son parent) : sans elle, l'admin d'une
+  sous-organisation choisirait d'hériter sans jamais voir de quoi. Renvoie 0 ligne sur une racine.
+  `configured` = au moins un des quatre éléments renseigné au-dessus.
+
+### RPC et fonction langues
+
+- `resolve_org_languages(p_org_id) → text[]` — SQL `STABLE`, `SECURITY INVOKER`, CTE ascendante
+  jusqu'à la racine (garde 20 niveaux) : les langues **applicables** à une organisation, c'est-à-dire
+  celles de son organisation principale. **Seule implémentation de la remontée** (motif
+  `resolve_branding`), servie par `public-api` (`GET /v1/portal/tenant`, champ `languages`) —
+  EXECUTE **réservé à `service_role`** : elle traverse des organisations que l'appelant n'a pas le
+  droit de lire. Les écrans du Socle n'en ont pas besoin : ils lisent la colonne de la racine,
+  qu'ils connaissent déjà.
+- `is_valid_language_set(codes text[]) → bool` — SQL `IMMUTABLE`, support du CHECK sur
+  `organizations.enabled_languages` : au moins `fr`, pas de doublon, codes de la forme
+  `^[a-z]{2,3}(-[a-z0-9]{2,8})*$`. Miroir de `LANGUAGE_CODE_RE` côté application.
+
+### `match_contacts(...)` — rapprochement d'identités
+
+`match_contacts(p_org_id, p_contact_type, p_first_name, p_last_name, p_usage_name, p_legal_name,
+p_siret, p_birth_date, p_email, p_phones[], p_status, p_exclude_ids[], p_limit) → TABLE(contact_id,
+score int, reasons text[])`. `SECURITY INVOKER`, `search_path=""`, **EXECUTE réservé à
+`service_role`**. Sert `POST /v1/contacts/match` de `contacts-api` — détail du scoring et des
+critères dans [../CLAUDE.md](../CLAUDE.md) et l'OpenAPI de `contacts-api`.
+
+### Fonctions de normalisation
+
+`IMMUTABLE`, `search_path=""` — support des index et de la recherche :
+`normalize_phone(raw)`, `normalize_name(value)`, `match_full_name(family, given)`,
+`immutable_unaccent(value)` (fige le dictionnaire `unaccent` pour le rendre indexable en GIN).
+
+### RPC quartiers
+
+`SECURITY INVOKER`, `search_path=public, extensions`, EXECUTE `authenticated` + `service_role`,
+révoqué d'`anon` :
+
+- `quartier_for_point(p_org_id, p_lon, p_lat)` — point-dans-polygone
+- `create_quartier_from_geojson(p_org_id, p_name, p_color, p_geojson)`
+- `create_quartiers_batch(p_org_id, p_items, p_replace)` — import atomique ; `p_replace = true`
+  **remplace tout le découpage** de l'organisation dans la même transaction (échec = aucun
+  découpage perdu) ; un lot vide en mode remplacement est refusé
+- `list_quartiers_geojson(p_org_id)` — seul point de sortie de `geom`, casté en GeoJSON
+- `stats_contacts_by_quartier(p_org_id)` — inclut une ligne « sans quartier »
+- `contacts_outside_quartiers(p_org_id)` — contacts géolocalisés hors de tout polygone
+
+`SECURITY DEFINER` avec garde interne (`is_org_admin(p_org_id)` ou `service_role`) — nécessaires
+car `contacts` n'a aucune policy d'écriture client :
+
+- `recalculate_contact_quartiers(p_org_id)`
+- `reset_orphan_manual_quartiers(p_org_id)` — après un import en remplacement, repasse en mode
+  automatique les contacts rattachés **manuellement** à un quartier disparu (sinon ignorés à
+  jamais par le recalcul) ; appelée par `create_quartiers_batch` en mode remplacement.
+
+### Fonctions trigger
+
+`SECURITY DEFINER`, **EXECUTE révoqué de `anon`/`authenticated`** (motif transverse, advisors
+0028/0029 — sans effet sur leur déclenchement, seulement sur leur appel direct via
+`/rest/v1/rpc/…`) : `handle_new_user`, `enforce_procedure_root_org`,
+`enforce_document_type_root_org`, `enforce_document_template_root_org`,
+`enforce_api_key_root_org`, `enforce_contact_root_org`,
+`enforce_contact_role_root_org`, `enforce_contact_role_same_org`, `enforce_quartier_root_org`,
+`assign_contact_quartier`, `sync_contact_external_ref_org`, `sync_contact_relation_org`,
+`enforce_smtp_no_inherit_on_root`, `enforce_branding_root_no_inherit`,
+`enforce_organization_application_root_org`, `provision_root_organization`,
+`normalize_platform_settings` (SECURITY INVOKER, EXECUTE révoqué).
+
+**Exceptions au motif** : `enforce_org_depth` et `set_updated_at` sont `SECURITY INVOKER`, EXECUTE
+ouvert à `PUBLIC` — pas de lecture de table protégée, pas besoin de contourner le RLS.
+
+---
+
+## Extensions
+
+Schéma dédié **`extensions`** : `postgis 3.3.7` (types géométriques, `quartiers.geom`),
+`pg_trgm 1.6` (similarité trigram, rapprochement d'identités), `unaccent 1.1` (normalisation de
+noms), `pgcrypto 1.3`, `uuid-ossp 1.1`. Hors schéma dédié : `pg_stat_statements`,
+`supabase_vault`, `plpgsql`. **`pgsodium` n'est pas installé** (disponible au catalogue
+seulement) — voir `smtp_settings.password` plus haut.
+
+---
+
+## Storage — buckets privés
+
+### `procedure-documents` — documents de la base de connaissances
+
+- Bucket **privé**, limite **25 Mio/fichier**, `allowed_mime_types = NULL` (aucun filtrage MIME
+  côté serveur — la validation de format est purement applicative, côté `procedureStorage.ts`).
+- **Isolation par convention de chemin** (pas de colonne dédiée) :
+  `{organization_id racine}/{procedure_id}/{agent|training}/{uid}-{fichier}`.
+- **4 policies** sur `storage.objects`, rôle `authenticated`, scopées
+  `bucket_id = 'procedure-documents'` : SELECT `has_org_access((storage.foldername(name))[1]::uuid)` ;
+  INSERT/UPDATE/DELETE `is_org_admin(...)` sur le même premier segment de chemin.
+- Accès en lecture par **URL signée temporaire** ; la référence `{path, name}` est stockée dans
+  `procedures.knowledge_base` (voir ci-dessous).
+
+### `document-templates` — fichiers du catalogue de documents
+
+- Bucket **privé**, limite **25 Mio/fichier**, `allowed_mime_types = NULL` (validation de format
+  purement applicative, côté `src/features/documents/documentTemplates.ts` :
+  `.doc`/`.docx`/`.odt`).
+- **Isolation par convention de chemin** : `{organization_id racine}/{uid}-{fichier}`.
+  ⚠️ **Pas de segment de document**, contrairement à `procedure-documents` : le fichier est
+  déposé **avant** que la ligne `document_templates` existe, il n'y a donc pas d'id à y mettre ;
+  le `uid` (`crypto.randomUUID()`) porte seul l'unicité.
+- **4 policies** sur `storage.objects`, rôle `authenticated`, scopées
+  `bucket_id = 'document-templates'` : SELECT `has_org_access((storage.foldername(name))[1]::uuid)` ;
+  INSERT/UPDATE/DELETE `is_org_admin(...)`. L'UPDATE porte **`using` ET `with check`** — sans les
+  deux, un objet pourrait être déplacé hors de son tenant.
+- Accès en lecture par **URL signée temporaire** ; le chemin est stocké dans
+  `document_templates.file_path`.
+
+---
+
+## Contrats JSONB possédés
+
+`procedures.form_schema`, `procedures.requester_config`, `procedures.knowledge_base`,
+`procedures.communication_config`, `procedures.translations` et `categories.translations` (ainsi
+que `metadata`) portent des
+commentaires SQL en base les qualifiant de **contrats possédés**, consommés en aval par
+Ariane/Clara. `public-api` les **transmet tels quels**
+(pass-through), sans les interpréter.
+
+Leur structure n'est **pas** décrite ici (propriété du code applicatif et de l'OpenAPI) :
+- Code source faisant foi : `src/features/procedures/*.ts` (`formSchema.ts`, `requesterFields.ts`,
+  `knowledgeBase.ts`, `communication.ts`, `conditions.ts`, `formats.ts` — tous testés).
+- ⚠️ `communication_config` **NULL** n'est pas « non publiée » : c'est une démarche jamais passée
+  par l'étape, à lire comme les valeurs par défaut (visible, non bornée). Le parseur applicatif
+  le fait ; un consommateur SQL direct doit le faire aussi. ⚠️ Le bloc `documents` du même JSON
+  fait **exception** : ses défauts sont **vides** (aucun document proposé), pas actifs — sans quoi
+  une colonne NULL déverserait tout le catalogue dans chaque démarche.
+- ⚠️ Le bloc `communication_config.documents` référence `document_templates` **sans clé
+  étrangère** : une sélection survit à la suppression de son document. L'UI comme `public-api`
+  écartent ces références mortes ; un consommateur SQL direct doit joindre, pas faire confiance.
+- ⚠️ `translations` (sur `procedures` **et** `categories`) a une forme depuis le 2026-09-06 :
+  `{ "<code de langue>": { "name": "…", "short_description": "…" } }`, code faisant foi
+  `src/features/languages/translations.ts` (testé). Les clés sous une langue sont celles des
+  **colonnes françaises** correspondantes ; `short_description` n'existe que sur `procedures`
+  (ajouté le 2026-09-07 — une catégorie n'a pas de descriptif). Trois règles portent tout le
+  reste : **jamais de clé `fr`** (le texte français est la colonne — l'y écrire créerait une
+  seconde source de vérité) ; un **champ absent = repli sur la colonne française**, pas un texte
+  vide ; et ce repli se fait **champ par champ**, une langue pouvant légitimement porter le
+  libellé traduit sans le descriptif. Les traductions d'une langue **désactivée** sont
+  **conservées** (le réglage gouverne l'usage, pas la donnée — motif `email_sender_name`) : elles
+  restent donc lisibles en base alors que la collectivité ne les affiche plus.
+- Contrat publié : `/api-doc` (Redoc, `public-api/openapi.json`).
+
+La sérialisation des deux Edge Functions applique une **whitelist stricte** : aucune colonne
+sensible ne peut fuir sur un `select *`. Colonnes explicitement **non exposées** : `is_active_global`,
+`api_keys.key_hash`, la géométrie binaire `quartiers.geom`. Les colonnes de `smtp_settings` ne
+sortent que par `GET /v1/organizations/{id}/smtp` (scope `smtp`, cf. Points de vigilance).
+Exception assumée : `contacts.internal_notes` **est** exposée par `contacts-api` (API
+serveur-à-serveur pour les apps agents) malgré le commentaire SQL de la colonne — documentée dans
+l'OpenAPI de `contacts-api`, voir Points de vigilance.
+
+La fiche contact expose aussi l'objet **`quartier` résolu** (`{id, name, color}`), construit via
+un embed PostgREST centralisé dans la constante `CONTACT_SELECT` de `contacts-api`. De même, la
+démarche expose **`documents` résolu** (libellé, type, groupe, nom de fichier) à partir du bloc
+`communication_config.documents` et du catalogue, via `loadTemplates` dans `public-api` —
+⚠️ `document_templates.file_path` n'est **jamais** exposé : le fichier passe par
+`GET /v1/document-templates/{id}/signed-url`.
+
+---
+
+## Points de vigilance
+
+Constats du 2026-08-12, à traiter ou à surveiller — non masqués :
+
+- **Cascade totale sur `organizations.parent_id`** : supprimer une organisation efface
+  récursivement son sous-arbre, ses contacts, ses quartiers, ses démarches et ses clés API.
+  Aucun garde-fou en base au-delà de la policy DELETE (super admin + non-racine).
+- **FK sans `ON DELETE`**, pouvant bloquer silencieusement une suppression : `procedures.category_id`,
+  `api_keys.created_by`, `contact_relations.role_id`.
+- **Colonnes de tenant nullables** : `categories.organization_id`, `procedures.organization_id`,
+  `organization_procedures.organization_id`/`procedure_id`, `user_organizations.user_id`/
+  `organization_id` — le discriminant de tenant peut être `NULL` en base.
+- **`categories`** : seule table métier scopée organisation sans trigger de rattachement racine
+  ni index d'unicité de nom. Rien n'empêche en base une démarche d'une racine A d'être catégorisée
+  sous une catégorie d'une autre racine — seule l'UI filtre par organisation.
+- **Absence de policy UPDATE sur `user_organizations`** : changer le rôle d'un membre en place est
+  impossible côté client ; l'UI doit supprimer puis recréer la ligne.
+- **`api_keys.scopes`** : borné par CHECK depuis le 2026-09-08 (`read`, `contacts`, `smtp`,
+  `ai`) ; les fonctions vérifient le scope requis (`read` par `public-api`, `contacts` par
+  `contacts-api`, `ai` par `ai-api`). Un cinquième scope s'ajoute au CHECK ET aux fonctions.
+- **`provision_root_organization`** a des effets de bord sur l'insert d'une racine (rôles, plafond,
+  domaine) : un script qui insère des racines les subit — neutraliser `platform_settings` en tête
+  de transaction (`plafond-ia.test.sql`).
+- **`quartiers.created_by`** : uuid sans FK ni contrainte.
+- **`procedures.updated_at`** sans trigger `set_updated_at`, contrairement aux quatre autres
+  tables horodatées.
+- **`contacts.internal_notes`** exposée par `contacts-api` alors que le commentaire SQL de la
+  colonne interdit toute sérialisation publique — divergence assumée et documentée dans l'OpenAPI,
+  mais à garder à l'esprit pour tout nouveau consommateur de données usagers.
+` — la même forme que
+  `api_keys.consumer`, c'est la même valeur), `name`, `scope` CHECK `('abonnement' |
+  'plateforme')`. Seed : `nora`, `iris`, `clara` (abonnement), `socle` (plateforme — la clé de
+  `translate-labels` sert toute racine). RLS : lecture `authenticated`, écriture `is_super_admin()`.
+- `organization_applications (organization_id, application_id)` PK, FK CASCADE des deux côtés,
+  `created_at`, `created_by`. Trigger `enforce_organization_application_root_org` (racine
+  obligatoire). RLS : lecture `has_org_access OR is_admin_of_self_or_ancestor` · INSERT/DELETE
+  `is_super_admin()` — souscrire est une décision commerciale.
+- **Transition** : la migration a abonné toutes les racines existantes à toutes les applications
+  `abonnement` (aucune régression au déploiement) ; les racines suivantes sont opt-in.
+
 ### `api_keys`
 
-- `organization_id` uuid **NULLABLE**, FK CASCADE — **NULL = clé plateforme** (périmètre global,
-  liaison unique Socle↔Clara) ; sinon racine imposée par `trg_enforce_api_key_root_org` (avec
-  `organization_id IS NULL`, la recherche de parent ne ramène rien, donc la clé plateforme passe
-  le trigger sans déclencher l'erreur de non-racine).
+- `organization_id` uuid **NULLABLE**, FK CASCADE — **NULL = clé plateforme**, rattachée à une
+  **application** (`consumer`) et bornée aux collectivités **abonnées** à celle-ci
+  (`application_scope_ids`) — plus « toutes les organisations » depuis le 2026-09-08 ; sinon
+  racine imposée par `trg_enforce_api_key_root_org` (avec `organization_id IS NULL`, la recherche
+  de parent ne ramène rien, donc la clé plateforme passe le trigger sans déclencher l'erreur de
+  non-racine).
 - `name`, `key_prefix`, `key_hash` **UNIQUE** (SHA-256, jamais stocké en clair), `scopes text[]`
-  NOT NULL défaut `{read}` (**aucune contrainte de valeurs** — `read`/`contacts` sont une
-  convention applicative, pas un CHECK), `last_used_at`/`expires_at`/`revoked_at`/`created_at`
-  timestamptz, `created_by` FK `users(id)` **sans `ON DELETE`** (bloque la suppression d'un
-  utilisateur ayant créé une clé).
-- `consumer text` NULLABLE, CHECK `~ '^[a-z][a-z0-9_-]{1,31}$'` (2026-08-29) — **l'application
-  imputable** d'un appel facturé. Elle vient de la CLÉ, jamais du corps de la requête : sans cela
-  n'importe quelle application pourrait faire porter sa dépense à une autre (doctrine « périmètre
-  dérivé de la clé »). `ai-api` refuse une clé de scope `ai` dont le `consumer` est nul — une
-  dépense sans imputation ne peut être ni facturée ni expliquée.
+  NOT NULL défaut `{read}`, **CHECK `scopes <@ '{read,contacts,smtp,ai}'`** (2026-09-08 — un
+  cinquième scope s'ajoute ici ET dans les fonctions), `last_used_at`/`expires_at`/`revoked_at`/
+  `created_at` timestamptz, `created_by` FK `users(id)` **sans `ON DELETE`** (bloque la suppression
+  d'un utilisateur ayant créé une clé).
+- `consumer text` NULLABLE, **FK `applications(id)`** (2026-09-08 ; CHECK de forme depuis le
+  2026-08-29) — **l'application** de la clé, et l'imputation d'un appel facturé. Elle vient de la
+  CLÉ, jamais du corps de la requête : sans cela n'importe quelle application pourrait faire porter
+  sa dépense à une autre (doctrine « périmètre dérivé de la clé »). **CHECK
+  `api_keys_platform_requires_consumer`** : une clé plateforme vivante porte une application (une
+  clé révoquée en est dispensée — elle est morte). `ai-api` refuse toute clé de scope `ai` sans
+  `consumer`, liée comprise — une dépense sans imputation ne peut être ni facturée ni expliquée.
 - **RLS** : une seule policy `ALL is_super_admin()` — gestion réservée au super admin. Côté UI,
-  les clés d'une racine se gèrent depuis sa page (`OrgSettingsPage`, section « API publique ») et
-  les clés plateforme (`organization_id IS NULL`) depuis `/superadmin/cles-plateforme`, cf.
-  [architecture.md](./architecture.md).
+  les clés d'une racine (partenaires) se gèrent depuis sa page (`OrgSettingsPage`, section « API
+  publique ») et les clés plateforme depuis `/superadmin/applications`, une liste par application,
+  cf. [architecture.md](./architecture.md).
 
 
 ### Plafond et journal d'utilisation IA

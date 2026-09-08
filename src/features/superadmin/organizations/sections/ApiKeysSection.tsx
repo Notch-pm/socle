@@ -6,10 +6,12 @@ const API_BASE_URL = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/public-a
 const CONTACTS_API_BASE_URL = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/contacts-api`;
 
 /**
- * Section « API publique » d'une organisation racine : présentation des deux API
- * de la gamme + clés rattachées à cette organisation (périmètre = elle et sa
- * descendance). Les clés **plateforme** (périmètre global) se gèrent sur la page
- * dédiée `/superadmin/cles-plateforme`.
+ * Section « API publique » d'une organisation racine : présentation des API de
+ * la gamme + clés rattachées à cette organisation (périmètre = elle et sa
+ * descendance) — des clés de PARTENAIRES. Les applications de la gamme (Nora,
+ * Iris, Clara) ne prennent pas de clé ici : chacune a la sienne, sur la page
+ * `/superadmin/applications`, et voit cette collectivité dès qu'elle y est
+ * abonnée (section « Applications souscrites »).
  */
 export function ApiKeysSection({ organizationId }: { organizationId: string }) {
   return (
@@ -19,12 +21,13 @@ export function ApiKeysSection({ organizationId }: { organizationId: string }) {
           <div className="flex items-center gap-3">
             <KeyRound className="size-5 text-primary" />
             <div>
-              <CardTitle className="text-base">APIs de la gamme</CardTitle>
+              <CardTitle className="text-base">Clés de partenaires</CardTitle>
               <CardDescription>
-                Délivrez des clés pour que d'autres applications (Clara, Ariane, Iris, partenaires)
-                consomment le référentiel (lecture) et le référentiel des usagers
-                (lecture/écriture) de cette organisation et de sa descendance. Les clés sont
-                destinées à un usage serveur-à-serveur ; leurs accès se choisissent à la création.
+                Délivrez des clés pour qu'un partenaire consomme le référentiel (lecture), les
+                usagers (lecture/écriture), le relais d'envoi ou l'assistant IA de cette
+                organisation et de sa descendance — jamais au-delà. Les applications de la gamme
+                (Nora, Iris, Clara) n'ont pas besoin de clé ici : cochez-les dans « Applications
+                souscrites ». Usage serveur-à-serveur ; les accès se choisissent à la création.
               </CardDescription>
             </div>
           </div>

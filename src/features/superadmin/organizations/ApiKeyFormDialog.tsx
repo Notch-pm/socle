@@ -13,6 +13,7 @@ import { Input } from "@/components/ui/input";
 import { Field } from "@/components/ui/field";
 import { Switch } from "@/components/ui/switch";
 import { useCreateApiKey, type ApiKeyOwner } from "@/features/superadmin/organizations/useApiKeys";
+import { useApplications } from "@/features/superadmin/applications/useApplications";
 
 /** Accès attribuables à une clé (colonne `api_keys.scopes`). */
 const SCOPE_OPTIONS = [
@@ -51,35 +52,41 @@ export const CONSUMER_HINT =
 
 /** Libellé de la case d'assentiment exigée pour créer une clé plateforme. */
 export const PLATFORM_ACK_LABEL =
-  "Je comprends que cette clé donne accès à toutes les organisations de la plateforme.";
+  "Je comprends que cette clé verra toutes les collectivités abonnées à cette application.";
 
 /**
- * Création d'une clé API. Deux temps : (1) formulaire (nom + accès + expiration
- * facultative) ; (2) révélation **unique** du secret (copiable), qui ne sera
- * plus jamais affiché.
+ * Création d'une clé API. Deux temps : (1) formulaire (nom + accès + application
+ * + expiration facultative) ; (2) révélation **unique** du secret (copiable),
+ * qui ne sera plus jamais affiché.
  *
- * `owner = null` crée une **clé plateforme** (périmètre = toutes les
- * organisations) : le dialogue l'annonce explicitement et exige une case
- * d'assentiment avant de permettre la création.
+ * `owner = null` crée une **clé plateforme** : rattachée à une application du
+ * registre, elle voit les collectivités ABONNÉES à cette application — et
+ * seulement elles. Le dialogue exige l'application et une case d'assentiment.
+ * Sur une clé LIÉE à une racine, l'application n'est demandée que pour le
+ * scope facturé (la dépense s'impute).
  */
 export function ApiKeyFormDialog({
   open,
   onOpenChange,
   owner,
   createdBy,
+  application,
 }: {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   owner: ApiKeyOwner;
   createdBy: string | null | undefined;
+  /** Application pré-liée (page des applications) : le sélecteur est verrouillé. */
+  application?: string;
 }) {
   const isPlatform = owner === null;
   const createKey = useCreateApiKey(owner, createdBy);
+  const { data: applications } = useApplications();
 
   const [name, setName] = React.useState("");
   const [expiresAt, setExpiresAt] = React.useState("");
   const [scopes, setScopes] = React.useState<string[]>(["read"]);
-  const [consumer, setConsumer] = React.useState("");
+  const [consumer, setConsumer] = React.useState(application ?? "");
   const [acknowledged, setAcknowledged] = React.useState(false);
   const [secret, setSecret] = React.useState<string | null>(null);
   const [copied, setCopied] = React.useState(false);
@@ -90,24 +97,25 @@ export function ApiKeyFormDialog({
       setName("");
       setExpiresAt("");
       setScopes(["read"]);
-      setConsumer("");
+      setConsumer(application ?? "");
       setAcknowledged(false);
       setSecret(null);
       setCopied(false);
       createKey.reset();
     }
-  }, [open]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [open, application]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const trimmed = name.trim();
   // Le scope facturé exige une application imputable : sans elle, `ai-api`
-  // refuserait la clé à l'usage (403). Autant le dire à la création.
+  // refuserait la clé à l'usage (403). Une clé plateforme l'exige toujours :
+  // c'est l'application qui borne son périmètre.
   const billed = scopes.includes(BILLED_SCOPE);
-  const consumerValue = consumer.trim().toLowerCase();
-  const consumerValid = /^[a-z][a-z0-9_-]{1,31}$/.test(consumerValue);
+  const applicationRequired = isPlatform || billed;
+  const consumerValid = consumer !== "";
   const canSubmit =
     trimmed.length > 0 &&
     scopes.length > 0 &&
-    (!billed || consumerValid) &&
+    (!applicationRequired || consumerValid) &&
     !createKey.isPending &&
     (!isPlatform || acknowledged);
 
@@ -121,7 +129,12 @@ export function ApiKeyFormDialog({
     // Expiration : fin de journée locale de la date saisie, sinon pas d'expiration.
     const expiresIso = expiresAt ? new Date(`${expiresAt}T23:59:59`).toISOString() : null;
     createKey.mutate(
-      { name: trimmed, expiresAt: expiresIso, scopes, consumer: billed ? consumerValue : null },
+      {
+        name: trimmed,
+        expiresAt: expiresIso,
+        scopes,
+        consumer: applicationRequired ? consumer : null,
+      },
       { onSuccess: (createdSecret) => setSecret(createdSecret) },
     );
   }
@@ -144,7 +157,8 @@ export function ApiKeyFormDialog({
     description = "Copiez cette clé maintenant : elle ne sera plus jamais affichée.";
   } else if (isPlatform) {
     title = "Nouvelle clé plateforme";
-    description = "Génère une clé d'accès aux API dont le périmètre est la plateforme entière.";
+    description =
+      "Génère la clé d'une application de la gamme : son périmètre est l'ensemble des collectivités abonnées à cette application.";
   } else {
     title = "Nouvelle clé API";
     description = "Génère une clé d'accès aux API pour cette organisation et sa descendance.";
@@ -191,11 +205,11 @@ export function ApiKeyFormDialog({
               >
                 <TriangleAlert className="mt-0.5 size-4 shrink-0" />
                 <p>
-                  <strong>Périmètre global.</strong> Cette clé lira{" "}
-                  <strong>toutes les organisations</strong> de la plateforme, tous clients
-                  confondus — et, avec l'accès « Usagers », tous leurs référentiels d'usagers.
-                  Réservez-la à une application de la gamme elle-même multi-tenant ; pour un
-                  partenaire ou un client, créez la clé depuis la page de son organisation.
+                  <strong>Clé d'application.</strong> Cette clé lira{" "}
+                  <strong>toutes les collectivités abonnées</strong> à l'application choisie, tous
+                  clients confondus — et, avec l'accès « Usagers », leurs référentiels d'usagers.
+                  Réservez-la à une application de la gamme ; pour un partenaire ou un client,
+                  créez la clé depuis la page de son organisation.
                 </p>
               </div>
             ) : null}
@@ -206,7 +220,7 @@ export function ApiKeyFormDialog({
                 autoFocus
                 value={name}
                 onChange={(e) => setName(e.target.value)}
-                placeholder={isPlatform ? "Ex. Clara — plateforme" : "Ex. Clara — production"}
+                placeholder={isPlatform ? "Ex. Clara — production" : "Ex. Partenaire X — production"}
               />
             </Field>
             <fieldset className="flex flex-col gap-2">
@@ -231,23 +245,27 @@ export function ApiKeyFormDialog({
                 <p className="text-xs text-destructive">Sélectionnez au moins un accès.</p>
               ) : null}
             </fieldset>
-            {billed ? (
-              <Field label="Application imputable" htmlFor="api-key-consumer">
-                <Input
+            {applicationRequired ? (
+              <Field label="Application" htmlFor="api-key-consumer">
+                <select
                   id="api-key-consumer"
                   value={consumer}
+                  disabled={Boolean(application)}
                   onChange={(e) => setConsumer(e.target.value)}
-                  placeholder="iris"
                   aria-describedby="api-key-consumer-hint"
-                />
+                  className="h-11 w-full rounded-lg border border-input bg-background px-3 text-sm disabled:opacity-60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                >
+                  <option value="">Choisir une application…</option>
+                  {(applications ?? []).map((app) => (
+                    <option key={app.id} value={app.id}>
+                      {app.name}
+                    </option>
+                  ))}
+                </select>
                 <p id="api-key-consumer-hint" className="text-xs text-muted-foreground">
-                  {CONSUMER_HINT} Minuscules, chiffres, tiret ou souligné.
+                  {CONSUMER_HINT}
+                  {isPlatform ? " Le périmètre de la clé est celui de l'application." : ""}
                 </p>
-                {consumer.trim() !== "" && !consumerValid ? (
-                  <p className="text-xs text-destructive">
-                    Identifiant invalide : 2 à 32 caractères, commençant par une lettre minuscule.
-                  </p>
-                ) : null}
               </Field>
             ) : null}
             <Field label="Expiration (facultatif)" htmlFor="api-key-expires">

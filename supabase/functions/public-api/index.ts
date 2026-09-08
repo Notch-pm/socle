@@ -29,6 +29,7 @@ import {
   serializeTenant,
 } from "./_shared/serializers.ts";
 import { buildOrganizationTree, isUuid } from "./_shared/scope.ts";
+import { API_KEY_COLUMNS, evaluateApiKey, scopeRequest, type ApiKeyRow } from "./_shared/apiKeyAuth.ts";
 import { errorResponse, jsonResponse } from "./_shared/errors.ts";
 import { buildOpenApiDocument } from "./_shared/openapi.ts";
 import { isoDay } from "./_shared/publication.ts";
@@ -256,26 +257,20 @@ Deno.serve(async (req: Request) => {
       return errorResponse("unauthorized", "Clé API manquante (Authorization: Bearer).", corsHeaders);
     }
     const keyHash = await sha256Hex(token);
-    const { data: apiKey } = await admin
+    const { data: apiKeyRow } = await admin
       .from("api_keys")
-      .select("id, organization_id, revoked_at, expires_at, scopes")
+      .select(API_KEY_COLUMNS)
       .eq("key_hash", keyHash)
       .maybeSingle();
 
-    if (
-      !apiKey ||
-      apiKey.revoked_at !== null ||
-      (apiKey.expires_at !== null && new Date(apiKey.expires_at).getTime() < Date.now())
-    ) {
-      return errorResponse("unauthorized", "Clé API invalide, révoquée ou expirée.", corsHeaders);
-    }
-    if (!Array.isArray(apiKey.scopes) || !apiKey.scopes.includes("read")) {
-      return errorResponse(
-        "forbidden",
-        "Cette clé ne porte pas le scope « read » requis pour le référentiel.",
-        corsHeaders,
-      );
-    }
+    // La décision (révoquée, expirée, scope, clé plateforme sans application)
+    // vit dans _shared/apiKeyAuth.ts, identique dans les trois fonctions.
+    const decision = evaluateApiKey(apiKeyRow as ApiKeyRow | null, {
+      requiredScope: "read",
+      scopeMessage: "Cette clé ne porte pas le scope « read » requis pour le référentiel.",
+    });
+    if (!decision.ok) return errorResponse(decision.code, decision.message, corsHeaders);
+    const apiKey = decision.key;
 
     // Trace best-effort (n'interrompt pas la requête en cas d'échec).
     try {
@@ -287,12 +282,23 @@ Deno.serve(async (req: Request) => {
       // ignoré
     }
 
-    // --- Périmètre : sous-arbre de l'organisation de la clé. Une clé
-    // PLATEFORME (organization_id NULL — liaison unique Socle↔Clara) voit
-    // toutes les organisations, toutes racines confondues. ---
-    let scopeIds: string[];
+    // --- Périmètre : sous-arbre de l'organisation de la clé — ou, pour une
+    // clé PLATEFORME, les sous-arbres des collectivités ABONNÉES à son
+    // application (`application_scope_ids`, registre du 2026-09-08). « Toutes
+    // les organisations » n'existe plus que pour le Socle lui-même
+    // (application de scope `plateforme`). ---
+    const scope = scopeRequest(apiKey);
+    const { data: scopeRows, error: scopeError } = await admin.rpc(scope.rpc, scope.args);
+    if (scopeError) {
+      return errorResponse("internal_error", "Impossible de calculer le périmètre.", corsHeaders);
+    }
+    const scopeIds: string[] = Array.isArray(scopeRows) ? scopeRows : [];
+
+    // Les parents servent à remonter à la racine d'un quartier demandé par
+    // une clé plateforme. Métadonnées sans contenu, et l'organisation visée
+    // est d'abord vérifiée dans le périmètre (`inScope`).
     let parentById: Map<string, string | null> = new Map();
-    if (apiKey.organization_id === null) {
+    if (scope.kind === "platform") {
       const { data: allOrgs, error: allOrgsError } = await admin
         .from("organizations")
         .select("id, parent_id");
@@ -300,16 +306,7 @@ Deno.serve(async (req: Request) => {
         return errorResponse("internal_error", "Impossible de calculer le périmètre.", corsHeaders);
       }
       const rows = (allOrgs ?? []) as Array<{ id: string; parent_id: string | null }>;
-      scopeIds = rows.map((r) => r.id);
       parentById = new Map(rows.map((r) => [r.id, r.parent_id]));
-    } else {
-      const { data: subtree, error: subtreeError } = await admin.rpc("org_subtree_ids", {
-        root: apiKey.organization_id,
-      });
-      if (subtreeError) {
-        return errorResponse("internal_error", "Impossible de calculer le périmètre.", corsHeaders);
-      }
-      scopeIds = Array.isArray(subtree) ? subtree : [];
     }
     const inScope = (id: string | null | undefined) => id != null && scopeIds.includes(id);
 

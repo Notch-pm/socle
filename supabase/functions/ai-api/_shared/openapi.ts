@@ -38,7 +38,7 @@ export function buildOpenApiDocument(serverUrl: string): Record<string, unknown>
     openapi: "3.1.0",
     info: {
       title: "API IA Socle — guichet du fournisseur LLM",
-      version: "1.1.0",
+      version: "1.2.0",
       description: [
         "Le Socle détient la clé du fournisseur LLM et **compte ce qu'elle dépense** pour",
         "toute la gamme. Les applications (Iris, Clara…) n'appellent plus le fournisseur :",
@@ -206,7 +206,10 @@ export function buildOpenApiDocument(serverUrl: string): Record<string, unknown>
         bearerApiKey: {
           type: "http",
           scheme: "bearer",
-          description: "Clé API Socle portant le scope `ai` et rattachée à une application.",
+          description:
+            "Clé API Socle portant le scope `ai` et rattachée à une application du registre. " +
+            "Une clé PLATEFORME ne débite que le crédit des collectivités ABONNÉES à son " +
+            "application : `X-Organization-Id` hors abonnement répond 404.",
         },
       },
       schemas: {

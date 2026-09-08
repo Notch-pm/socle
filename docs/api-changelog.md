@@ -13,6 +13,38 @@ Format d'une entrée : `## AAAA-MM-JJ — <api> — ajout|correctif|rupture`
 
 ---
 
+## 2026-09-08 — public-api, contacts-api & ai-api — rupture (clés plateforme seulement)
+
+**Une clé par application, bornée par abonnement.** Le Socle tient désormais un **registre des
+applications** (`nora`, `iris`, `clara`, `socle`…) et, par collectivité, la liste des applications
+**souscrites**. Une clé **plateforme** (`organization_id` NULL) est rattachée à une application et
+ne voit que les collectivités abonnées à celle-ci — plus jamais « toutes les organisations ».
+Versions : `public-api` **1.18.0**, `contacts-api` **1.1.0**, `ai-api` **1.2.0**. Les clés
+**liées à une organisation principale** (partenaires) ne changent pas.
+
+- **Ce qui change pour une clé plateforme** : `GET /v1/organizations` rend les racines abonnées et
+  leur descendance ; `GET /v1/portal/tenant` répond **404** pour le domaine d'une collectivité non
+  abonnée (même message qu'un domaine inconnu — on ne renseigne pas sur les clients des autres) ;
+  `contacts-api` et `ai-api` répondent **404** à un `X-Organization-Id` hors abonnement, comme à
+  une organisation inexistante.
+- ⚠️ **Une clé plateforme sans application est refusée (403)** : « Cette clé plateforme n'est
+  rattachée à aucune application : son périmètre ne peut pas être déterminé. » Les clés d'avant le
+  registre se rattachent depuis `/superadmin/applications` (« À rattacher »).
+- ⚠️ **Chemin de migration, dans cet ordre** : (1) migration `applications_et_abonnements` — elle
+  abonne **toutes les racines existantes à toutes les applications**, donc aucune régression le
+  jour du déploiement ; (2) rattacher les clés plateforme et vérifier les abonnements dans l'UI ;
+  (3) déployer les trois fonctions. Inverser (2) et (3) coupe le portail.
+- **Pourquoi** : l'isolation par tenant vivait dans le code de chaque application (une application
+  compromise lisait tout). Elle vit désormais au Socle, et l'arrivée d'un client ne transmet plus
+  aucun secret : le super administrateur coche ses applications, la clé de chacune le voit.
+- **Onboarding d'un client côté application** : `GET /v1/organizations` avec la clé de
+  l'application rend exactement ses clients — de quoi créer ses tenants à la synchronisation
+  plutôt qu'à la main.
+- `api_keys.consumer` est une clé étrangère vers le registre ; `scopes` est borné par CHECK à
+  `read`, `contacts`, `smtp`, `ai`.
+
+---
+
 ## 2026-09-08 — public-api — ajout
 
 **Le thème du site de démarches : chaque collectivité règle l'apparence de son portail.**

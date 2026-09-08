@@ -57,12 +57,12 @@ import {
   reservationFor,
 } from "./_shared/tokens.ts";
 import {
-  hasAiScope,
   isUuid,
   parseCompletionPayload,
   resolveRootOrgId,
   type OrgParentRow,
 } from "./_shared/validation.ts";
+import { API_KEY_COLUMNS, evaluateApiKey, type ApiKeyRow } from "./_shared/apiKeyAuth.ts";
 
 const FUNCTION_NAME = "ai-api";
 
@@ -209,29 +209,24 @@ Deno.serve(async (req: Request) => {
       return errorResponse("unauthorized", "Clé API manquante (Authorization: Bearer).", corsHeaders);
     }
     const keyHash = await sha256Hex(token);
-    const { data: apiKey } = await admin
+    const { data: apiKeyRow } = await admin
       .from("api_keys")
-      .select("id, organization_id, revoked_at, expires_at, scopes, consumer")
+      .select(API_KEY_COLUMNS)
       .eq("key_hash", keyHash)
       .maybeSingle();
 
-    if (
-      !apiKey ||
-      apiKey.revoked_at !== null ||
-      (apiKey.expires_at !== null && new Date(apiKey.expires_at).getTime() < Date.now())
-    ) {
-      return errorResponse("unauthorized", "Clé API invalide, révoquée ou expirée.", corsHeaders);
-    }
-    if (!hasAiScope(apiKey.scopes)) {
-      return errorResponse(
-        "forbidden",
-        "Cette clé ne porte pas le scope « ai » requis pour l'assistant.",
-        corsHeaders,
-      );
-    }
-    // L'imputation vient de la clé. Sans elle, le journal ne saurait pas à qui
-    // rattacher la dépense — et une dépense non imputable n'a pas lieu.
-    const consumer = typeof apiKey.consumer === "string" ? apiKey.consumer.trim() : "";
+    // La décision (révoquée, expirée, scope, clé plateforme sans application)
+    // vit dans _shared/apiKeyAuth.ts, identique dans les trois fonctions.
+    const decision = evaluateApiKey(apiKeyRow as ApiKeyRow | null, {
+      requiredScope: "ai",
+      scopeMessage: "Cette clé ne porte pas le scope « ai » requis pour l'assistant.",
+    });
+    if (!decision.ok) return errorResponse(decision.code, decision.message, corsHeaders);
+    const apiKey = decision.key;
+    // L'imputation vient de la clé — pour une clé LIÉE aussi. Sans elle, le
+    // journal ne saurait pas à qui rattacher la dépense — et une dépense non
+    // imputable n'a pas lieu.
+    const consumer = apiKey.consumer ?? "";
     if (consumer === "") {
       return errorResponse(
         "forbidden",
@@ -259,6 +254,18 @@ Deno.serve(async (req: Request) => {
       if (orgRowsError) throw orgRowsError;
       const rootId = resolveRootOrgId((orgRows ?? []) as OrgParentRow[], requested);
       if (!rootId) {
+        return errorResponse("not_found", "Organisation introuvable.", corsHeaders);
+      }
+      // Le budget d'une collectivité ne se débite que par les applications
+      // qu'elle a souscrites (`application_scope_ids`) ; hors abonnement =
+      // introuvable, comme hors référentiel.
+      const { data: scopeRows, error: scopeError } = await admin.rpc("application_scope_ids", {
+        p_application: consumer,
+      });
+      if (scopeError) {
+        return errorResponse("internal_error", "Impossible de calculer le périmètre.", corsHeaders);
+      }
+      if (!(Array.isArray(scopeRows) && scopeRows.includes(rootId))) {
         return errorResponse("not_found", "Organisation introuvable.", corsHeaders);
       }
       orgId = rootId;

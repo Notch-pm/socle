@@ -4,7 +4,7 @@ import { render, screen, fireEvent } from "@testing-library/react";
 import { ApiKeyFormDialog, CONSUMER_HINT, PLATFORM_ACK_LABEL } from "./ApiKeyFormDialog";
 
 // Mutation court-circuitée : on vérifie ce que le dialogue demande (propriétaire,
-// nom, scopes), pas l'insertion Supabase.
+// nom, scopes, application), pas l'insertion Supabase.
 const h = vi.hoisted(() => ({
   mutate: vi.fn(),
   reset: vi.fn(),
@@ -16,6 +16,19 @@ vi.mock("@/features/superadmin/organizations/useApiKeys", () => ({
     h.useCreateApiKey(...args);
     return { mutate: h.mutate, reset: h.reset, isPending: false, isError: false, error: null };
   },
+}));
+
+// Le registre des applications, tel que la page « Applications » le tient.
+vi.mock("@/features/superadmin/applications/useApplications", () => ({
+  useApplications: () => ({
+    data: [
+      { id: "clara", name: "Clara — gestion de courrier", scope: "abonnement" },
+      { id: "iris", name: "Iris — gestion des demandes", scope: "abonnement" },
+      { id: "nora", name: "Nora — portail usagers", scope: "abonnement" },
+      { id: "socle", name: "Socle — traduction automatique", scope: "plateforme" },
+    ],
+    isLoading: false,
+  }),
 }));
 
 // Primitives Radix (Dialog, Switch) : polyfills absents de jsdom.
@@ -32,8 +45,16 @@ if (!globalThis.ResizeObserver) {
   } as unknown as typeof ResizeObserver;
 }
 
-function renderDialog(owner: string | null) {
-  render(<ApiKeyFormDialog open onOpenChange={() => {}} owner={owner} createdBy="user-1" />);
+function renderDialog(owner: string | null, application?: string) {
+  render(
+    <ApiKeyFormDialog
+      open
+      onOpenChange={() => {}}
+      owner={owner}
+      createdBy="user-1"
+      application={application}
+    />,
+  );
 }
 
 function fillName(value: string) {
@@ -44,6 +65,10 @@ function submitButton() {
   return screen.getByRole("button", { name: /^Créer la clé/ });
 }
 
+const applicationSelect = () => screen.getByLabelText("Application") as HTMLSelectElement;
+const chooseApplication = (id: string) =>
+  fireEvent.change(applicationSelect(), { target: { value: id } });
+
 beforeEach(() => {
   h.mutate.mockReset();
   h.reset.mockReset();
@@ -51,20 +76,22 @@ beforeEach(() => {
 });
 
 describe("ApiKeyFormDialog — clé rattachée à une organisation", () => {
-  it("crée la clé pour l'organisation donnée sans assentiment supplémentaire", () => {
+  it("crée la clé pour l'organisation donnée, sans application ni assentiment", () => {
     renderDialog("org-1");
     expect(h.useCreateApiKey).toHaveBeenCalledWith("org-1", "user-1");
     expect(screen.getByText("Nouvelle clé API")).toBeTruthy();
     expect(screen.queryByRole("alert")).toBeNull();
     expect(screen.queryByLabelText(PLATFORM_ACK_LABEL)).toBeNull();
+    // Un partenaire n'est pas une application du registre.
+    expect(screen.queryByLabelText("Application")).toBeNull();
 
-    fillName("  Clara — production ");
+    fillName("  Partenaire X — production ");
     expect(submitButton().hasAttribute("disabled")).toBe(false);
     fireEvent.click(submitButton());
 
     expect(h.mutate).toHaveBeenCalledTimes(1);
     expect(h.mutate.mock.calls[0][0]).toEqual({
-      name: "Clara — production",
+      name: "Partenaire X — production",
       expiresAt: null,
       scopes: ["read"],
       consumer: null,
@@ -73,35 +100,59 @@ describe("ApiKeyFormDialog — clé rattachée à une organisation", () => {
 });
 
 describe("ApiKeyFormDialog — clé plateforme (owner = null)", () => {
-  it("annonce le périmètre global et exige l'assentiment avant de créer", () => {
+  it("exige une application ET l'assentiment avant de créer", () => {
     renderDialog(null);
     expect(h.useCreateApiKey).toHaveBeenCalledWith(null, "user-1");
     expect(screen.getByText("Nouvelle clé plateforme")).toBeTruthy();
-    // Avertissement explicite sur le périmètre.
-    expect(screen.getByRole("alert").textContent).toMatch(/toutes les organisations/i);
+    // L'avertissement parle d'abonnement, plus de « toutes les organisations ».
+    expect(screen.getByRole("alert").textContent).toMatch(/collectivités abonnées/i);
 
-    fillName("Clara — plateforme");
-    // Nom + scope valides, mais la case d'assentiment n'est pas cochée → bloqué.
+    fillName("Clara — production");
+    fireEvent.click(screen.getByLabelText(PLATFORM_ACK_LABEL));
+    // Nom + scope + assentiment, mais pas d'application → bloqué : sans
+    // application, la clé n'a pas de périmètre.
     expect(submitButton().hasAttribute("disabled")).toBe(true);
     fireEvent.click(submitButton());
     expect(h.mutate).not.toHaveBeenCalled();
 
-    fireEvent.click(screen.getByLabelText(PLATFORM_ACK_LABEL));
+    chooseApplication("clara");
     expect(submitButton().hasAttribute("disabled")).toBe(false);
     fireEvent.click(submitButton());
 
     expect(h.mutate).toHaveBeenCalledTimes(1);
     expect(h.mutate.mock.calls[0][0]).toEqual({
-      name: "Clara — plateforme",
+      name: "Clara — production",
       expiresAt: null,
       scopes: ["read"],
-      consumer: null,
+      consumer: "clara",
     });
   });
 
-  it("transmet les accès choisis (ex. usagers en plus du référentiel)", () => {
+  it("bloque tant que l'assentiment manque, même application choisie", () => {
     renderDialog(null);
-    fillName("Clara — plateforme");
+    fillName("Clara — production");
+    chooseApplication("clara");
+    expect(submitButton().hasAttribute("disabled")).toBe(true);
+    fireEvent.click(screen.getByLabelText(PLATFORM_ACK_LABEL));
+    expect(submitButton().hasAttribute("disabled")).toBe(false);
+  });
+
+  it("verrouille l'application quand la page l'a pré-liée", () => {
+    // Depuis la page « Applications », la clé est créée SOUS une application :
+    // pas de choix à faire, pas d'erreur possible.
+    renderDialog(null, "nora");
+    expect(applicationSelect().value).toBe("nora");
+    expect(applicationSelect().hasAttribute("disabled")).toBe(true);
+
+    fillName("Nora — production");
+    fireEvent.click(screen.getByLabelText(PLATFORM_ACK_LABEL));
+    fireEvent.click(submitButton());
+    expect(h.mutate.mock.calls[0][0]).toMatchObject({ consumer: "nora" });
+  });
+
+  it("transmet les accès choisis (ex. usagers en plus du référentiel)", () => {
+    renderDialog(null, "clara");
+    fillName("Clara — production");
     fireEvent.click(screen.getByLabelText("Usagers (lecture + écriture)"));
     fireEvent.click(screen.getByLabelText(PLATFORM_ACK_LABEL));
     fireEvent.click(submitButton());
@@ -112,51 +163,35 @@ describe("ApiKeyFormDialog — clé plateforme (owner = null)", () => {
 
 /**
  * Le scope facturé exige une application imputable. Sans elle, `ai-api`
- * refuserait la clé à l'usage (403 « n'est rattachée à aucune application
- * consommatrice ») : autant le dire à la création plutôt qu'au premier appel.
+ * refuserait la clé à l'usage (403) : autant le dire à la création plutôt
+ * qu'au premier appel.
  */
-describe("ApiKeyFormDialog — scope IA et imputation", () => {
+describe("ApiKeyFormDialog — scope IA et imputation sur une clé liée", () => {
   const enableAi = () => fireEvent.click(screen.getByLabelText("Assistant IA (jetons facturés)"));
-  const consumerInput = () => screen.getByLabelText("Application imputable") as HTMLInputElement;
 
   it("ne demande l'application que si le scope IA est coché", () => {
     renderDialog("org-1");
     fillName("Iris");
-    expect(screen.queryByLabelText("Application imputable")).toBeNull();
+    expect(screen.queryByLabelText("Application")).toBeNull();
     enableAi();
-    expect(screen.getByLabelText("Application imputable")).toBeTruthy();
+    expect(screen.getByLabelText("Application")).toBeTruthy();
     expect(screen.getByText(new RegExp(CONSUMER_HINT.slice(0, 30)))).toBeTruthy();
   });
 
-  it("ferme le bouton tant que l'application n'est pas nommée", () => {
+  it("ferme le bouton tant que l'application n'est pas choisie", () => {
     renderDialog("org-1");
     fillName("Iris");
     enableAi();
     expect(submitButton().hasAttribute("disabled")).toBe(true);
-    fireEvent.change(consumerInput(), { target: { value: "iris" } });
+    chooseApplication("iris");
     expect(submitButton().hasAttribute("disabled")).toBe(false);
   });
 
-  it("refuse un identifiant qui ne tiendrait pas la contrainte SQL", () => {
+  it("transmet l'imputation avec le scope", () => {
     renderDialog("org-1");
     fillName("Iris");
     enableAi();
-    // « Iris » n'est PAS dans cette liste : la casse est normalisée avant
-    // validation (voir le cas suivant). Seul ce que la contrainte SQL
-    // refuserait vraiment est rejeté ici.
-    for (const invalide of ["1iris", "i", "iris pro", "iris!", "-iris"]) {
-      fireEvent.change(consumerInput(), { target: { value: invalide } });
-      expect(submitButton().hasAttribute("disabled")).toBe(true);
-    }
-    fireEvent.change(consumerInput(), { target: { value: "iris-prod" } });
-    expect(submitButton().hasAttribute("disabled")).toBe(false);
-  });
-
-  it("normalise en minuscules et transmet l'imputation", () => {
-    renderDialog("org-1");
-    fillName("Iris");
-    enableAi();
-    fireEvent.change(consumerInput(), { target: { value: "  IRIS  " } });
+    chooseApplication("iris");
     fireEvent.click(submitButton());
 
     expect(h.mutate.mock.calls[0][0]).toMatchObject({
@@ -170,7 +205,7 @@ describe("ApiKeyFormDialog — scope IA et imputation", () => {
     renderDialog("org-1");
     fillName("Iris");
     enableAi();
-    fireEvent.change(consumerInput(), { target: { value: "iris" } });
+    chooseApplication("iris");
     enableAi();
     fireEvent.click(submitButton());
 

@@ -132,7 +132,8 @@ exécutables par `authenticated` : le RLS les évalue avec les droits de l'appel
   `translations` des deux premières porte les **textes traduits** (voir feature « langues »).
 - `smtp_settings` (SMTP par organisation, **hérité du parent** sauf configuration propre —
   voir feature).
-- `api_keys` (clés d'API rattachées à une racine, ou **clé plateforme** — `organization_id` NULL, périmètre global, liaison unique avec Clara — voir feature ; `consumer` = application imputable des appels facturés).
+- `api_keys` (clés d'API rattachées à une racine — partenaires —, ou **clé plateforme** — `organization_id` NULL, rattachée à une **application** du registre et bornée aux collectivités **abonnées** à celle-ci — voir feature « Applications et abonnements » ; `consumer` = l'application, FK `applications`, et l'imputation des appels facturés).
+- `applications` (registre des applications de la gamme : `nora`, `iris`, `clara`, `socle`), `organization_applications` (abonnements par racine), `platform_settings` (ligne unique : zone des sous-domaines fournis, cible CNAME, plafond IA par défaut — voir feature « Mise en service d'un client »).
 - `ai_usage_quotas` / `ai_usage_counters` / `ai_usage_events` (plafond mensuel de jetons, compteur et journal — voir feature « guichet IA »).
 - `contacts`, `contact_roles`, `contact_role_assignments`, `contact_external_references`,
   `contact_relations` (référentiel des usagers — voir feature).
@@ -235,9 +236,10 @@ service interne — qui est nommé à sa place, **même s'il n'a pas activé la 
   sous-organisations). Les racines sont les **clients** : aucune vue ne fond tous les clients
   dans un même arbre (`/superadmin/organisations` **n'existe plus**, redirection vers
   `/superadmin`). La création d'une racine se fait par le bouton icône « + » de la ligne
-  « Organisations » (même `OrganizationFormDialog`). Sous les organisations, l'entrée **« Clés
-  plateforme »** (`/superadmin/cles-plateforme`) gère les clés API à périmètre global — voir
-  feature « API publique ».
+  « Organisations » (même `OrganizationFormDialog`). Sous les organisations, l'entrée **« Applications »**
+  (`/superadmin/applications`, une clé plateforme par application) et l'entrée **« Plateforme »**
+  (`/superadmin/plateforme`, réglages de plateforme et rejeu du provisioning) — voir features
+  « Applications et abonnements » et « Mise en service d'un client ».
 
 ### Édition d'organisation en pleine page (app par organisation)
 
@@ -720,9 +722,10 @@ avec **`verify_jwt = false`** (l'auth est portée par la fonction, pas par la pa
   multi-tenant). Les géométries de quartiers exigent alors le paramètre `organization_id`.
   RLS `api_keys` = `is_super_admin()` pour tout (gestion super admin uniquement). L'UI gère les
   clés **par racine** (section « API publique » d'`OrgSettingsPage`) et les clés **plateforme** sur
-  la page dédiée **`/superadmin/cles-plateforme`** (`PlatformApiKeysPage`, entrée « Clés
-  plateforme » du menu ; carte de comptage sur le tableau de bord) — avant le 2026-08-20 une clé
-  plateforme n'apparaissait nulle part dans l'UI (créée et révocable seulement par SQL).
+  la page **`/superadmin/applications`** (`ApplicationsPage`, une liste par application ; carte de
+  comptage sur le tableau de bord). ⚠️ Depuis le 2026-09-08 une clé plateforme est **rattachée à une
+  application** et ne voit que les collectivités **abonnées** — voir feature « Applications et
+  abonnements » ; « périmètre = toutes les organisations » n'existe plus que pour le Socle lui-même.
 - **Isolation** : la fonction lit avec la **service role** (hors RLS) mais **restreint chaque requête
   au sous-arbre** de l'org de la clé, via `public.org_subtree_ids(root uuid) returns uuid[]`
   (récursif, `SECURITY INVOKER`, `EXECUTE` réservé à `service_role` — révoqué de
@@ -762,8 +765,8 @@ avec **`verify_jwt = false`** (l'auth est portée par la fonction, pas par la pa
   `text/plain` + CSP `sandbox` (anti-hameçonnage sur `*.supabase.co`) → un rendu HTML depuis la
   function ne s'affiche pas. Le `openapi.json` (JSON) est, lui, servi normalement.
 - **Gestion des clés (super admin)** : section **« API publique »** de `OrgSettingsPage`
-  (**racine uniquement**), à côté de SMTP / catalogue / types de PJ, et page **« Clés plateforme »**
-  (`/superadmin/cles-plateforme`). Les deux partagent `ApiKeysList` (liste + révocation via
+  (**racine uniquement**), à côté de SMTP / catalogue / types de PJ, et page **« Applications »**
+  (`/superadmin/applications`, `ApiKeysList` montée une fois par application). Les deux partagent `ApiKeysList` (liste + révocation via
   `AlertDialog`) + `ApiKeyFormDialog` (**génération + hachage navigateur** via `apiKeys.ts`, secret
   **affiché une seule fois**) + `useApiKeys.ts` (`useApiKeys`/`useCreateApiKey`/`useRevokeApiKey`,
   paramétrés par un `ApiKeyOwner` = id de racine **ou `null` = plateforme** (`organization_id IS
@@ -772,6 +775,96 @@ avec **`verify_jwt = false`** (l'auth est portée par la fonction, pas par la pa
   `ApiKeyFormDialog.test.tsx`). `created_by` = `profile.id`.
 - Logique pure **testée** : `_shared/{serializers,scope,errors,openapi}.ts`,
   `superadmin/organizations/apiKeys.ts` (génération/hachage, `apiKeyStatus`, `countActiveApiKeys`).
+
+## Feature : mise en service d'un client (provisioning, check-list, plateforme)
+
+Procédure complète : [docs/onboarding.md](docs/onboarding.md). **La règle** : par client, rien
+dans Supabase — tout dans le Socle ; dans Supabase, une fois, pour la plateforme.
+
+- **Réglages de plateforme** (`platform_settings`, ligne unique, page `/superadmin/plateforme`,
+  `src/features/superadmin/platform/`) : zone des sous-domaines fournis, cible CNAME des domaines
+  personnalisés, plafond IA par défaut. Lisible par tout `authenticated` (aucun secret n'y vit —
+  l'écran des domaines affiche la cible CNAME), UPDATE super admin. Bouton **« Rejouer le
+  provisioning »** (`provision_existing_roots`) pour les racines créées avant les réglages.
+- **Une racine naît équipée** : trigger `provision_root_organization` (AFTER INSERT OR UPDATE OF
+  `parent_id`, racines seulement) → `provision_root` pose les **8 rôles de contact** (le seed du
+  2026-07-15 ne se rejouait jamais : `contacts-api` refusait tout rôle à un client récent), le
+  **plafond IA par défaut** (insert direct dans `ai_usage_quotas` — `set_ai_usage_quota` exige
+  `auth.uid()`, nul dans un trigger) et le **sous-domaine fourni** `<slug>.<zone>`.
+  ⚠️ **Idempotent et jamais bloquant** : `on conflict do nothing`, collision de hostname →
+  `raise warning`, et le trigger avale toute erreur (`exception when others`) — la création de
+  l'organisation est l'acte principal. ⚠️ Tout script qui insère des racines en hérite :
+  `plafond-ia.test.sql` neutralise le plafond par défaut en tête de transaction.
+  ⚠️ Le **slug n'est pas sûr pour un nom DNS** (« Sète » → `s-te` par l'ancien `slugify`) :
+  `dns_label_from_slug` (SQL) / `dnsLabelFromSlug` (TS, `organizationDomains.ts`, tests jumeaux)
+  dérivent le label — et `OrganizationFormDialog` slugifie désormais avec lui. Un slug renommé
+  ensuite **ne renomme pas** le sous-domaine.
+- **Check-list « Mise en service »** en tête de la page d'une racine (`OnboardingChecklistCard`,
+  logique pure `onboardingChecklist.ts`, RPC `root_onboarding_status` — `jsonb`, pour qu'une
+  clé s'ajoute sans `drop function`) : SMTP, premier admin, applications souscrites, catégories,
+  démarche en production, activation, domaine, page publiée (facultatif), plafond IA décidé, logo
+  (facultatif), rôles. Chaque ligne mène à sa section (`?section=`). ⚠️ Lecteur **tolérant** :
+  une clé absente vaut « pas fait », jamais une exception.
+- **Le super administrateur peut tout faire** depuis `OrgSettingsPage` : sections
+  `categories` (`CategoriesManager`, motif `DocumentTypesManager`), `activations`
+  (`ActivationsSection` = sélecteur sur le sous-arbre + `OrganizationProceduresTab`), et
+  `GeneralInfoSection` monte le `GeneralInfoForm` complet de l'app par organisation (adresse,
+  téléphone, courriel, expéditeur). Avant, `ProtectedRoute` le redirigeait hors des deux écrans
+  qui créent une catégorie et activent une démarche : un client ne se livrait pas sans SQL.
+- **Plafond IA : « illimité » est une décision.** Ligne absente = non décidé (la check-list le
+  signale) ; ligne `is_active = false` = illimité **explicite**, valeur conservée pour le retour
+  en arrière (`AiUsageSection` : « Passer en illimité », `useAiUsage` expose `configuredLimit`).
+- **Courriels d'authentification en repli de plateforme** (`PLATFORM_SMTP_*`, module pur
+  `_shared/smtp.ts` **identique** dans `invite-user` et `auth-email-hook`, test d'identité) :
+  la collectivité d'abord (`resolve_smtp_settings`), la plateforme ensuite, rien sinon. Couvre
+  l'invitation du premier administrateur avant tout SMTP, et le super admin sans organisation.
+  ⚠️ Les courriels **métier** ne connaissent pas ce repli. `invite-user` : garde
+  `is_admin_of_self_or_ancestor` (motif `send-test-email`), action `resend` (bouton
+  « Renvoyer l'invitation », 409 si le compte est déjà actif).
+- Tests SQL auto-annulés : `supabase/tests/provisioning.test.sql`, `applications.test.sql`.
+  Migrations : `platform_settings`, `provision_root_organization`, `root_onboarding_status`,
+  `organization_domains_superadmin_write`.
+
+## Feature : applications et abonnements (`applications`, `organization_applications`)
+
+**Une clé par application, bornée par abonnement** (décision PO du 2026-09-08, contrat
+public-api 1.18.0 / contacts-api 1.1.0 / ai-api 1.2.0 — rupture pour les clés plateforme, rien
+n'étant en production).
+
+- `applications` = le **registre** (`id` de la forme de `consumer`, `name`, `scope` :
+  `abonnement` ou `plateforme`). Seed `nora`, `iris`, `clara`, `socle` (plateforme : la clé
+  de `translate-labels` sert toute racine). `api_keys.consumer` est une **FK** vers ce registre
+  (plus de texte libre : une faute de frappe ne crée plus un consommateur fantôme dans le journal
+  IA) ; CHECK `api_keys_platform_requires_consumer` (une clé plateforme vivante porte une
+  application ; révoquée, dispensée) ; CHECK `scopes <@ '{read,contacts,smtp,ai}'`.
+- `organization_applications (racine, application)` = l'**abonnement**, coché par le super admin
+  dans la section « Applications souscrites » (`ApplicationsSection`). C'est **tout** l'onboarding
+  côté clés : aucun secret ne circule. RLS écriture super admin (décision commerciale), lecture
+  `has_org_access OR is_admin_of_self_or_ancestor`. ⚠️ La migration a abonné **toutes les racines
+  existantes à toutes les applications** : aucune régression le jour du déploiement ; les suivantes
+  sont opt-in.
+- **Périmètre d'une clé plateforme** = `application_scope_ids(app)` (service role seulement, motif
+  `org_subtree_ids`) : les sous-arbres des racines abonnées ; toutes les organisations pour le scope
+  `plateforme` ; `{}` pour une application inconnue. `public-api` : `GET /v1/organizations` rend
+  exactement les clients de l'application, `/v1/portal/tenant` répond **404** pour une collectivité
+  non abonnée (même message qu'un domaine inconnu) ; `contacts-api` / `ai-api` : racine résolue de
+  `X-Organization-Id` hors abonnement → **404**.
+- ⚠️ **Une clé plateforme sans application → 403** (« son périmètre ne peut pas être déterminé ») :
+  la décision vit dans `_shared/apiKeyAuth.ts` (`evaluateApiKey`, `scopeRequest`), **identique
+  dans les trois fonctions** (test d'identité `apiKeyAuth.test.ts`) — avant, le bloc était copié
+  trois fois sans test. Pas de `_shared` de premier niveau : le déploiement MCP ne sait pas
+  exprimer `../_shared/`.
+- ⚠️ **Ordre de déploiement d'un changement de périmètre** : migration → abonnements et
+  rattachement des clés dans l'UI → déploiement des fonctions. Inverser les deux derniers coupe le
+  portail. Les clés d'avant le registre se rattachent depuis `/superadmin/applications`
+  (« À rattacher », `useAssignApiKeyApplication`).
+- UI : `src/features/superadmin/applications/` (`useApplications.ts`, `ApplicationsPage` —
+  une `ApiKeysList` par application + « Nouvelle application »), `ApiKeyFormDialog` (sélecteur
+  d'application, requis pour une clé plateforme et pour le scope `ai`), `ApiKeysList` affiche les
+  **quatre** scopes et l'application. Les clés **liées** (partenaires) ne changent pas.
+- Migration `applications_et_abonnements` ; changelog du 2026-09-08. **Hors dépôt** : Iris et
+  Clara doivent créer leurs tenants à la synchronisation (leur clé rend exactement leurs clients),
+  Nora prendre une clé d'ingestion Iris plateforme.
 
 ## Feature : site de démarches — portail usagers (`organization_domains`, `portal_pages`)
 
@@ -787,8 +880,12 @@ démarches ». Ajouter une collectivité au portail = une ligne de domaine, aucu
   normalisé par trigger à l'écriture, au plus un `is_primary` par organisation, **pas** restreint
   à une racine (une sous-organisation peut tenir son guichet). Écran `DomainsSection` : onglet
   « Domaines du portail » de l'éditeur d'organisation (admin) et section `?section=domaines`
-  d'`OrgSettingsPage` (superadmin). ⚠️ Un doublon peut appartenir à une organisation que
-  l'administrateur n'a pas le droit de voir : l'erreur ne dit pas laquelle. `localhost` est
+  d'`OrgSettingsPage` (superadmin). ⚠️ **Écriture réservée au super administrateur** depuis le
+  2026-09-08 (RLS `is_super_admin()`) : le sous-domaine fourni se pose au provisioning, un domaine
+  personnalisé suppose un CNAME chez le client et un enregistrement chez l'hébergeur du portail ;
+  les administrateurs lisent leurs domaines et la cible CNAME (`platform_settings`). ⚠️ Un doublon
+  peut appartenir à une organisation que l'administrateur n'a pas le droit de voir : l'erreur ne
+  dit pas laquelle. `localhost` est
   refusé par CHECK — le développement de Nora simule un domaine réel (`<label>.localhost` →
   `<label>.<PORTAL_DEV_DOMAIN_SUFFIX>`).
 - **Composition** (`portal_pages`, une ligne par `(organization_id, slug)`, racine uniquement) :

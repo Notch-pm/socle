@@ -67,6 +67,7 @@ Documentation interactive (Redoc), consultable sans compte : **`/api-doc`** et
 | [docs/integration.md](docs/integration.md) | Équipes consommatrices (Ariane, Clara, Iris) | Obtention de clé, scopes, garanties d'isolation, politique de compatibilité |
 | [docs/api-changelog.md](docs/api-changelog.md) | Équipes consommatrices | Journal daté des évolutions du contrat public |
 | [docs/operations.md](docs/operations.md) | Ops | Déploiement, secrets, migrations, CI |
+| [docs/onboarding.md](docs/onboarding.md) | Éditeur (super admin, ops) | Mise en service : la plateforme une fois, puis chaque client sans SQL |
 | [docs/roadmap.md](docs/roadmap.md) | Tous | Évolutions envisagées, non engagées sauf mention |
 | [docs/archive/](docs/archive/) | — | Instantanés historiques, non maintenus |
 
