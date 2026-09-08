@@ -152,8 +152,57 @@ describe("buildOpenApiDocument", () => {
 describe("contrat — documents et courriers", () => {
   const doc = buildOpenApiDocument("https://example.supabase.co/functions/v1/public-api") as any;
 
-  it("annonce la version 1.16.0 du contrat", () => {
-    expect(doc.info.version).toBe("1.16.0");
+  it("annonce la version 1.17.0 du contrat", () => {
+    expect(doc.info.version).toBe("1.17.0");
+  });
+
+  it("le thème voyage avec le TENANT : il vaut pour toutes les pages", () => {
+    // Le loger dans la page ferait un thème par page, ce que l'éditeur
+    // n'offre pas — et le déloger ensuite casserait un contrat déjà servi.
+    expect(doc.components.schemas.Tenant.properties.theme).toEqual({
+      $ref: "#/components/schemas/PortalTheme",
+    });
+    expect(doc.components.schemas.PortalPage.properties).not.toHaveProperty("theme");
+  });
+
+  it("le thème ne porte AUCUNE couleur, et le dit", () => {
+    const schema = doc.components.schemas.PortalTheme;
+    // Les couleurs viennent de la charte graphique : les exposer ici en ferait
+    // une seconde source de vérité.
+    expect(JSON.stringify(schema.properties)).not.toMatch(/#[0-9a-f]{6}/i);
+    expect(schema.description).toMatch(/AUCUNE couleur/);
+    expect(schema.description).toMatch(/branding/);
+    expect(schema.description).toMatch(/jamais `null`/);
+  });
+
+  it("chaque réglage du thème est un énuméré fermé", () => {
+    const schema = doc.components.schemas.PortalTheme;
+    expect(schema.properties.typography.properties.font.enum).toEqual([
+      "systeme",
+      "nunito-sans",
+      "rubik",
+      "public-sans",
+    ]);
+    for (const [block, keys] of [
+      ["typography", ["font", "text_scale"]],
+      ["shapes", ["radius", "shadow", "density"]],
+    ] as const) {
+      for (const key of keys) {
+        expect(schema.properties[block].properties[key].enum.length).toBeGreaterThan(1);
+      }
+    }
+    // Les quatre blocs sont obligatoires : un consommateur n'a jamais à tester
+    // leur présence.
+    expect(schema.required.sort()).toEqual(["accessibility", "header", "shapes", "typography"]);
+  });
+
+  it("dit comment charger la police, parce que c'est le seul réglage qui coûte", () => {
+    const font = doc.components.schemas.PortalTheme.properties.typography.properties.font;
+    expect(font.description).toMatch(/QUE celle-ci/);
+    // ⚠️ Et d'où : auto-hébergées. Un consommateur qui les prendrait chez
+    // Google enverrait l'IP de chaque visiteur à un tiers.
+    expect(font.description).toMatch(/AUTO-HÉBERGEZ/);
+    expect(font.description).toMatch(/Open Font License/);
   });
 
   it("décrit les textes traduits d'une section, dans un schéma à PART", () => {
@@ -305,6 +354,7 @@ describe("contrat — portail usagers", () => {
       "languages",
       "name",
       "slug",
+      "theme",
     ]);
     // Une page publique : rien de ce qui suit n'a de raison d'y être servi.
     for (const leak of ["address", "phone", "email", "metadata", "email_sender_name"]) {

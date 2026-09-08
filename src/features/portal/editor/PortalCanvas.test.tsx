@@ -3,6 +3,7 @@ import { describe, expect, it, vi } from "vitest";
 import { fireEvent, render, screen } from "@testing-library/react";
 import { DndContext } from "@dnd-kit/core";
 import { createSection } from "@/features/portal/portalPage";
+import { defaultPortalTheme } from "@/features/portal/portalTheme";
 import type { PortalCatalogueEntry } from "@/features/portal/catalogue";
 import type { Audience } from "@/features/procedures/requesterFields";
 import { PortalCanvas, type PortalCanvasProps } from "./PortalCanvas";
@@ -27,6 +28,9 @@ function renderCanvas(over: Partial<PortalCanvasProps> = {}) {
   const props: PortalCanvasProps = {
     organizationName: "ACCM",
     organizationLogoUrl: null,
+    organizationLogoWhiteUrl: null,
+    theme: defaultPortalTheme(),
+    branding: null,
     languages: ["fr"],
     sections,
     device: "bureau",

@@ -14,6 +14,7 @@
  * écartée au rendu — pas au parse, qui n'a pas le catalogue sous la main.
  */
 import { z } from "zod";
+import { HEX_COLOR } from "./contrast";
 import { PIVOT_LANGUAGE } from "@/features/languages/languages";
 import {
   PORTAL_SECTION_FIELDS,
@@ -67,8 +68,13 @@ export type TexteImageLayout = (typeof TEXTE_IMAGE_LAYOUTS)[number];
 /** Raccourcis sous le champ de recherche : au-delà, la ligne déborde. */
 export const MAX_SHORTCUTS = 4;
 
-/** Une couleur est une valeur CSS injectée dans la page : `#rrggbb`, rien d'autre. */
-export const HEX_COLOR = /^#[0-9a-f]{6}$/;
+/**
+ * Une couleur est une valeur CSS injectée dans la page : `#rrggbb`, rien d'autre.
+ * Ré-exportée depuis `contrast.ts`, qui porte toute l'arithmétique des couleurs
+ * (luminance, contraste, variante foncée) : une seule implémentation, un seul
+ * endroit où la lire.
+ */
+export { HEX_COLOR, isDarkColor } from "./contrast";
 
 /**
  * Une URL d'image finit dans le `src` d'une page publique : **`https` absolue,
@@ -367,21 +373,6 @@ export function createContactSection(org: ContactSource): TexteSection {
     body: parts.length > 0 ? parts.join(" · ") : "Coordonnées et horaires d'ouverture.",
     align: "left",
   };
-}
-
-/**
- * Le texte se lit-il en clair sur ce fond ? Luminance relative (sRGB, WCAG) :
- * sous 0,4 le fond est sombre et appelle du texte clair. Une couleur illisible
- * est traitée comme sombre — le défaut du pied de page l'est.
- */
-export function isDarkColor(hex: string): boolean {
-  if (!HEX_COLOR.test(hex)) return true;
-  const channel = (i: number) => {
-    const c = parseInt(hex.slice(i, i + 2), 16) / 255;
-    return c <= 0.03928 ? c / 12.92 : ((c + 0.055) / 1.055) ** 2.4;
-  };
-  const luminance = 0.2126 * channel(1) + 0.7152 * channel(3) + 0.0722 * channel(5);
-  return luminance < 0.4;
 }
 
 /**

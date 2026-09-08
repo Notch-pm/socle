@@ -862,6 +862,44 @@ export type Database = {
           },
         ]
       }
+      portal_themes: {
+        Row: {
+          created_at: string
+          draft: Json
+          id: string
+          organization_id: string
+          published: Json | null
+          published_at: string | null
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          draft: Json
+          id?: string
+          organization_id: string
+          published?: Json | null
+          published_at?: string | null
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          draft?: Json
+          id?: string
+          organization_id?: string
+          published?: Json | null
+          published_at?: string | null
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "portal_themes_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       procedures: {
         Row: {
           agent_description: string | null

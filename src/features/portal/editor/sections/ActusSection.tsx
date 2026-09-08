@@ -12,23 +12,28 @@ export function ActusSection({ section, device }: { section: ActusSectionData; d
   return (
     <div className="flex flex-col gap-3">
       <div className="flex items-baseline justify-between gap-3">
-        <h2 className="text-lg font-bold text-foreground">{section.title}</h2>
-        <span className="shrink-0 text-[12.5px] font-semibold text-primary">Toutes les actualités</span>
+        <h2 className="text-[length:var(--pt-h2)] font-bold text-[color:var(--pt-ink)]">{section.title}</h2>
+        <span className="shrink-0 text-[length:var(--pt-small)] font-semibold text-[color:var(--pt-primary)]">
+          Toutes les actualités
+        </span>
       </div>
       <div className={cn("grid gap-2.5", device === "mobile" ? "grid-cols-1" : "grid-cols-3")}>
         {[0, 1, 2].map((i) => (
-          <div key={i} className="overflow-hidden rounded-xl border border-border bg-background">
-            <div className="flex h-[94px] items-center justify-center bg-muted">
-              <ImageOff className="size-[18px] text-border" />
+          <div
+            key={i}
+            className="overflow-hidden rounded-[var(--pt-radius)] border border-[color:var(--pt-border)] bg-white shadow-[var(--pt-shadow)]"
+          >
+            <div className="flex h-[94px] items-center justify-center bg-[color:var(--pt-surface)]">
+              <ImageOff className="size-[18px] text-[color:var(--pt-border)]" />
             </div>
             <div className="flex flex-col gap-1.5 px-3 py-2.5">
-              <span className="h-2.5 w-14 rounded-full bg-muted" />
-              <span className="h-3 w-4/5 rounded-full bg-muted" />
+              <span className="h-2.5 w-14 rounded-full bg-[color:var(--pt-surface)]" />
+              <span className="h-3 w-4/5 rounded-full bg-[color:var(--pt-surface)]" />
             </div>
           </div>
         ))}
       </div>
-      <p className="text-xs text-muted-foreground">Les actualités arrivent bientôt.</p>
+      <p className="text-[length:var(--pt-tiny)] text-[color:var(--pt-muted)]">Les actualités arrivent bientôt.</p>
     </div>
   );
 }

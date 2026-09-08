@@ -1,4 +1,5 @@
 import * as React from "react";
+import type { CSSProperties } from "react";
 import { useDroppable } from "@dnd-kit/core";
 import { SortableContext, type SortingStrategy } from "@dnd-kit/sortable";
 import { ChevronDown, Globe, Menu, Plus } from "lucide-react";
@@ -6,6 +7,8 @@ import { cn } from "@/lib/utils";
 import { languageLabel } from "@/features/languages/languages";
 import type { PortalSection } from "@/features/portal/portalPage";
 import type { PortalCatalogueEntry } from "@/features/portal/catalogue";
+import type { PortalTheme } from "@/features/portal/portalTheme";
+import { themeCssVariables, type ThemeBranding } from "@/features/portal/themeStyle";
 import { DEVICE_PAGE_WIDTH, type Device } from "./device";
 import { SectionBlock } from "./SectionBlock";
 
@@ -19,6 +22,12 @@ export const CANVAS_DROP_ID = "canvas";
  */
 const noShift: SortingStrategy = () => null;
 
+/**
+ * La navigation du portail — DÉCORATIVE : aucune de ces pages n'existe encore,
+ * mieux vaut du texte inerte qu'un lien mort. Même liste que Nora.
+ */
+const NAV_LABELS = ["Démarches", "Actualités", "Contact"] as const;
+
 export interface PortalCanvasProps {
   organizationName: string;
   /**
@@ -28,6 +37,21 @@ export interface PortalCanvasProps {
    * `GET /v1/organizations/{id}/branding` — pas besoin de la RPC ici.
    */
   organizationLogoUrl: string | null;
+  /**
+   * Le logo en version blanche, pour un bandeau de couleur. Absent, on retombe
+   * sur le logo couleur : mieux vaut un logo un peu perdu sur son fond qu'un
+   * bandeau anonyme.
+   */
+  organizationLogoWhiteUrl: string | null;
+  /** Le thème du site — c'est lui qui peint la page et son bandeau. */
+  theme: PortalTheme;
+  /**
+   * La charte de la collectivité. L'éditeur est toujours sur une racine, qui
+   * n'hérite jamais : les colonnes portent déjà la valeur **résolue**.
+   */
+  branding: ThemeBranding | null;
+  /** Simulation « texte agrandi » — de l'éditeur, jamais du site. */
+  largeText?: boolean;
   /**
    * Les langues activées par la collectivité, français compris. Elles ne
    * servent ici qu'à MONTRER où le sélecteur de langue se placera pour
@@ -66,7 +90,12 @@ function PageLogo({ url }: { url: string | null }) {
   const [broken, setBroken] = React.useState(false);
   React.useEffect(() => setBroken(false), [url]);
   if (!url || broken) {
-    return <div className="size-[26px] shrink-0 rounded-lg bg-primary" />;
+    return (
+      <div
+        className="size-[26px] shrink-0 rounded-[var(--pt-radius-sm)]"
+        style={{ background: "var(--pt-mark-bg)" }}
+      />
+    );
   }
   return (
     <img
@@ -103,6 +132,10 @@ function DropShadow({ label }: { label: string }) {
 export function PortalCanvas({
   organizationName,
   organizationLogoUrl,
+  organizationLogoWhiteUrl,
+  theme,
+  branding,
+  largeText,
   languages,
   sections,
   device,
@@ -192,6 +225,14 @@ export function PortalCanvas({
 
   const shadow = dropIndex !== null && dropLabel !== null ? <DropShadow label={dropLabel} /> : null;
 
+  // Le logo blanc ne sert que sur un bandeau de couleur, et seulement si la
+  // collectivité en a déposé un : sans lui, le logo couleur reste préférable à
+  // rien du tout.
+  const headerLogoUrl =
+    theme.header.fill === "color" && theme.header.logoWhite && organizationLogoWhiteUrl
+      ? organizationLogoWhiteUrl
+      : organizationLogoUrl;
+
   return (
     <div className="relative min-w-0 flex-1 bg-muted">
       <div
@@ -217,54 +258,118 @@ export function PortalCanvas({
           {/* `zoom` et non `transform: scale()` : le zoom agit sur la mise en
               page, le conteneur défilant suit donc la page agrandie au lieu de
               la couper sur les bords — et centre celle qui est réduite. */}
+          {/* ⚠️ TOUT LE THÈME TIENT DANS CET OBJET DE STYLE. Les sections ne
+              reçoivent pas le thème en props : elles lisent des variables CSS.
+              Régler un curseur ne recalcule donc qu'un objet, pas sept arbres
+              de composants — et c'est ce qui rend l'aperçu instantané. */}
           <div
-            className="overflow-hidden rounded-[14px] bg-background shadow-socle-lg transition-[width] duration-200 ease-out"
-            style={{ width: pageWidth, zoom: scale }}
+            className="overflow-hidden bg-white shadow-socle-lg transition-[width] duration-200 ease-out"
+            style={{
+              ...themeCssVariables(theme, branding, { largeText }),
+              width: pageWidth,
+              zoom: scale,
+              borderRadius: 14,
+              fontFamily: "var(--pt-font)",
+              color: "var(--pt-ink)",
+            }}
           >
-            <header className="flex h-14 items-center gap-3.5 border-b border-border px-6">
-              <PageLogo url={organizationLogoUrl} />
-              <span className="truncate text-sm font-extrabold tracking-tight">{organizationName}</span>
-              <div className="flex-1" />
-              <nav className={cn("flex items-center gap-3.5", device === "mobile" && "hidden")}>
-                <span className="whitespace-nowrap text-[12.5px] text-muted-foreground">Démarches</span>
-                <span className="whitespace-nowrap text-[12.5px] text-muted-foreground">Actualités</span>
-                <span className="whitespace-nowrap text-[12.5px] text-muted-foreground">Contact</span>
-              </nav>
-              {/* ⚠️ DÉCORATIF, comme la nav et « Mon compte » : c'est la place
-                  du sélecteur que verra l'usager, pas un contrôle. Affiché
-                  seulement si la collectivité a plus d'une langue — sinon on
-                  montrerait un élément que ses usagers ne verront jamais — et
-                  visible même en mobile, contrairement à la nav : c'est le seul
-                  élément qu'un visiteur non francophone doit pouvoir atteindre
-                  sur un téléphone. */}
-              {languages.length > 1 ? (
-                <span
-                  className="flex items-center gap-1 whitespace-nowrap rounded-md border border-border px-2 py-1 text-[12.5px] text-muted-foreground"
-                  title={languages.map(languageLabel).join(", ")}
-                >
-                  <Globe className="size-3.5" />
-                  Français
-                  <ChevronDown className="size-3" />
+            {/* Le bandeau : direction, hauteur, fond et encre viennent tous du
+                thème. Le logo centré met la marque AU-DESSUS du menu — d'où une
+                direction en colonne, pas un simple alignement. */}
+            <header
+              className="flex items-center gap-[var(--pt-header-gap)] border-b"
+              style={{
+                flexDirection: "var(--pt-header-direction)" as CSSProperties["flexDirection"],
+                height: "var(--pt-header-height)",
+                padding: "var(--pt-header-pad)",
+                background: "var(--pt-header-surface)",
+                color: "var(--pt-header-ink)",
+                borderBottomColor: "var(--pt-header-border)",
+              }}
+            >
+              <div className="flex min-w-0 items-center gap-2.5">
+                <PageLogo url={headerLogoUrl} />
+                <span className="truncate text-[length:var(--pt-h2)] font-extrabold tracking-tight">
+                  {organizationName}
                 </span>
-              ) : null}
-              <span className="whitespace-nowrap rounded-full border border-primary px-2.5 py-1 text-[12.5px] font-bold text-primary">
-                Mon compte
-              </span>
-              {device === "mobile" ? (
-                <div className="flex size-[30px] shrink-0 items-center justify-center rounded-lg border border-border">
-                  <Menu className="size-[15px]" />
-                </div>
-              ) : null}
+              </div>
+              <div className="flex-1" />
+              {/* ⚠️ Nav, langue, compte et burger dans UN SEUL conteneur : en
+                  logo centré l'en-tête passe en colonne, et des enfants frères
+                  s'empileraient chacun sur sa ligne. Ce qu'on veut, c'est DEUX
+                  lignes — la marque, puis tout le reste. */}
+              <div className="flex items-center gap-2.5">
+                <nav className={cn("flex items-center gap-2", device === "mobile" && "hidden")}>
+                  {NAV_LABELS.map((label) => (
+                    <span
+                      key={label}
+                      className="whitespace-nowrap text-[length:var(--pt-small)]"
+                      style={{
+                        color: "var(--pt-header-muted)",
+                        background: "var(--pt-nav-bg)",
+                        padding: "var(--pt-nav-pad)",
+                        borderRadius: "var(--pt-nav-radius)",
+                      }}
+                    >
+                      {label}
+                    </span>
+                  ))}
+                </nav>
+                {/* ⚠️ DÉCORATIF, comme la nav et « Mon compte » : c'est la place
+                    du sélecteur que verra l'usager, pas un contrôle. Affiché
+                    seulement si la collectivité a plus d'une langue — sinon on
+                    montrerait un élément que ses usagers ne verront jamais — et
+                    visible même en mobile, contrairement à la nav : c'est le seul
+                    élément qu'un visiteur non francophone doit pouvoir atteindre
+                    sur un téléphone. */}
+                {languages.length > 1 ? (
+                  <span
+                    className="flex items-center gap-1 whitespace-nowrap rounded-[var(--pt-radius-sm)] border px-2 py-1 text-[length:var(--pt-small)]"
+                    style={{ color: "var(--pt-header-muted)", borderColor: "var(--pt-account-border)" }}
+                    title={languages.map(languageLabel).join(", ")}
+                  >
+                    <Globe className="size-3.5" />
+                    Français
+                    <ChevronDown className="size-3" />
+                  </span>
+                ) : null}
+                <span
+                  className="whitespace-nowrap rounded-[var(--pt-radius-sm)] border text-[length:var(--pt-small)] font-bold"
+                  style={{
+                    background: "var(--pt-account-bg)",
+                    color: "var(--pt-account-fg)",
+                    borderColor: "var(--pt-account-border)",
+                    padding: "var(--pt-account-pad)",
+                  }}
+                >
+                  Mon compte
+                </span>
+                {device === "mobile" ? (
+                  <div
+                    className="flex size-[30px] shrink-0 items-center justify-center rounded-[var(--pt-radius-sm)] border"
+                    style={{ borderColor: "var(--pt-account-border)" }}
+                  >
+                    <Menu className="size-[15px]" />
+                  </div>
+                ) : null}
+              </div>
             </header>
 
             <SortableContext items={sections.map((s) => s.id)} strategy={noShift}>
+              {/* ⚠️ Le rembourrage HORIZONTAL reste fixe (14 px mobile, 24 px
+                  ailleurs) : le pied de page l'annule par des marges négatives
+                  chiffrées pour aller au bord (`FooterSection`). Le rendre
+                  variable le ferait dépasser ou rentrer à chaque changement de
+                  densité. La densité gouverne donc l'écart entre les blocs et
+                  le rembourrage vertical — ce que son aide annonce. */}
               <div
                 ref={setListRef}
-                className={cn(
-                  "flex flex-col gap-[22px]",
-                  device === "mobile" ? "px-3.5 pt-5" : "px-6 pt-[26px]",
-                  flushFooter ? "pb-0" : device === "mobile" ? "pb-7" : "pb-[34px]",
-                )}
+                className={cn("flex flex-col", device === "mobile" ? "px-3.5" : "px-6")}
+                style={{
+                  gap: "var(--pt-gap)",
+                  paddingTop: "var(--pt-pad)",
+                  paddingBottom: flushFooter ? 0 : "var(--pt-pad)",
+                }}
               >
                 {sections.map((section, index) => (
                   <React.Fragment key={section.id}>

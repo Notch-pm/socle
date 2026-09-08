@@ -15,6 +15,51 @@ Format d'une entrée : `## AAAA-MM-JJ — <api> — ajout|correctif|rupture`
 
 ## 2026-09-08 — public-api — ajout
 
+**Le thème du site de démarches : chaque collectivité règle l'apparence de son portail.**
+Typographie, formes, densité, en-tête, accessibilité — réglés dans l'onglet « Thème » de
+l'éditeur du Socle, publiés avec la page d'accueil, et servis au portail. Version du contrat :
+**1.17.0**. Ajout **additif** : un consommateur qui l'ignore continue de rendre ce qu'il rend
+aujourd'hui.
+
+**`theme` sur `Tenant`** (`GET /v1/portal/tenant?hostname=`).
+
+- **Pourquoi sur le tenant et pas sur la page** : le thème vaut pour **toutes les pages** du
+  portail. Le loger dans `GET /v1/portal/page` en ferait un thème par page — ce que l'éditeur
+  n'offre pas — et le déloger ensuite serait une rupture. Il arrive donc avec l'appel que vous
+  faites déjà en premier, sans aller-retour supplémentaire.
+- ⚠️ **Toujours présent, jamais `null`.** Une collectivité qui n'a rien publié reçoit **les
+  défauts du Socle**. Ne recodez pas de défauts chez vous : deux jeux de valeurs finiraient par
+  diverger. C'est aussi ce qui rend les ajouts à venir indolores — un nouveau réglage arrivera
+  avec sa valeur par défaut, jamais un trou.
+- ⚠️ **Le thème ne porte AUCUNE couleur.** Elles restent servies par
+  `GET /v1/organizations/{id}/branding`, héritage résolu. Le thème dit **comment** peindre, la
+  charte dit **avec quoi**. Une collectivité choisit ses couleurs une fois, pour toute la gamme.
+- **Toutes les valeurs sont des énumérés fermés** : traduisez-les par une table de
+  correspondance, sans interpréter de chaîne libre. Les quatre blocs (`typography`, `shapes`,
+  `header`, `accessibility`) sont tous présents.
+- ⚠️ **`typography.font` est un IDENTIFIANT, pas une famille CSS** (`systeme`, `nunito-sans`,
+  `rubik`, `public-sans`). C'est le seul réglage du thème qui coûte quelque chose : **ne chargez
+  que la police choisie**. Tout le reste est du CSS, gratuit ; `systeme` ne télécharge rien.
+- ⚠️ **AUTO-HÉBERGEZ-LES, ne les prenez pas chez Google Fonts.** Les trois familles web sont sous
+  **SIL Open Font License 1.1** — c'est le *critère d'entrée* au catalogue, précisément pour que
+  vous puissiez les servir depuis votre propre domaine. Un site de collectivité qui les chargerait
+  chez Google enverrait l'adresse IP de chaque visiteur à un tiers, sans base légale (jugement du
+  LG München I du 20 janvier 2022, position de la CNIL). C'est aussi pourquoi Marianne, la police
+  de l'État, n'est pas au catalogue : sa licence lui est propre.
+- ⚠️ **`accessibility.dark_primary` ne remplace pas la charte, il la fonce au rendu** : clarté
+  multipliée par **0,75**, teinte et saturation inchangées (sRGB → TSL → sRGB). La collectivité
+  l'active quand le contraste de sa couleur ne suffit pas ; ses colonnes de charte ne bougent pas.
+  `high_contrast` implique le même assombrissement, en plus d'encres et de bordures plus sombres.
+- ⚠️ **`accessibility.declaration` est une mention légale**, pas un réglage visuel : la
+  déclaration RGAA obligatoire d'un site public, à afficher au pied des pages. Chaîne vide = la
+  collectivité ne l'a pas encore écrite ; n'inventez rien à sa place.
+- Rien à faire pour un consommateur en place.
+- **Nora consomme déjà ce champ** (le portail usagers de la gamme) : il peut servir de référence
+  d'implémentation — lecture tolérante champ par champ, un seul objet de style, polices
+  auto-hébergées.
+
+## 2026-09-08 — public-api — ajout
+
 **Les services internes : qui instruit n'est pas toujours qui s'affiche.** Une collectivité peut
 désormais marquer une sous-organisation « service interne » : elle instruit des demandes, mais
 n'apparaît pas sur le portail usagers — c'est son **porteur** (le premier ancêtre qui n'est pas un

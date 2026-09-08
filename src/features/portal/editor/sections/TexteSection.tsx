@@ -5,13 +5,21 @@ import type { TexteSection as TexteSectionData } from "@/features/portal/portalP
 export function TexteSection({ section }: { section: TexteSectionData }) {
   return (
     <div
+      // L'aplat est la couleur secondaire de la collectivité, diluée : posé en
+      // style parce qu'une transparence sur une variable CSS ne s'écrit pas en
+      // modificateur d'opacité Tailwind (il ne sait pas décomposer un `var()`).
+      style={{ background: "var(--pt-accent-soft)" }}
       className={cn(
-        "flex flex-col gap-1.5 rounded-xl bg-secondary/35 px-[22px] py-[18px]",
+        "flex flex-col gap-1.5 rounded-[var(--pt-radius)] p-[var(--pt-pad)]",
         section.align === "center" ? "items-center text-center" : "items-start text-left",
       )}
     >
-      <span className="text-base font-bold text-foreground">{section.title}</span>
-      <span className="text-[13.5px] leading-relaxed text-foreground/80">{section.body}</span>
+      <span className="text-[length:var(--pt-h2)] font-bold text-[color:var(--pt-ink)]">
+        {section.title}
+      </span>
+      <span className="text-[length:var(--pt-body)] leading-relaxed text-[color:var(--pt-ink)]">
+        {section.body}
+      </span>
     </div>
   );
 }

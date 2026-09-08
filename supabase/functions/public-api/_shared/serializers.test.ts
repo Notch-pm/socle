@@ -14,6 +14,7 @@ import {
   serializeSmtpSettings,
   serializeTenant,
 } from "./serializers.ts";
+import { defaultPortalThemeDto } from "./portalTheme.ts";
 
 describe("serializers — whitelist stricte (aucune fuite)", () => {
   it("n'expose que les champs prévus pour une organisation, même avec des colonnes en trop", () => {
@@ -483,38 +484,72 @@ describe("serializeTenant — la whitelist la plus étroite (page publique)", ()
     parent_id: null,
   };
 
-  it("n'expose que id, name, slug, le domaine résolu et les langues", () => {
-    const dto = serializeTenant(row, "nantes.edilumen.fr", ["fr", "br"]);
-    expect(dto).toEqual({
+  it("n'expose que id, name, slug, le domaine résolu, les langues et le thème", () => {
+    const dto = serializeTenant(row, "nantes.edilumen.fr", ["fr", "br"], null);
+    expect(Object.keys(dto).sort()).toEqual([
+      "hostname",
+      "id",
+      "languages",
+      "name",
+      "slug",
+      "theme",
+    ]);
+    expect(dto).toMatchObject({
       id: "org-1",
       name: "Ville de Nantes",
       slug: "nantes",
       hostname: "nantes.edilumen.fr",
       languages: ["fr", "br"],
     });
+    // Aucune des colonnes de la ligne ne franchit.
+    for (const leak of ["address", "phone", "email", "metadata", "email_sender_name", "status"]) {
+      expect(dto).not.toHaveProperty(leak);
+    }
+  });
+
+  it("⚠️ un tenant sans thème publié reçoit les DÉFAUTS, jamais null", () => {
+    // Le portail n'a pas à inventer des valeurs que le Socle connaît : deux
+    // jeux de défauts finiraient par diverger.
+    const dto = serializeTenant(row, "nantes.edilumen.fr", null, null);
+    expect(dto.theme).toEqual(defaultPortalThemeDto());
+  });
+
+  it("sert le thème publié quand il y en a un", () => {
+    const dto = serializeTenant(row, "nantes.edilumen.fr", null, {
+      typography: { font: "rubik", scale: "compact" },
+      header: { fill: "color", color: "secondary", logoWhite: false },
+      accessibility: { highContrast: true, declaration: "Audit du 12 juin 2026" },
+    });
+    expect(dto.theme.typography).toEqual({ font: "rubik", text_scale: "compact" });
+    expect(dto.theme.header).toMatchObject({ fill: "color", color: "secondary", logo_white: false });
+    expect(dto.theme.accessibility.high_contrast).toBe(true);
+    expect(dto.theme.accessibility.declaration).toBe("Audit du 12 juin 2026");
+    // Ce que le thème stocké ne disait pas reprend son défaut.
+    expect(dto.theme.shapes).toEqual(defaultPortalThemeDto().shapes);
+    expect(dto.theme.accessibility.dark_primary).toBe(false);
   });
 
   it("rend le domaine tel que résolu, pas celui demandé", () => {
     // Le portail normalise son entrée, la base stocke la forme canonique : la
     // réponse porte celle de la BASE, pour que le portail sache sur quelle clé
     // le tenant a été trouvé sans refaire la normalisation.
-    expect(serializeTenant(row, "demarches.nantes.fr", null).hostname).toBe("demarches.nantes.fr");
+    expect(serializeTenant(row, "demarches.nantes.fr", null, null).hostname).toBe("demarches.nantes.fr");
   });
 
   it("tolère un slug absent", () => {
-    expect(serializeTenant({ ...row, slug: null }, "nantes.edilumen.fr", null).slug).toBeNull();
+    expect(serializeTenant({ ...row, slug: null }, "nantes.edilumen.fr", null, null).slug).toBeNull();
   });
 
   it("sert toujours le français, en tête, quoi qu'il arrive", () => {
     // Une résolution qui échoue ou une collectivité sans réglage ne doivent pas
     // fermer le portail : il reste la langue dont on est certain.
-    expect(serializeTenant(row, "n.fr", null).languages).toEqual(["fr"]);
-    expect(serializeTenant(row, "n.fr", "br").languages).toEqual(["fr"]);
-    expect(serializeTenant(row, "n.fr", ["br"]).languages).toEqual(["fr", "br"]);
+    expect(serializeTenant(row, "n.fr", null, null).languages).toEqual(["fr"]);
+    expect(serializeTenant(row, "n.fr", "br", null).languages).toEqual(["fr"]);
+    expect(serializeTenant(row, "n.fr", ["br"], null).languages).toEqual(["fr", "br"]);
   });
 
   it("écarte ce qui n'est pas un code de langue, et les doublons", () => {
-    expect(serializeTenant(row, "n.fr", [" BR ", "br", 42, "", "!!", "en"]).languages).toEqual([
+    expect(serializeTenant(row, "n.fr", [" BR ", "br", 42, "", "!!", "en"], null).languages).toEqual([
       "fr",
       "br",
       "en",

@@ -79,7 +79,7 @@ export function SectionBlock({
       {...(previewing ? {} : attributes)}
       {...(previewing ? {} : listeners)}
       className={cn(
-        "relative rounded-xl p-[18px]",
+        "relative rounded-[var(--pt-radius)] p-[18px]",
         !previewing &&
           "cursor-grab outline outline-2 outline-offset-[3px] outline-transparent transition-[outline-color,background-color] active:cursor-grabbing",
         !previewing && !selected && "hover:outline-dashed hover:outline-primary/45",
@@ -153,7 +153,7 @@ function SectionContent({
 }) {
   switch (section.kind) {
     case "recherche":
-      return <RechercheSection section={section} device={device} catalogue={catalogue} />;
+      return <RechercheSection section={section} catalogue={catalogue} />;
     case "demarches":
       return <DemarchesSection section={section} device={device} catalogue={catalogue} />;
     case "actus":

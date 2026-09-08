@@ -39,6 +39,9 @@ import { sectionFromPaletteKind } from "@/features/portal/editor/paletteSection"
 import { CANVAS_DROP_ID, PortalCanvas } from "@/features/portal/editor/PortalCanvas";
 import { SectionInspector } from "@/features/portal/editor/SectionInspector";
 import { SectionPalette } from "@/features/portal/editor/SectionPalette";
+import { ThemePanel } from "@/features/portal/editor/ThemePanel";
+import type { PortalTheme } from "@/features/portal/portalTheme";
+import type { ThemeBranding } from "@/features/portal/themeStyle";
 
 export interface PortalEditorProps {
   organizationName: string;
@@ -56,10 +59,26 @@ export interface PortalEditorProps {
    * départ.
    */
   languages: readonly string[];
+  /**
+   * Le logo en version blanche de la collectivité, pour un bandeau de couleur.
+   */
+  organizationLogoWhiteUrl: string | null;
+  /**
+   * La charte graphique de la collectivité — les deux couleurs dont le thème
+   * dérive toute sa palette.
+   *
+   * ⚠️ CE N'EST PAS UNE DONNÉE DU THÈME : le thème n'en porte aucune. Elles
+   * viennent du paramétrage de l'organisation (onglet « Charte graphique »),
+   * et l'éditeur étant toujours sur une racine, elles sont déjà résolues.
+   */
+  branding: ThemeBranding | null;
   /** Le brouillon courant — possédé par le parent, pas par l'éditeur. */
   page: PortalPage;
   /** Toute modification : ajout, déplacement, édition, retrait d'une section. */
   onChange: (page: PortalPage) => void;
+  /** Le thème courant — possédé par le parent, comme la page. */
+  theme: PortalTheme;
+  onThemeChange: (theme: PortalTheme) => void;
   catalogue: PortalCatalogueEntry[];
   contact: ContactSource;
   statusLine: string;
@@ -103,10 +122,14 @@ const collisionDetection: CollisionDetection = (args) => {
 export function PortalEditor({
   organizationName,
   organizationLogoUrl,
+  organizationLogoWhiteUrl,
+  branding,
   organizationId,
   languages,
   page,
   onChange,
+  theme,
+  onThemeChange,
   catalogue,
   contact,
   statusLine,
@@ -116,7 +139,11 @@ export function PortalEditor({
   onClose,
   busy,
 }: PortalEditorProps) {
+  const [view, setView] = React.useState<EditorView>("composition");
   const [device, setDevice] = React.useState<Device>("bureau");
+  // Simulation « texte agrandi » : contexte d'édition, comme l'appareil — elle
+  // ne part jamais en base (voir `themeStyle.ts`).
+  const [largeText, setLargeText] = React.useState(false);
   const [selectedId, setSelectedId] = React.useState<string | null>(null);
   const [paletteOpen, setPaletteOpen] = React.useState(true);
   const [previewing, setPreviewing] = React.useState(false);
@@ -125,6 +152,7 @@ export function PortalEditor({
   // 5 px avant qu'un glisser ne commence : c'est ce qui laisse passer le clic
   // sur un bloc (sélection) et sur un bouton de la palette (ajout).
   const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 5 } }));
+  const themeView = view === "theme";
   const sections = page.sections;
   const selected = sections.find((s) => s.id === selectedId) ?? null;
 
@@ -140,7 +168,7 @@ export function PortalEditor({
   // Suppr ou Retour arrière retire le bloc sélectionné — sauf quand on tape
   // dans un champ de l'inspecteur, où ces touches gardent leur sens.
   React.useEffect(() => {
-    if (!selectedId || previewing) return;
+    if (!selectedId || previewing || view !== "composition") return;
     const onKeyDown = (event: KeyboardEvent) => {
       if (event.key !== "Delete" && event.key !== "Backspace") return;
       const target = event.target as HTMLElement | null;
@@ -154,7 +182,7 @@ export function PortalEditor({
     // `handleRemove` lit `sections` du rendu courant : l'effet se réabonne à
     // chaque changement de sélection ou de page, c'est voulu.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [selectedId, previewing, sections]);
+  }, [selectedId, previewing, sections, view]);
 
   /** Où le bloc tomberait si on le lâchait maintenant — `null` : nulle part. */
   function targetIndex(event: DragOverEvent | DragEndEvent): number | null {
@@ -201,6 +229,25 @@ export function PortalEditor({
     if (next !== sections) setSections(next);
   }
 
+  // Les deux vues rendent le MÊME canevas : ce qui les distingue tient dans
+  // les quelques props d'édition passées à côté.
+  const canvasProps = {
+    organizationName,
+    organizationLogoUrl,
+    organizationLogoWhiteUrl,
+    theme,
+    branding,
+    largeText,
+    languages,
+    sections,
+    device,
+    catalogue,
+    onSelect: setSelectedId,
+    onShift: (id: string, direction: -1 | 1) => setSections(shiftSection(sections, id, direction)),
+    onRemove: handleRemove,
+    onOpenPalette: () => setPaletteOpen(true),
+  };
+
   function handleAddFromPalette(section: PortalSection) {
     setSections(insertSectionAt(sections, section, appendIndex(sections, section)));
     setSelectedId(section.id);
@@ -227,12 +274,12 @@ export function PortalEditor({
         <div className="flex flex-1 items-center justify-center">
           <SegmentedControl<EditorView>
             aria-label="Vue de l'éditeur"
-            value="composition"
-            onChange={() => {}}
+            value={view}
+            onChange={setView}
             options={[
               { value: "composition", label: "Composition" },
               { value: "contenus", label: "Contenus", disabled: true, title: "Bientôt disponible" },
-              { value: "theme", label: "Thème", disabled: true, title: "Bientôt disponible" },
+              { value: "theme", label: "Thème" },
             ]}
           />
         </div>
@@ -249,16 +296,18 @@ export function PortalEditor({
             <RotateCcw />
             Annuler
           </Button>
-          <Button
-            type="button"
-            variant={previewing ? "primary" : "outline"}
-            size="sm"
-            aria-pressed={previewing}
-            onClick={() => setPreviewing((v) => !v)}
-          >
-            <Eye />
-            {previewing ? "Quitter l'aperçu" : "Prévisualiser"}
-          </Button>
+          {themeView ? null : (
+            <Button
+              type="button"
+              variant={previewing ? "primary" : "outline"}
+              size="sm"
+              aria-pressed={previewing}
+              onClick={() => setPreviewing((v) => !v)}
+            >
+              <Eye />
+              {previewing ? "Quitter l'aperçu" : "Prévisualiser"}
+            </Button>
+          )}
           <Button type="button" size="sm" onClick={onPublish} disabled={busy}>
             Publier
           </Button>
@@ -266,6 +315,30 @@ export function PortalEditor({
       </header>
 
       <div className="relative flex min-h-0 flex-1">
+        {themeView ? (
+          <>
+            <ThemePanel
+              theme={theme}
+              branding={branding}
+              onChange={onThemeChange}
+              largeText={largeText}
+              onLargeTextChange={setLargeText}
+            />
+            {/* La MÊME page que la composition, avec le même canevas : régler
+                le thème sur une page d'exemple laisserait la collectivité
+                découvrir le résultat sur la sienne. `previewing` la rend sans
+                chrome d'édition — ici on règle l'apparence, pas la
+                composition. */}
+            <PortalCanvas
+              {...canvasProps}
+              previewing
+              selectedId={null}
+              paletteOpen={false}
+              dropIndex={null}
+              dropLabel={null}
+            />
+          </>
+        ) : (
         <DndContext
           sensors={sensors}
           collisionDetection={collisionDetection}
@@ -275,21 +348,12 @@ export function PortalEditor({
           onDragCancel={() => setDrag(null)}
         >
           <PortalCanvas
-            organizationName={organizationName}
-            organizationLogoUrl={organizationLogoUrl}
-            languages={languages}
-            sections={sections}
-            device={device}
+            {...canvasProps}
             selectedId={selectedId}
-            catalogue={catalogue}
             paletteOpen={paletteOpen}
             previewing={previewing}
             dropIndex={drag?.dropIndex ?? null}
             dropLabel={drag?.label ?? null}
-            onSelect={setSelectedId}
-            onShift={(id, direction) => setSections(shiftSection(sections, id, direction))}
-            onRemove={handleRemove}
-            onOpenPalette={() => setPaletteOpen(true)}
           />
 
           {previewing ? null : (
@@ -329,6 +393,7 @@ export function PortalEditor({
             ) : null}
           </DragOverlay>
         </DndContext>
+        )}
       </div>
     </div>
   );

@@ -20,6 +20,7 @@ import type {
   SmtpSettingsDto,
   TenantDto,
 } from "./dto.ts";
+import { serializePortalTheme } from "./portalTheme.ts";
 
 /** Ligne DB brute, structure inconnue à la compilation. */
 type Row = Record<string, unknown>;
@@ -324,13 +325,21 @@ export function serializeBranding(organizationId: string, row: Row | null): Bran
  * une page publique : tout champ ajouté ici devient lisible par n'importe quel
  * visiteur du portail.
  */
-export function serializeTenant(row: Row, hostname: string, languages: unknown): TenantDto {
+export function serializeTenant(
+  row: Row,
+  hostname: string,
+  languages: unknown,
+  theme: unknown,
+): TenantDto {
   return {
     id: str(row.id),
     name: str(row.name),
     slug: nullableStr(row.slug),
     hostname,
     languages: readLanguages(languages),
+    // Rien de publié ⇒ les défauts du Socle, jamais `null` : voir
+    // `serializePortalTheme`.
+    theme: serializePortalTheme(theme),
   };
 }
 

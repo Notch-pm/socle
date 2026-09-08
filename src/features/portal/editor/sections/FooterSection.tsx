@@ -27,13 +27,13 @@ export function FooterSection({
         // Rembourrage du bloc (18 px) + marge de la page (24 px bureau, 14 px mobile).
         device === "mobile" ? "-mx-[32px]" : "-mx-[42px]",
         flush && "-mb-[18px]",
-        dark ? "text-white" : "text-foreground",
+        dark ? "text-white" : "text-[color:var(--pt-ink)]",
       )}
       style={{ backgroundColor: section.background }}
     >
-      {section.title ? <div className="mb-4 text-sm font-bold">{section.title}</div> : null}
+      {section.title ? <div className="mb-4 text-[length:var(--pt-body)] font-bold">{section.title}</div> : null}
       {section.children.length === 0 ? (
-        <p className={cn("text-[12.5px]", dark ? "text-white/60" : "text-muted-foreground")}>
+        <p className={cn("text-[length:var(--pt-small)]", dark ? "text-white/60" : "text-black/55")}>
           Ajoutez des blocs depuis le panneau de droite — coordonnées, horaires, mentions.
         </p>
       ) : (
@@ -43,11 +43,11 @@ export function FooterSection({
               key={child.id}
               className={cn("flex flex-col gap-1", child.align === "center" && "items-center text-center")}
             >
-              <span className="text-[13.5px] font-bold">{child.title}</span>
+              <span className="text-[length:var(--pt-body)] font-bold">{child.title}</span>
               <span
                 className={cn(
-                  "whitespace-pre-line text-[12.5px] leading-relaxed",
-                  dark ? "text-white/75" : "text-foreground/75",
+                  "whitespace-pre-line text-[length:var(--pt-small)] leading-relaxed",
+                  dark ? "text-white/75" : "text-black/70",
                 )}
               >
                 {child.body}

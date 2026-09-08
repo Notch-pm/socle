@@ -183,6 +183,36 @@ aucun endpoint, il décrit ce qui existe **en base**.
 
 ---
 
+### `portal_themes` — thème du site de démarches
+
+- `organization_id` NOT NULL, FK **CASCADE**, **UNIQUE** ; `draft` jsonb NOT NULL ; `published`
+  jsonb ; `published_at` ; `created_at` / `updated_at` (trigger `set_updated_at`). CHECK
+  `(published is null) = (published_at is null)`.
+- **Même discipline que `portal_pages`**, et pour la même raison : `draft` est ce que l'éditeur
+  écrit tout seul, `published` ce que le portail sert, et il ne bouge que sur un geste explicite.
+  L'éditeur publie les deux tables **d'un seul geste** — l'agent publie « son site », pas une
+  table.
+- **Pas de `slug`** : un thème par collectivité, c'est tout son objet. C'est aussi pourquoi il a
+  sa table plutôt qu'une clé dans `portal_pages` — il vaut pour **toutes les pages**, et le loger
+  dans la page d'accueil deviendrait un mensonge le jour où « Contact » et « Mentions légales »
+  arriveront.
+- Contenu : schéma JSON **possédé**, défini par `src/features/portal/portalTheme.ts`. Quatre
+  blocs voisins (`typography`, `shapes`, `header`, `accessibility`), **sans numéro de version** —
+  motif `communication_config` : chaque champ retombe sur SON défaut, un thème ne peut pas être
+  « faux », seulement partiellement inconnu.
+- ⚠️ **Aucune couleur** : elles vivent dans la charte graphique de l'organisation
+  (`primary_color` / `secondary_color`) et n'ont pas à exister deux fois. Le thème dit COMMENT
+  peindre, la charte dit AVEC QUOI. Seul `accessibility.dark_primary` la touche — il fonce la
+  couleur **au rendu**, sans modifier la colonne.
+- **Racine uniquement** (trigger `enforce_portal_theme_root_org`, motif `portal_pages`) : c'est le
+  site de la collectivité, pas celui d'un de ses services.
+- **RLS** : lecture `has_org_access(organization_id)` · écriture `is_org_admin(organization_id)`
+  — calqué sur `portal_pages`.
+- Consommé par le portail dans `GET /v1/portal/tenant?hostname=` (contrat 1.17.0), champ `theme` :
+  ⚠️ rien de publié ⇒ **les défauts du Socle**, jamais `null`.
+
+---
+
 ---
 
 ## Catalogue de démarches

@@ -278,6 +278,81 @@ export interface TenantDto {
    * (héritage **déjà résolu**, comme la charte graphique).
    */
   languages: string[];
+  /**
+   * Le thème PUBLIÉ du site de démarches : typographie, formes, densité,
+   * en-tête, accessibilité. Il vaut pour **toutes les pages** du portail —
+   * c'est pourquoi il voyage avec le tenant plutôt qu'avec une page.
+   *
+   * ⚠️ **Toujours présent, jamais `null`.** Une collectivité qui n'a rien
+   * publié reçoit les **défauts du Socle** : les laisser inventer au
+   * consommateur ferait deux jeux de valeurs, qui finiraient par diverger.
+   * Un réglage ajouté plus tard arrivera de la même façon — avec sa valeur par
+   * défaut, jamais un trou.
+   *
+   * ⚠️ **Il ne porte AUCUNE couleur.** Celles-ci viennent de
+   * `GET /v1/organizations/{id}/branding` (héritage déjà résolu). Le thème dit
+   * COMMENT peindre, la charte dit AVEC QUOI — et une collectivité ne choisit
+   * ses couleurs qu'une fois, pour toute la gamme.
+   */
+  theme: PortalThemeDto;
+}
+
+/**
+ * Thème du site de démarches. Toutes les valeurs sont des **énumérés fermés** :
+ * un consommateur peut les traduire en une table de correspondance, sans avoir
+ * à interpréter une chaîne libre.
+ *
+ * ⚠️ **`font` est un IDENTIFIANT, pas un nom de famille CSS.** À vous de le
+ * traduire en pile de polices, et surtout de ne charger QUE celle-là : c'est le
+ * seul réglage du thème qui coûte des octets et une requête. `systeme` n'en
+ * demande aucune.
+ *
+ * ⚠️ **AUTO-HÉBERGEZ-LES.** Les trois familles web sont sous SIL Open Font
+ * License 1.1 — c'est le critère d'entrée au catalogue, précisément pour que
+ * vous puissiez les servir depuis votre propre domaine. Les prendre chez Google
+ * Fonts enverrait l'adresse IP de chaque visiteur à un tiers, sans base légale,
+ * sur le site d'une collectivité.
+ *
+ * ⚠️ `sticky` et `declaration` ne changent aucune couleur : le premier dit si
+ * le bandeau suit le défilement, le second est la **mention RGAA obligatoire**
+ * d'un site public, à afficher au pied des pages. Vide = la collectivité ne
+ * l'a pas encore écrite ; n'inventez rien à sa place.
+ */
+export interface PortalThemeDto {
+  typography: {
+    font: "systeme" | "nunito-sans" | "rubik" | "public-sans";
+    text_scale: "compact" | "standard" | "comfortable";
+  };
+  shapes: {
+    radius: "square" | "soft" | "round";
+    shadow: "none" | "soft" | "strong";
+    /** Espacement entre les blocs et à l'intérieur des cartes. */
+    density: "compact" | "standard" | "airy";
+  };
+  header: {
+    /** `color` : le bandeau prend une couleur de la charte, celle de `color`. */
+    fill: "white" | "color";
+    color: "primary" | "secondary";
+    /** Utiliser `logo_white_url` de la charte sur un bandeau coloré. */
+    logo_white: boolean;
+    logo: "left" | "center";
+    menu: "text" | "pills";
+    sticky: boolean;
+    account: "prominent" | "discreet";
+  };
+  accessibility: {
+    /** Encres et bordures assombries, couleur principale comprise. */
+    high_contrast: boolean;
+    /**
+     * Assombrir la couleur principale de la charte — sa clarté multipliée par
+     * **0,75**, teinte et saturation inchangées. Réglé par la collectivité
+     * quand le contraste de sa couleur ne suffit pas ; sa charte, elle, n'est
+     * pas modifiée.
+     */
+    dark_primary: boolean;
+    /** Mention RGAA affichée au pied du site. Vide si non renseignée. */
+    declaration: string;
+  };
 }
 
 /**

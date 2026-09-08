@@ -36,7 +36,7 @@ function FilterPreview({
     <span
       aria-hidden="true"
       title={choices}
-      className="flex h-8 shrink-0 items-center gap-1.5 rounded-lg border border-border bg-background px-2.5 text-[12px] text-muted-foreground"
+      className="flex h-8 shrink-0 items-center gap-1.5 rounded-[var(--pt-radius-sm)] border border-[color:var(--pt-border)] bg-white px-2.5 text-[length:var(--pt-small)] text-[color:var(--pt-muted)]"
     >
       {icon}
       {label}
@@ -78,7 +78,9 @@ export function DemarchesSection({
   return (
     <div className="flex flex-col gap-3">
       <div className="flex flex-wrap items-center justify-between gap-3">
-        <h2 className="text-lg font-bold text-foreground">{section.title}</h2>
+        <h2 className="text-[length:var(--pt-h2)] font-bold text-[color:var(--pt-ink)]">
+          {section.title}
+        </h2>
         {/* Les deux filtres se CUMULENT — chacun sur sa dimension : qui je
             suis, et à qui je m'adresse. Ils se rangent donc côte à côte. */}
         <div className="flex flex-wrap items-center gap-2">
@@ -99,7 +101,7 @@ export function DemarchesSection({
         </div>
       </div>
       {entries.length === 0 ? (
-        <p className="rounded-lg border border-dashed border-border py-6 text-center text-sm text-muted-foreground">
+        <p className="rounded-[var(--pt-radius-sm)] border border-dashed border-[color:var(--pt-border)] py-6 text-center text-[length:var(--pt-body)] text-[color:var(--pt-muted)]">
           Aucune démarche n'est proposée en ligne pour le moment.
         </p>
       ) : (
@@ -109,30 +111,40 @@ export function DemarchesSection({
             return (
               <div
                 key={entry.id}
+                style={isPinned ? { background: "var(--pt-primary-soft)" } : undefined}
                 className={cn(
-                  "flex flex-col gap-2 rounded-xl border border-border bg-background p-3",
-                  isPinned && "border-primary bg-primary/5",
+                  "flex flex-col gap-2 rounded-[var(--pt-radius)] border p-[var(--pt-card-pad)] shadow-[var(--pt-shadow)]",
+                  isPinned
+                    ? "border-[color:var(--pt-primary)]"
+                    : "border-[color:var(--pt-border)] bg-white",
                 )}
               >
                 <div className="flex items-center justify-between gap-1.5">
-                  <div className="flex size-[26px] items-center justify-center rounded-lg bg-primary/10">
-                    <FileText className="size-3.5 text-primary" />
+                  <div
+                    className="flex size-[26px] items-center justify-center rounded-[var(--pt-radius-sm)]"
+                    style={{ background: "var(--pt-primary-soft)" }}
+                  >
+                    <FileText className="size-3.5 text-[color:var(--pt-primary)]" />
                   </div>
                   {isPinned ? (
-                    <span className="whitespace-nowrap rounded-full bg-secondary px-1.5 py-0.5 text-[10.5px] font-extrabold text-secondary-foreground">
+                    <span className="whitespace-nowrap rounded-full bg-[color:var(--pt-accent)] px-1.5 py-0.5 text-[length:var(--pt-tiny)] font-extrabold text-[color:var(--pt-accent-ink)]">
                       À la une
                     </span>
                   ) : null}
                 </div>
-                <span className="text-[13.5px] font-bold leading-tight text-foreground">{entry.name}</span>
+                <span className="text-[length:var(--pt-body)] font-bold leading-tight text-[color:var(--pt-ink)]">
+                  {entry.name}
+                </span>
                 {entry.shortDescription ? (
-                  <span className="text-[11.5px] text-muted-foreground">{entry.shortDescription}</span>
+                  <span className="text-[length:var(--pt-small)] text-[color:var(--pt-muted)]">
+                    {entry.shortDescription}
+                  </span>
                 ) : null}
                 <ul className="mt-auto flex flex-wrap gap-1 pt-1" aria-label="Organismes proposant cette démarche">
                   {entry.organizations.map((org) => (
                     <li
                       key={org.id}
-                      className="rounded-full bg-muted px-1.5 py-0.5 text-[10px] font-semibold text-muted-foreground"
+                      className="rounded-full bg-[color:var(--pt-surface)] px-1.5 py-0.5 text-[length:var(--pt-tiny)] font-semibold text-[color:var(--pt-muted)]"
                     >
                       {org.name}
                     </li>

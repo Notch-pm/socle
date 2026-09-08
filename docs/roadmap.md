@@ -152,6 +152,24 @@ suppose la précédente.
   son nom**), de quoi router la demande en aval ; `is_internal_service` sur `Organization`. Le
   Socle refuse qu'une même démarche soit activée par deux organisations d'un même porteur — sans
   quoi une demande déposée au nom de la mairie n'aurait pas de destinataire déterminé.
+- **2026-09-08 — Le thème du site : chaque collectivité règle l'apparence de son portail.**
+  L'onglet « Thème » de l'éditeur (jusque-là grisé) ouvre sur quatre préréglages, la typographie
+  (catalogue de 4 polices figé dans le code — contrat de nommage, motif `languages.ts`), les
+  formes et la densité, l'en-tête (fond, logo, menu, bouton de compte, en-tête fixe) et
+  l'accessibilité (contraste renforcé, assombrissement de la couleur principale, déclaration
+  RGAA), plus un **contrôle des contrastes** qui mesure la charte RÉELLE de la collectivité et ne
+  propose son correctif que quand il corrige vraiment. `portal_themes` (`draft` / `published`,
+  même discipline que `portal_pages` ; les deux se publient **d'un seul geste**), contrat
+  **1.17.0** (`Tenant.theme`). ⚠️ Le thème ne porte **aucune couleur** : elles restent dans la
+  charte graphique. Le canevas de l'éditeur applique désormais le thème ET la charte — il montre
+  la page telle qu'elle sera, plus une maquette aux couleurs de la gamme.
+  **Nora l'applique le jour même** : `Tenant.theme` lu à la frontière, un seul objet de style sur
+  la racine de la page, et tout le portail — accueil composé, liste de repli, présentation d'une
+  démarche, formulaire — passé aux variables CSS. Les trois polices sont **auto-hébergées**
+  (`public/fonts/`, OFL 1.1) : pas de Google Fonts sur le site d'une collectivité, et une seule
+  famille chargée par visite (≈ 35 Ko). La **déclaration d'accessibilité** s'affiche au pied de
+  toutes les pages. ⚠️ Marianne a quitté le catalogue au passage : sa licence n'autorise pas la
+  redistribution qu'un portail public suppose — remplacée par **Rubik**.
 - **2026-09-06 — Les démarches « pour de vrai » : une page, un formulaire, une demande.** Le
   portail sert désormais une démarche au lieu de la lister : `GET /v1/portal/procedures/{id}`
   (contrat **1.12.0**) ajoute la catégorie et les deux schémas de SAISIE (`form_schema`,
@@ -180,10 +198,11 @@ suppose la précédente.
    `translations` en clé voisine sans reprise. Enfin, les langues de France sans code ISO (gallo,
    poitevin-saintongeais, francique lorrain) attendent une convention de nommage — voir l'en-tête
    de `src/features/languages/languages.ts`.
-2. **Les autres templates.** L'onglet « Thème » (grisé) : gabarits de page et variantes de mise en
-   page au-delà de la composition libre ; d'autres pages que l'accueil (`portal_pages.slug` est
-   prêt : « Contact », « Mentions légales », « Accessibilité » — obligatoires pour un site
-   public) ; le bloc « Actualités » (grisé) quand une source d'actualités existera au Socle.
+2. **Les autres templates.** Gabarits de page et variantes de mise en page au-delà de la
+   composition libre ; d'autres pages que l'accueil (`portal_pages.slug` est prêt : « Contact »,
+   « Mentions légales », « Accessibilité » — obligatoires pour un site public) ; le bloc
+   « Actualités » (grisé) quand une source d'actualités existera au Socle ; la vue « Contenus »
+   (grisée) qui va avec.
 3. **Démarches hors compte.** La demande part déjà (2026-09-06) ; il lui manque son après :
    confirmation par courriel et **lien de suivi signé** à durée limitée, sans mot de passe. Il
    faut pour cela que le **statut d'une demande soit consultable** depuis le portail — Iris le

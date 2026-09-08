@@ -26,9 +26,11 @@ export function TexteImageSection({
     <div className={cn("flex items-center gap-5", stacked ? "flex-col" : "flex-row")}>
       <div className="flex min-w-0 flex-1 flex-col gap-1.5">
         {section.title ? (
-          <span className="text-base font-bold text-foreground">{section.title}</span>
+          <span className="text-[length:var(--pt-h2)] font-bold text-[color:var(--pt-ink)]">
+            {section.title}
+          </span>
         ) : null}
-        <span className="whitespace-pre-line text-[13.5px] leading-relaxed text-foreground/80">
+        <span className="whitespace-pre-line text-[length:var(--pt-body)] leading-relaxed text-[color:var(--pt-ink)]">
           {section.body}
         </span>
       </div>
@@ -38,7 +40,7 @@ export function TexteImageSection({
           d'abord sur un téléphone. */}
       <div
         className={cn(
-          "shrink-0 overflow-hidden rounded-xl",
+          "shrink-0 overflow-hidden rounded-[var(--pt-radius)]",
           stacked ? "w-full" : "w-[45%]",
           imageFirst && "order-first",
         )}
@@ -49,7 +51,7 @@ export function TexteImageSection({
           <img
             src={section.imageUrl}
             alt={section.alt}
-            className="aspect-[4/3] w-full bg-muted object-cover"
+            className="aspect-[4/3] w-full bg-[color:var(--pt-surface)] object-cover"
           />
         ) : (
           <ImagePlaceholder />
@@ -65,9 +67,9 @@ export function TexteImageSection({
  */
 function ImagePlaceholder() {
   return (
-    <div className="flex aspect-[4/3] w-full flex-col items-center justify-center gap-1.5 rounded-xl border border-dashed border-border bg-muted/40 text-muted-foreground">
+    <div className="flex aspect-[4/3] w-full flex-col items-center justify-center gap-1.5 rounded-[var(--pt-radius)] border border-dashed border-[color:var(--pt-border)] bg-[color:var(--pt-surface)] text-[color:var(--pt-muted)]">
       <ImageIcon className="size-5" aria-hidden="true" />
-      <span className="px-3 text-center text-[11.5px]">Adresse de l'image à renseigner</span>
+      <span className="px-3 text-center text-[length:var(--pt-tiny)]">Adresse de l'image à renseigner</span>
     </div>
   );
 }

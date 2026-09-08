@@ -4,6 +4,7 @@ import { describe, it, expect, vi } from "vitest";
 import { render, screen, fireEvent, within } from "@testing-library/react";
 import { PortalEditor } from "./PortalEditor";
 import { defaultPortalPage, type ContactSource } from "@/features/portal/portalPage";
+import { defaultPortalTheme } from "@/features/portal/portalTheme";
 
 // Primitives Radix (Switch, utilisé par l'inspecteur) : polyfills absents de jsdom.
 if (!Element.prototype.hasPointerCapture) {
@@ -28,6 +29,7 @@ const CONTACT: ContactSource = {
 
 function renderEditor(overrides: Partial<ComponentProps<typeof PortalEditor>> = {}) {
   const onChange = vi.fn();
+  const onThemeChange = vi.fn();
   const onPublish = vi.fn();
   const onDiscard = vi.fn();
   const onClose = vi.fn();
@@ -35,10 +37,14 @@ function renderEditor(overrides: Partial<ComponentProps<typeof PortalEditor>> = 
     <PortalEditor
       organizationName="Ville de Sainte-Colombe"
       organizationLogoUrl={null}
+      organizationLogoWhiteUrl={null}
+      branding={null}
       organizationId="org-1"
       languages={["fr"]}
       page={defaultPortalPage()}
       onChange={onChange}
+      theme={defaultPortalTheme()}
+      onThemeChange={onThemeChange}
       catalogue={[]}
       contact={CONTACT}
       statusLine="Brouillon enregistré à 14:32"
@@ -48,7 +54,7 @@ function renderEditor(overrides: Partial<ComponentProps<typeof PortalEditor>> = 
       {...overrides}
     />,
   );
-  return { onChange, onPublish, onDiscard, onClose };
+  return { onChange, onThemeChange, onPublish, onDiscard, onClose };
 }
 
 describe("PortalEditor — en-tête", () => {
@@ -58,17 +64,49 @@ describe("PortalEditor — en-tête", () => {
     expect(screen.getByText("Brouillon enregistré à 14:32")).toBeTruthy();
   });
 
-  it("les onglets Contenus et Thème sont indisponibles", () => {
+  it("l'onglet Contenus reste indisponible, Composition et Thème sont ouverts", () => {
     renderEditor();
     const nav = screen.getByRole("tablist", { name: "Vue de l'éditeur" });
     const contenus = within(nav).getByRole("tab", { name: "Contenus" });
-    const theme = within(nav).getByRole("tab", { name: "Thème" });
     expect(contenus.getAttribute("aria-disabled")).toBe("true");
-    expect(theme.getAttribute("aria-disabled")).toBe("true");
     expect(contenus.getAttribute("title")).toBe("Bientôt disponible");
 
-    const composition = within(nav).getByRole("tab", { name: "Composition" });
-    expect(composition.getAttribute("aria-disabled")).toBeNull();
+    for (const name of ["Composition", "Thème"]) {
+      expect(within(nav).getByRole("tab", { name }).getAttribute("aria-disabled")).toBeNull();
+    }
+  });
+
+  it("l'onglet Thème ouvre les réglages, et le canevas reste celui de la page", () => {
+    renderEditor();
+    const nav = screen.getByRole("tablist", { name: "Vue de l'éditeur" });
+    fireEvent.click(within(nav).getByRole("tab", { name: "Thème" }));
+
+    expect(screen.getByRole("complementary", { name: "Réglages du thème" })).toBeTruthy();
+    // La page composée est toujours là — on règle son apparence, pas une
+    // maquette d'exemple.
+    expect(screen.getByText("Trouvez votre démarche")).toBeTruthy();
+    // Plus d'édition de composition : ni palette, ni bouton d'ajout.
+    expect(screen.queryByRole("button", { name: "Ajouter une section" })).toBeNull();
+  });
+
+  it("un réglage du thème remonte au parent, la page n'est pas touchée", () => {
+    const { onThemeChange, onChange } = renderEditor();
+    const nav = screen.getByRole("tablist", { name: "Vue de l'éditeur" });
+    fireEvent.click(within(nav).getByRole("tab", { name: "Thème" }));
+
+    fireEvent.click(screen.getByRole("tab", { name: "Arrondis" }));
+    expect(onThemeChange).toHaveBeenCalledTimes(1);
+    expect(onThemeChange.mock.calls[0][0].shapes.radius).toBe("round");
+    expect(onChange).not.toHaveBeenCalled();
+  });
+
+  it("« Aperçu gros texte » ne remonte RIEN : c'est une simulation, pas un réglage du site", () => {
+    const { onThemeChange } = renderEditor();
+    const nav = screen.getByRole("tablist", { name: "Vue de l'éditeur" });
+    fireEvent.click(within(nav).getByRole("tab", { name: "Thème" }));
+
+    fireEvent.click(screen.getByRole("switch", { name: "Aperçu gros texte" }));
+    expect(onThemeChange).not.toHaveBeenCalled();
   });
 
   it("appelle onPublish au clic sur Publier", () => {

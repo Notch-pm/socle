@@ -377,9 +377,19 @@ Deno.serve(async (req: Request) => {
         p_org_id: org.id,
       });
 
+      // Thème PUBLIÉ du site — jamais le brouillon, qui est une colonne
+      // distincte et n'a pas de route. Il vit sur la racine, comme la page :
+      // rien de publié (ou rien du tout) ⇒ le sérialiseur rend les défauts du
+      // Socle, jamais `null`. Un échec de lecture ne ferme donc pas le portail.
+      const { data: theme } = await admin
+        .from("portal_themes")
+        .select("published")
+        .eq("organization_id", org.id)
+        .maybeSingle();
+
       return jsonResponse(
         200,
-        serializeTenant(org, String(domain.hostname), languages),
+        serializeTenant(org, String(domain.hostname), languages, theme?.published ?? null),
         corsHeaders,
       );
     }

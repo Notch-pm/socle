@@ -3,6 +3,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { act, fireEvent, render, screen } from "@testing-library/react";
 import { AUTOSAVE_DELAY_MS, PortalEditorPage } from "./PortalEditorPage";
 import { defaultPortalPage, type PortalPage } from "./portalPage";
+import { defaultPortalTheme, type PortalTheme } from "./portalTheme";
 import type { PortalEditorProps } from "./PortalEditor";
 
 /**
@@ -14,12 +15,18 @@ import type { PortalEditorProps } from "./PortalEditor";
  */
 const h = vi.hoisted(() => ({
   row: null as Record<string, unknown> | null,
+  themeRow: null as Record<string, unknown> | null,
   ensure: vi.fn(),
+  ensureTheme: vi.fn(),
   save: vi.fn(),
+  saveTheme: vi.fn(),
   publish: vi.fn(),
+  publishTheme: vi.fn(),
   discard: vi.fn(),
+  discardTheme: vi.fn(),
   navigate: vi.fn(),
   edits: 0,
+  themeEdits: 0,
 }));
 
 vi.mock("react-router-dom", () => ({
@@ -61,8 +68,42 @@ vi.mock("@/features/portal/usePortalPage", () => ({
   usePortalPage: () => ({ data: h.row, isLoading: false }),
   useEnsurePortalPage: () => ({ mutate: h.ensure, isIdle: true, isError: false }),
   useSaveDraft: () => ({ mutate: h.save, isPending: false, isError: false }),
-  usePublishPortalPage: () => ({ mutate: h.publish, isPending: false, isError: false, reset: () => {} }),
-  useDiscardDraft: () => ({ mutate: h.discard, isPending: false, isError: false, reset: () => {} }),
+  usePublishPortalPage: () => ({
+    mutate: h.publish,
+    mutateAsync: h.publish,
+    isPending: false,
+    isError: false,
+    reset: () => {},
+  }),
+  useDiscardDraft: () => ({
+    mutate: h.discard,
+    mutateAsync: h.discard,
+    isPending: false,
+    isError: false,
+    reset: () => {},
+  }),
+}));
+
+// Le thème vit dans sa propre table, mais dans le même éditeur : mêmes gestes,
+// même minuteur, même publication.
+vi.mock("@/features/portal/usePortalTheme", () => ({
+  usePortalTheme: () => ({ data: h.themeRow, isLoading: false }),
+  useEnsurePortalTheme: () => ({ mutate: h.ensureTheme, isIdle: true, isError: false }),
+  useSaveThemeDraft: () => ({ mutate: h.saveTheme, isPending: false, isError: false }),
+  usePublishPortalTheme: () => ({
+    mutate: h.publishTheme,
+    mutateAsync: h.publishTheme,
+    isPending: false,
+    isError: false,
+    reset: () => {},
+  }),
+  useDiscardThemeDraft: () => ({
+    mutate: h.discardTheme,
+    mutateAsync: h.discardTheme,
+    isPending: false,
+    isError: false,
+    reset: () => {},
+  }),
 }));
 
 // Le pantin : chaque clic « modifier » remonte une page avec un titre différent.
@@ -78,10 +119,18 @@ vi.mock("@/features/portal/PortalEditor", () => ({
       };
       props.onChange(next);
     };
+    const editTheme = () => {
+      h.themeEdits += 1;
+      props.onThemeChange({
+        ...props.theme,
+        shapes: { ...props.theme.shapes, radius: h.themeEdits % 2 === 0 ? "round" : "square" },
+      });
+    };
     return (
       <div>
         <span data-testid="status">{props.statusLine}</span>
         <button type="button" onClick={edit}>modifier</button>
+        <button type="button" onClick={editTheme}>régler le thème</button>
         <button type="button" onClick={props.onPublish}>publier</button>
         <button type="button" onClick={props.onDiscard}>annuler</button>
       </div>
@@ -102,14 +151,32 @@ function rowFor(draft: PortalPage, published: PortalPage | null = null) {
   };
 }
 
+function themeRowFor(draft: PortalTheme, published: PortalTheme | null = null) {
+  return {
+    id: "theme-1",
+    organization_id: "org-1",
+    draft,
+    published,
+    published_at: published ? "2026-09-01T10:00:00Z" : null,
+    created_at: "2026-09-01T10:00:00Z",
+    updated_at: "2026-09-01T10:00:00Z",
+  };
+}
+
 beforeEach(() => {
   vi.useFakeTimers();
   h.row = rowFor(defaultPortalPage());
+  h.themeRow = themeRowFor(defaultPortalTheme());
   h.edits = 0;
+  h.themeEdits = 0;
   h.ensure.mockReset();
+  h.ensureTheme.mockReset();
   h.save.mockReset();
-  h.publish.mockReset();
-  h.discard.mockReset();
+  h.saveTheme.mockReset();
+  h.publish.mockReset().mockResolvedValue(undefined);
+  h.publishTheme.mockReset().mockResolvedValue(undefined);
+  h.discard.mockReset().mockResolvedValue(defaultPortalPage());
+  h.discardTheme.mockReset().mockResolvedValue(defaultPortalTheme());
 });
 
 afterEach(() => {
@@ -121,6 +188,12 @@ describe("PortalEditorPage — première ouverture", () => {
     h.row = null;
     render(<PortalEditorPage variant="superadmin" />);
     expect(h.ensure).toHaveBeenCalledWith("org-1");
+  });
+
+  it("crée aussi le thème s'il n'existe pas encore", () => {
+    h.themeRow = null;
+    render(<PortalEditorPage variant="superadmin" />);
+    expect(h.ensureTheme).toHaveBeenCalledWith("org-1");
   });
 
   it("dit que la page n'a jamais été publiée", () => {
@@ -158,6 +231,24 @@ describe("PortalEditorPage — sauvegarde automatique", () => {
     expect(h.publish).not.toHaveBeenCalled();
   });
 
+  it("un réglage de thème n'écrit QUE le thème, et vice-versa", () => {
+    render(<PortalEditorPage variant="superadmin" />);
+    fireEvent.click(screen.getByRole("button", { name: "régler le thème" }));
+    act(() => {
+      vi.advanceTimersByTime(AUTOSAVE_DELAY_MS);
+    });
+    expect(h.saveTheme).toHaveBeenCalledTimes(1);
+    expect(h.saveTheme.mock.calls[0][0]).toMatchObject({ id: "theme-1" });
+    expect(h.save).not.toHaveBeenCalled();
+
+    fireEvent.click(screen.getByRole("button", { name: "modifier" }));
+    act(() => {
+      vi.advanceTimersByTime(AUTOSAVE_DELAY_MS);
+    });
+    expect(h.save).toHaveBeenCalledTimes(1);
+    expect(h.saveTheme).toHaveBeenCalledTimes(1);
+  });
+
   it("écrit ce qui reste en attente quand on quitte l'éditeur", () => {
     const { unmount } = render(<PortalEditorPage variant="superadmin" />);
     fireEvent.click(screen.getByRole("button", { name: "modifier" }));
@@ -167,7 +258,7 @@ describe("PortalEditorPage — sauvegarde automatique", () => {
 });
 
 describe("PortalEditorPage — publication", () => {
-  it("demande confirmation, puis publie le DERNIER état, sauvegarde en attente comprise", () => {
+  it("demande confirmation, puis publie le DERNIER état, sauvegarde en attente comprise", async () => {
     render(<PortalEditorPage variant="superadmin" />);
     fireEvent.click(screen.getByRole("button", { name: "modifier" }));
     fireEvent.click(screen.getByRole("button", { name: "publier" }));
@@ -184,24 +275,56 @@ describe("PortalEditorPage — publication", () => {
     });
     expect(h.save).not.toHaveBeenCalled();
   });
+
+  it("publier, c'est publier SON SITE : la composition ET le thème", async () => {
+    render(<PortalEditorPage variant="superadmin" />);
+    fireEvent.click(screen.getByRole("button", { name: "régler le thème" }));
+    fireEvent.click(screen.getByRole("button", { name: "publier" }));
+    await act(async () => {
+      fireEvent.click(screen.getByRole("button", { name: "Publier" }));
+    });
+
+    expect(h.publish).toHaveBeenCalledTimes(1);
+    expect(h.publishTheme).toHaveBeenCalledTimes(1);
+    expect(h.publishTheme.mock.calls[0][0]).toMatchObject({ id: "theme-1" });
+    expect(h.publishTheme.mock.calls[0][0].draft.shapes.radius).toBe("square");
+  });
+
+  it("une publication à moitié faite laisse la modale ouverte", async () => {
+    h.publishTheme.mockRejectedValue(new Error("refus RLS"));
+    render(<PortalEditorPage variant="superadmin" />);
+    fireEvent.click(screen.getByRole("button", { name: "publier" }));
+    await act(async () => {
+      fireEvent.click(screen.getByRole("button", { name: "Publier" }));
+    });
+
+    // Le bouton de la modale est toujours là : c'est d'ici que l'agent reprend.
+    expect(screen.getByRole("button", { name: "Publier" })).toBeTruthy();
+  });
 });
 
 describe("PortalEditorPage — annulation", () => {
-  it("rend le brouillon à la dernière publication, sans toucher à published", () => {
+  it("rend le brouillon à la dernière publication, sans toucher à published", async () => {
     h.row = rowFor(defaultPortalPage(), defaultPortalPage());
+    h.themeRow = themeRowFor(defaultPortalTheme(), defaultPortalTheme());
     render(<PortalEditorPage variant="superadmin" />);
     fireEvent.click(screen.getByRole("button", { name: "annuler" }));
-    expect(screen.getByText(/reviendra à la dernière composition publiée/)).toBeTruthy();
+    expect(screen.getByText(/reviendra à la dernière version publiée/)).toBeTruthy();
 
-    fireEvent.click(screen.getByRole("button", { name: "Annuler les modifications" }));
+    await act(async () => {
+      fireEvent.click(screen.getByRole("button", { name: "Annuler les modifications" }));
+    });
     expect(h.discard).toHaveBeenCalledTimes(1);
     expect(h.discard.mock.calls[0][0]).toMatchObject({ id: "page-1" });
     expect(h.discard.mock.calls[0][0].published).not.toBeNull();
+    // Le thème revient avec elle : annuler, c'est annuler ce qu'on voit.
+    expect(h.discardTheme).toHaveBeenCalledTimes(1);
+    expect(h.discardTheme.mock.calls[0][0]).toMatchObject({ id: "theme-1" });
   });
 
   it("prévient que sans publication, le brouillon reviendra au défaut", () => {
     render(<PortalEditorPage variant="superadmin" />);
     fireEvent.click(screen.getByRole("button", { name: "annuler" }));
-    expect(screen.getByText(/composition par défaut/)).toBeTruthy();
+    expect(screen.getByText(/au thème par défaut/)).toBeTruthy();
   });
 });

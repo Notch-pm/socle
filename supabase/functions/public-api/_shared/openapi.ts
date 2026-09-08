@@ -30,7 +30,7 @@ export function buildOpenApiDocument(serverUrl: string): Record<string, unknown>
     openapi: "3.1.0",
     info: {
       title: "API Socle — Référentiel de la gamme",
-      version: "1.16.0",
+      version: "1.17.0",
       description: [
         "API **en lecture seule** exposant le référentiel central de la gamme : les",
         "**organisations** (et sous-organisations) avec l'intégralité de leur configuration,",
@@ -840,6 +840,127 @@ export function buildOpenApiDocument(serverUrl: string): Record<string, unknown>
                 "celle de la collectivité même quand le domaine désigne une " +
                 "sous-organisation.",
               examples: [["fr", "en", "br"]],
+            },
+            theme: { $ref: "#/components/schemas/PortalTheme" },
+          },
+        },
+        PortalTheme: {
+          type: "object",
+          description:
+            "Thème **publié** du site de démarches : typographie, formes, densité, en-tête, " +
+            "accessibilité. Il vaut pour **toutes les pages** du portail — c'est pourquoi il " +
+            "voyage avec le tenant plutôt qu'avec une page.\n\n" +
+            "⚠️ **Toujours présent, jamais `null`.** Une collectivité qui n'a rien publié " +
+            "reçoit les **défauts du Socle** : les laisser inventer au consommateur ferait " +
+            "deux jeux de valeurs, qui finiraient par diverger. Un réglage ajouté plus tard " +
+            "arrivera de la même façon — avec sa valeur par défaut, jamais un trou.\n\n" +
+            "⚠️ **Il ne porte AUCUNE couleur.** Celles-ci viennent de " +
+            "`GET /v1/organizations/{id}/branding`, héritage déjà résolu. Le thème dit " +
+            "COMMENT peindre, la charte dit AVEC QUOI.\n\n" +
+            "Toutes les valeurs sont des **énumérés fermés** : traduisez-les par une table " +
+            "de correspondance, sans interpréter de chaîne libre.",
+          required: ["typography", "shapes", "header", "accessibility"],
+          properties: {
+            typography: {
+              type: "object",
+              required: ["font", "text_scale"],
+              properties: {
+                font: {
+                  type: "string",
+                  enum: ["systeme", "nunito-sans", "rubik", "public-sans"],
+                  description:
+                    "⚠️ Un **identifiant**, pas un nom de famille CSS : traduisez-le en pile " +
+                    "de polices. Ne chargez QUE celle-ci — c'est le seul réglage du thème qui " +
+                    "coûte des octets et une requête ; tout le reste est du CSS. `systeme` " +
+                    "n'en demande aucune.\n\n" +
+                    "⚠️ **AUTO-HÉBERGEZ-LES.** Les trois familles web sont sous SIL Open Font " +
+                    "License 1.1 — c'est le critère d'entrée au catalogue, précisément pour " +
+                    "que vous puissiez les servir depuis votre propre domaine. Les charger " +
+                    "depuis Google Fonts enverrait l'adresse IP de chaque visiteur à un tiers, " +
+                    "sans base légale, sur le site d'une collectivité.",
+                },
+                text_scale: {
+                  type: "string",
+                  enum: ["compact", "standard", "comfortable"],
+                  description:
+                    "Facteur appliqué à TOUTES les tailles de texte du site : 0,92 / 1 / 1,12.",
+                },
+              },
+            },
+            shapes: {
+              type: "object",
+              required: ["radius", "shadow", "density"],
+              properties: {
+                radius: {
+                  type: "string",
+                  enum: ["square", "soft", "round"],
+                  description: "Rayon des angles : 2 / 10 / 18 px.",
+                },
+                shadow: { type: "string", enum: ["none", "soft", "strong"] },
+                density: {
+                  type: "string",
+                  enum: ["compact", "standard", "airy"],
+                  description:
+                    "Facteur des espacements — entre les blocs et dans les cartes : " +
+                    "0,78 / 1 / 1,28. N'agit pas sur les textes.",
+                },
+              },
+            },
+            header: {
+              type: "object",
+              required: ["fill", "color", "logo_white", "logo", "menu", "sticky", "account"],
+              properties: {
+                fill: {
+                  type: "string",
+                  enum: ["white", "color"],
+                  description:
+                    "`color` : le bandeau prend une couleur de la charte, celle que désigne " +
+                    "`color`. Posez alors une encre lisible dessus (le Socle en calcule une " +
+                    "par luminance).",
+                },
+                color: { type: "string", enum: ["primary", "secondary"] },
+                logo_white: {
+                  type: "boolean",
+                  description:
+                    "Utiliser `logo_white_url` de la charte sur un bandeau coloré. Sans logo " +
+                    "blanc déposé, gardez le logo couleur plutôt qu'un bandeau anonyme.",
+                },
+                logo: { type: "string", enum: ["left", "center"] },
+                menu: { type: "string", enum: ["text", "pills"] },
+                sticky: {
+                  type: "boolean",
+                  description: "Le bandeau reste visible au défilement de la page.",
+                },
+                account: { type: "string", enum: ["prominent", "discreet"] },
+              },
+            },
+            accessibility: {
+              type: "object",
+              required: ["high_contrast", "dark_primary", "declaration"],
+              properties: {
+                high_contrast: {
+                  type: "boolean",
+                  description:
+                    "Encres, bordures et couleur principale assombries. Implique l'effet de " +
+                    "`dark_primary` sur la couleur principale.",
+                },
+                dark_primary: {
+                  type: "boolean",
+                  description:
+                    "Assombrir la couleur principale de la charte : **sa clarté multipliée " +
+                    "par 0,75**, teinte et saturation inchangées (conversion sRGB → TSL → " +
+                    "sRGB). Réglé par la collectivité quand le contraste de sa couleur ne " +
+                    "suffit pas ; sa charte, elle, n'est pas modifiée.",
+                },
+                declaration: {
+                  type: "string",
+                  description:
+                    "Mention d'accessibilité **obligatoire (RGAA)** d'un site public, à " +
+                    "afficher au pied des pages. Chaîne vide = la collectivité ne l'a pas " +
+                    "encore écrite ; n'inventez rien à sa place.",
+                  examples: ["Conformité RGAA partielle — audit du 12 juin 2026"],
+                },
+              },
             },
           },
         },
