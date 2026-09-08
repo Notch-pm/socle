@@ -44,16 +44,20 @@ export function CategoryFormDialog({
   open,
   onOpenChange,
   category,
+  fixedOrganizationId,
   onSubmit,
   submitting,
 }: {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   category?: Category | null;
+  /** Si fourni, l'organisation est verrouillée (section par organisation) — pas de sélecteur. */
+  fixedOrganizationId?: string;
   onSubmit: (values: CategoryFormValues) => void;
   submitting: boolean;
 }) {
   const isEdit = Boolean(category);
+  const scoped = fixedOrganizationId != null;
   const { data: organizations, isLoading: loadingOrgs } = useWritableOrganizations();
   const { data: allOrgs } = useAllOrganizations();
 
@@ -82,18 +86,18 @@ export function CategoryFormDialog({
     if (!open) return;
     setName(category?.name ?? "");
     setIcon(category?.icon ?? null);
-    setOrganizationId(category?.organization_id ?? "");
+    setOrganizationId(category?.organization_id ?? fixedOrganizationId ?? "");
     setTranslations(translationInput(category?.translations));
-  }, [open, category]);
+  }, [open, category, fixedOrganizationId]);
 
   // En création, pré-sélectionner l'organisation principale dès qu'elle est connue.
   React.useEffect(() => {
-    if (!open || category || organizationId) return;
+    if (!open || category || organizationId || scoped) return;
     if (defaultOrgId) setOrganizationId(defaultOrgId);
-  }, [open, category, organizationId, defaultOrgId]);
+  }, [open, category, organizationId, defaultOrgId, scoped]);
 
   const canSubmit = name.trim().length > 0 && organizationId.length > 0 && !submitting;
-  const noOrgAvailable = !loadingOrgs && (organizations?.length ?? 0) === 0;
+  const noOrgAvailable = !scoped && !loadingOrgs && (organizations?.length ?? 0) === 0;
 
   function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -137,6 +141,7 @@ export function CategoryFormDialog({
             />
           </Field>
 
+          {scoped ? null : (
           <Field label="Organisation" htmlFor="category-org">
             {noOrgAvailable ? (
               <p className="text-sm text-muted-foreground">
@@ -162,6 +167,7 @@ export function CategoryFormDialog({
               </select>
             )}
           </Field>
+          )}
 
           <Field label="Icône">
             <IconPicker value={icon} onChange={setIcon} />

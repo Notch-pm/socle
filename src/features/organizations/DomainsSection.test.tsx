@@ -11,6 +11,8 @@ const h = vi.hoisted(() => ({
   create: vi.fn(),
   remove: vi.fn(),
   setPrimary: vi.fn(),
+  role: "super_admin" as string,
+  platform: null as null | { portal_domain_suffix: string | null; portal_cname_target: string | null },
 }));
 
 vi.mock("@/features/organizations/useOrganizationDomains", () => ({
@@ -19,6 +21,21 @@ vi.mock("@/features/organizations/useOrganizationDomains", () => ({
   useCreateOrganizationDomain: () => ({ mutate: h.create, isPending: false }),
   useDeleteOrganizationDomain: () => ({ mutate: h.remove, isPending: false }),
   useSetPrimaryOrganizationDomain: () => ({ mutate: h.setPrimary, isPending: false }),
+}));
+
+// L'écriture est réservée au super administrateur (RLS) : le composant le
+// reflète d'après le profil.
+vi.mock("@/features/auth/AuthProvider", () => ({
+  useAuth: () => ({
+    session: null,
+    profile: { global_role: h.role },
+    loading: false,
+    signOut: vi.fn(),
+  }),
+}));
+
+vi.mock("@/features/superadmin/platform/usePlatformSettings", () => ({
+  usePlatformSettings: () => ({ data: h.platform, isLoading: false, isError: false }),
 }));
 
 const ORG = "org-1";
@@ -43,6 +60,8 @@ function type(value: string) {
 
 beforeEach(() => {
   h.domains = [];
+  h.role = "super_admin";
+  h.platform = null;
   h.create.mockReset();
   h.remove.mockReset();
   h.setPrimary.mockReset();
@@ -92,7 +111,7 @@ describe("DomainsSection — ajout", () => {
     add();
 
     expect(h.create).not.toHaveBeenCalled();
-    expect(screen.getByText(/PORTAL_DEV_DOMAIN_SUFFIX/)).toBeTruthy();
+    expect(screen.getByText(/simule un domaine réel/)).toBeTruthy();
   });
 
   it("explique un domaine déjà pris sans dire à qui", () => {
@@ -153,5 +172,48 @@ describe("DomainsSection — liste", () => {
     // Le ticket « j'ai ajouté le domaine et ça ne répond pas » se prévient ici.
     render(<DomainsSection organizationId={ORG} />);
     expect(screen.getByText(/pointer vers le portail dans votre configuration DNS/)).toBeTruthy();
+  });
+});
+
+describe("DomainsSection — plateforme", () => {
+  it("nomme la cible CNAME quand la plateforme l'a réglée", () => {
+    // Sans cible, l'administrateur sait qu'il doit pointer le domaine, pas où.
+    h.platform = { portal_domain_suffix: null, portal_cname_target: "portail.edilumen.fr" };
+    render(<DomainsSection organizationId={ORG} />);
+    expect(screen.getByText("portail.edilumen.fr")).toBeTruthy();
+    expect(screen.getByText(/enregistrement CNAME/)).toBeTruthy();
+  });
+
+  it("marque le sous-domaine fourni, et pas un domaine propre", () => {
+    h.platform = { portal_domain_suffix: "demarches.edilumen.fr", portal_cname_target: null };
+    h.domains = [
+      domain({ hostname: "nantes.demarches.edilumen.fr" }),
+      domain({ id: "dom-2", hostname: "demarches.nantes.fr", is_primary: false }),
+    ];
+    render(<DomainsSection organizationId={ORG} />);
+    expect(screen.getAllByText("Sous-domaine fourni")).toHaveLength(1);
+    expect(screen.getByText(/est fourni par la plateforme/)).toBeTruthy();
+  });
+});
+
+describe("DomainsSection — administrateur de collectivité", () => {
+  beforeEach(() => {
+    h.role = "consultant";
+  });
+
+  it("lit ses domaines sans pouvoir en poser, en retirer ni en changer", () => {
+    // Le RLS refuserait de toute façon : l'écran ne propose pas un geste qui
+    // échouerait, il dit à qui s'adresser.
+    h.domains = [
+      domain(),
+      domain({ id: "dom-2", hostname: "demarches.nantes.fr", is_primary: false }),
+    ];
+    render(<DomainsSection organizationId={ORG} />);
+
+    expect(screen.queryByLabelText(/Nouveau domaine/)).toBeNull();
+    expect(screen.queryByRole("button", { name: /Définir principal/ })).toBeNull();
+    expect(screen.queryByTitle("Supprimer")).toBeNull();
+    expect(screen.getByText(/posés par l'éditeur de la plateforme/)).toBeTruthy();
+    expect(screen.getByRole("link", { name: /demarches\.nantes\.fr/ })).toBeTruthy();
   });
 });

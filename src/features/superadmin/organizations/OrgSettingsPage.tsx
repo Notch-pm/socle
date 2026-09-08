@@ -1,12 +1,14 @@
 import * as React from "react";
 import { useParams, useNavigate, useSearchParams } from "react-router-dom";
-import { ArrowLeft, Settings2, Users as UsersIcon, ListChecks, FileCheck2, FileSignature, MapPin, Mail, Palette, Globe, Languages, LayoutTemplate, KeyRound, Gauge, type LucideIcon } from "lucide-react";
+import { ArrowLeft, Settings2, Users as UsersIcon, ListChecks, FileCheck2, FileSignature, MapPin, Mail, Palette, Globe, Languages, LayoutTemplate, KeyRound, Gauge, Tags, ToggleRight, type LucideIcon } from "lucide-react";
 import { Card, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { EmptyState } from "@/components/shared/EmptyState";
 import { useOrganization, type OrgNode } from "@/features/superadmin/organizations/useOrganizationsAdmin";
 import { GeneralInfoSection } from "@/features/superadmin/organizations/sections/GeneralInfoSection";
 import { SmtpSettingsSection } from "@/features/superadmin/organizations/sections/SmtpSettingsSection";
+import { ActivationsSection } from "@/features/superadmin/organizations/sections/ActivationsSection";
+import { OnboardingChecklistCard } from "@/features/superadmin/organizations/OnboardingChecklistCard";
 import { OrganizationsManager } from "@/features/organizations/OrganizationsManager";
 import { BrandingSection } from "@/features/organizations/BrandingSection";
 import { DomainsSection } from "@/features/organizations/DomainsSection";
@@ -15,6 +17,7 @@ import { ApiKeysSection } from "@/features/superadmin/organizations/sections/Api
 import { AiUsageSection } from "@/features/superadmin/organizations/sections/AiUsageSection";
 import { UsersManagementPage } from "@/features/users/UsersManagementPage";
 import { ProceduresListPanel } from "@/features/procedures/ProceduresListPanel";
+import { CategoriesManager } from "@/features/categories/CategoriesManager";
 import { DocumentTypesManager } from "@/features/document-types/DocumentTypesManager";
 import { DocumentTemplatesManager } from "@/features/documents/DocumentTemplatesManager";
 import { QuartiersManager } from "@/features/quartiers/QuartiersManager";
@@ -26,7 +29,9 @@ type Section =
   | "langues"
   | "domaines"
   | "utilisateurs"
+  | "categories"
   | "demarches"
+  | "activations"
   | "types-pieces"
   | "documents"
   | "quartiers"
@@ -34,18 +39,20 @@ type Section =
   | "api"
   | "ia";
 
-const SECTIONS: { key: Section; title: string; description: string; icon: LucideIcon }[] = [
-  { key: "general", title: "Informations générales", description: "Nom, slug, type, organisation parente", icon: Settings2 },
+const SECTIONS: { key: Exclude<Section, "menu">; title: string; description: string; icon: LucideIcon }[] = [
+  { key: "general", title: "Informations générales", description: "Nom, coordonnées, slug, organisation parente", icon: Settings2 },
   { key: "charte", title: "Charte graphique", description: "Logos et couleurs repris par les applications de la gamme", icon: Palette },
   { key: "langues", title: "Langues", description: "Langues activées pour les libellés des démarches et des catégories", icon: Languages },
   { key: "domaines", title: "Domaines du portail", description: "Adresses par lesquelles les usagers atteignent les démarches en ligne", icon: Globe },
   { key: "utilisateurs", title: "Utilisateurs", description: "Membres et rôles de cette organisation", icon: UsersIcon },
+  { key: "categories", title: "Catégories", description: "Thématiques qui regroupent les démarches — obligatoires pour en créer", icon: Tags },
   { key: "demarches", title: "Catalogue de démarches", description: "Démarches de l'organisation principale", icon: ListChecks },
+  { key: "activations", title: "Démarches activées", description: "Quel organisme de l'arbre propose quelle démarche", icon: ToggleRight },
   { key: "types-pieces", title: "Types de pièce justificative", description: "Pièces demandées dans les démarches", icon: FileCheck2 },
   { key: "documents", title: "Documents", description: "Modèles de documents et de courriers à variables", icon: FileSignature },
   { key: "quartiers", title: "Quartiers", description: "Découpage du territoire pour rattacher les usagers", icon: MapPin },
   { key: "smtp", title: "Emails (SMTP)", description: "Serveur SMTP utilisé pour les emails de cette organisation", icon: Mail },
-  { key: "api", title: "API publique", description: "Clés d'accès en lecture seule (organisations, démarches, catégories)", icon: KeyRound },
+  { key: "api", title: "API publique", description: "Clés d'accès des partenaires : référentiel, usagers, relais, assistant IA", icon: KeyRound },
   { key: "ia", title: "Assistant IA", description: "Plafond mensuel de jetons et consommation par application", icon: Gauge },
 ];
 
@@ -61,25 +68,18 @@ const SECTIONS: { key: Section; title: string; description: string; icon: Lucide
  * Effet de bord bienvenu : changer d'organisation dans le rail navigue vers une
  * URL SANS `section`, donc revient au menu. L'effet qui le faisait à la main
  * (le composant reste monté d'une organisation à l'autre) n'a plus lieu d'être.
+ *
+ * Clés et libellés sont DÉRIVÉS de `SECTIONS` : une section ajoutée s'y déclare
+ * une fois, pas dans trois listes à tenir alignées.
  */
-const SECTION_KEYS = new Set<string>([
-  "general", "charte", "langues", "domaines", "utilisateurs", "demarches", "types-pieces", "documents", "quartiers", "smtp", "api", "ia",
-]);
+const SECTION_KEYS = new Set<string>(SECTIONS.map((section) => section.key));
 
 const SECTION_LABELS: Record<Section, string> = {
   menu: "",
-  general: "Informations générales",
-  charte: "Charte graphique",
-  langues: "Langues",
-  domaines: "Domaines du portail",
-  utilisateurs: "Utilisateurs",
-  demarches: "Catalogue de démarches",
-  "types-pieces": "Types de pièce justificative",
-  documents: "Documents",
-  quartiers: "Quartiers",
-  smtp: "Emails (SMTP)",
-  api: "API publique",
-  ia: "Assistant IA",
+  ...(Object.fromEntries(SECTIONS.map((section) => [section.key, section.title])) as Record<
+    Exclude<Section, "menu">,
+    string
+  >),
 };
 
 export function OrgSettingsPage() {
@@ -115,6 +115,13 @@ export function OrgSettingsPage() {
     );
   }
 
+  const rootOnly = (section: React.ReactNode, what: string) =>
+    organization.parent_id === null ? (
+      section
+    ) : (
+      <EmptyState message={`${what} au niveau de l'organisation principale (racine).`} />
+    );
+
   if (activeSection !== "menu") {
     return (
       <div className="flex flex-col gap-6 p-6">
@@ -139,8 +146,10 @@ export function OrgSettingsPage() {
         {activeSection === "langues" && <LanguagesSection organization={organization} />}
         {activeSection === "domaines" && <DomainsSection organizationId={organization.id} />}
         {activeSection === "utilisateurs" && <UsersManagementPage organizationId={organization.id} />}
+        {activeSection === "categories" &&
+          rootOnly(<CategoriesManager organizationId={organization.id} />, "Les catégories se paramètrent")}
         {activeSection === "demarches" &&
-          (organization.parent_id === null ? (
+          rootOnly(
             <ProceduresListPanel
               organizationId={organization.id}
               canDelete
@@ -150,28 +159,17 @@ export function OrgSettingsPage() {
               onEdit={(id) =>
                 navigate(`/superadmin/organisations/${organization.id}/demarches/${id}`)
               }
-            />
-          ) : (
-            <EmptyState message="Les démarches se paramètrent au niveau de l'organisation principale (racine)." />
-          ))}
+            />,
+            "Les démarches se paramètrent",
+          )}
+        {/* Sur toute organisation : le sélecteur couvre son sous-arbre. */}
+        {activeSection === "activations" && <ActivationsSection organization={organization} />}
         {activeSection === "types-pieces" &&
-          (organization.parent_id === null ? (
-            <DocumentTypesManager organizationId={organization.id} />
-          ) : (
-            <EmptyState message="Les types de pièce se paramètrent au niveau de l'organisation principale (racine)." />
-          ))}
+          rootOnly(<DocumentTypesManager organizationId={organization.id} />, "Les types de pièce se paramètrent")}
         {activeSection === "documents" &&
-          (organization.parent_id === null ? (
-            <DocumentTemplatesManager organizationId={organization.id} />
-          ) : (
-            <EmptyState message="Les documents se paramètrent au niveau de l'organisation principale (racine)." />
-          ))}
+          rootOnly(<DocumentTemplatesManager organizationId={organization.id} />, "Les documents se paramètrent")}
         {activeSection === "quartiers" &&
-          (organization.parent_id === null ? (
-            <QuartiersManager organizationId={organization.id} />
-          ) : (
-            <EmptyState message="Les quartiers se paramètrent au niveau de l'organisation principale (racine)." />
-          ))}
+          rootOnly(<QuartiersManager organizationId={organization.id} />, "Les quartiers se paramètrent")}
         {activeSection === "smtp" && (
           <SmtpSettingsSection
             organizationId={organization.id}
@@ -179,19 +177,11 @@ export function OrgSettingsPage() {
           />
         )}
         {activeSection === "api" &&
-          (organization.parent_id === null ? (
-            <ApiKeysSection organizationId={organization.id} />
-          ) : (
-            <EmptyState message="Les clés API se gèrent au niveau de l'organisation principale (racine)." />
-          ))}
+          rootOnly(<ApiKeysSection organizationId={organization.id} />, "Les clés API se gèrent")}
         {/* Un budget est une affaire de collectivité, pas de service : le
             plafond se pose sur la racine, et le trigger le garde en base. */}
         {activeSection === "ia" &&
-          (organization.parent_id === null ? (
-            <AiUsageSection organizationId={organization.id} />
-          ) : (
-            <EmptyState message="Le plafond IA se règle au niveau de l'organisation principale (racine)." />
-          ))}
+          rootOnly(<AiUsageSection organizationId={organization.id} />, "Le plafond IA se règle")}
       </div>
     );
   }
@@ -214,6 +204,20 @@ export function OrgSettingsPage() {
           <p className="text-muted-foreground">Configuration de l'organisation</p>
         </div>
       </div>
+
+      {/* La mise en service, en tête : c'est la première chose qu'un super
+          administrateur veut savoir d'un client — où en est-on. Chaque ligne
+          mène à sa section. Racines seulement : la RPC refuse le reste. */}
+      {organization.parent_id === null ? (
+        <OnboardingChecklistCard
+          organizationId={organization.id}
+          onOpen={(target) =>
+            target.kind === "portal"
+              ? navigate(`/superadmin/organisations/${organization.id}/portail`)
+              : setActiveSection(target.section as Section)
+          }
+        />
+      ) : null}
 
       <section className="flex flex-col gap-3">
         <h2 className="text-lg font-semibold">Arborescence</h2>

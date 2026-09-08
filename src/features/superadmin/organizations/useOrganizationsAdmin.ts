@@ -2,6 +2,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/lib/supabase";
 import type { TablesInsert, TablesUpdate } from "@/types/database.types";
 import type { OrgStatus } from "./orgTree";
+import { parseOnboardingStatus } from "./onboardingChecklist";
 
 // Logique d'arbre pure (testable sans la couche données) déplacée dans ./orgTree.
 // Ré-exportée ici pour préserver les imports existants.
@@ -116,6 +117,26 @@ export function useSetOrganizationStatus() {
       queryClient.invalidateQueries({ queryKey: ORGS_KEY });
       queryClient.invalidateQueries({ queryKey: ["organization", variables.id] });
       queryClient.invalidateQueries({ queryKey: ["organization-children"] });
+    },
+  });
+}
+
+/**
+ * État de mise en service d'une racine (RPC `root_onboarding_status`). Lu à
+ * chaque montage de la carte : elle n'apparaît que sur le menu de la page, que
+ * l'on retrouve en sortant d'une section — c'est là que quelque chose a pu
+ * changer, et aucune mutation n'a à connaître cette clé.
+ */
+export function useRootOnboardingStatus(orgId: string | undefined) {
+  return useQuery({
+    queryKey: ["root-onboarding-status", orgId],
+    enabled: Boolean(orgId),
+    staleTime: 0,
+    refetchOnMount: "always",
+    queryFn: async () => {
+      const { data, error } = await supabase.rpc("root_onboarding_status", { p_org_id: orgId! });
+      if (error) throw new Error(error.message);
+      return parseOnboardingStatus(data);
     },
   });
 }

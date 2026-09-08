@@ -8,7 +8,7 @@ import {
 } from "@/components/ui/dialog";
 import { AiUsageOverview } from "@/features/ai-usage/AiUsageOverview";
 import { formatTokens, nextRenewalIso, renewalLabel } from "@/features/ai-usage/aiQuota";
-import { useAiUsage, useDeleteAiQuota, useSetAiQuota } from "@/features/ai-usage/useAiUsage";
+import { useAiUsage, useSetAiQuota } from "@/features/ai-usage/useAiUsage";
 
 /**
  * Assistant IA d'une collectivité : le plafond mensuel de jetons et ce qui a
@@ -24,12 +24,18 @@ import { useAiUsage, useDeleteAiQuota, useSetAiQuota } from "@/features/ai-usage
  * ci-dessous : le budget se négocie avec l'éditeur, il ne se sert pas. Le
  * serveur dit d'ailleurs la même chose, `set_ai_usage_quota` gardant sa garde
  * `is_super_admin()` à l'intérieur de la fonction.
+ *
+ * Trois états, et le troisième est une DÉCISION : un plafond actif, un plafond
+ * « passé en illimité » (la ligne reste, `is_active = false`, la valeur est
+ * conservée pour le retour en arrière), et « rien de décidé » — l'état d'une
+ * collectivité que personne n'a réglée, illimitée par défaut, que la
+ * check-list de mise en service signale. Depuis le provisioning, une racine
+ * naît avec le plafond par défaut de la plateforme quand il existe.
  */
 
 export function AiUsageSection({ organizationId }: { organizationId: string }) {
   const usage = useAiUsage(organizationId);
   const setQuota = useSetAiQuota();
-  const deleteQuota = useDeleteAiQuota();
 
   const [open, setOpen] = React.useState(false);
   const [value, setValue] = React.useState("");
@@ -38,19 +44,25 @@ export function AiUsageSection({ organizationId }: { organizationId: string }) {
 
   function openDialog() {
     setError(null);
-    setValue(usage.data?.view.limit ? String(usage.data.view.limit) : "");
+    const configured = usage.data?.configuredLimit;
+    setValue(configured ? String(configured) : "");
     setOpen(true);
+  }
+
+  function parseValue(): number | null {
+    const parsed = Number.parseInt(value.replace(/[^\d]/g, ""), 10);
+    return Number.isFinite(parsed) && parsed > 0 ? parsed : null;
   }
 
   async function submit() {
     setError(null);
-    const parsed = Number.parseInt(value.replace(/[^\d]/g, ""), 10);
-    if (!Number.isFinite(parsed) || parsed <= 0) {
+    const parsed = parseValue();
+    if (parsed === null) {
       setError("Le plafond doit être un nombre de jetons strictement positif.");
       return;
     }
     try {
-      await setQuota.mutateAsync({ organizationId, limitTokens: parsed });
+      await setQuota.mutateAsync({ organizationId, limitTokens: parsed, isActive: true });
       setOpen(false);
     } catch (err) {
       // Message du serveur (RPC) — on ne le réécrit pas.
@@ -58,17 +70,29 @@ export function AiUsageSection({ organizationId }: { organizationId: string }) {
     }
   }
 
-  async function remove() {
+  /**
+   * Illimité EXPLICITE : la ligne reste, inactive, avec sa valeur. Sans ligne
+   * ni saisie, il n'y a rien à conserver — on demande la valeur qui
+   * s'appliquerait le jour où l'on rebornerait, plutôt que d'en inventer une.
+   */
+  async function goUnlimited() {
     setError(null);
+    const kept = usage.data?.configuredLimit ?? parseValue();
+    if (kept === null) {
+      setError("Indiquez le plafond à conserver pour un retour en arrière, puis passez en illimité.");
+      return;
+    }
     try {
-      await deleteQuota.mutateAsync({ organizationId });
+      await setQuota.mutateAsync({ organizationId, limitTokens: kept, isActive: false });
       setOpen(false);
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Retrait refusé.");
+      setError(err instanceof Error ? err.message : "Enregistrement refusé.");
     }
   }
 
   const view = usage.data?.view;
+  const decided = usage.data?.configuredLimit != null;
+  const unlimitedByChoice = decided && usage.data?.isActive === false;
 
   return (
     <>
@@ -76,7 +100,7 @@ export function AiUsageSection({ organizationId }: { organizationId: string }) {
         organizationId={organizationId}
         action={
           <Button type="button" variant="outline" size="sm" onClick={openDialog}>
-            <Pencil className="size-4" /> Modifier
+            <Pencil className="size-4" /> {decided ? "Modifier" : "Décider"}
           </Button>
         }
       />
@@ -88,6 +112,11 @@ export function AiUsageSection({ organizationId }: { organizationId: string }) {
             <DialogDescription>
               Au-delà, l'assistant refuse poliment et nomme la date de renouvellement. Le reste
               des applications continue de fonctionner normalement.
+              {!decided
+                ? " Rien n'a encore été décidé pour cette collectivité : elle est illimitée."
+                : unlimitedByChoice
+                  ? " Cette collectivité est illimitée par choix ; la valeur ci-dessous est celle qu'un retour en arrière rétablirait."
+                  : ""}
             </DialogDescription>
           </DialogHeader>
 
@@ -114,17 +143,16 @@ export function AiUsageSection({ organizationId }: { organizationId: string }) {
             <Button
               type="button"
               variant="ghost"
-              disabled={view?.unlimited || deleteQuota.isPending}
-              onClick={() => void remove()}
+              disabled={unlimitedByChoice || setQuota.isPending}
+              onClick={() => void goUnlimited()}
             >
-              {deleteQuota.isPending ? <Loader2 className="size-4 animate-spin" /> : null}
-              Retirer le plafond
+              Passer en illimité
             </Button>
             <div className="flex gap-2">
               <Button type="button" variant="outline" onClick={() => setOpen(false)}>Annuler</Button>
               <Button type="button" onClick={() => void submit()} disabled={setQuota.isPending}>
                 {setQuota.isPending ? <Loader2 className="size-4 animate-spin" /> : null}
-                Enregistrer
+                {unlimitedByChoice ? "Rétablir ce plafond" : "Enregistrer"}
               </Button>
             </div>
           </DialogFooter>

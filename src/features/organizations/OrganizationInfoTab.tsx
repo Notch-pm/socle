@@ -32,7 +32,12 @@ export function OrganizationInfoTab({ organization }: { organization: Organizati
   );
 }
 
-function GeneralInfoForm({ organization }: { organization: Organization }) {
+/**
+ * Le formulaire seul, sans la liste des sous-organisations : la page de
+ * réglages du superadmin le monte aussi (`GeneralInfoSection`) — un seul
+ * formulaire pour deux zones, motif `SmtpSettingsSection`.
+ */
+export function GeneralInfoForm({ organization }: { organization: Organization }) {
   const { data: allOrgs } = useAllOrganizations();
   const updateOrg = useUpdateOrganization();
 

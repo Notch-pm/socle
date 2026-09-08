@@ -58,7 +58,7 @@ describe("validateHostname — miroir de la contrainte de la base", () => {
     // impossible : localhost ne PEUT pas être un domaine de collectivité, la
     // simulation locale se règle côté portail.
     const message = validateHostname("localhost");
-    expect(message).toMatch(/PORTAL_DEV_DOMAIN_SUFFIX/);
+    expect(message).toMatch(/simule un domaine réel/);
   });
 
   it("refuse ce que la contrainte refuserait", () => {
@@ -94,5 +94,59 @@ describe("validateHostname — miroir de la contrainte de la base", () => {
 describe("portalUrl", () => {
   it("compose l'adresse du portail", () => {
     expect(portalUrl("nantes.edilumen.fr")).toBe("https://nantes.edilumen.fr");
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Sous-domaine fourni — miroir de `dns_label_from_slug` (SQL). Les cas sont
+// ceux de `supabase/tests/provisioning.test.sql` (R5) : un cas ajouté ici
+// s'ajoute là-bas, et réciproquement.
+// ---------------------------------------------------------------------------
+import { dnsLabelFromSlug, isProvidedDomain, providedHostname } from "./organizationDomains";
+
+describe("dnsLabelFromSlug — le label est dérivé, pas recopié", () => {
+  it("retire accents et ponctuation, comme unaccent + regexp_replace", () => {
+    expect(dnsLabelFromSlug("  Sète--Agglopôle ! ")).toBe("sete-agglopole");
+    expect(dnsLabelFromSlug("Aix-en-Provence")).toBe("aix-en-provence");
+    expect(dnsLabelFromSlug("L'Isle-sur-la-Sorgue")).toBe("l-isle-sur-la-sorgue");
+    expect(dnsLabelFromSlug("Mairie de Cahors")).toBe("mairie-de-cahors");
+  });
+
+  it("translittère ce que la décomposition Unicode ne sépare pas", () => {
+    // « œ » n'a pas de diacritique à retirer : sans cette règle, il tomberait
+    // en tiret et « Œuvre » deviendrait « -uvre ».
+    expect(dnsLabelFromSlug("Œuvres sociales")).toBe("oeuvres-sociales");
+    expect(dnsLabelFromSlug("Straße")).toBe("strasse");
+  });
+
+  it("rend null quand il ne reste rien", () => {
+    expect(dnsLabelFromSlug("---")).toBeNull();
+    expect(dnsLabelFromSlug("   ")).toBeNull();
+    expect(dnsLabelFromSlug(null)).toBeNull();
+    expect(dnsLabelFromSlug(undefined)).toBeNull();
+  });
+
+  it("borne à 63 caractères sans laisser de tiret de coupe", () => {
+    expect(dnsLabelFromSlug("a".repeat(70))).toHaveLength(63);
+    expect(dnsLabelFromSlug("a".repeat(62) + "-b")).toBe("a".repeat(62));
+  });
+});
+
+describe("providedHostname / isProvidedDomain", () => {
+  it("compose label et zone, et rien sans l'un des deux", () => {
+    expect(providedHostname("Sète Agglopôle", "demarches.edilumen.fr")).toBe(
+      "sete-agglopole.demarches.edilumen.fr",
+    );
+    expect(providedHostname("Sète Agglopôle", null)).toBeNull();
+    expect(providedHostname("---", "demarches.edilumen.fr")).toBeNull();
+  });
+
+  it("reconnaît un sous-domaine de la zone, et aucun sans zone", () => {
+    expect(isProvidedDomain("nantes.demarches.edilumen.fr", "demarches.edilumen.fr")).toBe(true);
+    expect(isProvidedDomain("demarches.nantes.fr", "demarches.edilumen.fr")).toBe(false);
+    // « ressemble à » ne suffit pas : sans zone réglée, aucun domaine n'est fourni.
+    expect(isProvidedDomain("nantes.demarches.edilumen.fr", null)).toBe(false);
+    // La zone elle-même n'est pas un sous-domaine de la zone.
+    expect(isProvidedDomain("demarches.edilumen.fr", "demarches.edilumen.fr")).toBe(false);
   });
 });

@@ -63,6 +63,11 @@ begin
   -- ==========================================================================
   -- MISE EN PLACE
   -- ==========================================================================
+  -- Le provisioning (2026-09-08) poserait un plafond par défaut aux racines
+  -- créées ci-dessous, dont org_n, qui doit rester SANS plafond. Neutralisé
+  -- ici — annulé avec la transaction, comme tout le reste.
+  update public.platform_settings set default_ai_monthly_tokens = null, portal_domain_suffix = null;
+
   insert into public.users (id, email, global_role) values
     (u_super, 'super@o.test', 'super_admin'),
     (u_admin, 'admin@o.test', 'user');

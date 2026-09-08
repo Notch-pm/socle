@@ -1,5 +1,5 @@
 import * as React from "react";
-import { Plus, Search, Pencil, Trash2 } from "lucide-react";
+import { Plus, Search, Pencil, Trash2, MailPlus } from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -15,7 +15,12 @@ import {
   AlertDialogCancel,
   AlertDialogAction,
 } from "@/components/ui/alert-dialog";
-import { useOrgUsers, useRemoveOrgUser, type OrgUser } from "@/features/users/useOrgUsers";
+import {
+  useOrgUsers,
+  useRemoveOrgUser,
+  useResendInvitation,
+  type OrgUser,
+} from "@/features/users/useOrgUsers";
 import { CreateUserDialog } from "@/features/users/CreateUserDialog";
 import { EditUserDialog } from "@/features/users/EditUserDialog";
 
@@ -24,11 +29,32 @@ const roleLabel: Record<string, string> = { admin: "Administrateur", consultant:
 export function UsersManagementPage({ organizationId }: { organizationId: string }) {
   const { data: users, isLoading, isError } = useOrgUsers(organizationId);
   const removeUser = useRemoveOrgUser(organizationId);
+  const resend = useResendInvitation(organizationId);
 
   const [search, setSearch] = React.useState("");
   const [createOpen, setCreateOpen] = React.useState(false);
   const [editing, setEditing] = React.useState<OrgUser | null>(null);
   const [removing, setRemoving] = React.useState<OrgUser | null>(null);
+  // Le résultat d'un renvoi d'invitation, en clair sous la barre d'actions :
+  // le serveur tranche (compte déjà actif, courriel non parti) et son message
+  // s'affiche tel quel.
+  const [notice, setNotice] = React.useState<{ tone: "ok" | "error"; text: string } | null>(null);
+
+  function resendInvitation(user: OrgUser) {
+    setNotice(null);
+    resend.mutate(user.email, {
+      onSuccess: (result) =>
+        setNotice(
+          result.email_sent
+            ? { tone: "ok", text: `Invitation renvoyée à ${user.email}.` }
+            : {
+                tone: "error",
+                text: `L'invitation n'a pas pu être envoyée${result.email_error ? ` : ${result.email_error}` : "."}`,
+              },
+        ),
+      onError: (error) => setNotice({ tone: "error", text: error.message }),
+    });
+  }
 
   const filtered = (users ?? []).filter((u) => {
     if (!search) return true;
@@ -58,6 +84,15 @@ export function UsersManagementPage({ organizationId }: { organizationId: string
         </Button>
       </div>
 
+      {notice ? (
+        <p
+          role={notice.tone === "error" ? "alert" : "status"}
+          className={notice.tone === "error" ? "text-sm text-destructive" : "text-sm text-success"}
+        >
+          {notice.text}
+        </p>
+      ) : null}
+
       <Card>
         <CardContent className="p-0">
           {isLoading ? (
@@ -85,7 +120,7 @@ export function UsersManagementPage({ organizationId }: { organizationId: string
                   <th className="px-4 py-3">Nom</th>
                   <th className="px-4 py-3">Email</th>
                   <th className="px-4 py-3">Rôle</th>
-                  <th className="w-24 px-4 py-3">Actions</th>
+                  <th className="w-32 px-4 py-3">Actions</th>
                 </tr>
               </thead>
               <tbody>
@@ -102,6 +137,17 @@ export function UsersManagementPage({ organizationId }: { organizationId: string
                     </td>
                     <td className="px-4 py-3">
                       <div className="flex gap-1">
+                        {/* Proposé sur toute ligne : c'est le serveur qui sait
+                            si le compte est encore inactif (409 sinon). */}
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          title="Renvoyer l'invitation"
+                          disabled={resend.isPending}
+                          onClick={() => resendInvitation(u)}
+                        >
+                          <MailPlus className="size-4" />
+                        </Button>
                         <Button
                           variant="ghost"
                           size="icon"

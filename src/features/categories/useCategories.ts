@@ -4,14 +4,18 @@ import type { Tables, TablesInsert, TablesUpdate } from "@/types/database.types"
 
 const CATEGORIES_KEY = ["categories"] as const;
 
-export function useCategoriesQuery() {
+/**
+ * Les catégories visibles (RLS), ou celles d'une seule organisation quand
+ * `organizationId` est fourni — la section superadmin d'une racine. Les
+ * mutations invalident le préfixe : les deux formes se rafraîchissent.
+ */
+export function useCategoriesQuery(organizationId?: string) {
   return useQuery({
-    queryKey: CATEGORIES_KEY,
+    queryKey: [...CATEGORIES_KEY, organizationId ?? "all"],
     queryFn: async () => {
-      const { data, error } = await supabase
-        .from("categories")
-        .select("*")
-        .order("name", { ascending: true });
+      let query = supabase.from("categories").select("*").order("name", { ascending: true });
+      if (organizationId) query = query.eq("organization_id", organizationId);
+      const { data, error } = await query;
       if (error) throw error;
       return data;
     },

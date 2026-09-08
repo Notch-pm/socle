@@ -123,3 +123,40 @@ export function useRemoveOrgUser(orgId: string) {
     onSuccess: () => queryClient.invalidateQueries({ queryKey: membersKey(orgId) }),
   });
 }
+
+export interface ResendInvitationResult {
+  success: boolean;
+  email_sent: boolean;
+  email_error: string | null;
+}
+
+/**
+ * Réémet le lien d'activation d'un compte encore inactif (`invite-user`,
+ * action `resend`). Un courriel d'invitation perdu — relais absent au moment
+ * de l'invitation, boîte pleine — laissait jusqu'ici un compte que personne
+ * ne pouvait activer. Le serveur tranche : compte déjà actif → 409, compte
+ * hors de l'organisation → 404 ; le message français remonte tel quel.
+ */
+export function useResendInvitation(orgId: string) {
+  return useMutation({
+    mutationFn: async (email: string): Promise<ResendInvitationResult> => {
+      const { data, error } = await supabase.functions.invoke<ResendInvitationResult>("invite-user", {
+        body: { action: "resend", email, organization_id: orgId },
+      });
+      if (error) {
+        // Une réponse non-2xx arrive en `FunctionsHttpError` : le message de
+        // la fonction est dans le corps, pas dans `error.message`.
+        let message = error.message;
+        try {
+          const body = await (error as { context?: Response }).context?.json();
+          if (body && typeof body.error === "string") message = body.error;
+        } catch {
+          // corps illisible : on garde le message générique
+        }
+        throw new Error(message);
+      }
+      if (!data) throw new Error("Réponse invalide du serveur");
+      return data;
+    },
+  });
+}

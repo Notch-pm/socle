@@ -11,6 +11,7 @@ import { Input } from "@/components/ui/input";
 import { Field } from "@/components/ui/field";
 import { Switch } from "@/components/ui/switch";
 import { useAllOrganizations, type Organization } from "@/features/superadmin/organizations/useOrganizationsAdmin";
+import { dnsLabelFromSlug } from "@/features/organizations/organizationDomains";
 
 export interface OrganizationFormValues {
   name: string;
@@ -23,13 +24,12 @@ export interface OrganizationFormValues {
   is_internal_service: boolean;
 }
 
-function slugify(name: string) {
-  return name
-    .toLowerCase()
-    .trim()
-    .replace(/[^a-z0-9]+/g, "-")
-    .replace(/(^-|-$)/g, "");
-}
+/**
+ * Le slug est dérivé comme un label DNS (`dnsLabelFromSlug`, miroir de la
+ * fonction SQL) : c'est lui qui devient le sous-domaine fourni du portail à
+ * la création d'une racine. « Sète » donne `sete`, pas `s-te`.
+ */
+const slugify = (value: string) => dnsLabelFromSlug(value);
 
 export function OrganizationFormDialog({
   open,

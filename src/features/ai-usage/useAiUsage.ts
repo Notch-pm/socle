@@ -36,6 +36,12 @@ export interface AiUsage {
   period: string;
   isActive: boolean;
   updatedAt: string | null;
+  /**
+   * La valeur portée par la ligne de plafond, active ou non — `null` sans
+   * ligne. Un plafond « passé en illimité » la conserve (le réglage gouverne
+   * l'usage, pas la donnée) : c'est elle que le retour en arrière retrouve.
+   */
+  configuredLimit: number | null;
   view: QuotaView;
   /** Qui a dépensé, et sur quelle fonctionnalité. */
   byConsumer: ConsumerUsage[];
@@ -72,6 +78,7 @@ export function useAiUsage(orgId: string, period: string = currentPeriod()) {
         period,
         isActive: active,
         updatedAt: quota?.updated_at ?? null,
+        configuredLimit: quota?.monthly_limit_tokens ?? null,
         view: quotaView({
           limit: quota && active ? quota.monthly_limit_tokens : null,
           used: counter?.used_tokens ?? 0,

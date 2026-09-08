@@ -1,22 +1,20 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { Webhook } from "https://esm.sh/standardwebhooks@1.0.0";
 import nodemailer from "npm:nodemailer@6";
+import {
+  resolveSmtp,
+  senderHeader,
+  siteNameFor,
+  useImplicitTls,
+  type SmtpConfig,
+  type SmtpRow,
+} from "./_shared/smtp.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
   "Access-Control-Allow-Headers":
     "authorization, x-client-info, apikey, content-type, webhook-id, webhook-timestamp, webhook-signature",
 };
-
-interface SmtpSettings {
-  host: string;
-  port: number;
-  username: string;
-  password: string;
-  from_email: string;
-  from_name: string;
-  use_tls: boolean;
-}
 
 function buildBrandedEmail(siteName: string, heading: string, bodyHtml: string, ctaLabel: string, ctaUrl: string, isOtp = false) {
   const primary = "#0aaa6b"; // Edilumen primary green — matches src/index.css --primary
@@ -61,22 +59,16 @@ function buildBrandedEmail(siteName: string, heading: string, bodyHtml: string, 
 </html>`;
 }
 
-async function sendViaSMTP(smtp: SmtpSettings, to: string, subject: string, html: string, text: string) {
+async function sendViaSMTP(smtp: SmtpConfig, to: string, subject: string, html: string, text: string) {
   const transporter = nodemailer.createTransport({
     host: smtp.host,
-    port: smtp.port || 587,
-    secure: smtp.use_tls && smtp.port === 465,
-    auth: { user: smtp.username, pass: smtp.password },
-    tls: smtp.use_tls ? { rejectUnauthorized: false } : undefined,
+    port: smtp.port,
+    secure: useImplicitTls(smtp),
+    auth: smtp.username && smtp.password ? { user: smtp.username, pass: smtp.password } : undefined,
+    tls: smtp.useTls ? { rejectUnauthorized: false } : undefined,
   });
 
-  await transporter.sendMail({
-    from: smtp.from_name ? `${smtp.from_name} <${smtp.from_email}>` : smtp.from_email,
-    to,
-    subject,
-    text,
-    html,
-  });
+  await transporter.sendMail({ from: senderHeader(smtp), to, subject, text, html });
 }
 
 function getEmailContent(emailType: string, siteName: string) {
@@ -160,8 +152,9 @@ Deno.serve(async (req: Request) => {
       });
     }
 
-    const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
-    const serviceRoleKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
+    const env = Deno.env.toObject();
+    const supabaseUrl = env.SUPABASE_URL!;
+    const serviceRoleKey = env.SUPABASE_SERVICE_ROLE_KEY!;
     const adminClient = createClient(supabaseUrl, serviceRoleKey);
 
     const user = payload.user;
@@ -174,47 +167,53 @@ Deno.serve(async (req: Request) => {
       });
     }
 
-    // Find the user's organization (first membership) to look up its SMTP
-    // settings and name — mirrors Clara's approach.
+    // L'organisation de l'utilisateur (première appartenance) donne le nom
+    // sous lequel le courriel se présente et le relais à utiliser. Un compte
+    // SANS appartenance — le super administrateur de la plateforme, un compte
+    // pas encore rattaché — n'a pas d'organisation : il est servi par le relais
+    // de plateforme, au nom de la plateforme.
     const { data: membership } = await adminClient
       .from("user_organizations")
       .select("organization_id")
       .eq("user_id", user.id)
       .limit(1)
       .maybeSingle();
+    const orgId: string | null = membership?.organization_id ?? null;
 
-    if (!membership?.organization_id) {
-      console.error(`No organization found for user ${user.id}`);
-      return new Response(JSON.stringify({ error: "Organisation introuvable pour cet utilisateur" }), {
-        status: 404,
-        headers: { ...corsHeaders, "Content-Type": "application/json" },
+    let orgName: string | null = null;
+    let row: SmtpRow | null = null;
+    if (orgId) {
+      const { data: org } = await adminClient
+        .from("organizations")
+        .select("name")
+        .eq("id", orgId)
+        .single();
+      orgName = org?.name ?? null;
+
+      // Relais applicable : celui de l'organisation de l'utilisateur, ou celui
+      // de l'ancêtre le plus proche dont elle hérite (resolve_smtp_settings).
+      const { data: smtpRows, error: smtpError } = await adminClient.rpc("resolve_smtp_settings", {
+        p_org_id: orgId,
       });
+      row = smtpError ? null : ((Array.isArray(smtpRows) ? smtpRows[0] : smtpRows) as SmtpRow | null);
     }
 
-    const orgId = membership.organization_id;
-
-    const { data: org } = await adminClient
-      .from("organizations")
-      .select("name")
-      .eq("id", orgId)
-      .single();
-    const siteName = org?.name || "Edilumen";
-
-    // Relais applicable : celui de l'organisation de l'utilisateur, ou celui de
-    // l'ancetre le plus proche dont elle herite (resolve_smtp_settings). Sans
-    // cette resolution, un membre d'une sous-organisation ne recevait rien.
-    const { data: smtpRows, error: smtpError } = await adminClient.rpc("resolve_smtp_settings", {
-      p_org_id: orgId,
-    });
-    const smtp = Array.isArray(smtpRows) ? smtpRows[0] : smtpRows;
-
-    if (smtpError || !smtp) {
-      console.error(`No SMTP settings for org ${orgId}`);
-      return new Response(JSON.stringify({ error: "Configuration SMTP introuvable pour cette organisation" }), {
-        status: 404,
-        headers: { ...corsHeaders, "Content-Type": "application/json" },
-      });
+    // La collectivité d'abord, le relais de plateforme en repli — voir
+    // _shared/smtp.ts. Sans l'un ni l'autre, on le dit : un courriel
+    // d'authentification qui ne part pas est une panne, pas un détail.
+    const smtp = resolveSmtp(row, env);
+    if (!smtp) {
+      console.error(orgId ? `No SMTP settings for org ${orgId}, no platform relay` : `No organization for user ${user.id}, no platform relay`);
+      return new Response(
+        JSON.stringify({
+          error: orgId
+            ? "Configuration SMTP introuvable pour cette organisation, et aucun relais de plateforme configuré"
+            : "Organisation introuvable pour cet utilisateur, et aucun relais de plateforme configuré",
+        }),
+        { status: 404, headers: { ...corsHeaders, "Content-Type": "application/json" } },
+      );
     }
+    const siteName = siteNameFor(orgName, env);
 
     const emailType = emailData.email_action_type || "recovery";
     const tokenHash = emailData.token_hash || "";
@@ -237,8 +236,8 @@ Deno.serve(async (req: Request) => {
       ? `${t.heading}\n\n${t.body}\n\nCode : ${confirmationUrl}\n\n${siteName}`
       : `${t.heading}\n\n${t.body}\n\n${t.cta} : ${confirmationUrl}\n\n${siteName}`;
 
-    await sendViaSMTP(smtp as SmtpSettings, user.email, t.subject, html, text);
-    console.log(`Auth email sent: type=${emailType}, to=${user.email}, org=${orgId}`);
+    await sendViaSMTP(smtp, user.email, t.subject, html, text);
+    console.log(`Auth email sent: type=${emailType}, to=${user.email}, org=${orgId ?? "none"}, relay=${smtp.source}`);
 
     return new Response(JSON.stringify({ success: true }), {
       headers: { ...corsHeaders, "Content-Type": "application/json" },

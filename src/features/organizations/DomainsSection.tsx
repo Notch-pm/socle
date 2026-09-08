@@ -16,7 +16,10 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
+import { useAuth } from "@/features/auth/AuthProvider";
+import { usePlatformSettings } from "@/features/superadmin/platform/usePlatformSettings";
 import {
+  isProvidedDomain,
   normalizeHostname,
   portalUrl,
   validateHostname,
@@ -48,10 +51,21 @@ function isUniqueViolation(error: unknown): boolean {
  * Ajouter une ligne ici met une collectivité en ligne, sans redéploiement.
  *
  * Montée telle quelle par les deux écrans — l'éditeur d'organisation de
- * l'application par collectivité, et la page de réglages du superadmin. Le RLS
- * décide qui peut écrire (`is_org_admin`), pas le composant.
+ * l'application par collectivité, et la page de réglages du superadmin.
+ * Depuis le 2026-09-08, l'ÉCRITURE est réservée au super administrateur (RLS
+ * `is_super_admin()`) : le sous-domaine fourni se pose à la création, et un
+ * domaine personnalisé suppose un CNAME chez le client et un enregistrement
+ * chez l'hébergeur du portail — un travail de l'éditeur. L'administrateur de
+ * la collectivité lit ses domaines et la cible CNAME ; il n'en pose plus.
+ * Le composant reflète le RLS, il ne le remplace pas.
  */
 export function DomainsSection({ organizationId }: { organizationId: string }) {
+  const { profile } = useAuth();
+  const canEdit = profile?.global_role === "super_admin";
+  const { data: platform } = usePlatformSettings();
+  const suffix = platform?.portal_domain_suffix ?? null;
+  const cnameTarget = platform?.portal_cname_target ?? null;
+
   const { data: domains, isLoading, isError } = useOrganizationDomains(organizationId);
   const createDomain = useCreateOrganizationDomain();
   const deleteDomain = useDeleteOrganizationDomain();
@@ -111,51 +125,72 @@ export function DomainsSection({ organizationId }: { organizationId: string }) {
           <CardDescription>
             Les adresses par lesquelles vos usagers accèdent à vos démarches en ligne. Le portail
             n'a aucune configuration propre : c'est ce rattachement qui lui dit quelle collectivité
-            servir. Ajouter un domaine ici suffit à la mettre en ligne.
+            servir.
+            {suffix
+              ? ` Le sous-domaine en .${suffix} est fourni par la plateforme et ne demande aucune configuration.`
+              : ""}
           </CardDescription>
         </CardHeader>
         <CardContent>
-          <form onSubmit={handleSubmit} className="flex flex-col gap-3">
-            <Field
-              label="Nouveau domaine"
-              htmlFor="domain-hostname"
-              hint="Par exemple nantes.edilumen.fr, ou votre propre domaine (demarches.ville-de-nantes.fr)."
-            >
-              <div className="flex gap-2">
-                <Input
-                  id="domain-hostname"
-                  value={input}
-                  onChange={(event) => {
-                    setInput(event.target.value);
-                    setServerError(null);
-                  }}
-                  onBlur={() => setTouched(true)}
-                  placeholder="nantes.edilumen.fr"
-                  aria-invalid={Boolean(shownError)}
-                  autoComplete="off"
-                  spellCheck={false}
-                />
-                <Button type="submit" disabled={createDomain.isPending}>
-                  <Plus />
-                  {createDomain.isPending ? "Ajout…" : "Ajouter"}
-                </Button>
-              </div>
-              {shownError ? (
-                <p className="mt-1.5 text-sm text-destructive">{shownError}</p>
-              ) : showPreview ? (
-                <p className="mt-1.5 text-sm text-muted-foreground">
-                  Sera enregistré comme <span className="font-medium">{normalized}</span>
-                </p>
-              ) : null}
-            </Field>
-          </form>
+          {canEdit ? (
+            <form onSubmit={handleSubmit} className="flex flex-col gap-3">
+              <Field
+                label="Nouveau domaine"
+                htmlFor="domain-hostname"
+                hint="Le domaine propre de la collectivité, par exemple demarches.ville-de-nantes.fr."
+              >
+                <div className="flex gap-2">
+                  <Input
+                    id="domain-hostname"
+                    value={input}
+                    onChange={(event) => {
+                      setInput(event.target.value);
+                      setServerError(null);
+                    }}
+                    onBlur={() => setTouched(true)}
+                    placeholder="demarches.ville-de-nantes.fr"
+                    aria-invalid={Boolean(shownError)}
+                    autoComplete="off"
+                    spellCheck={false}
+                  />
+                  <Button type="submit" disabled={createDomain.isPending}>
+                    <Plus />
+                    {createDomain.isPending ? "Ajout…" : "Ajouter"}
+                  </Button>
+                </div>
+                {shownError ? (
+                  <p className="mt-1.5 text-sm text-destructive">{shownError}</p>
+                ) : showPreview ? (
+                  <p className="mt-1.5 text-sm text-muted-foreground">
+                    Sera enregistré comme <span className="font-medium">{normalized}</span>
+                  </p>
+                ) : null}
+              </Field>
+            </form>
+          ) : (
+            <p className="text-sm text-muted-foreground">
+              Les domaines sont posés par l'éditeur de la plateforme. Pour un domaine propre à
+              votre collectivité, contactez-le : il vous indiquera l'enregistrement DNS à créer.
+            </p>
+          )}
 
           {/* Le Socle enregistre le rattachement ; il ne configure aucun DNS.
-              Le dire ici évite le ticket « j'ai ajouté le domaine et ça ne
-              répond pas ». */}
+              Le dire ici — avec la cible, quand la plateforme l'a réglée —
+              évite le ticket « j'ai ajouté le domaine et ça ne répond pas ». */}
           <p className="mt-4 text-sm text-muted-foreground">
-            Le domaine doit également pointer vers le portail dans votre configuration DNS. Le
-            Socle enregistre le rattachement, il ne le publie pas.
+            {cnameTarget ? (
+              <>
+                Un domaine personnalisé doit pointer vers le portail dans votre configuration DNS :
+                un enregistrement CNAME vers{" "}
+                <code className="rounded bg-muted px-1.5 py-0.5 text-xs">{cnameTarget}</code>. Le
+                Socle enregistre le rattachement, il ne le publie pas.
+              </>
+            ) : (
+              <>
+                Le domaine doit également pointer vers le portail dans votre configuration DNS. Le
+                Socle enregistre le rattachement, il ne le publie pas.
+              </>
+            )}
           </p>
         </CardContent>
       </Card>
@@ -200,13 +235,22 @@ export function DomainsSection({ organizationId }: { organizationId: string }) {
                       {domain.hostname}
                       <ExternalLink className="size-3.5 text-muted-foreground" />
                     </a>
+                    {isProvidedDomain(domain.hostname, suffix) ? (
+                      <Badge
+                        variant="outline"
+                        className="ml-2"
+                        title="Attribué par la plateforme à la création : le DNS de la zone y répond déjà"
+                      >
+                        Sous-domaine fourni
+                      </Badge>
+                    ) : null}
                   </td>
                   <td className="px-4 py-3">
                     {domain.is_primary ? (
                       <Badge variant="secondary" title="Domaine écrit dans les liens envoyés aux usagers">
                         Principal
                       </Badge>
-                    ) : (
+                    ) : canEdit ? (
                       <Button
                         variant="ghost"
                         size="sm"
@@ -218,19 +262,21 @@ export function DomainsSection({ organizationId }: { organizationId: string }) {
                         <Star className="size-4" />
                         Définir principal
                       </Button>
-                    )}
+                    ) : null}
                   </td>
                   <td className="px-4 py-3">
-                    <div className="flex justify-end">
-                      <Button
-                        variant="ghost"
-                        size="icon"
-                        title="Supprimer"
-                        onClick={() => setDeleting(domain)}
-                      >
-                        <Trash2 className="size-4 text-destructive" />
-                      </Button>
-                    </div>
+                    {canEdit ? (
+                      <div className="flex justify-end">
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          title="Supprimer"
+                          onClick={() => setDeleting(domain)}
+                        >
+                          <Trash2 className="size-4 text-destructive" />
+                        </Button>
+                      </div>
+                    ) : null}
                   </td>
                 </tr>
               ))}
