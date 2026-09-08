@@ -1,9 +1,11 @@
 import { describe, expect, it } from "vitest";
 import type { Procedure } from "@/features/procedures/useProcedures";
 import type { Organization } from "@/features/superadmin/organizations/orgTree";
+import type { Audience } from "@/features/procedures/requesterFields";
 import {
   CATALOGUE_VISIBILITY_LABELS,
   buildCatalogue,
+  catalogueAudiences,
   catalogueOrganizations,
   catalogueVisibility,
   isoDay,
@@ -118,7 +120,44 @@ describe("toCatalogueEntry / libellés", () => {
       shortDescription: "En ligne, sous 3 jours.",
       visibility: "visible",
       organizations: [ACCM],
+      // Jamais paramétrée : aucun public déclaré. Voir `enabledAudiences`.
+      audiences: [],
     });
+  });
+
+  it("porte les publics déclarés, dans l'ordre du paramétrage", () => {
+    const config = {
+      association: { enabled: true, fields: {} },
+      citoyen: { enabled: true, fields: {} },
+      entreprise: { enabled: false, fields: {} },
+    };
+    const entry = toCatalogueEntry(procedure({ requester_config: config }), TODAY, [ACCM]);
+    // L'ordre est celui d'`AUDIENCES`, pas celui des clés du JSON : deux
+    // démarches paramétrées dans un ordre différent doivent se filtrer pareil.
+    expect(entry.audiences).toEqual(["citoyen", "association"]);
+  });
+});
+
+describe("catalogueAudiences — le filtre « Je suis… » a-t-il un sens ?", () => {
+  const entry = (audiences: Audience[], id: string) => ({
+    ...toCatalogueEntry(procedure({ id }), TODAY, [ACCM]),
+    audiences,
+  });
+
+  it("réunit les publics des démarches affichées, sans doublon et dans l'ordre", () => {
+    expect(
+      catalogueAudiences([entry(["association"], "a"), entry(["citoyen", "association"], "b")]),
+    ).toEqual(["citoyen", "association"]);
+  });
+
+  it("ne rend qu'un seul public quand toutes visent le même — le filtre ne s'affichera pas", () => {
+    // Un filtre à un choix n'en est pas un : c'est ce que le canevas vérifie
+    // avant d'afficher la pastille.
+    expect(catalogueAudiences([entry(["citoyen"], "a"), entry(["citoyen"], "b")])).toEqual(["citoyen"]);
+  });
+
+  it("ignore les démarches sans public déclaré plutôt que d'inventer « tous publics »", () => {
+    expect(catalogueAudiences([entry([], "a")])).toEqual([]);
   });
 });
 

@@ -302,6 +302,22 @@ export interface PortalProcedureDto {
   /** Organismes qui proposent la démarche, dans l'ordre de l'arbre. */
   organizations: PortalOrganizationRefDto[];
   /**
+   * Publics auxquels la démarche est ouverte — `citoyen`, `entreprise`,
+   * `association` — dans cet ordre. C'est de quoi filtrer une liste (« Je
+   * suis… ») sans charger le détail de chaque démarche.
+   *
+   * ⚠️ **Peut être vide**, et ce n'est pas une anomalie : une démarche dont
+   * l'étape « Informations demandeur » n'a jamais été remplie ne déclare aucun
+   * public. Elle ne répond alors à **aucun** choix de filtre — la lire comme
+   * « tous publics » la ferait apparaître partout, y compris là où elle n'est
+   * pas ouverte.
+   *
+   * Le détail (`GET /v1/portal/procedures/{id}`) sert la configuration
+   * complète dans `requester_config` : ces publics-ci en sont l'extrait qui
+   * concerne l'usager avant qu'il ait choisi sa démarche.
+   */
+  audiences: Array<"citoyen" | "entreprise" | "association">;
+  /**
    * Libellés traduits, `{ "<code de langue>": { "name": "…" } }` — mêmes règles
    * que `CategoryDto.translations` (pas de clé `fr`, repli sur `name`).
    */
@@ -377,7 +393,7 @@ export interface PortalProcedureDetailDto extends PortalProcedureDto {
  */
 export type PortalSectionTranslationsDto = Record<
   string,
-  Partial<Record<"title" | "subtitle" | "placeholder" | "body", string>>
+  Partial<Record<"title" | "subtitle" | "placeholder" | "body" | "alt", string>>
 >;
 
 export interface PortalRechercheSectionDto {
@@ -400,7 +416,20 @@ export interface PortalDemarchesSectionDto {
   pinned_first: boolean;
   /** Démarches à la une (identifiants de démarches publiées). */
   pinned: string[];
-  translations: PortalSectionTranslationsDto;
+  /**
+   * Proposer à l'usager le filtre « Je suis… » : citoyen, entreprise,
+   * association. Il restreint la grille aux démarches dont `audiences`
+   * contient le public choisi.
+   *
+   * ⚠️ Il se **cumule** avec le filtre par organisme (`PortalProcedure.
+   * organizations`), il ne le remplace pas : deux dimensions indépendantes de
+   * la même grille.
+   *
+   * ⚠️ `true` ne veut pas dire « affiche-le » : un filtre à un seul choix n'en
+   * est pas un. Ne le montrez que si les démarches affichées visent au moins
+   * deux publics — c'est ce que fait l'éditeur du Socle.
+   */
+  audience_filter: boolean;
 }
 
 export interface PortalActusSectionDto {
@@ -430,12 +459,40 @@ export interface PortalTexteSectionDto {
   translations: PortalSectionTranslationsDto;
 }
 
+/**
+ * Un texte et une illustration. `layout` dit lequel des deux se lit en
+ * **premier** — un ordre, pas une position : sur un téléphone les deux moitiés
+ * s'empilent, et il n'y a plus de gauche ni de droite.
+ *
+ * ⚠️ `image_url` est une URL **libre**, saisie par la collectivité : le Socle
+ * n'héberge pas le fichier et ne garantit pas qu'il existe encore. Elle est en
+ * revanche filtrée sur sa forme — `http(s)://…` ou chemin absolu — parce
+ * qu'elle finit dans le `src` d'une page publique. Vide = pas d'image : le bloc
+ * n'est alors qu'un bandeau texte, ce n'est pas une erreur.
+ *
+ * ⚠️ `title` est **facultatif** sur ce bloc, contrairement aux autres bandeaux :
+ * vide, il n'y a pas de titre à afficher — pas un titre vide.
+ */
+export interface PortalTexteImageSectionDto {
+  id: string;
+  kind: "texte-image";
+  title: string;
+  body: string;
+  /** URL de l'image, `http(s)://…` ou `/…`. Chaîne vide s'il n'y en a pas. */
+  image_url: string;
+  /** Texte alternatif de l'image. Vide = image décorative (attribut `alt=""`). */
+  alt: string;
+  layout: "text-first" | "image-first";
+  translations: PortalSectionTranslationsDto;
+}
+
 export type PortalSectionDto =
   | PortalRechercheSectionDto
   | PortalDemarchesSectionDto
   | PortalActusSectionDto
   | PortalCompteSectionDto
   | PortalTexteSectionDto
+  | PortalTexteImageSectionDto
   | PortalFooterSectionDto;
 
 export interface PortalPageDto {

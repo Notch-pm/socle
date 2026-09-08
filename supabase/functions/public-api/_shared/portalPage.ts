@@ -20,6 +20,13 @@ import type {
 
 /** Une couleur est une valeur CSS injectée chez le consommateur : `#rrggbb`, rien d'autre. */
 const HEX_COLOR = /^#[0-9a-f]{6}$/;
+/**
+ * Une URL d'image finit dans le `src` d'une page publique : **`https` absolue,
+ * ou rien**. Miroir d'`IMAGE_URL` côté éditeur — la garde est des DEUX côtés,
+ * parce que la colonne peut aussi avoir été écrite avant que l'éditeur ne la
+ * pose.
+ */
+const IMAGE_URL = /^https:\/\/[^\s]+$/i;
 /** Le sombre classique d'un pied de page — le défaut de l'éditeur. */
 const DEFAULT_FOOTER_BACKGROUND = "#0f1f18";
 
@@ -112,6 +119,11 @@ function serializeSection(raw: unknown, publishedIds: Set<string>): PortalSectio
         columns: columns(row.columns),
         pinned_first: bool(row.pinnedFirst, false),
         pinned: references(row.pinned, publishedIds),
+        // ⚠️ `false` par défaut : la clé manque exactement sur les pages
+        // composées avant que ce filtre existe, et une page publiée ne gagne
+        // pas un filtre que personne n'y a mis. L'éditeur, lui, le propose sur
+        // toute grille neuve.
+        audience_filter: bool(row.audienceFilter, false),
         translations: translations(row.translations, ["title"]),
       };
     case "actus":
@@ -141,6 +153,23 @@ function serializeSection(raw: unknown, publishedIds: Set<string>): PortalSectio
         align: row.align === "center" ? "center" : "left",
         translations: translations(row.translations, ["title", "body"]),
       };
+    case "texte-image": {
+      // ⚠️ On ÉCARTE une adresse qu'on n'accepte pas, on ne la nettoie pas :
+      // `javascript:` et `data:` n'ont pas de forme inoffensive qu'on saurait
+      // reconstituer. Le bloc reste servi, sans image — le texte de la
+      // collectivité n'a pas à disparaître avec son illustration.
+      const imageUrl = str(row.imageUrl);
+      return {
+        id,
+        kind: "texte-image",
+        title,
+        body: str(row.body),
+        image_url: IMAGE_URL.test(imageUrl) ? imageUrl : "",
+        alt: str(row.alt),
+        layout: row.layout === "image-first" ? "image-first" : "text-first",
+        translations: translations(row.translations, ["title", "body", "alt"]),
+      };
+    }
     case "footer": {
       // Les sous-blocs sont lus un par un, et seuls les bandeaux texte
       // passent : un sous-bloc abîmé n'emporte pas le pied de page.

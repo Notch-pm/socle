@@ -22,6 +22,7 @@ function entry(over: Partial<PortalCatalogueEntry> = {}): PortalCatalogueEntry {
     shortDescription: "Délai 3 jours",
     visibility: "visible",
     organizations: [{ id: "org-1", name: "ACCM" }],
+    audiences: ["citoyen"],
     ...over,
   };
 }
@@ -86,6 +87,47 @@ describe("SectionInspector — démarches", () => {
     expect(screen.getByText("Brouillon")).toBeTruthy();
     const button = screen.getByRole("button", { name: /Acte de naissance/ });
     expect(isDisabled(button)).toBe(false);
+  });
+});
+
+describe("SectionInspector — filtre « Je suis… » de la grille", () => {
+  it("se bascule, et se cumule avec le filtre par organisme au lieu de le remplacer", () => {
+    const section = { ...createSection("demarches"), audienceFilter: false } as PortalSection;
+    const { onChange } = renderInspector(section);
+
+    fireEvent.click(screen.getByLabelText(/Filtre/));
+
+    // Seul `audienceFilter` bouge : rien de ce qui concerne les organismes.
+    expect(onChange).toHaveBeenCalledWith(expect.objectContaining({ audienceFilter: true }));
+  });
+});
+
+describe("SectionInspector — texte et image", () => {
+  it("change l'ordre des deux moitiés", () => {
+    const section = createSection("texte-image") as PortalSection;
+    const { onChange } = renderInspector(section);
+
+    fireEvent.click(screen.getByRole("tab", { name: "Image puis texte" }));
+
+    expect(onChange).toHaveBeenCalledWith(expect.objectContaining({ layout: "image-first" }));
+  });
+
+  it("signale une adresse d'image que la page n'acceptera pas", () => {
+    // Le parseur l'écarterait en silence au rechargement : mieux vaut le dire
+    // au moment où elle se tape.
+    const section = { ...createSection("texte-image"), imageUrl: "javascript:alert(1)" } as PortalSection;
+    renderInspector(section);
+    expect(screen.getByText(/Adresse attendue/)).toBeTruthy();
+  });
+
+  it("ne signale rien tant que le champ est vide — une image est facultative", () => {
+    renderInspector(createSection("texte-image"));
+    expect(screen.queryByText(/Adresse attendue/)).toBeNull();
+  });
+
+  it("annonce son titre comme facultatif", () => {
+    renderInspector(createSection("texte-image"));
+    expect(screen.getByLabelText(/Titre \(facultatif\)/)).toBeTruthy();
   });
 });
 

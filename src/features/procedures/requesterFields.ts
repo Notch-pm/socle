@@ -81,6 +81,25 @@ export function defaultRequesterConfig(): RequesterConfig {
   };
 }
 
+/**
+ * Les publics ACTIVÉS d'une démarche, dans l'ordre d'`AUDIENCES` — « à qui
+ * cette démarche s'adresse ». C'est ce sur quoi le portail filtre (« Je
+ * suis… »), et c'est le seul morceau de `requester_config` qui a affaire à un
+ * usager : le reste (quels champs, obligatoires ou non) ne le concerne qu'une
+ * fois la démarche choisie.
+ *
+ * ⚠️ LA LISTE PEUT ÊTRE VIDE, et ce n'est pas une anomalie : une démarche dont
+ * l'étape « Informations demandeur » n'a jamais été remplie ne s'adresse à
+ * aucun public déclaré. Elle ne répond alors à aucun choix du filtre — elle
+ * reste visible tant qu'on ne filtre pas. La traiter comme « tous publics »
+ * la ferait apparaître sous chaque choix, y compris là où elle n'est pas
+ * ouverte.
+ */
+export function enabledAudiences(raw: unknown): Audience[] {
+  const config = parseRequesterConfig(raw);
+  return AUDIENCES.filter((audience) => config[audience.key].enabled).map((a) => a.key);
+}
+
 function coerceVisibility(value: unknown): FieldVisibility {
   return typeof value === "string" && VALID_VISIBILITIES.includes(value as FieldVisibility)
     ? (value as FieldVisibility)

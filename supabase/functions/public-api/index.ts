@@ -139,8 +139,10 @@ async function loadPortalCatalogue(
   const { data: procedures, error: proceduresError } = await admin
     .from("procedures")
     .select(
+      // `requester_config` est lu pour en TIRER les publics (`audiences`) ; il
+      // ne sort pas de la liste — voir `readAudiences`.
       "id, name, short_description, user_description, input_duration_minutes, " +
-        "status, type, communication_config, order_index, translations",
+        "status, type, communication_config, order_index, translations, requester_config",
     )
     .eq("organization_id", rootId);
   if (proceduresError) throw proceduresError;

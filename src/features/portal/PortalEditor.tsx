@@ -42,6 +42,8 @@ import { SectionPalette } from "@/features/portal/editor/SectionPalette";
 
 export interface PortalEditorProps {
   organizationName: string;
+  /** Le logo de la collectivité, affiché dans le bandeau de la maquette. */
+  organizationLogoUrl: string | null;
   /** Id de l'organisation principale — la traduction automatique s'y impute. */
   organizationId: string;
   /**
@@ -100,6 +102,7 @@ const collisionDetection: CollisionDetection = (args) => {
  */
 export function PortalEditor({
   organizationName,
+  organizationLogoUrl,
   organizationId,
   languages,
   page,
@@ -273,6 +276,7 @@ export function PortalEditor({
         >
           <PortalCanvas
             organizationName={organizationName}
+            organizationLogoUrl={organizationLogoUrl}
             languages={languages}
             sections={sections}
             device={device}

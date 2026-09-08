@@ -11,6 +11,7 @@ import { CompteSection } from "./sections/CompteSection";
 import { DemarchesSection } from "./sections/DemarchesSection";
 import { FooterSection } from "./sections/FooterSection";
 import { RechercheSection } from "./sections/RechercheSection";
+import { TexteImageSection } from "./sections/TexteImageSection";
 import { TexteSection } from "./sections/TexteSection";
 
 export interface SectionBlockProps {
@@ -161,6 +162,8 @@ function SectionContent({
       return <CompteSection section={section} device={device} />;
     case "texte":
       return <TexteSection section={section} />;
+    case "texte-image":
+      return <TexteImageSection section={section} device={device} />;
     case "footer":
       return <FooterSection section={section} device={device} flush={flush} />;
   }

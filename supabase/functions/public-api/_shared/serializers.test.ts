@@ -542,7 +542,7 @@ describe("serializePortalProcedure — le paramétrage d'instruction ne sort pas
     category_id: "cat-1",
   };
 
-  it("n'expose que les sept champs publics", () => {
+  it("n'expose que les huit champs publics", () => {
     expect(serializePortalProcedure(row)).toEqual({
       id: "proc-1",
       name: "Demande d'acte de naissance",
@@ -550,9 +550,52 @@ describe("serializePortalProcedure — le paramétrage d'instruction ne sort pas
       user_description: "Adressée au service état civil.",
       input_duration_minutes: 5,
       organizations: [],
+      // `requester_config` de la fixture ne déclare aucun public connu : rien
+      // à servir. ⚠️ Pas « tous publics » — voir le test dédié plus bas.
+      audiences: [],
       // Des libellés, pas du paramétrage : le portail en a besoin pour servir
       // la démarche dans la langue choisie par l'usager.
       translations: { br: { name: "Testeni ganedigezh" } },
+    });
+  });
+
+  /**
+   * Les publics d'une démarche — le seul champ DÉRIVÉ de la liste.
+   *
+   * ⚠️ Miroir volontaire d'`enabledAudiences`
+   * (`src/features/procedures/requesterFields.ts`) : une edge function ne peut
+   * rien importer de `src/`, et ce sont les tests des deux côtés qui empêchent
+   * les deux lectures de diverger — motif `portalCatalogue.ts`.
+   */
+  describe("les publics traversent, la configuration qui les porte non", () => {
+    const withConfig = (requester_config: unknown) =>
+      serializePortalProcedure({ id: "p", name: "X", requester_config });
+
+    it("sert les publics activés, dans l'ordre du paramétrage", () => {
+      expect(
+        withConfig({
+          association: { enabled: true, fields: { courriel: "obligatoire" } },
+          citoyen: { enabled: true, fields: {} },
+          entreprise: { enabled: false, fields: {} },
+        }).audiences,
+      ).toEqual(["citoyen", "association"]);
+    });
+
+    it("ne sert QUE les noms — jamais les champs demandés au requérant", () => {
+      const dto = withConfig({
+        citoyen: { enabled: true, fields: { nir: "obligatoire" } },
+      }) as Record<string, unknown>;
+      expect(dto.audiences).toEqual(["citoyen"]);
+      expect(dto).not.toHaveProperty("requester_config");
+      expect(JSON.stringify(dto)).not.toContain("nir");
+    });
+
+    it("rend une liste VIDE quand rien n'est paramétré, jamais les trois publics", () => {
+      // La lire comme « tous publics » ferait apparaître la démarche sous des
+      // publics auxquels elle n'est pas ouverte.
+      for (const raw of [null, undefined, {}, "citoyen", ["citoyen"], { citoyen: { enabled: "oui" } }]) {
+        expect(withConfig(raw).audiences, JSON.stringify(raw) ?? "undefined").toEqual([]);
+      }
     });
   });
 
@@ -596,6 +639,9 @@ describe("serializePortalProcedureDetail — le formulaire sort, l'instruction n
     short_description: "En quelques minutes.",
     user_description: "Adressée au service état civil.",
     input_duration_minutes: 5,
+    // La même ligne porte les deux : `audiences` en est l'extrait qui sert à
+    // filtrer une liste, `requester_config` la configuration complète.
+    requester_config: { citoyen: { enabled: true, fields: { courriel: "obligatoire" } } },
     translations: { br: { name: "Testeni ganedigezh" } },
   };
   const detail = {
@@ -615,6 +661,7 @@ describe("serializePortalProcedureDetail — le formulaire sort, l'instruction n
       user_description: "Adressée au service état civil.",
       input_duration_minutes: 5,
       organizations: [{ id: "accm", name: "ACCM" }],
+      audiences: ["citoyen"],
       translations: { br: { name: "Testeni ganedigezh" } },
       category: { id: "cat-1", name: "État civil", translations: { br: { name: "Stad-civil" } } },
       form_schema: detail.form_schema,

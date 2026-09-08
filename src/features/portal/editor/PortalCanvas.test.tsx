@@ -1,8 +1,10 @@
 // @vitest-environment jsdom
 import { describe, expect, it, vi } from "vitest";
-import { render, screen } from "@testing-library/react";
+import { fireEvent, render, screen } from "@testing-library/react";
 import { DndContext } from "@dnd-kit/core";
 import { createSection } from "@/features/portal/portalPage";
+import type { PortalCatalogueEntry } from "@/features/portal/catalogue";
+import type { Audience } from "@/features/procedures/requesterFields";
 import { PortalCanvas, type PortalCanvasProps } from "./PortalCanvas";
 
 // jsdom n'a pas de ResizeObserver ; le canevas s'en sert pour la mise à
@@ -24,6 +26,7 @@ const sections = [
 function renderCanvas(over: Partial<PortalCanvasProps> = {}) {
   const props: PortalCanvasProps = {
     organizationName: "ACCM",
+    organizationLogoUrl: null,
     languages: ["fr"],
     sections,
     device: "bureau",
@@ -123,5 +126,110 @@ describe("PortalCanvas — la place du sélecteur de langue", () => {
     // atteindre, et il le cherche d'abord sur son téléphone.
     renderCanvas({ languages: ["fr", "en"], device: "mobile" });
     expect(screen.getByTitle("Français, Anglais")).not.toBeNull();
+  });
+});
+
+describe("PortalCanvas — le logo de la collectivité", () => {
+  it("affiche le logo dans le bandeau quand l'organisation en a un", () => {
+    // Le même repère que le portail : l'agent compose sa page sous l'identité
+    // que verront ses usagers, pas sous une pastille générique.
+    const { container } = renderCanvas({ organizationLogoUrl: "https://exemple.fr/logo.png" });
+    const img = container.querySelector("header img");
+    expect(img?.getAttribute("src")).toBe("https://exemple.fr/logo.png");
+  });
+
+  it("retombe sur la pastille sans logo", () => {
+    const { container } = renderCanvas({ organizationLogoUrl: null });
+    expect(container.querySelector("header img")).toBeNull();
+  });
+
+  it("retombe sur la pastille si l'image ne charge pas", () => {
+    // `logo_url` est une URL libre : elle peut pointer vers un fichier disparu.
+    // Une vignette cassée dans une maquette se lit comme un défaut de la page.
+    const { container } = renderCanvas({ organizationLogoUrl: "https://exemple.fr/disparu.png" });
+    const img = container.querySelector("header img") as HTMLImageElement;
+    fireEvent.error(img);
+    expect(container.querySelector("header img")).toBeNull();
+  });
+});
+
+/**
+ * Les deux filtres de la grille de démarches, tels que la maquette les montre.
+ *
+ * ⚠️ Ils sont DÉCORATIFS, comme la nav : le canevas montre la page, il ne la
+ * fait pas fonctionner. Ce qui se vérifie ici, c'est leur PRÉSENCE — chacun ne
+ * s'affiche que s'il y a de quoi choisir, et les deux se cumulent.
+ */
+describe("PortalCanvas — les filtres de la grille de démarches", () => {
+  const proc = (id: string, audiences: Audience[], orgs: string[]): PortalCatalogueEntry => ({
+    id,
+    name: `Démarche ${id}`,
+    shortDescription: null,
+    visibility: "visible",
+    organizations: orgs.map((name) => ({ id: name, name })),
+    audiences,
+  });
+
+  const grid = (audienceFilter: boolean) => [
+    { ...createSection("demarches"), id: "g", title: "Démarches les plus demandées", audienceFilter },
+  ];
+
+  it("montre « Je suis… » quand les démarches affichées visent plusieurs publics", () => {
+    renderCanvas({
+      sections: grid(true),
+      catalogue: [proc("a", ["citoyen"], ["ACCM"]), proc("b", ["entreprise"], ["ACCM"])],
+    });
+    const pill = screen.getByTitle("Citoyen, Entreprise");
+    expect(pill.textContent).toContain("Je suis");
+  });
+
+  it("ne le montre pas quand toutes visent le même public — un choix unique n'est pas un filtre", () => {
+    renderCanvas({
+      sections: grid(true),
+      catalogue: [proc("a", ["citoyen"], ["ACCM"]), proc("b", ["citoyen"], ["ACCM"])],
+    });
+    expect(screen.queryByText(/Je suis/)).toBeNull();
+  });
+
+  it("ne le montre pas quand le bloc ne le propose pas, même si les publics diffèrent", () => {
+    renderCanvas({
+      sections: grid(false),
+      catalogue: [proc("a", ["citoyen"], ["ACCM"]), proc("b", ["entreprise"], ["ACCM"])],
+    });
+    expect(screen.queryByText(/Je suis/)).toBeNull();
+  });
+
+  it("le cumule avec le filtre par organisme, il ne le remplace pas", () => {
+    renderCanvas({
+      sections: grid(true),
+      catalogue: [proc("a", ["citoyen"], ["ACCM"]), proc("b", ["entreprise"], ["Arles"])],
+    });
+    expect(screen.getByTitle("Citoyen, Entreprise")).toBeTruthy();
+    expect(screen.getByTitle("ACCM, Arles").textContent).toContain("Tous les organismes");
+  });
+});
+
+describe("PortalCanvas — bloc texte et image", () => {
+  it("rend l'image avec sa description, et respecte l'ordre choisi", () => {
+    const section = {
+      ...createSection("texte-image"),
+      id: "ti",
+      title: "Nos équipements",
+      body: "La piscine est ouverte toute l'année.",
+      imageUrl: "https://exemple.fr/piscine.jpg",
+      alt: "La piscine municipale",
+      layout: "image-first" as const,
+    };
+    const { container } = renderCanvas({ sections: [section] });
+    const img = container.querySelector('img[src="https://exemple.fr/piscine.jpg"]');
+    expect(img?.getAttribute("alt")).toBe("La piscine municipale");
+    // L'ordre est porté par `order-first` : il vaut côte à côte ET empilé.
+    expect(img?.closest("div")?.className).toContain("order-first");
+  });
+
+  it("montre la place de l'image tant qu'aucune adresse n'est saisie", () => {
+    // Un bloc à moitié vide se lirait comme un bloc cassé.
+    renderCanvas({ sections: [{ ...createSection("texte-image"), id: "ti" }] });
+    expect(screen.getByText(/Adresse de l'image à renseigner/)).toBeTruthy();
   });
 });

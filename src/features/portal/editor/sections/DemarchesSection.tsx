@@ -1,7 +1,13 @@
-import { Building2, ChevronDown, FileText } from "lucide-react";
+import type { ReactNode } from "react";
+import { Building2, ChevronDown, FileText, UserRound } from "lucide-react";
 import { cn } from "@/lib/utils";
 import type { DemarchesSection as DemarchesSectionData } from "@/features/portal/portalPage";
-import { catalogueOrganizations, type PortalCatalogueEntry } from "@/features/portal/catalogue";
+import {
+  AUDIENCE_FILTER_LABELS,
+  catalogueAudiences,
+  catalogueOrganizations,
+  type PortalCatalogueEntry,
+} from "@/features/portal/catalogue";
 import { effectiveColumns, type Device } from "../device";
 
 const GRID_COLS_CLASS: Record<number, string> = {
@@ -12,18 +18,28 @@ const GRID_COLS_CLASS: Record<number, string> = {
 };
 
 /**
- * Le filtre par organisme tel que le portail le rend — figé ici, comme le
- * champ de recherche : le canevas montre la page, il ne la fait pas
- * fonctionner. N'apparaît que s'il y a de quoi choisir.
+ * Un filtre de la grille tel que le portail le rend — figé ici, comme le champ
+ * de recherche : le canevas montre la page, il ne la fait pas fonctionner.
+ * Chacun n'apparaît que s'il y a de quoi choisir.
  */
-function OrganizationFilterPreview() {
+function FilterPreview({
+  icon,
+  label,
+  choices,
+}: {
+  icon: ReactNode;
+  label: string;
+  /** Ce que l'usager pourra choisir — en infobulle, la liste est parlante ici. */
+  choices: string;
+}) {
   return (
     <span
       aria-hidden="true"
+      title={choices}
       className="flex h-8 shrink-0 items-center gap-1.5 rounded-lg border border-border bg-background px-2.5 text-[12px] text-muted-foreground"
     >
-      <Building2 className="size-3.5" />
-      Tous les organismes
+      {icon}
+      {label}
       <ChevronDown className="size-3.5" />
     </span>
   );
@@ -52,13 +68,35 @@ export function DemarchesSection({
     entries = [...entries].sort((a, b) => Number(pinned.has(b.id)) - Number(pinned.has(a.id)));
   }
   const organizations = catalogueOrganizations(entries);
+  // ⚠️ Les publics se lisent sur les démarches AFFICHÉES, pas sur les trois
+  // valeurs possibles : proposer « Entreprise » quand aucune démarche ne s'y
+  // adresse ne mènerait qu'à une liste vide. Et le réglage ne suffit pas — il
+  // dit ce que la collectivité veut, le catalogue dit si ça a un sens.
+  const audiences = section.audienceFilter ? catalogueAudiences(entries) : [];
   const cols = effectiveColumns(section.columns, device);
 
   return (
     <div className="flex flex-col gap-3">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <h2 className="text-lg font-bold text-foreground">{section.title}</h2>
-        {organizations.length > 1 ? <OrganizationFilterPreview /> : null}
+        {/* Les deux filtres se CUMULENT — chacun sur sa dimension : qui je
+            suis, et à qui je m'adresse. Ils se rangent donc côte à côte. */}
+        <div className="flex flex-wrap items-center gap-2">
+          {audiences.length > 1 ? (
+            <FilterPreview
+              icon={<UserRound className="size-3.5" />}
+              label="Je suis…"
+              choices={audiences.map((a) => AUDIENCE_FILTER_LABELS[a]).join(", ")}
+            />
+          ) : null}
+          {organizations.length > 1 ? (
+            <FilterPreview
+              icon={<Building2 className="size-3.5" />}
+              label="Tous les organismes"
+              choices={organizations.map((org) => org.name).join(", ")}
+            />
+          ) : null}
+        </div>
       </div>
       {entries.length === 0 ? (
         <p className="rounded-lg border border-dashed border-border py-6 text-center text-sm text-muted-foreground">

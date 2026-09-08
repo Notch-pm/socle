@@ -22,6 +22,13 @@ const noShift: SortingStrategy = () => null;
 export interface PortalCanvasProps {
   organizationName: string;
   /**
+   * Le logo de la collectivité, tel que le portail l'affichera. L'éditeur est
+   * toujours sur une racine, qui n'hérite jamais de charte : la colonne
+   * `logo_url` porte donc déjà la valeur **résolue** que Nora reçoit de
+   * `GET /v1/organizations/{id}/branding` — pas besoin de la RPC ici.
+   */
+  organizationLogoUrl: string | null;
+  /**
    * Les langues activées par la collectivité, français compris. Elles ne
    * servent ici qu'à MONTRER où le sélecteur de langue se placera pour
    * l'usager — le canevas est une maquette, pas le portail.
@@ -42,6 +49,33 @@ export interface PortalCanvasProps {
   onShift: (id: string, direction: -1 | 1) => void;
   onRemove: (id: string) => void;
   onOpenPalette: () => void;
+}
+
+/**
+ * L'identité de la collectivité dans le bandeau de la maquette : son logo
+ * quand elle en a un, sinon la pastille — exactement le repli de Nora
+ * (`PageHeader`), pour que l'agent voie ici ce que verra l'usager.
+ *
+ * ⚠️ Hauteur fixe, largeur LIBRE (bornée), comme dans l'en-tête de l'app :
+ * les logos de collectivité sont des bandeaux larges, les enfermer dans un
+ * carré les réduit à une tache. `logo_url` est une URL libre qui peut pointer
+ * vers un fichier disparu : on retombe alors sur la pastille plutôt que de
+ * laisser la vignette cassée du navigateur dans une maquette.
+ */
+function PageLogo({ url }: { url: string | null }) {
+  const [broken, setBroken] = React.useState(false);
+  React.useEffect(() => setBroken(false), [url]);
+  if (!url || broken) {
+    return <div className="size-[26px] shrink-0 rounded-lg bg-primary" />;
+  }
+  return (
+    <img
+      src={url}
+      alt=""
+      onError={() => setBroken(true)}
+      className="h-7 w-auto max-w-[160px] shrink-0 object-contain"
+    />
+  );
 }
 
 /**
@@ -68,6 +102,7 @@ function DropShadow({ label }: { label: string }) {
  */
 export function PortalCanvas({
   organizationName,
+  organizationLogoUrl,
   languages,
   sections,
   device,
@@ -187,7 +222,7 @@ export function PortalCanvas({
             style={{ width: pageWidth, zoom: scale }}
           >
             <header className="flex h-14 items-center gap-3.5 border-b border-border px-6">
-              <div className="size-[26px] shrink-0 rounded-lg bg-primary" />
+              <PageLogo url={organizationLogoUrl} />
               <span className="truncate text-sm font-extrabold tracking-tight">{organizationName}</span>
               <div className="flex-1" />
               <nav className={cn("flex items-center gap-3.5", device === "mobile" && "hidden")}>

@@ -301,6 +301,9 @@ est fonctionnelle (voir feature « Édition d'organisation » ci-dessous). Param
 - **Informations demandeur** → colonne `procedures.requester_config` (JSONB). Publics
   citoyen/entreprise/association activables ; par public, chaque donnée vaut `masque`/`visible`/
   `obligatoire`. Logique pure + parseur robuste `requesterFields.ts` (testé), UI `steps/DemandeurStep.tsx`.
+  `enabledAudiences` en extrait les publics **activés** : c'est le seul morceau de cette colonne
+  qui concerne un usager avant qu'il ait choisi sa démarche, et c'est ce que le portail sert
+  (`PortalProcedure.audiences`) et ce sur quoi il filtre.
 - **Formulaire** → colonne `procedures.form_schema` (JSONB) : **form builder maison**, schéma
   **possédé** (contrat public consommé en aval). Contenu = liste ordonnée de nœuds *champ* ou *section* ;
   champs simples / choix (options) / **pièce justificative** (1–5 fichiers, formats, obligatoire +
@@ -438,7 +441,9 @@ service — motif du catalogue de démarches, des quartiers, du plafond IA.
   `jsonb_typeof = 'object'` des deux côtés.
 - **Troisième porteur (2026-09-07)** : les **textes de la page composée** du portail
   (`portal_pages.draft/published`), sous la même forme, avec le jeu de champs
-  `PORTAL_SECTION_FIELDS` (`title`, `subtitle`, `placeholder`, `body`). La traduction vit **sur la
+  `PORTAL_SECTION_FIELDS` (`title`, `subtitle`, `placeholder`, `body`, `alt` — le texte alternatif
+  d'une image du bloc `texte-image` : le laisser en français ne traduirait la page que pour ceux
+  qui la voient). La traduction vit **sur la
   section** — elle voyage donc avec son bloc au glisser-déposer, à la duplication, à la
   suppression, et les sous-blocs du pied de page en héritent (ce sont des sections). ⚠️ Le schéma
   **reste en `version: 1`** : l'ajout est purement additif, et `parsePortalPage` refuse tout autre
@@ -736,7 +741,7 @@ démarches ». Ajouter une collectivité au portail = une ligne de domaine, aucu
   produit qu'une écriture, jamais sur `published`.
 - **Schéma possédé** (`src/features/portal/portalPage.ts`, motif `formSchema.ts`) :
   `{ version: 1, sections }`, kinds `recherche` / `demarches` / `actus` / `compte` / `texte` /
-  `footer`. Parse **tolérant section par section** (une section illisible est écartée, les autres
+  `texte-image` / `footer`. Parse **tolérant section par section** (une section illisible est écartée, les autres
   restent — une page d'accueil de collectivité ne s'efface pas pour un bloc abîmé) ; repli total
   sur `defaultPortalPage()` si ce n'est pas une page. Les épinglages et raccourcis référencent des
   **`procedures.id`**, jamais des libellés. ⚠️ Les couleurs (`footer.background`) n'entrent que
@@ -754,9 +759,43 @@ démarches ». Ajouter une collectivité au portail = une ligne de domaine, aucu
   l'en-tête dès que deux organismes proposent quelque chose. ⚠️ Une démarche que **personne**
   n'active n'est pas servie par le portail, même en `production` : c'est le badge « Non activée ».
   La règle est le **miroir volontaire** de `public-api/_shared/portalCatalogue.ts`.
+- **Texte et image** (`texte-image`, 2026-09-07) : un paragraphe et une illustration, côte à côte
+  et **empilés sur mobile**. `layout` (`text-first` / `image-first`) est un **ordre de lecture**,
+  pas une position : porté par un seul `order-first`, il vaut dans les deux dispositions — « image
+  à gauche » n'a plus de sens sur un téléphone, « image d'abord » si. Titre **facultatif** (comme
+  le pied de page) : ce bloc illustre autant qu'il annonce. ⚠️ `imageUrl` est une **URL libre**,
+  motif `organizations.logo_url` : le Socle enregistre et publie, il n'héberge pas le fichier — mais
+  il filtre la **forme** (`IMAGE_URL` : **`https` absolue, rien d'autre**), parce que la valeur finit
+  dans le `src` d'une page publique ; on **écarte**, on ne nettoie pas (motif `footer.background`),
+  et le bloc reste servi sans image plutôt que perdu. ⚠️ `http://` et les chemins absolus sont
+  refusés **à la saisie** alors que le Socle pourrait les stocker sans risque : c'est le portail qui
+  ne peut pas les rendre (servi en https, et il n'héberge aucun média de collectivité), et une
+  adresse acceptée ici mais écartée là-bas ne se découvrirait qu'en production. Le champ le **signale à la saisie** : sans
+  cela, le parseur l'écarterait en silence au rechargement. ⚠️ `alt` **se traduit** — c'est ce que
+  lit une synthèse vocale, le laisser en français ne traduirait la page que pour ceux qui la voient
+  (d'où sa présence dans `PORTAL_SECTION_FIELDS` et dans `FIELD_SPECS` de `translate-labels`) ;
+  **vide = image décorative**, jamais le titre recopié à sa place.
+- **Filtre « Je suis… »** de la grille de démarches (`demarches.audienceFilter`, 2026-09-07) :
+  citoyen / entreprise / association, d'après les publics activés à l'étape « Informations
+  demandeur » (`enabledAudiences`, pur et testé, lu dans `PortalCatalogueEntry.audiences`).
+  ⚠️ Il se **cumule** avec le filtre par organisme, il ne le remplace pas : deux dimensions de la
+  même grille — qui je suis, et à qui je m'adresse. ⚠️ Le réglage dit ce que la collectivité
+  **veut** ; c'est le catalogue affiché qui dit s'il a un **sens** : sous deux publics représentés
+  (`catalogueAudiences`), la pastille ne s'affiche pas — un filtre à un seul choix n'en est pas un.
+  Même règle que le filtre par organisme, et les deux pastilles sont décoratives dans le canevas.
+  ⚠️ **Le défaut de la fabrique (`true`) diverge de celui du parseur (`false`)**, et c'est voulu :
+  une grille neuve le propose, une page composée avant qu'il existe ne gagne pas un filtre que
+  personne n'y a mis. ⚠️ Une démarche **sans public déclaré** ne répond à aucun choix (elle reste
+  visible sans filtre) : la lire comme « tous publics » la ferait apparaître là où elle n'est pas
+  ouverte.
 - **Éditeur** (`PortalEditorPage` → `PortalEditor` → `editor/*`) : entrée de menu « Site de
   démarches » (`/site-de-demarches`, `?org=` quand plusieurs racines) et
-  `/superadmin/organisations/:orgId/portail`. Palette / canevas / inspecteur, aperçu = le canevas
+  `/superadmin/organisations/:orgId/portail`. Le bandeau de la maquette porte le **logo de la
+  collectivité** (`organizations.logo_url`), avec repli sur la pastille — même règle que Nora
+  (`PageHeader`), et si l'URL ne charge pas : une vignette cassée dans une maquette se lit comme
+  un défaut de la page. ⚠️ Pas de `resolve_branding` ici : l'éditeur est toujours sur une **racine**,
+  qui n'hérite jamais, donc la colonne porte déjà la valeur résolue que Nora reçoit de
+  `GET /v1/organizations/{id}/branding`. Palette / canevas / inspecteur, aperçu = le canevas
   sans son chrome, Bureau / Tablette / Mobile (`device.ts`, largeur de page fixe mise à l'échelle
   par CSS `zoom` — pas `transform`, pour que le conteneur défilant suive ; ajustement à la fenêtre
   et Ctrl/⌘ + molette). Glisser-déposer dnd-kit avec la logique pure dans `portalReorder.ts` :
@@ -793,13 +832,17 @@ démarches ». Ajouter une collectivité au portail = une ligne de domaine, aucu
 - **Grisé, pas caché** : le bloc « Actualités » (palette et inspecteur) et les vues « Contenus »
   / « Thème » — aucune route, `aria-disabled`, « Bientôt disponible ». Le parse accepte quand
   même `actus` : une composition importée plus tard ne sera pas amputée.
-- **API** (tag « Portail » de `public-api`, contrat 1.7.0 → 1.12.0) : `GET /v1/portal/tenant?hostname=`
+- **API** (tag « Portail » de `public-api`, contrat 1.7.0 → 1.15.0) : `GET /v1/portal/tenant?hostname=`
   (**même 404** pour inconnu / hors périmètre / obsolète : on ne renseigne pas sur l'existence des
   collectivités ; porte `languages`, les langues de la collectivité, héritage résolu), `GET /v1/portal/procedures?tenant_id=` (déjà filtrées : `production`, `externe`,
   `portalVisible`, dans leur période **heure de Paris**, **et activées par au moins un organisme
   actif de l'arbre du tenant** — chaque démarche porte `organizations`, dans l'ordre de l'arbre ;
   règle pure `_shared/portalCatalogue.ts`, lectures dans `loadPortalCatalogue` : sous-arbre,
-  organisations, activations, catalogue de la **racine** du tenant), `GET /v1/portal/procedures/{id}?tenant_id=`
+  organisations, activations, catalogue de la **racine** du tenant ; depuis **1.15.0** chaque
+  démarche porte aussi `audiences`, l'extrait de `requester_config` qui dit à **qui** elle
+  s'adresse — ⚠️ seuls les NOMS des publics traversent, jamais les champs demandés au requérant,
+  qui restent au détail ; ⚠️ une liste **vide** = aucun public déclaré, surtout pas « tous publics ».
+  Miroir volontaire d'`enabledAudiences`, testé des deux côtés — motif `readDocumentIds`), `GET /v1/portal/procedures/{id}?tenant_id=`
   (le **détail** : le public de la liste, plus la catégorie et les DEUX schémas de saisie
   `form_schema` et `requester_config` — ils *sont* le formulaire de l'usager ; `knowledge_base`,
   `agent_description` et les documents ne franchissent toujours pas. Même `publishedCatalogue`,
@@ -809,13 +852,16 @@ démarches ». Ajouter une collectivité au portail = une ligne de domaine, aucu
   (`published` seulement, références résolues sur ce même catalogue ; chaque section porte
   `translations` depuis le contrat **1.14.0** — schéma `PortalSectionTranslations`, **distinct** de
   `Translations` qui décrit `name`/`short_description`, et servi **par whitelist des champs du
-  kind** : un `body` égaré sur une `recherche` ne sort pas). La charte vient de
+  kind** : un `body` égaré sur une `recherche` ne sort pas ; en **1.15.0** s'ajoutent la section
+  `PortalTexteImageSection` (avec la clé traduisible `alt`) et `audience_filter` sur la grille). La charte vient de
   `GET /v1/organizations/{id}/branding` (résolue). ⚠️ `supabase/config.toml` déclare
   `verify_jwt = false` pour `public-api` : un déploiement sans ce fichier remet le défaut `true`
   et coupe **tous** les consommateurs (incident du 2026-09-05).
 - Code : `src/features/portal/` — `portalPage.ts` (+ `fieldsForKind`, `sectionText`,
   `setSectionTranslation`, `hasTranslations`), `portalReorder.ts`, `catalogue.ts` (purs,
-  **testés**), `usePortalPage.ts` (`usePortalPage`, `useEnsurePortalPage`, `useSaveDraft`,
+  **testés** — `catalogue.ts` porte aussi `audiences` par entrée, `catalogueAudiences` et
+  `AUDIENCE_FILTER_LABELS`, les publics au **singulier** : ils complètent « Je suis… », là où le
+  paramétrage les nomme au pluriel), `usePortalPage.ts` (`usePortalPage`, `useEnsurePortalPage`, `useSaveDraft`,
   `usePublishPortalPage`, `useDiscardDraft`), `PortalEditorPage.tsx` (chargement, autosave,
   publier / annuler — **testé**), `PortalEditor.tsx` (shell, état du glisser), `editor/`
   (`PortalCanvas`, `SectionBlock`, `SectionInspector`, `SectionTranslations`, `SectionPalette`,

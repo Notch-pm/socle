@@ -17,6 +17,7 @@ const FIELD_LABELS: Record<PortalSectionField, string> = {
   subtitle: "Sous-titre",
   placeholder: "Texte du champ",
   body: "Paragraphe",
+  alt: "Description de l'image",
 };
 
 /**

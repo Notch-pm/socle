@@ -21,7 +21,15 @@ import {
   type TranslationMap,
 } from "@/features/languages/translations";
 
-export const SECTION_KINDS = ["recherche", "demarches", "actus", "compte", "texte", "footer"] as const;
+export const SECTION_KINDS = [
+  "recherche",
+  "demarches",
+  "actus",
+  "compte",
+  "texte",
+  "texte-image",
+  "footer",
+] as const;
 export type SectionKind = (typeof SECTION_KINDS)[number];
 
 export const SECTION_LABELS: Record<SectionKind, string> = {
@@ -30,6 +38,7 @@ export const SECTION_LABELS: Record<SectionKind, string> = {
   actus: "Actualités",
   compte: "Espace usager",
   texte: "Bandeau texte",
+  "texte-image": "Texte et image",
   footer: "Pied de page",
 };
 
@@ -47,11 +56,35 @@ export type ActusLayout = (typeof ACTUS_LAYOUTS)[number];
 export const TEXT_ALIGNS = ["left", "center"] as const;
 export type TextAlign = (typeof TEXT_ALIGNS)[number];
 
+/**
+ * L'ordre des deux moitiés d'un bloc « texte et image ». Un ORDRE et non une
+ * position (« image à gauche ») : sur un téléphone les deux moitiés s'empilent,
+ * et il n'y a plus de gauche ni de droite — il reste ce qui se lit en premier.
+ */
+export const TEXTE_IMAGE_LAYOUTS = ["text-first", "image-first"] as const;
+export type TexteImageLayout = (typeof TEXTE_IMAGE_LAYOUTS)[number];
+
 /** Raccourcis sous le champ de recherche : au-delà, la ligne déborde. */
 export const MAX_SHORTCUTS = 4;
 
 /** Une couleur est une valeur CSS injectée dans la page : `#rrggbb`, rien d'autre. */
 export const HEX_COLOR = /^#[0-9a-f]{6}$/;
+
+/**
+ * Une URL d'image finit dans le `src` d'une page publique : **`https` absolue,
+ * ou rien**. Même parti que `HEX_COLOR` — on ÉCARTE, on ne nettoie pas :
+ * `data:` et `javascript:` n'ont pas de forme inoffensive qu'on saurait
+ * reconstituer.
+ *
+ * ⚠️ `http://` et les chemins absolus sont refusés ICI, à la saisie, alors même
+ * que le Socle pourrait les stocker sans risque. C'est le portail qui ne peut
+ * pas les rendre : il est servi en https (un `http://` y est bloqué comme
+ * contenu mixte) et n'héberge aucun média de collectivité (un `/media/x.jpg`
+ * s'y résoudrait en 404). Les accepter reviendrait à enregistrer une image que
+ * l'aperçu montre et que l'usager ne verra jamais — exactement le genre d'écart
+ * qu'on ne découvre qu'en production. Miroir de `socle/urls.ts` chez Nora.
+ */
+export const IMAGE_URL = /^https:\/\/[^\s]+$/i;
 
 /** Le sombre classique d'un pied de page — l'encre forêt de la gamme. */
 export const DEFAULT_FOOTER_BACKGROUND = "#0f1f18";
@@ -102,6 +135,19 @@ export interface DemarchesSection extends SectionCommon {
   pinnedFirst: boolean;
   /** Démarches à la une (`procedures.id`). */
   pinned: string[];
+  /**
+   * Proposer à l'usager le filtre « Je suis… » (citoyen / entreprise /
+   * association), qui restreint la grille aux démarches ouvertes à ce public.
+   *
+   * ⚠️ Il se CUMULE avec le filtre par organisme, il ne le remplace pas : les
+   * deux réduisent la même grille, chacun sur sa dimension — qui je suis, et à
+   * qui je m'adresse.
+   *
+   * ⚠️ Le réglage dit ce que la collectivité VEUT ; c'est le catalogue affiché
+   * qui dit si le filtre a un sens. Un filtre à un seul choix n'en est pas un :
+   * quand toutes les démarches visent le même public, il ne s'affiche pas.
+   */
+  audienceFilter: boolean;
 }
 
 export interface ActusSection extends SectionCommon {
@@ -125,6 +171,34 @@ export interface TexteSection extends SectionCommon {
 }
 
 /**
+ * Un texte et une illustration côte à côte — et empilés dès qu'il n'y a plus la
+ * place. `layout` dit lequel des deux se lit en premier.
+ *
+ * ⚠️ Le titre est FACULTATIF ici, contrairement aux autres bandeaux : ce bloc
+ * sert autant à illustrer un paragraphe qu'à annoncer une rubrique, et un titre
+ * d'amorce y serait, la moitié du temps, un texte à effacer.
+ *
+ * ⚠️ `imageUrl` est une URL libre, comme `organizations.logo_url` : le Socle
+ * l'enregistre et la publie, il n'héberge pas le fichier et ne vérifie pas
+ * qu'il existe. Elle n'est acceptée qu'en `http(s)` ou en chemin absolu —
+ * c'est une valeur qui finit dans le `src` d'une page publique, et un
+ * `javascript:` n'y a rien à faire.
+ */
+export interface TexteImageSection extends SectionCommon {
+  kind: "texte-image";
+  body: string;
+  /** URL de l'image, `http(s)://…` ou `/…`. Vide tant que rien n'est choisi. */
+  imageUrl: string;
+  /**
+   * Texte alternatif de l'image — ce que lit une synthèse vocale, et ce qui
+   * s'affiche si l'image manque. C'est un texte d'usager comme les autres : il
+   * se traduit.
+   */
+  alt: string;
+  layout: TexteImageLayout;
+}
+
+/**
  * Pied de page : un bandeau pleine largeur, à la couleur de fond choisie, qui
  * répartit des sous-blocs sur une à trois colonnes. Les sous-blocs sont des
  * bandeaux texte — « Contact et horaires » en est un — dans l'ordre choisi ;
@@ -144,6 +218,7 @@ export type PortalSection =
   | ActusSection
   | CompteSection
   | TexteSection
+  | TexteImageSection
   | FooterSection;
 
 export interface PortalPage {
@@ -168,6 +243,7 @@ export const PALETTE_ITEMS: { kind: PaletteKind; label: string; hint: string; av
   { kind: "actus", label: "Actualités", hint: "Bientôt disponible", available: false },
   { kind: "compte", label: "Espace usager", hint: "Bandeau de connexion", available: true },
   { kind: "texte", label: "Bandeau texte", hint: "Titre + paragraphe", available: true },
+  { kind: "texte-image", label: "Texte et image", hint: "Paragraphe + illustration", available: true },
   { kind: "contact", label: "Contact et horaires", hint: "Coordonnées de la mairie", available: true },
   { kind: "footer", label: "Pied de page", hint: "Pleine largeur, 1 à 3 colonnes", available: true },
 ];
@@ -200,6 +276,12 @@ const BUILDERS: { [K in SectionKind]: (id: string) => SectionOf<K> } = {
     columns: 3,
     pinnedFirst: false,
     pinned: [],
+    // Une grille NEUVE le propose : c'est l'aide qu'on attend d'un catalogue
+    // qui mélange les publics, et elle s'efface d'elle-même quand il n'y en a
+    // qu'un. ⚠️ À ne pas confondre avec le défaut du PARSEUR, qui vaut `false`
+    // (voir `demarchesSchema`) : une page déjà publiée ne gagne pas un filtre
+    // que personne n'y a mis.
+    audienceFilter: true,
   }),
   actus: (id) => ({
     id,
@@ -224,6 +306,18 @@ const BUILDERS: { [K in SectionKind]: (id: string) => SectionOf<K> } = {
     title: "Titre du bandeau",
     body: "Un paragraphe court à destination des usagers.",
     align: "left",
+  }),
+  // Sans titre : il est facultatif sur ce bloc (voir `TexteImageSection`), et
+  // le texte vient d'abord — c'est l'ordre que le nom du bloc annonce.
+  "texte-image": (id) => ({
+    id,
+    kind: "texte-image",
+    translations: {},
+    title: "",
+    body: "Un paragraphe court, illustré par une image.",
+    imageUrl: "",
+    alt: "",
+    layout: "text-first",
   }),
   // Sans titre ni sous-bloc : un pied de page se remplit depuis l'inspecteur,
   // et un titre d'amorce y ferait un bandeau de plus à effacer.
@@ -335,6 +429,11 @@ export function fieldsForKind(kind: SectionKind): readonly PortalSectionField[] 
       return ["title", "subtitle"];
     case "texte":
       return ["title", "body"];
+    case "texte-image":
+      // `alt` avec les autres : c'est le texte que lit une synthèse vocale, et
+      // le laisser en français reviendrait à ne traduire la page que pour ceux
+      // qui la voient.
+      return ["title", "body", "alt"];
     default:
       // `demarches`, `actus`, `footer` : un titre, et rien d'autre. Les
       // sous-blocs du pied de page ont chacun les leurs.
@@ -356,7 +455,9 @@ export function sectionText(section: PortalSection, field: PortalSectionField): 
     case "placeholder":
       return section.kind === "recherche" ? section.placeholder : "";
     case "body":
-      return section.kind === "texte" ? section.body : "";
+      return section.kind === "texte" || section.kind === "texte-image" ? section.body : "";
+    case "alt":
+      return section.kind === "texte-image" ? section.alt : "";
   }
 }
 
@@ -452,6 +553,11 @@ const demarchesSchema = z.object({
   columns,
   pinnedFirst: z.boolean().default(false),
   pinned: z.array(z.string()).default([]),
+  // ⚠️ `false` par défaut, alors que la FABRIQUE le met à `true` : la clé
+  // manque exactement sur les pages composées avant que ce filtre existe, et
+  // les faire changer d'aspect sans que personne y ait touché serait une
+  // modification qu'aucun agent n'a demandée. Une grille neuve, elle, part avec.
+  audienceFilter: z.boolean().default(false),
 });
 
 const actusSchema = z.object({
@@ -475,6 +581,18 @@ const texteSchema = z.object({
   align: z.enum(TEXT_ALIGNS).default("left"),
 });
 
+const texteImageSchema = z.object({
+  ...common,
+  kind: z.literal("texte-image"),
+  body: z.string().default(""),
+  // `.catch("")` et non un refus : une URL qu'on n'accepte pas fait un bloc
+  // sans image, pas un bloc perdu — la collectivité garde son texte et voit
+  // que l'image manque. Motif `background`.
+  imageUrl: z.string().regex(IMAGE_URL).catch("").default(""),
+  alt: z.string().default(""),
+  layout: z.enum(TEXTE_IMAGE_LAYOUTS).default("text-first"),
+});
+
 // Les sous-blocs sont lus à part, un par un (voir `parseSection`) : un
 // sous-bloc abîmé ne doit pas emporter le pied de page entier.
 const footerSchema = z.object({
@@ -491,6 +609,7 @@ const sectionSchema = z.discriminatedUnion("kind", [
   actusSchema,
   compteSchema,
   texteSchema,
+  texteImageSchema,
   footerSchema,
 ]);
 

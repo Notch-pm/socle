@@ -15,6 +15,60 @@ Format d'une entrée : `## AAAA-MM-JJ — <api> — ajout|correctif|rupture`
 
 ## 2026-09-07 — public-api — ajout
 
+**Un bloc « texte et image » sur la page d'accueil, et un filtre « Je suis… » sur la grille de
+démarches.** Deux ajouts de l'éditeur du Socle qui demandent chacun quelque chose au portail.
+Version du contrat : **1.15.0**. Ajouts additifs — aucun champ existant ne change de sens.
+
+**1. Nouvelle section `texte-image`** (`GET /v1/portal/page`), schéma **`PortalTexteImageSection`**,
+ajoutée au `oneOf` et au `discriminator` de `PortalPage` : `title` (facultatif), `body`,
+`image_url`, `alt`, `layout`, `translations`.
+
+- `layout` vaut `text-first` ou `image-first` : c'est un **ORDRE de lecture**, pas une position.
+  Côte à côte il donne la colonne de gauche ; empilé sur un téléphone, il donne ce qui vient en
+  premier — et il doit être respecté dans les deux cas.
+- ⚠️ **`image_url` est une adresse libre**, saisie par la collectivité : le Socle n'héberge pas le
+  fichier et ne garantit pas qu'il existe encore. Prévoyez qu'elle ne charge pas. Sa **forme** est
+  en revanche filtrée — **`https` absolue seulement** ; `javascript:`, `data:`, `http://` et les
+  chemins relatifs sont **écartés, pas nettoyés**, et le bloc est alors servi sans image. (Un
+  portail servi en https ne peut afficher ni contenu mixte, ni un chemin qui se résoudrait chez
+  lui : accepter ces formes ferait enregistrer des images que personne ne verrait.)
+- ⚠️ **`image_url` vide n'est pas une erreur** : le bloc n'est qu'un bandeau texte, à rendre comme
+  tel. Même chose pour `title` vide : pas de titre à afficher, et surtout pas un titre vide.
+- ⚠️ **`alt` vide = image décorative** : rendez un `alt` vide, jamais le titre du bloc à la place —
+  une synthèse vocale lirait deux fois la même chose.
+- `PortalSectionTranslations` porte donc une clé de plus, **`alt`** : le texte alternatif se traduit
+  comme les autres, sinon la page n'est traduite que pour ceux qui la voient. Toujours **par
+  whitelist du `kind`** : `alt` n'apparaît que sur une section `texte-image`.
+- Rien à faire pour un consommateur en place, **à une réserve près** : un `kind` inconnu doit être
+  **ignoré**, jamais servi brut ni traité comme une erreur (c'est déjà le contrat). Un portail qui
+  ne connaît pas encore `texte-image` affichera la page sans ce bloc.
+
+**2. `audience_filter` sur `PortalDemarchesSection`, `audiences` sur `PortalProcedure`** — de quoi
+proposer à l'usager « Je suis… : citoyen / entreprise / association ».
+
+- `audience_filter` (booléen) dit que la collectivité **veut** ce filtre sur cette grille. Il se
+  **cumule** avec un filtre par organisme (`PortalProcedure.organizations`), il ne le remplace pas :
+  deux dimensions indépendantes de la même liste — qui je suis, et à qui je m'adresse.
+- ⚠️ **`true` ne veut pas dire « affiche-le »** : un filtre à un seul choix n'en est pas un. Ne le
+  montrez que si les démarches affichées visent **au moins deux** publics — c'est exactement ce que
+  fait l'éditeur du Socle, et c'est ce que voit l'agent qui compose la page.
+- ⚠️ **`false` sur les pages composées avant l'existence du filtre** : la clé y manque, et une page
+  publiée ne gagne pas un élément que personne n'y a mis. Une grille créée depuis le 2026-09-07 naît
+  avec.
+- `audiences` (`PortalProcedure`, donc aussi `PortalProcedureDetail`) liste les publics auxquels la
+  démarche est ouverte, dans l'ordre `citoyen`, `entreprise`, `association`. C'est l'extrait de
+  `requester_config` qui concerne l'usager **avant** qu'il ait choisi sa démarche : de quoi filtrer
+  une liste sans charger le détail de chacune. La configuration complète (quels champs, obligatoires
+  ou non) reste au détail, elle ne franchit toujours pas sur la liste.
+- ⚠️ **`audiences` peut être VIDE, et ce n'est pas une anomalie** : une démarche dont l'étape
+  « Informations demandeur » n'a jamais été remplie ne déclare aucun public. Elle ne répond alors à
+  **aucun** choix du filtre — elle reste visible tant qu'on ne filtre pas. La lire comme « tous
+  publics » la ferait apparaître sous chaque choix, y compris là où elle n'est pas ouverte.
+
+---
+
+## 2026-09-07 — public-api — ajout
+
 **La page d'accueil composée se traduit.** Les libellés des démarches et des catégories l'étaient
 déjà ; les textes que la collectivité **écrit elle-même** dans son éditeur — titres de blocs,
 sous-titres, texte du champ de recherche, paragraphes, pied de page — le sont maintenant aussi.

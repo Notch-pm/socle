@@ -39,9 +39,11 @@ describe("createSection", () => {
       const section = createSection(kind);
       expect(section.kind).toBe(kind);
       expect(section.id).toBeTruthy();
-      // Le pied de page naît sans titre : un titre d'amorce y ferait un
-      // bandeau de plus à effacer, ses sous-blocs portent les leurs.
-      if (kind === "footer") expect(section.title).toBe("");
+      // Deux blocs naissent sans titre : le pied de page, dont un titre
+      // d'amorce ferait un bandeau de plus à effacer (ses sous-blocs portent
+      // les leurs), et « texte et image », où le titre est facultatif — il sert
+      // autant à illustrer un paragraphe qu'à annoncer une rubrique.
+      if (kind === "footer" || kind === "texte-image") expect(section.title).toBe("");
       else expect(section.title).not.toBe("");
     }
   });
@@ -142,6 +144,9 @@ describe("parsePortalPage", () => {
       columns: 3,
       pinnedFirst: false,
       pinned: [],
+      // ⚠️ `false`, alors qu'une grille NEUVE naît avec le filtre : la clé
+      // manque exactement sur les pages composées avant qu'il existe.
+      audienceFilter: false,
     });
   });
 
@@ -225,6 +230,107 @@ describe("pied de page", () => {
       sections: [{ id: "f", kind: "footer", background: "red; background:url(x)" }],
     });
     expect(page.sections[0]).toMatchObject({ background: "#0f1f18" });
+  });
+});
+
+describe("bloc « texte et image »", () => {
+  it("naît sans titre, texte d'abord, sans image", () => {
+    expect(createSection("texte-image")).toMatchObject({
+      kind: "texte-image",
+      title: "",
+      imageUrl: "",
+      alt: "",
+      layout: "text-first",
+    });
+    expect(createSection("texte-image").body).not.toBe("");
+  });
+
+  it("se re-parse à l'identique, ordre et texte alternatif compris", () => {
+    const built: PortalPage = {
+      version: 1,
+      sections: [
+        {
+          ...createSection("texte-image"),
+          title: "Nos équipements",
+          imageUrl: "https://exemple.fr/piscine.jpg",
+          alt: "La piscine municipale",
+          layout: "image-first",
+        },
+      ],
+    };
+    expect(parsePortalPage(built)).toEqual(built);
+  });
+
+  it("traduit son titre, son paragraphe ET la description de l'image", () => {
+    // `alt` est ce que lit une synthèse vocale : le laisser en français ne
+    // traduirait la page que pour ceux qui la voient.
+    expect(fieldsForKind("texte-image")).toEqual(["title", "body", "alt"]);
+  });
+
+  it("écarte une adresse d'image qui n'est pas une adresse, sans perdre le bloc", () => {
+    // Une URL finit dans le `src` d'une page publique : on écarte, on ne
+    // nettoie pas. Le texte de la collectivité, lui, reste.
+    // ⚠️ `http://` et les chemins absolus sont écartés AUSSI : le portail est
+    // servi en https et n'héberge aucun média de collectivité.
+    for (const imageUrl of [
+      "javascript:alert(1)",
+      "data:image/svg+xml,<svg/>",
+      "exemple.fr/x.jpg",
+      "http://exemple.fr/a.jpg",
+      "/media/a.jpg",
+      "https://",
+    ]) {
+      const page = parsePortalPage({
+        version: 1,
+        sections: [{ id: "i", kind: "texte-image", body: "Texte gardé", imageUrl }],
+      });
+      expect(page.sections[0], imageUrl).toMatchObject({ imageUrl: "", body: "Texte gardé" });
+    }
+  });
+
+  it("accepte une https absolue, et elle seule", () => {
+    for (const imageUrl of ["https://exemple.fr/a.jpg", "https://cdn.exemple.fr/x/y.png?v=2"]) {
+      const page = parsePortalPage({
+        version: 1,
+        sections: [{ id: "i", kind: "texte-image", imageUrl }],
+      });
+      expect(page.sections[0], imageUrl).toMatchObject({ imageUrl });
+    }
+  });
+
+  it("refuse un ordre hors domaine plutôt que d'en inventer un", () => {
+    const page = parsePortalPage({
+      version: 1,
+      sections: [{ id: "i", kind: "texte-image", layout: "image-au-milieu" }],
+    });
+    expect(page.sections).toEqual([]);
+  });
+});
+
+describe("filtre « Je suis… » de la grille de démarches", () => {
+  it("est proposé sur une grille neuve", () => {
+    expect(createSection("demarches").audienceFilter).toBe(true);
+  });
+
+  it("est ABSENT d'une grille composée avant qu'il existe", () => {
+    // ⚠️ Le défaut du parseur (`false`) diverge de celui de la fabrique
+    // (`true`), et c'est voulu : la clé manque exactement sur les pages déjà
+    // publiées, qui ne doivent pas gagner un filtre que personne n'y a mis.
+    const page = parsePortalPage({
+      version: 1,
+      sections: [{ id: "g", kind: "demarches", title: "Démarches les plus demandées" }],
+    });
+    expect(page.sections[0]).toMatchObject({ audienceFilter: false });
+  });
+
+  it("survit à l'aller-retour dans les deux sens", () => {
+    for (const audienceFilter of [true, false]) {
+      const built: PortalPage = {
+        version: 1,
+        sections: [{ ...createSection("demarches"), audienceFilter }],
+      };
+      expect(parsePortalPage(built)).toEqual(built);
+    }
   });
 });
 

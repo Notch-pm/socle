@@ -30,7 +30,7 @@ export function buildOpenApiDocument(serverUrl: string): Record<string, unknown>
     openapi: "3.1.0",
     info: {
       title: "API Socle — Référentiel de la gamme",
-      version: "1.14.0",
+      version: "1.15.0",
       description: [
         "API **en lecture seule** exposant le référentiel central de la gamme : les",
         "**organisations** (et sous-organisations) avec l'intégralité de leur configuration,",
@@ -848,7 +848,7 @@ export function buildOpenApiDocument(serverUrl: string): Record<string, unknown>
           description:
             "Démarche telle qu'un usager la voit. Whitelist beaucoup plus étroite que " +
             "`Procedure` : le paramétrage d'instruction n'y figure pas.",
-          required: ["id", "name", "organizations"],
+          required: ["id", "name", "organizations", "audiences"],
           properties: {
             id: { type: "string", format: "uuid" },
             name: { type: "string", description: "Intitulé de la démarche." },
@@ -874,6 +874,20 @@ export function buildOpenApiDocument(serverUrl: string): Record<string, unknown>
                 "(activation par organisation), dans l'ordre de l'arbre : la collectivité, " +
                 "puis ses sous-organisations. Jamais vide.",
               items: { $ref: "#/components/schemas/PortalOrganizationRef" },
+            },
+            audiences: {
+              type: "array",
+              description:
+                "Publics auxquels la démarche est ouverte, dans cet ordre — de quoi filtrer " +
+                "une liste (« Je suis… ») sans charger le détail de chaque démarche. " +
+                "⚠️ **Peut être vide**, et ce n'est pas une anomalie : une démarche dont " +
+                "l'étape « Informations demandeur » n'a jamais été remplie ne déclare aucun " +
+                "public. Elle ne répond alors à **aucun** choix de filtre — la lire comme " +
+                "« tous publics » la ferait apparaître là où elle n'est pas ouverte. La " +
+                "configuration complète (quels champs, obligatoires ou non) est servie par " +
+                "`GET /v1/portal/procedures/{id}` dans `requester_config`.",
+              items: { type: "string", enum: ["citoyen", "entreprise", "association"] },
+              examples: [["citoyen", "association"]],
             },
             translations: { $ref: "#/components/schemas/Translations" },
           },
@@ -955,6 +969,7 @@ export function buildOpenApiDocument(serverUrl: string): Record<string, unknown>
                   { $ref: "#/components/schemas/PortalActusSection" },
                   { $ref: "#/components/schemas/PortalCompteSection" },
                   { $ref: "#/components/schemas/PortalTexteSection" },
+                  { $ref: "#/components/schemas/PortalTexteImageSection" },
                   { $ref: "#/components/schemas/PortalFooterSection" },
                 ],
                 discriminator: {
@@ -965,6 +980,7 @@ export function buildOpenApiDocument(serverUrl: string): Record<string, unknown>
                     actus: "#/components/schemas/PortalActusSection",
                     compte: "#/components/schemas/PortalCompteSection",
                     texte: "#/components/schemas/PortalTexteSection",
+                    "texte-image": "#/components/schemas/PortalTexteImageSection",
                     footer: "#/components/schemas/PortalFooterSection",
                   },
                 },
@@ -994,7 +1010,16 @@ export function buildOpenApiDocument(serverUrl: string): Record<string, unknown>
         PortalDemarchesSection: {
           type: "object",
           description: "Grille de démarches ; le catalogue vient de `GET /v1/portal/procedures`.",
-          required: ["id", "kind", "title", "columns", "pinned_first", "pinned", "translations"],
+          required: [
+            "id",
+            "kind",
+            "title",
+            "columns",
+            "pinned_first",
+            "pinned",
+            "audience_filter",
+            "translations",
+          ],
           properties: {
             id: { type: "string" },
             kind: { type: "string", enum: ["demarches"] },
@@ -1008,6 +1033,16 @@ export function buildOpenApiDocument(serverUrl: string): Record<string, unknown>
               type: "array",
               items: { type: "string", format: "uuid" },
               description: "Démarches à la une — identifiants de démarches publiées.",
+            },
+            audience_filter: {
+              type: "boolean",
+              description:
+                "Proposer le filtre « Je suis… » (citoyen / entreprise / association), qui " +
+                "restreint la grille aux démarches dont `audiences` contient le public choisi. " +
+                "Il se **cumule** avec un filtre par organisme, il ne le remplace pas. " +
+                "⚠️ `true` ne veut pas dire « affiche-le » : un filtre à un seul choix n'en est " +
+                "pas un — ne le montrez que si les démarches affichées visent au moins deux " +
+                "publics. `false` sur les pages composées avant l'existence de ce filtre.",
             },
             translations: { $ref: "#/components/schemas/PortalSectionTranslations" },
           },
@@ -1048,6 +1083,50 @@ export function buildOpenApiDocument(serverUrl: string): Record<string, unknown>
             title: { type: "string" },
             body: { type: "string" },
             align: { type: "string", enum: ["left", "center"] },
+            translations: { $ref: "#/components/schemas/PortalSectionTranslations" },
+          },
+        },
+        PortalTexteImageSection: {
+          type: "object",
+          description:
+            "Un texte et une illustration. `layout` dit lequel des deux se lit en **premier** — " +
+            "un ordre, pas une position : sur un téléphone les deux moitiés s'empilent, et il " +
+            "n'y a plus de gauche ni de droite.",
+          required: ["id", "kind", "title", "body", "image_url", "alt", "layout", "translations"],
+          properties: {
+            id: { type: "string" },
+            kind: { type: "string", enum: ["texte-image"] },
+            title: {
+              type: "string",
+              description:
+                "Titre **facultatif** sur ce bloc : vide, il n'y a pas de titre à afficher.",
+            },
+            body: { type: "string" },
+            image_url: {
+              type: "string",
+              description:
+                "URL de l'image : **`https` absolue**, ou chaîne vide. ⚠️ C'est une adresse " +
+                "**libre** saisie par la collectivité : le Socle n'héberge pas le fichier et ne " +
+                "garantit pas qu'il existe encore — prévoyez le cas où elle ne charge pas. Sa " +
+                "**forme** est en revanche filtrée : `javascript:`, `data:`, `http://` et les " +
+                "chemins relatifs sont **écartés, pas nettoyés** (un portail servi en https ne " +
+                "peut de toute façon afficher ni contenu mixte ni chemin résolu chez lui). " +
+                "Chaîne **vide** = pas d'image : le bloc n'est alors qu'un bandeau texte, ce " +
+                "n'est pas une erreur.",
+              examples: ["https://exemple.fr/media/piscine.jpg"],
+            },
+            alt: {
+              type: "string",
+              description:
+                "Texte alternatif de l'image. **Vide = image décorative** : rendez un `alt` vide, " +
+                "jamais le titre du bloc à la place — une synthèse vocale lirait deux fois la " +
+                "même chose. Il se traduit comme les autres textes (`translations.alt`).",
+            },
+            layout: {
+              type: "string",
+              enum: ["text-first", "image-first"],
+              description: "Ce qui se lit en premier. À conserver quand les moitiés s'empilent.",
+            },
             translations: { $ref: "#/components/schemas/PortalSectionTranslations" },
           },
         },
@@ -1344,7 +1423,8 @@ export function buildOpenApiDocument(serverUrl: string): Record<string, unknown>
           description:
             "Textes de la section traduits, indexés par **code de langue** (BCP 47). Les clés " +
             "d'une langue sont celles des textes de la section : `title`, et selon le `kind` " +
-            "`subtitle`, `placeholder`, `body` — attendre `body` sur une section `recherche` " +
+            "`subtitle`, `placeholder`, `body`, `alt` — attendre `body` sur une section " +
+            "`recherche` " +
             "n'a pas de sens. Mêmes trois règles que `Translations` : il n'y a **jamais** de " +
             "clé `fr` (le français est le champ de même nom) ; un texte **absent** n'est pas " +
             "un texte vide, c'est un **repli sur le champ français** ; et ce repli se fait " +
@@ -1359,6 +1439,10 @@ export function buildOpenApiDocument(serverUrl: string): Record<string, unknown>
               subtitle: { type: "string" },
               placeholder: { type: "string" },
               body: { type: "string" },
+              alt: {
+                type: "string",
+                description: "Texte alternatif de l'image d'un bloc `texte-image`.",
+              },
             },
           },
           example: {

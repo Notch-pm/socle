@@ -43,12 +43,16 @@ export type TranslatableField = (typeof TRANSLATABLE_FIELDS)[number];
  * Les textes libres d'une section de page composée — l'autre jeu de champs
  * traduisibles, possédé par `src/features/portal/portalPage.ts`.
  *
+ * ⚠️ `alt` est le texte alternatif d'une image, et il est ici pour la même
+ * raison que les autres : c'est ce que lit une synthèse vocale. Le laisser en
+ * français reviendrait à ne traduire la page que pour ceux qui la voient.
+ *
  * ⚠️ IL VIT ICI, avec l'autre, parce que les trois règles de la maison (jamais
  * de clé `fr`, vide = absence, repli champ par champ) sont écrites **une seule
  * fois** dans ce module. Un second jeu de champs devait pouvoir s'en servir
  * sans les recopier — c'est ce qui les fait tenir ensemble.
  */
-export const PORTAL_SECTION_FIELDS = ["title", "subtitle", "placeholder", "body"] as const;
+export const PORTAL_SECTION_FIELDS = ["title", "subtitle", "placeholder", "body", "alt"] as const;
 
 export type PortalSectionField = (typeof PORTAL_SECTION_FIELDS)[number];
 

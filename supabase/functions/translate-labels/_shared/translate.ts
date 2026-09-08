@@ -103,6 +103,15 @@ export const FIELD_SPECS = {
       "nominal ou exemple comme en français, jamais une phrase complète, jamais de " +
       "ponctuation finale ;",
   },
+  alt: {
+    maxSource: 200,
+    maxTranslation: 300,
+    multiline: false,
+    cost: 60,
+    rule:
+      "« alt » est la DESCRIPTION d'une image, lue à voix haute par les synthèses vocales : " +
+      "dis CE QU'ON VOIT, en une phrase courte, sans « image de » ni « photo de » ;",
+  },
   body: {
     maxSource: 1500,
     maxTranslation: 1800,
@@ -147,7 +156,7 @@ export type LabelKind = "procedure" | "category" | "portal_section";
 export const KIND_FIELDS: Record<LabelKind, readonly TranslatableField[]> = {
   procedure: ["name", "short_description"],
   category: ["name"],
-  portal_section: ["title", "subtitle", "placeholder", "body"],
+  portal_section: ["title", "subtitle", "placeholder", "body", "alt"],
 };
 
 export interface TranslationTarget {

@@ -394,6 +394,24 @@ describe("portal_section", () => {
     ...overrides,
   });
 
+  it("accepte le texte alternatif d'une image, dans le même appel que le reste", () => {
+    // ⚠️ UN SEUL APPEL POUR TOUS LES TEXTES DU BLOC : le modèle décrit l'image
+    // en sachant de quel bloc elle illustre le propos. Et un seul débit.
+    const parsed = parseTranslatePayload(
+      page([
+        { key: "title", value: "Nos équipements" },
+        { key: "alt", value: "La piscine municipale" },
+      ]),
+    );
+    expect(parsed.ok).toBe(true);
+    if (!parsed.ok) return;
+    expect(parsed.value.fields.map((f) => f.key)).toEqual(["title", "alt"]);
+    const prompt = buildTranslationPrompt(parsed.value);
+    // Le registre compte : une description d'image n'est ni un titre ni un
+    // paragraphe, et « image de » y est du bruit pour une synthèse vocale.
+    expect(prompt.system).toContain("DESCRIPTION d'une image");
+  });
+
   it("accepte les quatre textes d'une section", () => {
     const parsed = parseTranslatePayload(
       page([

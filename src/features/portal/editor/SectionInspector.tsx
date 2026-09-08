@@ -10,6 +10,7 @@ import {
   FOOTER_COLUMNS,
   GRID_COLUMNS,
   HEX_COLOR,
+  IMAGE_URL,
   MAX_SHORTCUTS,
   SECTION_LABELS,
   createContactSection,
@@ -22,6 +23,8 @@ import {
   type PortalSection,
   type RechercheSection,
   type TextAlign,
+  type TexteImageLayout,
+  type TexteImageSection,
   type TexteSection,
 } from "@/features/portal/portalPage";
 import type { PortalCatalogueEntry } from "@/features/portal/catalogue";
@@ -52,6 +55,16 @@ export interface SectionInspectorProps {
 const TEXT_ALIGN_OPTIONS: { value: TextAlign; label: string }[] = [
   { value: "left", label: "Gauche" },
   { value: "center", label: "Centré" },
+];
+
+/**
+ * L'ordre des deux moitiés, nommé par ce qui vient EN PREMIER — le mot que
+ * l'agent cherche quand il veut « l'image à gauche » comme quand il regarde la
+ * page sur son téléphone.
+ */
+const TEXTE_IMAGE_LAYOUT_OPTIONS: { value: TexteImageLayout; label: string }[] = [
+  { value: "text-first", label: "Texte puis image" },
+  { value: "image-first", label: "Image puis texte" },
 ];
 
 /**
@@ -96,7 +109,11 @@ export function SectionInspector({
       <div className="flex flex-1 flex-col gap-[18px] overflow-auto p-4">
         <div className={cn("flex flex-col gap-[18px]", isActus && "pointer-events-none opacity-50")} aria-disabled={isActus || undefined}>
           <Field
-            label={section.kind === "footer" ? "Titre (facultatif)" : "Titre affiché"}
+            label={
+              section.kind === "footer" || section.kind === "texte-image"
+                ? "Titre (facultatif)"
+                : "Titre affiché"
+            }
             htmlFor="insp-title"
           >
             <Input
@@ -123,6 +140,9 @@ export function SectionInspector({
             </Field>
           ) : null}
           {section.kind === "texte" ? <TexteFields section={section} onChange={onChange} /> : null}
+          {section.kind === "texte-image" ? (
+            <TexteImageFields section={section} onChange={onChange} />
+          ) : null}
           {section.kind === "footer" ? (
             <FooterFields
               section={section}
@@ -270,6 +290,13 @@ function DemarchesFields({
         checked={section.pinnedFirst}
         onCheckedChange={(checked) => onChange({ ...section, pinnedFirst: checked })}
       />
+      <ToggleField
+        id="insp-audience-filter"
+        label="Filtre « Je suis… »"
+        checked={section.audienceFilter}
+        onCheckedChange={(checked) => onChange({ ...section, audienceFilter: checked })}
+        hint="Citoyen, entreprise, association — d'après les publics de l'étape « Informations demandeur ». Se cumule avec le filtre par organisme, et ne s'affiche que si les démarches visent plusieurs publics."
+      />
       <div className="flex flex-col gap-1.5">
         <span className="text-[12.5px] font-bold">Mise en avant</span>
         <ProcedurePickList
@@ -342,6 +369,70 @@ function TexteFields({
           value={section.align}
           onChange={(align) => onChange({ ...section, align })}
           options={TEXT_ALIGN_OPTIONS}
+        />
+      </Field>
+    </>
+  );
+}
+
+/**
+ * Texte et image. L'adresse de l'image est une URL libre — le Socle
+ * l'enregistre et la publie, il n'héberge pas le fichier (motif
+ * `organizations.logo_url`). Le champ le SIGNALE quand la forme n'est pas
+ * acceptée plutôt que de laisser découvrir au rechargement que l'image a
+ * disparu : `parsePortalPage` écarte ce qui n'est pas une `https` absolue.
+ */
+function TexteImageFields({
+  section,
+  onChange,
+}: {
+  section: TexteImageSection;
+  onChange: (section: PortalSection) => void;
+}) {
+  const url = section.imageUrl.trim();
+  const urlError = url !== "" && !IMAGE_URL.test(url);
+  return (
+    <>
+      <Field label="Paragraphe" htmlFor="insp-body">
+        <textarea
+          id="insp-body"
+          value={section.body}
+          onChange={(e) => onChange({ ...section, body: e.target.value })}
+          rows={4}
+          className="w-full rounded-lg border border-input bg-background px-3 py-2 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+        />
+      </Field>
+      <Field
+        label="Adresse de l'image"
+        htmlFor="insp-image-url"
+        hint="Lien https vers un fichier déjà en ligne, ex. https://…/visuel.jpg"
+        error={urlError ? "Adresse attendue : https://…" : undefined}
+      >
+        <Input
+          id="insp-image-url"
+          value={section.imageUrl}
+          onChange={(e) => onChange({ ...section, imageUrl: e.target.value })}
+          aria-invalid={urlError}
+          placeholder="https://"
+        />
+      </Field>
+      <Field
+        label="Description de l'image"
+        htmlFor="insp-image-alt"
+        hint="Lue par les synthèses vocales, affichée si l'image ne charge pas. À laisser vide si l'image est purement décorative."
+      >
+        <Input
+          id="insp-image-alt"
+          value={section.alt}
+          onChange={(e) => onChange({ ...section, alt: e.target.value })}
+        />
+      </Field>
+      <Field label="Ordre">
+        <SegmentedControl
+          aria-label="Ordre"
+          value={section.layout}
+          onChange={(layout) => onChange({ ...section, layout })}
+          options={TEXTE_IMAGE_LAYOUT_OPTIONS}
         />
       </Field>
     </>

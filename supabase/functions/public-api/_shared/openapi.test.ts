@@ -152,8 +152,8 @@ describe("buildOpenApiDocument", () => {
 describe("contrat — documents et courriers", () => {
   const doc = buildOpenApiDocument("https://example.supabase.co/functions/v1/public-api") as any;
 
-  it("annonce la version 1.14.0 du contrat", () => {
-    expect(doc.info.version).toBe("1.14.0");
+  it("annonce la version 1.15.0 du contrat", () => {
+    expect(doc.info.version).toBe("1.15.0");
   });
 
   it("décrit les textes traduits d'une section, dans un schéma à PART", () => {
@@ -162,12 +162,12 @@ describe("contrat — documents et courriers", () => {
     // clés dirait au consommateur qu'elles peuvent y apparaître — c'est faux.
     const section = doc.components.schemas.PortalSectionTranslations;
     expect(Object.keys(section.additionalProperties.properties))
-      .toEqual(["title", "subtitle", "placeholder", "body"]);
+      .toEqual(["title", "subtitle", "placeholder", "body", "alt"]);
     expect(section.description).toContain("champ par champ");
     expect(Object.keys(doc.components.schemas.Translations.additionalProperties.properties))
       .toEqual(["name", "short_description"]);
 
-    for (const kind of ["Recherche", "Demarches", "Actus", "Compte", "Texte", "Footer"]) {
+    for (const kind of ["Recherche", "Demarches", "Actus", "Compte", "Texte", "TexteImage", "Footer"]) {
       const schema = doc.components.schemas[`Portal${kind}Section`];
       expect(schema.properties.translations, kind).toEqual({
         $ref: "#/components/schemas/PortalSectionTranslations",
@@ -341,6 +341,7 @@ describe("contrat — démarches du portail", () => {
   it("sert une démarche amputée du paramétrage d'instruction", () => {
     const schema = doc.components.schemas.PortalProcedure;
     expect(Object.keys(schema.properties).sort()).toEqual([
+      "audiences",
       "id",
       "input_duration_minutes",
       "name",
@@ -352,6 +353,16 @@ describe("contrat — démarches du portail", () => {
     for (const leak of ["form_schema", "knowledge_base", "agent_description", "requester_config"]) {
       expect(schema.properties).not.toHaveProperty(leak);
     }
+  });
+
+  it("sert les PUBLICS d'une démarche, jamais la configuration qui les porte", () => {
+    // `audiences` répond à « à qui cette démarche s'adresse-t-elle ? », ce qui
+    // suffit à filtrer une liste. « Que va-t-on me demander ? » reste au détail.
+    const audiences = doc.components.schemas.PortalProcedure.properties.audiences;
+    expect(audiences.items.enum).toEqual(["citoyen", "entreprise", "association"]);
+    expect(doc.components.schemas.PortalProcedure.required).toContain("audiences");
+    // Le piège qu'un consommateur doit lire : vide ≠ tous publics.
+    expect(audiences.description).toContain("vide");
   });
 });
 
@@ -420,10 +431,37 @@ describe("contrat — page publiée du portail", () => {
       "footer",
       "recherche",
       "texte",
+      "texte-image",
     ]);
     for (const ref of items.oneOf) {
       const name = ref.$ref.split("/").pop();
       expect(doc.components.schemas[name].required).toContain("kind");
     }
+  });
+
+  it("décrit le bloc texte et image : un ORDRE, une URL libre, un alt qui se traduit", () => {
+    const schema = doc.components.schemas.PortalTexteImageSection;
+    expect(schema.properties.layout.enum).toEqual(["text-first", "image-first"]);
+    // Le consommateur doit savoir qu'il peut recevoir une adresse morte, et
+    // qu'une chaîne vide n'est pas une erreur.
+    expect(schema.properties.image_url.description).toContain("libre");
+    expect(schema.properties.image_url.description).toContain("vide");
+    expect(schema.required).toEqual([
+      "id",
+      "kind",
+      "title",
+      "body",
+      "image_url",
+      "alt",
+      "layout",
+      "translations",
+    ]);
+  });
+
+  it("annonce le filtre « Je suis… » sur la grille, cumulable et pas toujours affichable", () => {
+    const filter = doc.components.schemas.PortalDemarchesSection.properties.audience_filter;
+    expect(filter.type).toBe("boolean");
+    expect(filter.description).toContain("cumule");
+    expect(doc.components.schemas.PortalDemarchesSection.required).toContain("audience_filter");
   });
 });

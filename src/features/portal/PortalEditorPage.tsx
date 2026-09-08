@@ -307,6 +307,7 @@ function LoadedEditor({
     <>
       <PortalEditor
         organizationName={organization.name}
+        organizationLogoUrl={organization.logo_url}
         organizationId={organization.id}
         languages={enabledLanguages ?? []}
         page={page}

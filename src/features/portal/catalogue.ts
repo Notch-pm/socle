@@ -18,6 +18,7 @@
  */
 import { parseCommunicationConfig } from "@/features/procedures/communication";
 import { parseProcedureStatus } from "@/features/procedures/procedureStatus";
+import { AUDIENCES, enabledAudiences, type Audience } from "@/features/procedures/requesterFields";
 import type { Procedure } from "@/features/procedures/useProcedures";
 import {
   buildOrgTree,
@@ -45,6 +46,19 @@ export const CATALOGUE_VISIBILITY_LABELS: Record<CatalogueVisibility, string | n
   "non-activee": "Non activée",
 };
 
+/**
+ * Les publics, tels que le filtre « Je suis… » du portail les nomme : au
+ * SINGULIER, parce qu'ils complètent une phrase à la première personne — un
+ * usager est un citoyen, pas « des citoyens ». Le paramétrage, lui, les nomme
+ * au pluriel (`AUDIENCES`) : il décrit une population, pas la personne devant
+ * l'écran.
+ */
+export const AUDIENCE_FILTER_LABELS: Record<Audience, string> = {
+  citoyen: "Citoyen",
+  entreprise: "Entreprise",
+  association: "Association",
+};
+
 /** Un organisme qui propose une démarche, tel que la carte le nomme. */
 export interface CatalogueOrganization {
   id: string;
@@ -58,6 +72,13 @@ export interface PortalCatalogueEntry {
   visibility: CatalogueVisibility;
   /** Organismes de l'arbre qui proposent la démarche, dans l'ordre de l'arbre. */
   organizations: CatalogueOrganization[];
+  /**
+   * Publics auxquels la démarche est ouverte (étape « Informations
+   * demandeur »), dans l'ordre d'`AUDIENCES`. ⚠️ Peut être **vide** : une
+   * démarche dont l'étape n'a jamais été remplie ne déclare aucun public, et
+   * ne répond donc à aucun choix du filtre.
+   */
+  audiences: Audience[];
 }
 
 /** Ce qu'il faut d'une liaison `organization_procedures` pour savoir qui propose quoi. */
@@ -159,6 +180,7 @@ export function toCatalogueEntry(
     shortDescription: procedure.short_description,
     visibility: catalogueVisibility(procedure, today, organizations),
     organizations,
+    audiences: enabledAudiences(procedure.requester_config),
   };
 }
 
@@ -175,6 +197,17 @@ export function buildCatalogue(
 ): PortalCatalogueEntry[] {
   const offers = offersByProcedure(bindings, organizations);
   return procedures.map((procedure) => toCatalogueEntry(procedure, today, offers.get(procedure.id) ?? []));
+}
+
+/**
+ * Les publics représentés par au moins une des entrées, dans l'ordre
+ * d'`AUDIENCES` — de quoi savoir si le filtre « Je suis… » a un sens. Proposer
+ * « Entreprise » quand aucune démarche ne s'y adresse ne mènerait qu'à une
+ * liste vide.
+ */
+export function catalogueAudiences(entries: PortalCatalogueEntry[]): Audience[] {
+  const present = new Set(entries.flatMap((entry) => entry.audiences));
+  return AUDIENCES.map((a) => a.key).filter((key) => present.has(key));
 }
 
 /**

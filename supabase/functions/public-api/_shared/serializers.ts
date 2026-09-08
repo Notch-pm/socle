@@ -359,13 +359,49 @@ function readLanguages(value: unknown): string[] {
   return out;
 }
 
+/** Les trois publics du paramétrage, dans l'ordre où ils s'affichent. */
+const AUDIENCES = ["citoyen", "entreprise", "association"] as const;
+
 /**
- * Démarche pour le portail usagers. Six champs — aucun élément du paramétrage
- * d'instruction ne franchit. Le filtrage de PUBLICATION est fait en amont
- * (`publishedCatalogue`) : ce sérialiseur ne décide pas ce qui est publié, il
- * décide ce qui est montré. Les organismes qui proposent la démarche arrivent
+ * Les publics ACTIVÉS d'une démarche, lus dans `requester_config`.
+ *
+ * ⚠️ **Miroir volontaire** d'`enabledAudiences`
+ * (`src/features/procedures/requesterFields.ts`) : une edge function ne peut
+ * rien importer de `src/`, et les tests des deux côtés l'épinglent — motif
+ * `portalCatalogue.ts`.
+ *
+ * ⚠️ Seuls les NOMS des publics traversent, jamais la configuration des champs
+ * qui les accompagne : quelles informations sont demandées au requérant, et
+ * lesquelles sont obligatoires, appartiennent au détail
+ * (`GET /v1/portal/procedures/{id}`), pas à une liste. La liste répond à « à
+ * qui cette démarche s'adresse-t-elle ? », pas à « que va-t-on me demander ? ».
+ *
+ * ⚠️ Une colonne absente ou jamais paramétrée rend une liste **vide**, jamais
+ * les trois publics : rien n'a été déclaré, et le déclarer à la place de la
+ * collectivité ferait apparaître la démarche sous des publics auxquels elle
+ * n'est pas ouverte.
+ */
+export function readAudiences(raw: unknown): Array<"citoyen" | "entreprise" | "association"> {
+  if (!raw || typeof raw !== "object" || Array.isArray(raw)) return [];
+  const config = raw as Record<string, unknown>;
+  return AUDIENCES.filter((key) => {
+    const entry = config[key];
+    return !!entry && typeof entry === "object" && (entry as Record<string, unknown>).enabled === true;
+  });
+}
+
+/**
+ * Démarche pour le portail usagers. Une whitelist étroite — aucun élément du
+ * paramétrage d'instruction ne franchit. Le filtrage de PUBLICATION est fait en
+ * amont (`publishedCatalogue`) : ce sérialiseur ne décide pas ce qui est publié,
+ * il décide ce qui est montré. Les organismes qui proposent la démarche arrivent
  * déjà résolus, dans l'ordre de l'arbre ; ils sont recopiés champ par champ,
  * comme tout le reste.
+ *
+ * ⚠️ `audiences` est le seul champ DÉRIVÉ : il est extrait de
+ * `requester_config`, qui ne sort pas de la liste (voir `readAudiences`). Ce
+ * n'est pas une entorse à la whitelist, c'en est l'application — on sert les
+ * noms des publics, pas la configuration qui les porte.
  */
 export function serializePortalProcedure(
   row: Row,
@@ -378,6 +414,7 @@ export function serializePortalProcedure(
     user_description: nullableStr(row.user_description),
     input_duration_minutes: nullableNum(row.input_duration_minutes),
     organizations: organizations.map((org) => ({ id: str(org.id), name: str(org.name) })),
+    audiences: readAudiences(row.requester_config),
     translations: row.translations ?? null,
   };
 }

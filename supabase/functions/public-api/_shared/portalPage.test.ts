@@ -58,6 +58,90 @@ describe("serializePortalPage — tolérance, comme l'éditeur", () => {
       columns: 3,
       pinned_first: false,
       pinned: [],
+      // ⚠️ `false` : la clé manque exactement sur les pages composées avant que
+      // ce filtre existe, et une page publiée ne gagne pas un filtre que
+      // personne n'y a mis. L'éditeur, lui, le propose sur toute grille neuve.
+      audience_filter: false,
+    });
+  });
+
+  it("sert le filtre « Je suis… » tel que la collectivité l'a réglé", () => {
+    const dto = serializePortalPage(
+      { sections: [{ id: "g", kind: "demarches", audienceFilter: true }] },
+      META,
+      PUBLISHED,
+    );
+    expect(dto.sections[0]).toMatchObject({ audience_filter: true });
+  });
+
+  it("sert un bloc texte et image, ordre et texte alternatif compris", () => {
+    const dto = serializePortalPage(
+      {
+        sections: [
+          {
+            id: "ti",
+            kind: "texte-image",
+            title: "Nos équipements",
+            body: "La piscine est ouverte toute l'année.",
+            imageUrl: "https://exemple.fr/piscine.jpg",
+            alt: "La piscine municipale",
+            layout: "image-first",
+            translations: { en: { title: "Our facilities", alt: "The municipal pool" } },
+          },
+        ],
+      },
+      META,
+      PUBLISHED,
+    );
+    expect(dto.sections[0]).toEqual({
+      id: "ti",
+      kind: "texte-image",
+      title: "Nos équipements",
+      body: "La piscine est ouverte toute l'année.",
+      image_url: "https://exemple.fr/piscine.jpg",
+      alt: "La piscine municipale",
+      layout: "image-first",
+      translations: { en: { title: "Our facilities", alt: "The municipal pool" } },
+    });
+  });
+
+  it("ÉCARTE une adresse d'image qui n'en est pas, sans emporter le texte", () => {
+    // Elle finit dans le `src` d'une page publique : `javascript:` et `data:`
+    // n'ont pas de forme inoffensive qu'on saurait reconstituer. Le bloc reste
+    // servi, sans image — le texte de la collectivité n'a pas à disparaître.
+    for (const imageUrl of [
+      "javascript:alert(1)",
+      "data:image/svg+xml,<svg/>",
+      "exemple.fr/x.jpg",
+      // Le portail est servi en https (contenu mixte bloqué) et n'héberge aucun
+      // média de collectivité (chemin absolu = 404).
+      "http://exemple.fr/a.jpg",
+      "/media/a.jpg",
+    ]) {
+      const dto = serializePortalPage(
+        { sections: [{ id: "ti", kind: "texte-image", body: "Texte gardé", imageUrl }] },
+        META,
+        PUBLISHED,
+      );
+      expect(dto.sections[0], imageUrl).toMatchObject({ image_url: "", body: "Texte gardé" });
+    }
+  });
+
+  it("ramène un ordre inconnu au texte d'abord, et complète les défauts", () => {
+    const dto = serializePortalPage(
+      { sections: [{ id: "ti", kind: "texte-image", layout: "image-au-milieu" }] },
+      META,
+      PUBLISHED,
+    );
+    expect(dto.sections[0]).toEqual({
+      id: "ti",
+      kind: "texte-image",
+      title: "",
+      body: "",
+      image_url: "",
+      alt: "",
+      layout: "text-first",
+      translations: {},
     });
   });
 
