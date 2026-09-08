@@ -220,12 +220,25 @@ suppose la précédente.
 6. **Les échanges.** Fil de messages entre l'usager et l'agent sur une demande (demande de
    complément, réponse, notification par courriel via le SMTP hérité de la collectivité). Le fil
    vit avec la demande (Iris) ; le portail en est une vue.
-7. **Les pièces jointes.** Le formulaire du portail AFFICHE déjà les pièces attendues (champs
-   `attachment` du `form_schema`), désactivées et jamais bloquantes — le worker de copie d'Iris
-   n'étant pas actif, une URL signée expirerait avant d'être lue. Reste le dépôt réel des pièces
-   demandées par la démarche (`document_types`, déjà paramétrées par démarche) : formats et tailles bornés, stockage privé, analyse antivirus à
-   cadrer, remplacement d'une pièce refusée, et le même mécanisme pour les pièces jointes aux
-   échanges.
+7. **Les pièces jointes — livrées le 2026-09-08** (Iris + Nora, contrat d'ingestion Iris
+   2.0.0). Le fichier part dès sa sélection au portail (`portal-api /v1/demandes/pieces`) vers
+   Iris (`POST /v1/uploads`), qui vérifie le **contenu réel** (signature binaire contre une liste
+   fermée : PDF, images, HEIC, Word/Excel/OpenDocument — jamais SVG, HTML ni Office à macros),
+   borne la taille (10 Mo au portail), calcule l'empreinte et garde le fichier en attente de la
+   demande ; Nora ne stocke rien. Pas d'antivirus (décision PO : la liste fermée est la défense).
+   Le remplacement d'une pièce refusée existe côté Iris (instruction) ; **côté portail, il attend
+   les échanges (6)**, comme les pièces jointes aux échanges.
+   ⚠️ **Question ouverte, POUR LE SOCLE (2026-09-08)** : Iris refuse une demande dont la
+   démarche n'est pas activée pour l'organisme transmis (`organization_procedures`, opt-in
+   strict — garde `t18`). Or le portail ne transmet un organisme que si l'usager l'a choisi, donc
+   seulement quand la démarche publiée en **liste plusieurs** ; sans organisme, Iris retient la
+   **racine** de la collectivité. Une démarche activée pour une seule commune mais publiée sans
+   organisme (ou avec une liste qui ne reflète pas ses activations) part donc vers la racine et
+   se fait refuser — constaté au premier essai réel. À trancher : la liste `organizations` que
+   `public-api` publie avec une démarche doit être exactement **celle des organismes qui
+   l'activent** (le portail présélectionnant l'unique organisme), ou bien l'activation à la racine
+   devient implicite quand une seule commune active. La première lecture est la plus cohérente
+   avec l'opt-in strict.
 8. **FranceConnect (?)** Identification par FranceConnect / FranceConnect+ pour les démarches qui
    exigent une identité vérifiée. Question ouverte : habilitation à obtenir par la collectivité
    ou par l'éditeur, périmètre des données restituées, cohabitation avec les comptes locaux.
