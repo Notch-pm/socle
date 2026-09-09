@@ -1,0 +1,15 @@
+// Déploiement du front Socle sur Cloudflare Workers (static assets uniquement, aucun code Worker).
+//
+// ⚠️ Les variables VITE_SUPABASE_URL / VITE_SUPABASE_PUBLISHABLE_KEY sont inlinées par Vite
+// à `npm run build` : elles se règlent comme variables de BUILD (Settings → Build → Variables),
+// jamais comme variables de runtime — un Worker sans code n'en a pas.
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "socle",
+  "compatibility_date": "2026-09-01",
+  "assets": {
+    "directory": "./dist",
+    // React Router (BrowserRouter) : toute route inconnue sert index.html au lieu d'un 404.
+    "not_found_handling": "single-page-application"
+  }
+}

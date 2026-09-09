@@ -7,3 +7,5 @@ dist-ssr
 *.tsbuildinfo
 supabase/.temp/
 .playwright-mcp/
+.wrangler/
+.dev.vars
