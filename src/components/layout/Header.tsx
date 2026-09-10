@@ -5,6 +5,10 @@ import {
   useAllOrganizations,
   visibleRootOrganizations,
 } from "@/features/superadmin/organizations/useOrganizationsAdmin";
+import { AppLauncher } from "@/components/layout/AppLauncher";
+import { RAIL_WIDTH_CLASS } from "@/components/layout/Sidebar";
+import { CURRENT_APP, appInitial } from "@/components/layout/suiteApps";
+import { cn } from "@/lib/utils";
 import logo from "@/assets/logo-edilumen.svg";
 
 function initials(email: string) {
@@ -12,10 +16,14 @@ function initials(email: string) {
 }
 
 /**
- * Logo de la collectivité. `logo_url` est une URL libre saisie dans la fiche :
- * elle peut pointer vers un fichier disparu. On escamote alors l'image plutôt
- * que de laisser l'icône de vignette cassée du navigateur dans l'en-tête — le
- * nom, lui, suffit à identifier.
+ * Logo de la collectivité, **à nu** : pas de pastille ni de cadre autour. Un
+ * logo est déjà une identité graphique — l'enfermer dans une capsule de
+ * couleur le met en concurrence avec elle et le rend illisible.
+ *
+ * `logo_url` est une URL libre saisie dans la fiche : elle peut pointer vers un
+ * fichier disparu. On escamote alors l'image plutôt que de laisser l'icône de
+ * vignette cassée du navigateur dans l'en-tête — le nom, à côté, suffit à
+ * identifier.
  *
  * ⚠️ Hauteur fixe, largeur LIBRE (bornée). Les logos de collectivité sont le
  * plus souvent des bandeaux larges : les enfermer dans un carré de 24 px les
@@ -31,7 +39,7 @@ function OrgLogo({ url, name }: { url: string | null; name: string }) {
       src={url}
       alt={name}
       onError={() => setBroken(true)}
-      className="h-6 w-auto max-w-[120px] shrink-0 object-contain"
+      className="h-9 w-auto max-w-[160px] shrink-0 object-contain"
     />
   );
 }
@@ -53,10 +61,9 @@ export function Header() {
 
   const email = session?.user.email ?? "";
 
-  // Identité de la collectivité, à droite du produit — motif du shell de la
-  // gamme (Iris, Clara) : wordmark, séparateur, tenant. Les sommets de la forêt
-  // VISIBLE, donc rien de plus que ce que le RLS laisse voir : un membre d'une
-  // sous-organisation y lit la sienne, faute de voir sa racine.
+  // Identité de la collectivité — les sommets de la forêt VISIBLE, donc rien
+  // de plus que ce que le RLS laisse voir : un membre d'une sous-organisation
+  // y lit la sienne, faute de voir sa racine.
   const { data: organizations } = useAllOrganizations();
   const roots = visibleRootOrganizations(organizations ?? []);
   const main = roots[0];
@@ -66,28 +73,58 @@ export function Header() {
   const allNames = roots.map((o) => o.name).join(" · ");
 
   return (
-    <header className="flex h-14 shrink-0 items-center justify-between gap-4 border-b border-border bg-card px-4">
-      <div className="flex min-w-0 items-center gap-3">
-        <img src={logo} alt="Edilumen" className="h-5 shrink-0" />
-        <span className="shrink-0 text-sm font-semibold tracking-tight">Socle</span>
-        {main ? (
-          <>
-            <span className="h-6 w-px shrink-0 bg-border" aria-hidden="true" />
+    /**
+     * ⚠️ **QUI L'ON SERT À GAUCHE, AVEC QUOI À DROITE.** Le nom et le logo de
+     * la collectivité suivent immédiatement le wordmark Edilumen : c'est le
+     * contexte de tout ce que l'agent voit à l'écran, et il ne se lit pas dans
+     * une capsule qui concurrencerait le logo. Le produit (« Socle ») se pose
+     * à l'autre bout, contre le menu utilisateur — c'est un repère de
+     * navigation entre applications, pas le sujet de la page.
+     */
+    <header className="flex h-14 shrink-0 items-center gap-3 border-b border-border bg-card pr-4">
+      {/*
+        Colonne de la largeur du rail : le lanceur tombe ainsi exactement sur
+        l'axe vertical des icônes de navigation, juste au-dessus d'elles.
+      */}
+      <div className={cn("flex shrink-0 justify-center", RAIL_WIDTH_CLASS)}>
+        <AppLauncher organizationName={main?.name} />
+      </div>
+
+      <img src={logo} alt="Edilumen" className="h-5 shrink-0" />
+
+      {main ? (
+        <>
+          <span className="h-6 w-px shrink-0 bg-border" aria-hidden="true" />
+          <div className="flex min-w-0 items-center gap-2.5" title={allNames}>
             <OrgLogo url={main.logo_url} name={main.name} />
-            <span className="truncate text-sm font-medium text-muted-foreground" title={allNames}>
-              {main.name}
-            </span>
+            <span className="truncate text-sm font-semibold">{main.name}</span>
             {others > 0 ? (
               <span
                 title={allNames}
-                className="shrink-0 rounded-full bg-muted px-2 py-0.5 text-xs font-medium text-muted-foreground"
+                className="shrink-0 rounded-full bg-muted px-1.5 py-0.5 text-xs font-medium text-muted-foreground"
               >
                 +{others}
               </span>
             ) : null}
-          </>
-        ) : null}
+          </div>
+        </>
+      ) : null}
+
+      <div className="min-w-2 flex-1" />
+
+      <div className="flex shrink-0 items-center gap-2">
+        <span
+          aria-hidden="true"
+          className="flex size-6 items-center justify-center rounded-md bg-primary/10 text-xs font-bold text-primary"
+        >
+          {appInitial(CURRENT_APP)}
+        </span>
+        <span className="text-base font-bold tracking-tight text-primary">
+          {CURRENT_APP.name}
+        </span>
       </div>
+
+      <span className="h-6 w-px shrink-0 bg-border" aria-hidden="true" />
 
       <div ref={menuRef} className="relative shrink-0">
         <button
@@ -96,7 +133,7 @@ export function Header() {
           aria-expanded={menuOpen}
           className="flex items-center gap-2 rounded-lg px-2 py-1.5 hover:bg-muted"
         >
-          <span className="flex h-8 w-8 items-center justify-center rounded-full bg-muted text-xs font-semibold text-foreground">
+          <span className="flex h-8 w-8 items-center justify-center rounded-full bg-primary/10 text-xs font-semibold text-primary">
             {initials(email)}
           </span>
           <ChevronsUpDown className="size-4 text-muted-foreground" />

@@ -1416,10 +1416,23 @@ DS = Nunito Sans (non alignée volontairement pour l'instant).
   l'identique d'Iris et de Clara, qui ne s'en servent pas non plus pour le rail. Le rail est le
   repère qu'un agent retrouve d'une application à l'autre — le faire diverger serait la seule
   chose qu'il remarquerait en changeant d'outil.
-- **En-tête** (`Header.tsx`) : wordmark Edilumen · mention **« Socle »** (le produit dans
-  l'entreprise) · séparateur · **identité de l'organisation principale** (logo si `logo_url`,
-  traité comme un wordmark — hauteur fixe, largeur libre : les logos de collectivité sont des
-  bandeaux — puis nom) · menu utilisateur. Motif repris du shell d'Iris/Clara.
+  ⚠️ Le rail **commence par le tableau de bord** et tout y coule depuis le haut : ni pastille de
+  produit au-dessus (l'application se nomme dans l'en-tête), ni trait de séparation. Les entrées
+  ne sont **plus centrées** dans la hauteur disponible — elles glissaient à chaque
+  redimensionnement, alors qu'un agent les vise de mémoire.
+  Largeur exportée en `RAIL_WIDTH_CLASS` : l'en-tête s'en sert pour aligner le lanceur.
+- **En-tête** (`Header.tsx`) : **lanceur d'applications** (dans une colonne de la largeur du rail,
+  voir ci-dessous) · wordmark Edilumen · séparateur · **logo + nom de l'organisation principale**
+  — à droite : **pastille + nom du produit** (« Socle », en primaire) · séparateur · menu
+  utilisateur. Motif repris du shell d'Iris/Clara.
+  ⚠️ **QUI L'ON SERT À GAUCHE, AVEC QUOI À DROITE** : la collectivité est le **contexte** de tout
+  ce que l'agent voit, elle suit donc immédiatement Edilumen ; le produit est un **repère de
+  navigation** entre applications, il se pose à l'autre bout, contre le menu utilisateur.
+  ⚠️ Le logo de la collectivité se lit **à nu**, sans pastille ni cadre : un logo est déjà une
+  identité graphique, l'enfermer dans une capsule de couleur le met en concurrence avec elle. Il
+  est traité comme un wordmark (hauteur fixe, largeur libre bornée — les logos de collectivité
+  sont souvent des bandeaux). Sans `logo_url`, **le nom seul** : une initiale dans un carré ne
+  serait qu'un ersatz de la capsule qu'on vient d'enlever.
   L'organisation affichée vient de `visibleRootOrganizations` (pur, testé) : le sommet de la
   forêt **visible**, pas la racine stricte — un membre d'une sous-organisation ne voit pas sa
   racine (`has_org_access` exige l'appartenance directe) et resterait sans repère.
@@ -1429,6 +1442,41 @@ DS = Nunito Sans (non alignée volontairement pour l'instant).
   quoi que ce soit) ; le combler demande un `resolve_branding` par sommet visible. Le Socle
   n'ayant **pas** de bascule de tenant (chaque écran a son sélecteur), plusieurs sommets
   s'affichent « premier nom + `+N` » avec la liste en `title`.
+
+### Bascule entre applications de la gamme (`AppLauncher`, `suiteApps.ts`)
+
+Le motif **« quatre carrés »** dans le coin gauche de l'en-tête ouvre la grille des quatre
+produits — Socle, Iris, Clara, Ariane. Un agent voit où il est, et s'en va chez le voisin sans
+changer de collectivité.
+
+⚠️ **Le lanceur est la tête de la colonne de navigation**, pas un bouton d'en-tête posé là par
+hasard : il occupe une colonne de `RAIL_WIDTH_CLASS` (exportée par `Sidebar.tsx`) et porte le
+gabarit d'une tuile du rail — 44 px, `rounded-lg`, sans bordure —, si bien qu'il tombe
+exactement sur l'axe vertical des icônes juste en dessous. Changer la taille des tuiles du rail
+demande de changer celle du lanceur.
+
+- **Catalogue figé dans le code** (`src/components/layout/suiteApps.ts`, pur et testé), motif
+  `languages.ts` / `documentVariables.ts` : c'est un **contrat de nommage**, pas une donnée de
+  client. La `key` **EST** le sous-domaine — `iris` ⇒ `https://iris.edilumen.fr` —, et c'est cette
+  régularité des quatre déploiements qui permet de ne rien paramétrer par collectivité.
+  L'initiale de la pastille est **dérivée** du nom : saisie à part, elle finirait par le démentir.
+- ⚠️ **NE PAS CONFONDRE avec la table `applications`** (registre des consommateurs d'API :
+  `nora`, `iris`, `clara`, `socle` — feature « Applications et abonnements »). Celle-là dit qui a
+  le droit d'**appeler** le Socle, celle-ci où un **agent** peut se **rendre**. Les deux listes se
+  recoupent sans se confondre : **Nora** est le portail des **usagers**, elle n'a rien à faire
+  dans un lanceur d'agent ; **Ariane** n'appelle pas encore l'API mais s'ouvre bel et bien d'ici.
+- ⚠️ **Le damier de quatre carrés est RÉSERVÉ au lanceur** : c'est pour cela que le tableau de
+  bord du rail porte désormais une **maison** (`House`) et non plus `LayoutDashboard`. Les deux
+  tombant sur le même axe vertical, à 56 px l'un de l'autre, deux damiers l'un sous l'autre se
+  liraient l'un pour l'autre. Le rail du **superadmin** (`SuperAdminSidebar`, large et légendé)
+  garde son `LayoutDashboard` : le lanceur n'y est pas, et un super_admin ne voit jamais
+  l'autre zone.
+- ⚠️ **On change d'application, pas de collectivité** — le pied du panneau le dit (« Vous restez
+  sur l'organisation X »), parce que rien d'autre à l'écran ne le dirait. Et l'application
+  **courante** se coche au lieu d'être un lien : s'y « rendre » rechargerait la page pour aboutir
+  là où l'on est déjà.
+- Code : `src/components/layout/` — `suiteApps.ts` + `AppLauncher.tsx` (testés), consommés par
+  `Header.tsx` et `Sidebar.tsx` (tous deux testés).
 
 ## Conventions
 

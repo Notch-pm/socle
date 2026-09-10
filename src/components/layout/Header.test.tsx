@@ -39,6 +39,13 @@ describe("Header", () => {
     expect(screen.getByAltText("Edilumen")).toBeTruthy();
   });
 
+  it("ouvre sur le lanceur d'applications de la gamme", () => {
+    // Le nom du produit ne sert à rien si l'on ne peut pas en changer : les
+    // deux vont ensemble dans le coin gauche.
+    render(<Header />);
+    expect(screen.getByLabelText("Changer d'application")).toBeTruthy();
+  });
+
   it("porte l'identité de l'organisation principale", () => {
     h.orgs.mockReturnValue({ data: [org("accm", "ACCM", null, "https://exemple.test/accm.png")] });
     render(<Header />);

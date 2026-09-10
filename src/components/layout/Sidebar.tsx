@@ -1,6 +1,14 @@
 import { NavLink } from "react-router-dom";
-import { LayoutDashboard, Network, ListChecks, LayoutTemplate, Tags, FileCheck2, FileSignature, MapPin, Users, Sparkles } from "lucide-react";
+import { House, Network, ListChecks, LayoutTemplate, Tags, FileCheck2, FileSignature, MapPin, Users, Sparkles } from "lucide-react";
 import { cn } from "@/lib/utils";
+
+/**
+ * Largeur du rail, **partagée avec l'en-tête** : le lanceur d'applications
+ * occupe une colonne de cette largeur pour tomber exactement sur l'axe
+ * vertical des icônes de navigation. Une classe littérale, et non un calcul :
+ * Tailwind ne voit que ce qui est écrit tel quel dans le source.
+ */
+export const RAIL_WIDTH_CLASS = "w-[68px]";
 
 interface NavItem {
   to: string;
@@ -9,7 +17,14 @@ interface NavItem {
   end?: boolean;
 }
 
-const PINNED: NavItem = { to: "/", title: "Tableau de bord", icon: LayoutDashboard, end: true };
+/**
+ * ⚠️ **UNE MAISON, PAS LE DAMIER** de quatre carrés qu'on attend d'un « tableau
+ * de bord » : ce motif est celui du **lanceur d'applications**, posé juste
+ * au-dessus dans l'en-tête, sur le même axe vertical. Deux damiers l'un sous
+ * l'autre se liraient l'un pour l'autre. La maison dit ce qu'est cet écran
+ * ici : le point de départ.
+ */
+const PINNED: NavItem = { to: "/", title: "Tableau de bord", icon: House, end: true };
 
 const ITEMS: NavItem[] = [
   { to: "/organisations", title: "Organisations", icon: Network },
@@ -61,17 +76,25 @@ function Tile({ item }: { item: NavItem }) {
 
 export function Sidebar() {
   return (
+    /*
+      ⚠️ Le rail **commence** par le tableau de bord, et tout coule depuis le
+      haut : aucune pastille de produit au-dessus (l'application se nomme dans
+      l'en-tête, à droite), aucun trait de séparation. C'est aussi ce qui rend
+      les positions **stables** — centrer les entrées dans la hauteur
+      disponible les faisait glisser à chaque redimensionnement, alors qu'un
+      agent les vise de mémoire.
+    */
     <nav
       aria-label="Navigation principale"
-      className="flex w-[68px] shrink-0 flex-col items-center bg-primary py-4"
+      className={cn(
+        "flex shrink-0 flex-col items-center gap-2 overflow-y-auto bg-primary py-4",
+        RAIL_WIDTH_CLASS,
+      )}
     >
       <Tile item={PINNED} />
-      <div className="my-3 h-px w-8 bg-primary-foreground/20" />
-      <div className="flex flex-1 flex-col items-center justify-center gap-2">
-        {ITEMS.map((item) => (
-          <Tile key={item.to} item={item} />
-        ))}
-      </div>
+      {ITEMS.map((item) => (
+        <Tile key={item.to} item={item} />
+      ))}
     </nav>
   );
 }
