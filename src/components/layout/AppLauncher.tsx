@@ -64,10 +64,10 @@ function AppCard({ app }: { app: SuiteApp }) {
  * sur le même axe vertical, deux damiers l'un sous l'autre se liraient l'un
  * pour l'autre.
  *
- * ⚠️ **Même gabarit qu'une tuile du rail** (44 px, `rounded-lg`, sans bordure) :
- * le bouton se lit comme la tête de la colonne de navigation, pas comme un
- * bouton d'en-tête posé là par hasard. Changer la taille des tuiles du rail
- * demande de changer celle-ci.
+ * ⚠️ **Même gabarit qu'une tuile du rail** (36 px, `rounded-lg`, sans bordure —
+ * la mesure de la gamme) : le bouton se lit comme la tête de la colonne de
+ * navigation, pas comme un bouton d'en-tête posé là par hasard. Changer la
+ * taille des tuiles du rail demande de changer celle-ci.
  *
  * ⚠️ **On quitte le Socle, on ne change pas de collectivité** : le pied du
  * panneau le dit, parce que rien d'autre à l'écran ne le dirait. L'agent
@@ -102,7 +102,7 @@ export function AppLauncher({ organizationName }: { organizationName?: string })
         aria-haspopup="menu"
         aria-label="Changer d'application"
         title="Changer d'application"
-        className="flex h-11 w-11 items-center justify-center rounded-lg text-muted-foreground transition-colors hover:bg-muted hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+        className="flex h-9 w-9 items-center justify-center rounded-lg text-foreground transition-colors hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
       >
         <LayoutGrid className="size-5" />
       </button>

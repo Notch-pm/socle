@@ -39,7 +39,7 @@ function OrgLogo({ url, name }: { url: string | null; name: string }) {
       src={url}
       alt={name}
       onError={() => setBroken(true)}
-      className="h-9 w-auto max-w-[160px] shrink-0 object-contain"
+      className="h-7 w-auto max-w-[100px] shrink-0 object-contain sm:max-w-[140px]"
     />
   );
 }
@@ -90,7 +90,7 @@ export function Header() {
         <AppLauncher organizationName={main?.name} />
       </div>
 
-      <img src={logo} alt="Edilumen" className="h-5 shrink-0" />
+      <img src={logo} alt="Edilumen" className="h-6 shrink-0 object-contain" />
 
       {main ? (
         <>

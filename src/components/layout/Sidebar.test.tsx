@@ -27,7 +27,11 @@ describe("Sidebar", () => {
     // rien qui ne soit déjà dit, et repousserait la navigation d'un cran.
     renderRail();
     const rail = screen.getByRole("navigation", { name: "Navigation principale" });
-    expect(rail.children).toHaveLength(screen.getAllByRole("link").length);
+    // Tout ce qui s'annonce dans le rail (les tuiles portent un `title`) est
+    // un lien : aucune pastille, aucun ornement légendé.
+    const annonces = Array.from(rail.querySelectorAll("[title]"));
+    expect(annonces.length).toBeGreaterThan(0);
+    expect(annonces.every((el) => el.tagName === "A")).toBe(true);
     expect(screen.queryByText("Socle")).toBeNull();
   });
 });

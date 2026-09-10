@@ -3,12 +3,18 @@ import { House, Network, ListChecks, LayoutTemplate, Tags, FileCheck2, FileSigna
 import { cn } from "@/lib/utils";
 
 /**
- * Largeur du rail, **partagée avec l'en-tête** : le lanceur d'applications
- * occupe une colonne de cette largeur pour tomber exactement sur l'axe
- * vertical des icônes de navigation. Une classe littérale, et non un calcul :
- * Tailwind ne voit que ce qui est écrit tel quel dans le source.
+ * ⚠️ **52 px — LA MESURE DE LA GAMME**, pas un choix de Socle. Iris, Clara et
+ * Ariane peignent tous un rail de `w-[52px] py-3` à tuiles de 36 px : le rail
+ * est le repère qu'un agent retrouve d'une application à l'autre, une largeur
+ * qui diverge est précisément ce qu'il remarque en changeant d'outil. Socle a
+ * vécu jusqu'au 2026-09-10 sur 68 px à tuiles de 44 px — c'était le seul écart.
+ *
+ * Exportée parce que l'**en-tête s'en sert** : le lanceur d'applications occupe
+ * une colonne de cette largeur pour tomber exactement sur l'axe vertical des
+ * icônes de navigation. Une classe littérale, et non un calcul : Tailwind ne
+ * voit que ce qui est écrit tel quel dans le source.
  */
-export const RAIL_WIDTH_CLASS = "w-[68px]";
+export const RAIL_WIDTH_CLASS = "w-[52px]";
 
 interface NavItem {
   to: string;
@@ -62,7 +68,8 @@ function Tile({ item }: { item: NavItem }) {
       aria-label={item.title}
       className={({ isActive }) =>
         cn(
-          "flex h-11 w-11 items-center justify-center rounded-lg text-primary-foreground/70 transition-colors",
+          // 36 px : la tuile de la gamme (Iris, Clara, Ariane).
+          "flex h-9 w-9 items-center justify-center rounded-lg text-primary-foreground/70 transition-colors",
           "hover:bg-primary-foreground/10 hover:text-primary-foreground",
           "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary-foreground focus-visible:ring-offset-2 focus-visible:ring-offset-primary",
           isActive && "bg-primary-foreground/20 text-primary-foreground",
@@ -77,24 +84,29 @@ function Tile({ item }: { item: NavItem }) {
 export function Sidebar() {
   return (
     /*
-      ⚠️ Le rail **commence** par le tableau de bord, et tout coule depuis le
-      haut : aucune pastille de produit au-dessus (l'application se nomme dans
-      l'en-tête, à droite), aucun trait de séparation. C'est aussi ce qui rend
-      les positions **stables** — centrer les entrées dans la hauteur
-      disponible les faisait glisser à chaque redimensionnement, alors qu'un
-      agent les vise de mémoire.
+      ⚠️ **DISPOSITION DE LA GAMME**, à l'identique d'Iris, de Clara et
+      d'Ariane : le tableau de bord **épinglé tout en haut**, le reste
+      **centré dans la hauteur du rail** — et centré sur le rail ENTIER
+      (`absolute inset-0`), pas sur la place qui reste sous le tableau de bord,
+      sans quoi le groupe tomberait plus bas que dans les autres applications.
+      Aucune pastille de produit au-dessus (il se nomme dans l'en-tête), aucun
+      trait de séparation.
     */
     <nav
       aria-label="Navigation principale"
       className={cn(
-        "flex shrink-0 flex-col items-center gap-2 overflow-y-auto bg-primary py-4",
+        "relative flex h-full shrink-0 flex-col items-center bg-primary py-3",
         RAIL_WIDTH_CLASS,
       )}
     >
       <Tile item={PINNED} />
-      {ITEMS.map((item) => (
-        <Tile key={item.to} item={item} />
-      ))}
+      <div className="pointer-events-none absolute inset-0 flex flex-col items-center justify-center gap-0.5">
+        <div className="pointer-events-auto flex flex-col items-center gap-0.5">
+          {ITEMS.map((item) => (
+            <Tile key={item.to} item={item} />
+          ))}
+        </div>
+      </div>
     </nav>
   );
 }

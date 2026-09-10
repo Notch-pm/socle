@@ -1416,11 +1416,16 @@ DS = Nunito Sans (non alignée volontairement pour l'instant).
   l'identique d'Iris et de Clara, qui ne s'en servent pas non plus pour le rail. Le rail est le
   repère qu'un agent retrouve d'une application à l'autre — le faire diverger serait la seule
   chose qu'il remarquerait en changeant d'outil.
-  ⚠️ Le rail **commence par le tableau de bord** et tout y coule depuis le haut : ni pastille de
-  produit au-dessus (l'application se nomme dans l'en-tête), ni trait de séparation. Les entrées
-  ne sont **plus centrées** dans la hauteur disponible — elles glissaient à chaque
-  redimensionnement, alors qu'un agent les vise de mémoire.
-  Largeur exportée en `RAIL_WIDTH_CLASS` : l'en-tête s'en sert pour aligner le lanceur.
+  ⚠️ **LES MESURES DU RAIL SONT CELLES DE LA GAMME, PAS CELLES DE SOCLE** : `w-[52px]`, `py-3`,
+  tuiles de **36 px** (`h-9 w-9`) à icône de 20 px — identiques dans `AppSidebar` d'Iris, de
+  Clara et d'Ariane. Socle a vécu jusqu'au 2026-09-10 sur 68 px à tuiles de 44 px : c'était le
+  seul écart, et une largeur qui diverge est précisément ce qu'un agent remarque en changeant
+  d'outil. La largeur est exportée en `RAIL_WIDTH_CLASS` — l'en-tête s'en sert pour aligner le
+  lanceur sur l'axe des icônes.
+  ⚠️ **Disposition de la gamme** : tableau de bord **épinglé tout en haut**, le reste **centré
+  dans la hauteur du rail** — centré sur le rail ENTIER (`absolute inset-0`), pas sur la place
+  qui reste sous le tableau de bord, sans quoi le groupe tomberait plus bas qu'ailleurs. Ni
+  pastille de produit au-dessus (l'application se nomme dans l'en-tête), ni trait de séparation.
 - **En-tête** (`Header.tsx`) : **lanceur d'applications** (dans une colonne de la largeur du rail,
   voir ci-dessous) · wordmark Edilumen · séparateur · **logo + nom de l'organisation principale**
   — à droite : **pastille + nom du produit** (« Socle », en primaire) · séparateur · menu
@@ -1451,9 +1456,15 @@ changer de collectivité.
 
 ⚠️ **Le lanceur est la tête de la colonne de navigation**, pas un bouton d'en-tête posé là par
 hasard : il occupe une colonne de `RAIL_WIDTH_CLASS` (exportée par `Sidebar.tsx`) et porte le
-gabarit d'une tuile du rail — 44 px, `rounded-lg`, sans bordure —, si bien qu'il tombe
+gabarit d'une tuile du rail — 36 px, `rounded-lg`, sans bordure —, si bien qu'il tombe
 exactement sur l'axe vertical des icônes juste en dessous. Changer la taille des tuiles du rail
 demande de changer celle du lanceur.
+
+⚠️ **Iris, Clara et Ariane ont chacun le leur** (`AppSwitcher` + `apps.ts` / `lib/apps.ts`) : la
+maquette est commune, les quatre implémentations sont **jumelles et indépendantes** — rien ne
+transite d'un produit à l'autre, chacun tient sa propre session. Une divergence connue au
+2026-09-10 : le **descriptif d'Iris** s'écrit « Demandes des usagers » chez Iris, « Portail des
+démarches » chez Clara, « Gestion des demandes » ici. À trancher une fois pour les quatre.
 
 - **Catalogue figé dans le code** (`src/components/layout/suiteApps.ts`, pur et testé), motif
   `languages.ts` / `documentVariables.ts` : c'est un **contrat de nommage**, pas une donnée de
