@@ -1438,14 +1438,16 @@ DS = Nunito Sans (non alignée volontairement pour l'instant).
 
 ### Shell de l'app par organisation (le même que dans la gamme, couleur du rail exceptée)
 
-- **Rail latéral beurre** (`Sidebar.tsx`) : `bg-secondary` (`#FFCC57`, la secondaire du DS —
-  pas de couleur en dur), icônes **sombres** sur `secondary-foreground` (`/80` au repos, pleines
-  en survol et actives ; tuile `secondary-foreground/10|20`).
+- **Rail latéral beurre** (`Sidebar.tsx`) : jeton dédié `--rail` / `--rail-foreground`
+  (`index.css`, pas de couleur en dur) — fond `--rail: var(--secondary)` (`#FFCC57`, la secondaire
+  du DS, référencée et non recopiée), icônes **bleu nuit `#0B132B`** à **pleine opacité dans tous
+  les états** ; c'est la tuile qui marque le survol et l'actif (`rail-foreground/10|20`).
+  ⚠️ **Pas le brun `secondary-foreground`** pour les icônes, même s'il est le contraste « officiel »
+  de la secondaire : essayé à 80 % le 2026-09-11, il ressortait mal sur le jaune.
   ⚠️ **LA COULEUR DU RAIL N'EST PAS UN INVARIANT DE LA GAMME** — ses mesures et sa disposition,
   si (ci-dessous). Chaque application peint le sien — au 2026-09-11 : **Socle** en beurre
-  `#FFCC57`, **Clara** en bleu nuit `#0B132B` (icônes blanches, jeton dédié `--rail` /
-  `--rail-foreground`, rail et barre de navigation mobile), **Iris** et **Ariane** en primaire
-  verte. Une couleur qui diffère d'un produit à l'autre n'est pas un écart à réaligner. Changer
+  `#FFCC57` à icônes bleu nuit, **Clara** en bleu nuit `#0B132B` à icônes blanches (son propre
+  jeton `--rail`, rail et barre de navigation mobile), **Iris** et **Ariane** en primaire verte. Une couleur qui diffère d'un produit à l'autre n'est pas un écart à réaligner. Changer
   de couleur, c'est changer **le jeton et son jeton de contraste** ensemble (`bg-X` /
   `text-X-foreground`, états en `X-foreground/10|20`) — jamais un `white/…` ou `black/…` en dur,
   qui ne suit plus le fond.

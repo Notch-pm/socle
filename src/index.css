@@ -40,13 +40,18 @@
 
   --radius: 0.875rem;
 
+  /* Rail de navigation (`components/layout/Sidebar.tsx`) : fond beurre — la
+     secondaire, référencée et non recopiée — et icônes bleu nuit #0B132B.
+     ⚠️ Pas `--secondary-foreground` pour les icônes : son brun ressortait mal
+     sur le jaune (essayé le 2026-09-11). La couleur du rail est propre à
+     chaque application : Iris peint le sien en primaire, Clara en bleu nuit. */
+  --rail: var(--secondary);
+  --rail-foreground: 225 59.3% 10.6%;
+
   /* Jetons `--sidebar-*` du design system Notch/Ariane, conservés à
      l'identique d'Iris et de Clara. ⚠️ Le RAIL de navigation ne les utilise
-     PAS : il est peint avec la secondaire, `bg-secondary` (voir
-     `components/layout/Sidebar.tsx`) — la couleur du rail est propre à chaque
-     application : Iris peint le sien en primaire, Clara en bleu nuit avec un
-     jeton `--rail` à elle. Ces jetons restent alignés sur le DS pour ne pas
-     diverger d'un projet à l'autre. */
+     PAS : il a ses propres jetons, `--rail` ci-dessus. Ces jetons restent
+     alignés sur le DS pour ne pas diverger d'un projet à l'autre. */
   --sidebar-background: 160 15% 11%;
   --sidebar-foreground: 0 0% 95%;
   --sidebar-hover: 0 0% 100% / 0.08;

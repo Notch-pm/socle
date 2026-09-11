@@ -49,17 +49,17 @@ const ITEMS: NavItem[] = [
 /**
  * ⚠️ **LA COULEUR DU RAIL EST PROPRE À CHAQUE APPLICATION** : ce que la gamme
  * partage, c'est sa forme (largeur, tuiles, disposition), pas sa teinte. Au
- * 2026-09-11 : Socle en beurre (`bg-secondary`, `#FFCC57`), Clara en bleu nuit
- * (`#0B132B`), Iris et Ariane en primaire verte. Une couleur qui diffère d'un
- * produit à l'autre n'est pas un écart à réaligner.
+ * 2026-09-11 : Socle en beurre (`#FFCC57`) à icônes bleu nuit, Clara en bleu
+ * nuit (`#0B132B`), Iris et Ariane en primaire verte. Une couleur qui diffère
+ * d'un produit à l'autre n'est pas un écart à réaligner.
  *
- * C'est la secondaire du design system, pas une couleur en dur : le jeton
- * existait déjà à cette valeur exacte, avec sa couleur de contraste. Les icônes
- * sont donc **sombres** et se déclinent sur `secondary-foreground` (le brun du
- * texte sur la secondaire, `42 60% 16%`) : 5 : 1 au repos (à 80 %), 7 : 1 en
- * survol, 5,9 : 1 sur la tuile active — tous au-dessus du 4,5 : 1 du texte, quand
- * le RGAA n'en demande que 3 pour une icône. Les états assombrissent la tuile au
- * lieu de l'éclaircir : sur un fond clair, c'est l'ombre qui se voit.
+ * Fond et icônes passent par le jeton du rail, `--rail` / `--rail-foreground`
+ * (`index.css`) : le fond est la secondaire beurre du design system, les
+ * icônes sont bleu nuit `#0B132B`, **à pleine opacité dans tous les états** —
+ * 12,3 : 1 au repos, 10 : 1 en survol, 8 : 1 sur la tuile active. ⚠️ Le brun
+ * `secondary-foreground` à 80 %, essayé d'abord, ressortait mal sur le jaune.
+ * C'est la tuile qui marque l'état, en assombrissant le fond au lieu de
+ * l'éclaircir : sur un fond clair, c'est l'ombre qui se voit.
  *
  * Changer de couleur, c'est changer le jeton ET son jeton de contraste
  * (`bg-X` / `text-X-foreground`) : un `white/…` ou `black/…` en dur ne suit
@@ -76,10 +76,10 @@ function Tile({ item }: { item: NavItem }) {
       className={({ isActive }) =>
         cn(
           // 36 px : la tuile de la gamme (Iris, Clara, Ariane).
-          "flex h-9 w-9 items-center justify-center rounded-lg text-secondary-foreground/80 transition-colors",
-          "hover:bg-secondary-foreground/10 hover:text-secondary-foreground",
-          "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-secondary-foreground focus-visible:ring-offset-2 focus-visible:ring-offset-secondary",
-          isActive && "bg-secondary-foreground/20 text-secondary-foreground",
+          "flex h-9 w-9 items-center justify-center rounded-lg text-rail-foreground transition-colors",
+          "hover:bg-rail-foreground/10",
+          "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-rail-foreground focus-visible:ring-offset-2 focus-visible:ring-offset-rail",
+          isActive && "bg-rail-foreground/20",
         )
       }
     >
@@ -102,7 +102,7 @@ export function Sidebar() {
     <nav
       aria-label="Navigation principale"
       className={cn(
-        "relative flex h-full shrink-0 flex-col items-center bg-secondary py-3",
+        "relative flex h-full shrink-0 flex-col items-center bg-rail py-3",
         RAIL_WIDTH_CLASS,
       )}
     >

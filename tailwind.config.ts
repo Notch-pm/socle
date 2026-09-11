@@ -43,6 +43,10 @@ export default {
           hover: "hsl(var(--sidebar-hover))",
           active: "hsl(var(--sidebar-active))",
         },
+        rail: {
+          DEFAULT: "hsl(var(--rail))",
+          foreground: "hsl(var(--rail-foreground))",
+        },
       },
       borderRadius: {
         lg: "var(--radius)",
