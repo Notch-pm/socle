@@ -1436,13 +1436,19 @@ avec les primitives `src/components/ui/*` (Button, Input, Field, Card, Badge, Di
 et les classes de tokens — ce sont les « briques » du DS. Divergence connue : police Socle = Inter,
 DS = Nunito Sans (non alignée volontairement pour l'instant).
 
-### Shell de l'app par organisation (le même que dans la gamme)
+### Shell de l'app par organisation (le même que dans la gamme, couleur du rail exceptée)
 
-- **Rail latéral vert** (`Sidebar.tsx`) : `bg-primary`, états sur `primary-foreground/10|20`.
+- **Rail latéral beurre** (`Sidebar.tsx`) : `bg-secondary` (`#FFCC57`, la secondaire du DS —
+  pas de couleur en dur), icônes **sombres** sur `secondary-foreground` (`/80` au repos, pleines
+  en survol et actives ; tuile `secondary-foreground/10|20`).
+  ⚠️ **LA COULEUR DU RAIL N'EST PAS UN INVARIANT DE LA GAMME** — ses mesures et sa disposition,
+  si (ci-dessous). Chaque application peint le sien : Socle en beurre depuis le 2026-09-11, Iris,
+  Clara et Ariane en primaire verte à cette date. Une couleur qui diffère d'un produit à l'autre
+  n'est pas un écart à réaligner. Changer de couleur, c'est changer **le jeton et son jeton de
+  contraste** ensemble (`bg-X` / `text-X-foreground`, états en `X-foreground/10|20`) — jamais un
+  `white/…` ou `black/…` en dur, qui ne suit plus le fond.
   ⚠️ **Pas** les jetons `--sidebar-*` (charbon-forêt) : ils existent dans `index.css` à
-  l'identique d'Iris et de Clara, qui ne s'en servent pas non plus pour le rail. Le rail est le
-  repère qu'un agent retrouve d'une application à l'autre — le faire diverger serait la seule
-  chose qu'il remarquerait en changeant d'outil.
+  l'identique d'Iris et de Clara, qui ne s'en servent pas non plus pour le rail.
   ⚠️ **LES MESURES DU RAIL SONT CELLES DE LA GAMME, PAS CELLES DE SOCLE** : `w-[52px]`, `py-3`,
   tuiles de **36 px** (`h-9 w-9`) à icône de 20 px — identiques dans `AppSidebar` d'Iris, de
   Clara et d'Ariane. Socle a vécu jusqu'au 2026-09-10 sur 68 px à tuiles de 44 px : c'était le

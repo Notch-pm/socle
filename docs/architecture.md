@@ -195,6 +195,13 @@ Radix + `class-variance-authority` + `cn()`) et **2 composants partagés**
 Toast, DataTable, TreeView générique…) reste à construire au fil des besoins. Divergence assumée
 avec le DS : police Socle = Inter, DS = Nunito Sans (non alignée volontairement pour l'instant).
 
+Le **rail de navigation** de l'app par organisation partage avec la gamme ses **mesures et sa
+disposition**, pas sa **couleur** : chaque application peint le sien. Celui de Socle est en
+secondaire beurre (`bg-secondary`, `#FFCC57`, icônes sombres) depuis le 2026-09-11, ceux d'Iris,
+de Clara et d'Ariane en primaire verte — ce n'est pas un écart à réaligner. Aucun ne se sert des
+jetons `--sidebar-*` (forêt). Détail et contrastes : `CLAUDE.md`, « Shell de l'app par
+organisation ».
+
 ### 4.5 Logique métier en modules purs testés
 
 Les règles qui ne dépendent ni du DOM ni du réseau (constitution du schéma de formulaire,
