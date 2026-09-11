@@ -1442,11 +1442,13 @@ DS = Nunito Sans (non alignée volontairement pour l'instant).
   pas de couleur en dur), icônes **sombres** sur `secondary-foreground` (`/80` au repos, pleines
   en survol et actives ; tuile `secondary-foreground/10|20`).
   ⚠️ **LA COULEUR DU RAIL N'EST PAS UN INVARIANT DE LA GAMME** — ses mesures et sa disposition,
-  si (ci-dessous). Chaque application peint le sien : Socle en beurre depuis le 2026-09-11, Iris,
-  Clara et Ariane en primaire verte à cette date. Une couleur qui diffère d'un produit à l'autre
-  n'est pas un écart à réaligner. Changer de couleur, c'est changer **le jeton et son jeton de
-  contraste** ensemble (`bg-X` / `text-X-foreground`, états en `X-foreground/10|20`) — jamais un
-  `white/…` ou `black/…` en dur, qui ne suit plus le fond.
+  si (ci-dessous). Chaque application peint le sien — au 2026-09-11 : **Socle** en beurre
+  `#FFCC57`, **Clara** en bleu nuit `#0B132B` (icônes blanches, jeton dédié `--rail` /
+  `--rail-foreground`, rail et barre de navigation mobile), **Iris** et **Ariane** en primaire
+  verte. Une couleur qui diffère d'un produit à l'autre n'est pas un écart à réaligner. Changer
+  de couleur, c'est changer **le jeton et son jeton de contraste** ensemble (`bg-X` /
+  `text-X-foreground`, états en `X-foreground/10|20`) — jamais un `white/…` ou `black/…` en dur,
+  qui ne suit plus le fond.
   ⚠️ **Pas** les jetons `--sidebar-*` (charbon-forêt) : ils existent dans `index.css` à
   l'identique d'Iris et de Clara, qui ne s'en servent pas non plus pour le rail.
   ⚠️ **LES MESURES DU RAIL SONT CELLES DE LA GAMME, PAS CELLES DE SOCLE** : `w-[52px]`, `py-3`,

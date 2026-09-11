@@ -44,8 +44,9 @@
      l'identique d'Iris et de Clara. ⚠️ Le RAIL de navigation ne les utilise
      PAS : il est peint avec la secondaire, `bg-secondary` (voir
      `components/layout/Sidebar.tsx`) — la couleur du rail est propre à chaque
-     application, Iris et Clara peignent le leur en primaire. Ces jetons
-     restent alignés sur le DS pour ne pas diverger d'un projet à l'autre. */
+     application : Iris peint le sien en primaire, Clara en bleu nuit avec un
+     jeton `--rail` à elle. Ces jetons restent alignés sur le DS pour ne pas
+     diverger d'un projet à l'autre. */
   --sidebar-background: 160 15% 11%;
   --sidebar-foreground: 0 0% 95%;
   --sidebar-hover: 0 0% 100% / 0.08;

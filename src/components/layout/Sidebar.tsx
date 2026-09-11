@@ -48,10 +48,10 @@ const ITEMS: NavItem[] = [
 
 /**
  * ⚠️ **LA COULEUR DU RAIL EST PROPRE À CHAQUE APPLICATION** : ce que la gamme
- * partage, c'est sa forme (largeur, tuiles, disposition), pas sa teinte. Socle
- * le peint en beurre (`bg-secondary`, `#FFCC57`) depuis le 2026-09-11 ; Iris,
- * Clara et Ariane en primaire verte. Une couleur qui diffère d'un produit à
- * l'autre n'est pas un écart à réaligner.
+ * partage, c'est sa forme (largeur, tuiles, disposition), pas sa teinte. Au
+ * 2026-09-11 : Socle en beurre (`bg-secondary`, `#FFCC57`), Clara en bleu nuit
+ * (`#0B132B`), Iris et Ariane en primaire verte. Une couleur qui diffère d'un
+ * produit à l'autre n'est pas un écart à réaligner.
  *
  * C'est la secondaire du design system, pas une couleur en dur : le jeton
  * existait déjà à cette valeur exacte, avec sa couleur de contraste. Les icônes
