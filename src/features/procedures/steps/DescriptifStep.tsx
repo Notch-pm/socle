@@ -88,6 +88,14 @@ export function DescriptifStep({
   }, [isEdit, rankText, nextRank]);
 
   const noCategory = !loadingCategories && orgCategories.length === 0;
+  // Le <select> est `required` : tant que la catégorie déjà choisie n'est pas
+  // (encore) parmi les options chargées — requête en vol au premier rendu,
+  // catégorie supprimée depuis — la validation HTML5 du navigateur bloque
+  // silencieusement la soumission du formulaire (aucune erreur affichée,
+  // « Enregistrer et continuer » ne fait rien). On garde donc une option pour
+  // la valeur courante tant qu'elle n'a pas de correspondance dans la liste.
+  const currentCategoryMissing =
+    categoryId !== "" && !orgCategories.some((c) => c.id === categoryId);
 
   function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -143,6 +151,11 @@ export function DescriptifStep({
           <option value="" disabled>
             {loadingCategories ? "Chargement…" : "Sélectionner une catégorie"}
           </option>
+          {currentCategoryMissing ? (
+            <option value={categoryId} disabled>
+              {loadingCategories ? "Chargement…" : "Catégorie introuvable"}
+            </option>
+          ) : null}
           {orgCategories.map((c) => (
             <option key={c.id} value={c.id}>
               {c.name}
