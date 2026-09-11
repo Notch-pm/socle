@@ -68,6 +68,16 @@ export interface ProcedureDto {
    * quand la proposer.
    */
   status: string;
+  /**
+   * Conditions d'accès pour l'usager : `libre` (aucun compte requis) ou
+   * `authentifie` (l'usager doit être connecté à son espace pour déposer).
+   *
+   * ⚠️ **Ce n'est pas une règle de publication** : une démarche réservée est
+   * publiée comme les autres et doit se voir au catalogue — c'est là que
+   * l'usager apprend qu'il doit se connecter. Ce champ dit à quelles
+   * CONDITIONS on la dépose, pas si on la montre.
+   */
+  access_mode: "libre" | "authentifie";
   keywords: string[];
   short_description: string | null;
   user_description: string | null;
@@ -383,6 +393,19 @@ export interface PortalProcedureDto {
   user_description: string | null;
   /** Durée de saisie estimée, en minutes. */
   input_duration_minutes: number | null;
+  /**
+   * Conditions d'accès : `libre` (n'importe quel visiteur dépose) ou
+   * `authentifie` (il faut être connecté à son espace usager).
+   *
+   * ⚠️ **Une démarche `authentifie` est servie comme les autres**, et doit
+   * s'afficher comme les autres : c'est en la lisant que l'usager apprend
+   * qu'il doit se connecter. La masquer la cacherait à ceux-là mêmes qui ont
+   * un compte. Le portail demande la connexion au moment de **déposer**.
+   *
+   * ⚠️ `libre` quand la colonne n'a jamais été réglée — et c'est ce qui était
+   * vrai avant qu'elle existe.
+   */
+  access_mode: "libre" | "authentifie";
   /** Organismes qui proposent la démarche, dans l'ordre de l'arbre. */
   organizations: PortalOrganizationRefDto[];
   /**

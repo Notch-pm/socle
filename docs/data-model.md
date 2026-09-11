@@ -1,7 +1,7 @@
 # Modèle de données
 
 > **Public** : développeurs, ops · **Question traitée** : qu'est-ce qui existe en base (tables,
-> contraintes, RLS, fonctions, storage) ? · **Dernière mise à jour** : 2026-09-08
+> contraintes, RLS, fonctions, storage) ? · **Dernière mise à jour** : 2026-09-10
 
 Pour le rôle de Socle dans la gamme et les décisions d'architecture, voir [../CLAUDE.md](../CLAUDE.md)
 et [./architecture.md](./architecture.md). Pour les endpoints, schémas de requête/réponse et la
@@ -239,6 +239,7 @@ aucun endpoint, il décrit ce qui existe **en base**.
 | `name` | text NOT NULL |
 | `type` | text NOT NULL défaut `externe`, CHECK `interne`\|`externe` |
 | `status` | text NOT NULL défaut `brouillon`, CHECK `brouillon`\|`production` |
+| `access_mode` | text NOT NULL défaut `libre`, CHECK `libre`\|`authentifie` — conditions d'accès pour l'usager |
 | `short_description`, `user_description`, `agent_description` | text |
 | `keywords` | `text[]` |
 | `input_duration_minutes` | int, CHECK `NULL OR >= 0` |
@@ -264,6 +265,14 @@ aucun endpoint, il décrit ce qui existe **en base**.
   brouillon n'est proposée nulle part, quelles que soient les deux autres.
 - `status` a été ajouté le 2026-08-30 avec le défaut `brouillon` **pour toutes les lignes
   existantes** : la notion n'existait pas, nul n'avait déclaré une démarche prête.
+- ⚠️ **`access_mode` n'est PAS une quatrième notion de publication** (ajouté le 2026-09-10) : il dit
+  à quelles conditions l'usager **dépose** la démarche — `libre` sans compte, `authentifie` connecté
+  à son espace —, jamais si on la montre. Une démarche réservée reste au catalogue du portail et
+  doit s'y voir : c'est en la lisant que l'usager apprend qu'il doit se connecter. Défaut `libre`
+  **pour toutes les lignes existantes**, et c'est ce qui était vrai (le portail dépose sans compte
+  depuis le 2026-09-06) ; le défaut inverse aurait fermé un catalogue entier que personne n'avait
+  déclaré fermé. Le Socle **enregistre et publie**, il ne refuse aucun dépôt — c'est le portail qui
+  demande la connexion. Servi en contrat 1.19.0 sur `Procedure` et `PortalProcedure`.
 - `category_id` sans `ON DELETE` : supprimer une catégorie utilisée par une démarche est **bloqué**
   par Postgres (pas de CASCADE, pas de SET NULL).
 

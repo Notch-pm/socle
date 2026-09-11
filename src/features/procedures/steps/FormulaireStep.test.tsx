@@ -48,6 +48,7 @@ function makeProcedure(formSchema: unknown = null): Procedure {
     knowledge_base: null,
     communication_config: null,
     status: "brouillon",
+    access_mode: "libre",
     created_at: null,
     updated_at: null,
   };

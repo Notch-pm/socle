@@ -145,7 +145,10 @@ async function loadPortalCatalogue(
       // `requester_config` est lu pour en TIRER les publics (`audiences`) ; il
       // ne sort pas de la liste — voir `readAudiences`.
       "id, name, short_description, user_description, input_duration_minutes, " +
-        "status, type, communication_config, order_index, translations, requester_config",
+        "status, type, communication_config, order_index, translations, requester_config, " +
+        // `access_mode` dit à quelles conditions l'usager dépose ; il ne filtre
+        // RIEN — une démarche réservée reste au catalogue.
+        "access_mode",
     )
     .eq("organization_id", rootId);
   if (proceduresError) throw proceduresError;

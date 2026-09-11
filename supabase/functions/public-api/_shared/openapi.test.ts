@@ -152,8 +152,8 @@ describe("buildOpenApiDocument", () => {
 describe("contrat — documents et courriers", () => {
   const doc = buildOpenApiDocument("https://example.supabase.co/functions/v1/public-api") as any;
 
-  it("annonce la version 1.18.0 du contrat", () => {
-    expect(doc.info.version).toBe("1.18.0");
+  it("annonce la version 1.19.0 du contrat", () => {
+    expect(doc.info.version).toBe("1.19.0");
   });
 
   it("le thème voyage avec le TENANT : il vaut pour toutes les pages", () => {
@@ -391,6 +391,7 @@ describe("contrat — démarches du portail", () => {
   it("sert une démarche amputée du paramétrage d'instruction", () => {
     const schema = doc.components.schemas.PortalProcedure;
     expect(Object.keys(schema.properties).sort()).toEqual([
+      "access_mode",
       "audiences",
       "id",
       "input_duration_minutes",
@@ -513,5 +514,38 @@ describe("contrat — page publiée du portail", () => {
     expect(filter.type).toBe("boolean");
     expect(filter.description).toContain("cumule");
     expect(doc.components.schemas.PortalDemarchesSection.required).toContain("audience_filter");
+  });
+});
+
+describe("contrat — accès libre ou usagers authentifiés", () => {
+  const doc = buildOpenApiDocument("https://example.supabase.co/functions/v1/public-api") as any;
+
+  it("décrit les deux accès sur la démarche complète et sur celle du portail", () => {
+    for (const name of ["Procedure", "PortalProcedure"]) {
+      const field = doc.components.schemas[name].properties.access_mode;
+      expect(field, name).toBeDefined();
+      expect(field.enum, name).toEqual(["libre", "authentifie"]);
+    }
+  });
+
+  it("⚠️ dit que ce n'est PAS une règle de publication — des deux côtés", () => {
+    // Le piège du consommateur : retirer du catalogue ce qui exige un compte.
+    // Il cacherait la démarche à ceux-là mêmes qui en ont un.
+    expect(doc.components.schemas.Procedure.properties.access_mode.description).toContain(
+      "pas une quatrième règle de publication",
+    );
+    const portal = doc.components.schemas.PortalProcedure.properties.access_mode.description;
+    expect(portal).toContain("servie comme les autres");
+    expect(portal).toContain("déposer");
+    // Et la route le répète là où le portail le lira : dans la liste publiée.
+    expect(doc.paths["/v1/portal/procedures"].get.description).toContain(
+      "n'est pas une cinquième condition",
+    );
+  });
+
+  it("le champ est toujours servi au portail : jamais à deviner", () => {
+    // Un champ facultatif obligerait chaque portail à choisir un défaut, et
+    // deux portails choisiraient deux défauts différents.
+    expect(doc.components.schemas.PortalProcedure.required).toContain("access_mode");
   });
 });

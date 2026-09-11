@@ -1033,6 +1033,7 @@ export type Database = {
       }
       procedures: {
         Row: {
+          access_mode: string
           agent_description: string | null
           category_id: string | null
           communication_config: Json | null
@@ -1055,6 +1056,7 @@ export type Database = {
           user_description: string | null
         }
         Insert: {
+          access_mode?: string
           agent_description?: string | null
           category_id?: string | null
           communication_config?: Json | null
@@ -1077,6 +1079,7 @@ export type Database = {
           user_description?: string | null
         }
         Update: {
+          access_mode?: string
           agent_description?: string | null
           category_id?: string | null
           communication_config?: Json | null

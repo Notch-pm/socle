@@ -30,7 +30,7 @@ export function buildOpenApiDocument(serverUrl: string): Record<string, unknown>
     openapi: "3.1.0",
     info: {
       title: "API Socle — Référentiel de la gamme",
-      version: "1.18.0",
+      version: "1.19.0",
       description: [
         "API **en lecture seule** exposant le référentiel central de la gamme : les",
         "**organisations** (et sous-organisations) avec l'intégralité de leur configuration,",
@@ -191,6 +191,11 @@ export function buildOpenApiDocument(serverUrl: string): Record<string, unknown>
             "**N'appliquez pas ces règles vous-même** à partir de `GET /v1/procedures` : elles " +
             "évoluent avec le paramétrage, et un consommateur qui les recopie finit par publier " +
             "ce qui ne devait pas l'être.\n\n" +
+            "⚠️ **`access_mode` n'est pas une cinquième condition.** Une démarche réservée " +
+            "aux usagers authentifiés (`access_mode` = \"authentifie\") est servie par " +
+            "cette liste comme les autres, et doit s'y afficher comme les autres : c'est en " +
+            "la lisant que l'usager apprend qu'il doit se connecter. Demandez la connexion " +
+            "au moment de **déposer**, pas au moment de montrer.\n\n" +
             "**Cette liste est un catalogue** : elle ne porte ni `form_schema`, ni " +
             "`requester_config`, ni `knowledge_base`, ni `agent_description`, ni documents. " +
             "Pour afficher une démarche et la faire remplir, appelez " +
@@ -972,7 +977,7 @@ export function buildOpenApiDocument(serverUrl: string): Record<string, unknown>
           description:
             "Démarche telle qu'un usager la voit. Whitelist beaucoup plus étroite que " +
             "`Procedure` : le paramétrage d'instruction n'y figure pas.",
-          required: ["id", "name", "organizations", "audiences"],
+          required: ["id", "name", "organizations", "audiences", "access_mode"],
           properties: {
             id: { type: "string", format: "uuid" },
             name: { type: "string", description: "Intitulé de la démarche." },
@@ -990,6 +995,21 @@ export function buildOpenApiDocument(serverUrl: string): Record<string, unknown>
             input_duration_minutes: {
               type: ["integer", "null"],
               description: "Durée de saisie estimée, en minutes.",
+            },
+            access_mode: {
+              type: "string",
+              enum: ["libre", "authentifie"],
+              description:
+                "Conditions d'accès : `libre` = n'importe quel visiteur dépose la démarche ; " +
+                "`authentifie` = l'usager doit être connecté à son espace pour la déposer. " +
+                "⚠️ **Une démarche `authentifie` est servie comme les autres, et doit " +
+                "s'afficher comme les autres** : c'est en la lisant que l'usager apprend " +
+                "qu'il doit se connecter, et la masquer la cacherait à ceux-là mêmes qui ont " +
+                "un compte. Demandez la connexion au moment de **déposer**, pas au moment " +
+                "de montrer. Ce n'est donc pas une règle de publication : les démarches " +
+                "servies ici sont déjà celles qui sont publiées. ⚠️ `libre` quand la " +
+                "collectivité n'a rien réglé — c'est ce qui était vrai avant que le réglage " +
+                "existe.",
             },
             organizations: {
               type: "array",
@@ -1522,6 +1542,17 @@ export function buildOpenApiDocument(serverUrl: string): Record<string, unknown>
                 "**où et quand** proposer une démarche déjà prête, celui-là dit si elle " +
                 "l'est. Une démarche en brouillon n'est proposée nulle part, quelle que " +
                 "soit sa visibilité.",
+            },
+            access_mode: {
+              type: "string",
+              enum: ["libre", "authentifie"],
+              description:
+                "Conditions d'accès pour l'usager : `libre` (aucun compte requis) ou " +
+                "`authentifie` (l'usager doit être connecté à son espace pour déposer). " +
+                "⚠️ **Ce n'est pas une quatrième règle de publication** : une démarche " +
+                "réservée est publiée comme les autres et doit se voir au catalogue. Ce " +
+                "champ dit à quelles CONDITIONS on la dépose, pas si on la montre. " +
+                "Défaut `libre`, y compris pour les démarches d'avant le réglage.",
             },
             keywords: { type: "array", items: { type: "string" } },
             short_description: { type: ["string", "null"] },

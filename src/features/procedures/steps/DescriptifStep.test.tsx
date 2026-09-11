@@ -50,6 +50,7 @@ const procedure = {
   knowledge_base: null,
   communication_config: null,
   status: "brouillon",
+  access_mode: "libre",
   created_at: null,
   updated_at: null,
 } as unknown as Procedure;
@@ -114,5 +115,39 @@ describe("DescriptifStep — traductions", () => {
     expect(onSubmit.mock.calls[0][0].translations).toEqual({
       oc: { name: "Acte de naissença" },
     });
+  });
+});
+
+describe("DescriptifStep — accès libre ou usagers authentifiés", () => {
+  it("relit l'accès enregistré et le renvoie tel quel si on n'y touche pas", () => {
+    const onSubmit = renderStep();
+
+    const select = screen.getByLabelText(/Accès/) as HTMLSelectElement;
+    expect(select.value).toBe("libre");
+    fireEvent.submit(document.querySelector("form")!);
+    expect(onSubmit.mock.calls[0][0].access_mode).toBe("libre");
+  });
+
+  it("enregistre la restriction choisie par l'agent", () => {
+    const onSubmit = renderStep();
+
+    fireEvent.change(screen.getByLabelText(/Accès/), { target: { value: "authentifie" } });
+    fireEvent.submit(document.querySelector("form")!);
+
+    expect(onSubmit.mock.calls[0][0].access_mode).toBe("authentifie");
+  });
+
+  it("une colonne jamais réglée se lit « accès libre », jamais un champ vide", () => {
+    // Le défaut inverse fermerait un catalogue que personne n'a déclaré fermé.
+    const onSubmit = vi.fn();
+    render(
+      <DescriptifStep
+        formId="f2"
+        organizationId="org-1"
+        procedure={{ ...procedure, access_mode: null } as unknown as Procedure}
+        onSubmit={onSubmit}
+      />,
+    );
+    expect((screen.getByLabelText(/Accès/) as HTMLSelectElement).value).toBe("libre");
   });
 });

@@ -33,6 +33,7 @@ function makeProcedure(knowledgeBase: unknown = null): Procedure {
     knowledge_base: knowledgeBase as Procedure["knowledge_base"],
     communication_config: null,
     status: "brouillon",
+    access_mode: "libre",
     created_at: null,
     updated_at: null,
   };

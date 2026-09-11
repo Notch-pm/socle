@@ -160,6 +160,25 @@ export function serializeProcedureDocuments(
 }
 
 /**
+ * Conditions d'accès d'une démarche, lues dans `procedures.access_mode`.
+ *
+ * ⚠️ Toute valeur inattendue — colonne absente comprise — vaut **`libre`** :
+ * c'est ce qui était vrai avant que la colonne existe, et annoncer une
+ * restriction que la collectivité n'a pas réglée ferait refuser des dépôts qui
+ * passaient la veille. C'est l'inverse du doute sur `status`, où le doute ne
+ * publie rien — là il s'agit de ne rien affirmer de trop, ici de ne rien
+ * fermer de trop.
+ *
+ * ⚠️ Miroir volontaire de `parseProcedureAccessMode`
+ * (`src/features/procedures/procedureAccess.ts`) : une edge function ne peut
+ * rien importer de `src/`, et les tests des deux côtés l'épinglent — motif
+ * `readAudiences`.
+ */
+export function readAccessMode(raw: unknown): "libre" | "authentifie" {
+  return raw === "authentifie" ? "authentifie" : "libre";
+}
+
+/**
  * `templatesById` porte le catalogue de documents du périmètre : sans lui, le
  * champ `documents` serait vide alors que la démarche en propose. Tout appelant
  * doit donc le fournir — d'où le paramètre requis.
@@ -174,6 +193,7 @@ export function serializeProcedure(row: Row, templatesById: Map<string, Row>): P
     // Colonne `text` + CHECK en base ; au moindre doute on sert « brouillon »,
     // le statut qui ne fait rien publier.
     status: row.status === "production" ? "production" : "brouillon",
+    access_mode: readAccessMode(row.access_mode),
     keywords: Array.isArray(row.keywords) ? (row.keywords as string[]) : [],
     short_description: nullableStr(row.short_description),
     user_description: nullableStr(row.user_description),
@@ -434,6 +454,7 @@ export function serializePortalProcedure(
     short_description: nullableStr(row.short_description),
     user_description: nullableStr(row.user_description),
     input_duration_minutes: nullableNum(row.input_duration_minutes),
+    access_mode: readAccessMode(row.access_mode),
     organizations: organizations.map((org) => ({
       id: str(org.id),
       name: str(org.name),

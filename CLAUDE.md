@@ -355,11 +355,35 @@ est fonctionnelle (voir feature « Édition d'organisation » ci-dessous). Param
   toutes en brouillon** (la notion n'existait pas — rien n'a été affirmé à leur place) : un
   consommateur qui filtre sur `production` n'obtient rien tant que le catalogue n'a pas été basculé.
   Logique pure `procedureStatus.ts` (testée : au moindre doute, **brouillon** — le doute ne publie rien).
+  ⚠️ **`access_mode` n'entre dans aucune de ces quatre notions** : il ne dit pas si la démarche est
+  proposée, ni sous quel nom, mais à quelles **conditions** on la dépose — voir ci-dessous.
 - **Descriptif** → colonnes `procedures` : `name` (obligatoire), `category_id` (obligatoire, catégories
-  de la racine), `type` (`interne`/`externe`), `keywords` (text[], CSV), `short_description`,
+  de la racine), `type` (`interne`/`externe`), `access_mode` (accès — voir ci-dessous),
+  `keywords` (text[], CSV), `short_description`,
   `input_duration_minutes`, `order_index` (rang, défaut max+1), + `translations` (libellé **et
   descriptif court** traduits dans chaque langue activée par la racine — voir feature « Langues et
   libellés traduits »).
+- **Accès = `procedures.access_mode`** (`libre` | `authentifie`, défaut **libre**, CHECK en base —
+  2026-09-10) : la démarche se dépose-t-elle sans compte, ou faut-il être connecté à son espace
+  usager ? Sélecteur **« Accès »** de l'étape Descriptif, à côté du type — c'est de la même nature,
+  ce que la démarche EST avant ce qu'elle demande.
+  ⚠️ **CE N'EST PAS UNE CINQUIÈME RÈGLE DE PUBLICATION**, et c'est le seul piège de ce réglage : une
+  démarche réservée reste au **catalogue** du portail et doit s'y voir — c'est en la lisant que
+  l'usager apprend qu'il doit se connecter. La retirer la cacherait à ceux-là mêmes qui ont un
+  compte. La connexion se demande au moment de **déposer**, pas au moment de montrer ; c'est écrit
+  aux trois endroits où un consommateur regarde (DTO, schéma OpenAPI, description de la route).
+  ⚠️ **Défaut `libre`, lignes existantes comprises** : c'est ce qui était vrai (le portail dépose
+  sans compte depuis le 2026-09-06), et le défaut inverse aurait fermé d'un coup un catalogue que
+  personne n'avait déclaré fermé. Même raison pour le parseur : **au moindre doute, `libre`** —
+  l'inverse de `procedureStatus` (là le doute ne publie rien, ici il ne **ferme** rien).
+  ⚠️ Le Socle **enregistre et publie**, il ne garde aucune porte (motif de la charte graphique et de
+  l'étape Communication) : tant que Nora ne lit pas le champ, une démarche réservée se dépose comme
+  les autres. L'espace usager est à la roadmap (« Démarches avec compte »).
+  **En aval** (contrat 1.19.0) : `access_mode` sur `Procedure` **et** sur `PortalProcedure` (liste
+  et détail) — le portail en a besoin pour l'annoncer, l'application qui instruit pour refuser un
+  dépôt anonyme. Logique pure `procedureAccess.ts` (testée) ; miroir edge `readAccessMode` dans
+  `public-api/_shared/serializers.ts` (testé des deux côtés, motif `readDocumentIds`). Migration
+  `procedures_acces_libre_authentifie`.
 - **Informations demandeur** → colonne `procedures.requester_config` (JSONB). Publics
   citoyen/entreprise/association activables ; par public, chaque donnée vaut `masque`/`visible`/
   `obligatoire`. Logique pure + parseur robuste `requesterFields.ts` (testé), UI `steps/DemandeurStep.tsx`.
@@ -431,7 +455,7 @@ est fonctionnelle (voir feature « Édition d'organisation » ci-dessous). Param
   `procedureStorage.ts` (logique pure de chemin/validation, testée) + `useProcedureDocuments.ts`
   (upload/suppression/URL signée). Logique pure **testée** : `requesterFields.ts`,
   `formSchema.ts`, `formReorder.ts`, `conditions.ts`, `formats.ts`, `knowledgeBase.ts`,
-  `communication.ts`, `procedureStatus.ts`, `markdown.ts`, `procedureStorage.ts`.
+  `communication.ts`, `procedureStatus.ts`, `procedureAccess.ts`, `markdown.ts`, `procedureStorage.ts`.
   Superadmin : section « Catalogue de démarches » dans `OrgSettingsPage` (racine uniquement).
 - Prérequis : une racine sans **catégorie** ne permet pas de créer une démarche (catégorie
   obligatoire) → créer d'abord des catégories via `/categories`.
@@ -1007,7 +1031,10 @@ démarches ». Ajouter une collectivité au portail = une ligne de domaine, aucu
   démarche porte aussi `audiences`, l'extrait de `requester_config` qui dit à **qui** elle
   s'adresse — ⚠️ seuls les NOMS des publics traversent, jamais les champs demandés au requérant,
   qui restent au détail ; ⚠️ une liste **vide** = aucun public déclaré, surtout pas « tous publics ».
-  Miroir volontaire d'`enabledAudiences`, testé des deux côtés — motif `readDocumentIds`), `GET /v1/portal/procedures/{id}?tenant_id=`
+  Miroir volontaire d'`enabledAudiences`, testé des deux côtés — motif `readDocumentIds` ; depuis
+  **1.19.0** chaque démarche porte `access_mode` — ⚠️ qui **ne filtre rien** : une démarche réservée
+  aux usagers authentifiés est servie comme les autres et doit s'afficher comme les autres, la
+  connexion se demande au **dépôt**), `GET /v1/portal/procedures/{id}?tenant_id=`
   (le **détail** : le public de la liste, plus la catégorie et les DEUX schémas de saisie
   `form_schema` et `requester_config` — ils *sont* le formulaire de l'usager ; `knowledge_base`,
   `agent_description` et les documents ne franchissent toujours pas. Même `publishedCatalogue`,

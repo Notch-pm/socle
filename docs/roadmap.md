@@ -2,7 +2,7 @@
 
 > **Public** : tous (devs Socle, équipes consommatrices) · **Question traitée** : quelles
 > évolutions sont envisagées, et lesquelles ont déjà été livrées ? · **Dernière mise à jour** :
-> 2026-09-08
+> 2026-09-10
 
 Liste d'**intentions**, pas d'engagements — sauf mention explicite d'une date de livraison.
 Née du chantier « Clara délègue ses usagers au Socle » (2026-07-16), enrichie depuis. Pour ce qui
@@ -213,7 +213,11 @@ suppose la précédente.
    leur état, mes informations. Authentification portée par Nora (projet Supabase du portail) et
    **rattachée au référentiel usagers du Socle** (`contacts`, via `contacts-api`) — le compte
    portail est une clé externe du contact (`contact_external_references`, source `portail_citoyen`,
-   déjà prévue), pas une seconde fiche.
+   déjà prévue), pas une seconde fiche. **Le paramétrage est prêt depuis le 2026-09-10** :
+   `procedures.access_mode` dit, démarche par démarche, si le dépôt exige un usager connecté, et il
+   est servi en contrat 1.19.0 sur `Procedure` et `PortalProcedure`. Reste à le **lire** — annoncer
+   la restriction sur la carte et sur la page de la démarche, puis bloquer le dépôt. ⚠️ Sans jamais
+   retirer la démarche du catalogue : c'est là que l'usager apprend qu'il doit se connecter.
 5. **Création de compte.** Inscription par courriel avec validation, réinitialisation de mot de
    passe, données minimales (RGPD : finalité, durée, droit d'accès et d'effacement à documenter),
    rapprochement d'une demande hors compte faite avec le même courriel.

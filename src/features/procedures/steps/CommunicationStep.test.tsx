@@ -61,6 +61,7 @@ function makeProcedure(communicationConfig: unknown = null): Procedure {
     knowledge_base: null,
     communication_config: communicationConfig as Procedure["communication_config"],
     status: "brouillon",
+    access_mode: "libre",
     created_at: null,
     updated_at: null,
   };

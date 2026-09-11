@@ -9,6 +9,7 @@ import {
   serializePortalProcedureDetail,
   serializeProcedure,
   serializeProcedureDocuments,
+  readAccessMode,
   serializeQuartier,
   serializeBranding,
   serializeSmtpSettings,
@@ -130,6 +131,39 @@ describe("serializers — whitelist stricte (aucune fuite)", () => {
     for (const status of [undefined, null, "", "PRODUCTION", 1, true]) {
       expect(serializeProcedure({ status }, new Map()).status).toBe("brouillon");
     }
+  });
+
+  describe("accès : libre ou réservé aux usagers authentifiés", () => {
+    it("sert les deux accès réglés par la collectivité", () => {
+      expect(serializeProcedure({ access_mode: "libre" }, new Map()).access_mode).toBe("libre");
+      expect(serializeProcedure({ access_mode: "authentifie" }, new Map()).access_mode).toBe(
+        "authentifie",
+      );
+    });
+
+    it("⚠️ le doute ne FERME rien : toute autre valeur vaut « libre »", () => {
+      // L'inverse du doute sur `status`, et pour la même raison — on n'affirme
+      // rien que la collectivité n'ait réglé. Annoncer une restriction
+      // imaginaire ferait refuser des dépôts qui passaient la veille.
+      for (const access_mode of [undefined, null, "", "AUTHENTIFIE", "authentifié", 1, true]) {
+        expect(
+          serializeProcedure({ access_mode }, new Map()).access_mode,
+          JSON.stringify(access_mode) ?? "undefined",
+        ).toBe("libre");
+      }
+    });
+
+    /**
+     * ⚠️ Miroir volontaire de `parseProcedureAccessMode`
+     * (`src/features/procedures/procedureAccess.ts`) : une edge function ne
+     * peut rien importer de `src/`, et ce sont les tests des deux côtés qui
+     * empêchent les deux lectures de diverger — motif `readAudiences`.
+     */
+    it("readAccessMode ne connaît que deux réponses", () => {
+      expect(readAccessMode("authentifie")).toBe("authentifie");
+      expect(readAccessMode("libre")).toBe("libre");
+      expect(readAccessMode(undefined)).toBe("libre");
+    });
   });
 
   it("activation : is_enabled coercé en booléen", () => {
@@ -579,13 +613,16 @@ describe("serializePortalProcedure — le paramétrage d'instruction ne sort pas
     category_id: "cat-1",
   };
 
-  it("n'expose que les huit champs publics", () => {
+  it("n'expose que les neuf champs publics", () => {
     expect(serializePortalProcedure(row)).toEqual({
       id: "proc-1",
       name: "Demande d'acte de naissance",
       short_description: "En quelques minutes.",
       user_description: "Adressée au service état civil.",
       input_duration_minutes: 5,
+      // Rien de réglé dans la fixture : l'accès est libre, comme il l'était
+      // avant que la colonne existe.
+      access_mode: "libre",
       organizations: [],
       // `requester_config` de la fixture ne déclare aucun public connu : rien
       // à servir. ⚠️ Pas « tous publics » — voir le test dédié plus bas.
@@ -663,6 +700,16 @@ describe("serializePortalProcedure — le paramétrage d'instruction ne sort pas
     }
   });
 
+  it("⚠️ sert une démarche réservée comme les autres, en le DISANT", () => {
+    // Le portail doit la montrer : c'est en la lisant que l'usager apprend
+    // qu'il doit se connecter. Elle n'est pas retirée du catalogue — la
+    // publication se décide en amont (`publishedCatalogue`), et `access_mode`
+    // n'y entre pas.
+    const dto = serializePortalProcedure({ ...row, access_mode: "authentifie" });
+    expect(dto.access_mode).toBe("authentifie");
+    expect(dto.id).toBe("proc-1");
+  });
+
   it("tolère les descriptifs absents — aucun n'est obligatoire au paramétrage", () => {
     const dto = serializePortalProcedure({ id: "p", name: "Sans descriptif" });
     expect(dto.short_description).toBeNull();
@@ -704,6 +751,7 @@ describe("serializePortalProcedureDetail — le formulaire sort, l'instruction n
       short_description: "En quelques minutes.",
       user_description: "Adressée au service état civil.",
       input_duration_minutes: 5,
+      access_mode: "libre",
       organizations: [{ id: "accm", name: "ACCM", handling_organization_id: null }],
       audiences: ["citoyen"],
       translations: { br: { name: "Testeni ganedigezh" } },

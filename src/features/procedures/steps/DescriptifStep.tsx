@@ -2,6 +2,11 @@ import * as React from "react";
 import { Input } from "@/components/ui/input";
 import { Field } from "@/components/ui/field";
 import { parseKeywords } from "@/features/procedures/keywords";
+import {
+  PROCEDURE_ACCESS_MODES,
+  parseProcedureAccessMode,
+  type ProcedureAccessMode,
+} from "@/features/procedures/procedureAccess";
 import { useCategoriesQuery } from "@/features/categories/useCategories";
 import { TranslationFields } from "@/features/languages/TranslationFields";
 import { useOrganizationLanguages } from "@/features/languages/useOrganizationLanguages";
@@ -23,6 +28,11 @@ export interface DescriptifValues {
   name: string;
   category_id: string;
   type: ProcedureType;
+  /**
+   * Conditions d'accès : `libre` ou `authentifie`. Ne décide pas de la
+   * publication — voir `procedureAccess.ts`.
+   */
+  access_mode: ProcedureAccessMode;
   keywords: string[];
   short_description: string | null;
   input_duration_minutes: number | null;
@@ -70,6 +80,9 @@ export function DescriptifStep({
   const [type, setType] = React.useState<ProcedureType>(
     (procedure?.type as ProcedureType) ?? "externe",
   );
+  const [accessMode, setAccessMode] = React.useState<ProcedureAccessMode>(() =>
+    parseProcedureAccessMode(procedure?.access_mode),
+  );
   const [keywordsText, setKeywordsText] = React.useState(procedure?.keywords?.join(", ") ?? "");
   const [shortDescription, setShortDescription] = React.useState(procedure?.short_description ?? "");
   const [durationText, setDurationText] = React.useState(
@@ -103,6 +116,7 @@ export function DescriptifStep({
       name: name.trim(),
       category_id: categoryId,
       type,
+      access_mode: accessMode,
       keywords: parseKeywords(keywordsText),
       short_description: shortDescription.trim() || null,
       input_duration_minutes: durationText.trim() ? Number(durationText) : null,
@@ -175,6 +189,35 @@ export function DescriptifStep({
           {PROCEDURE_TYPES.map((t) => (
             <option key={t.value} value={t.value}>
               {t.label}
+            </option>
+          ))}
+        </select>
+      </Field>
+
+      {/*
+        Qui peut déposer la démarche. Placé avec « Type » parce que c'est de la
+        même nature : ce que la démarche EST, avant ce qu'elle demande.
+        ⚠️ Ce réglage ne retire rien du catalogue du portail — une démarche
+        réservée doit s'y voir, c'est là que l'usager apprend qu'il doit se
+        connecter (voir `procedureAccess.ts`).
+      */}
+      <Field
+        label="Accès"
+        htmlFor="proc-access"
+        required
+        hint={PROCEDURE_ACCESS_MODES.find((mode) => mode.value === accessMode)?.hint}
+        className="sm:col-span-2"
+      >
+        <select
+          id="proc-access"
+          required
+          value={accessMode}
+          onChange={(e) => setAccessMode(e.target.value as ProcedureAccessMode)}
+          className={selectClass}
+        >
+          {PROCEDURE_ACCESS_MODES.map((mode) => (
+            <option key={mode.value} value={mode.value}>
+              {mode.label}
             </option>
           ))}
         </select>

@@ -1,7 +1,7 @@
 # Journal des évolutions des API publiques
 
 > **Public** : équipes consommatrices (Ariane, Clara, Iris, partenaires) · **Question traitée** :
-> quand un contrat d'API a-t-il changé, et comment ? · **Dernière mise à jour** : 2026-09-08
+> quand un contrat d'API a-t-il changé, et comment ? · **Dernière mise à jour** : 2026-09-10
 
 Journal **append-only** : chaque évolution de la surface de contrat des API publiques
 (`public-api`, `contacts-api`, `ai-api`) — endpoint, paramètre, champ de réponse, comportement
@@ -10,6 +10,46 @@ une correction s'ajoute sous une nouvelle date. Politique de compatibilité et o
 consommateur : [integration.md](./integration.md#politique-de-compatibilité-v1).
 
 Format d'une entrée : `## AAAA-MM-JJ — <api> — ajout|correctif|rupture`
+
+---
+
+## 2026-09-10 — public-api — ajout
+
+**Accès libre ou usagers authentifiés : une démarche dit désormais à quelles conditions on la
+dépose.** La collectivité règle le champ à l'étape « Descriptif » du paramétrage ; le Socle
+l'enregistre et le publie. Version du contrat : **1.19.0**. Ajout **additif** : un consommateur qui
+l'ignore continue de se comporter comme aujourd'hui, puisque la valeur par défaut est celle qui
+était vraie avant le réglage.
+
+**`access_mode` sur `Procedure`** (`GET /v1/procedures`, `/v1/procedures/{id}`) **et sur
+`PortalProcedure`** (`GET /v1/portal/procedures`, `/v1/portal/procedures/{id}`). Deux valeurs :
+
+| Valeur | Ce que le consommateur doit faire |
+|---|---|
+| `libre` | Rien de particulier : n'importe quel visiteur dépose la démarche. |
+| `authentifie` | Exiger un usager connecté **au moment du dépôt**. |
+
+- ⚠️ **CE N'EST PAS UNE RÈGLE DE PUBLICATION.** Les quatre conditions de publication du portail ne
+  changent pas, et `access_mode` ne s'y ajoute pas : une démarche `authentifie` est servie par
+  `GET /v1/portal/procedures` **comme les autres**, et doit s'y afficher comme les autres. C'est en
+  la lisant que l'usager apprend qu'il doit se connecter ; la retirer du catalogue la cacherait à
+  ceux-là mêmes qui ont un compte. Demandez la connexion au moment de **déposer**, pas au moment de
+  montrer.
+- ⚠️ **`libre` est le défaut, et il est servi sans distinction** : une colonne jamais réglée —
+  c'est le cas de toutes les démarches d'avant le 2026-09-10 — rend `libre`, parce que c'est ce qui
+  était vrai (le portail dépose sans compte depuis le 2026-09-06). Le défaut inverse aurait fermé
+  d'un coup un catalogue entier que personne n'avait déclaré fermé. Le champ est **toujours
+  présent** : un champ facultatif obligerait chaque portail à choisir un défaut, et deux portails en
+  choisiraient deux différents.
+- **Le Socle ne garde aucune porte** : il publie le réglage, il ne refuse aucun dépôt. C'est au
+  portail de demander la connexion et à l'application qui instruit de refuser un dépôt anonyme sur
+  une démarche réservée. Même partage que la charte graphique et l'étape Communication.
+- **Pour Nora** : l'espace usager n'existant pas encore (voir `docs/roadmap.md`, « Démarches avec
+  compte »), le champ est à afficher avant d'être à appliquer — une mention sur la carte et sur la
+  page de la démarche, le blocage du dépôt quand les comptes arriveront.
+- Base : `procedures.access_mode`, text NOT NULL défaut `libre`, CHECK
+  `procedures_access_mode_check` sur les deux valeurs. Migration
+  `procedures_acces_libre_authentifie`.
 
 ---
 
