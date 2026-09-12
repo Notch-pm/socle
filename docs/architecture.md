@@ -2,7 +2,7 @@
 
 > **Public** : développeuses et développeurs (humains et agents IA) travaillant sur Socle ·
 > **Question traitée** : comment le système est-il construit, et pourquoi · **Dernière mise à
-> jour** : 2026-09-08
+> jour** : 2026-09-12
 
 Ce document explique les frontières du système et les décisions qui les justifient. Il ne liste
 ni les tables (→ [`./data-model.md`](./data-model.md)), ni les endpoints (→ les OpenAPI, publiées
@@ -24,6 +24,8 @@ Trois grandes zones, une seule base de données :
 │ PostgREST + Auth           │          │ Edge Functions Deno                   │
 │ (Supabase)                 │          │ public-api      (lecture seule)       │
 │ RLS = frontière unique     │          │ contacts-api    (lecture/écriture)    │
+│                            │          │ ai-api          (guichet LLM)         │
+│                            │          │ audience-api    (écriture seule)      │
 └─────────────┬──────────────┘          │ verify_jwt=false, auth portée par le  │
               │ requêtes filtrées par    │ code de la fonction                    │
               │ le rôle de l'appelant    └───────────────────┬──────────────────┘
@@ -129,7 +131,7 @@ nombre de clés plateforme actives.
 
 | Route | Composant |
 |---|---|
-| `/` (index) | `DashboardPage` (placeholder) |
+| `/` (index) | `DashboardPage` (chiffres du référentiel + fréquentation du site) |
 | `/organisations` | `OrganizationsPage` |
 | `/organisations/:orgId` | `OrganizationEditorPage` (page à onglets) |
 | `/demarches` | `ProceduresPage` |

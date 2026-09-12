@@ -103,12 +103,16 @@ describe("scopeRequest — par quelle RPC calculer le périmètre", () => {
   });
 });
 
-describe("le module est le même dans les trois fonctions", () => {
-  it("public-api, contacts-api et ai-api portent une copie identique", () => {
+describe("le module est le même dans les quatre fonctions", () => {
+  it("public-api, contacts-api, ai-api et audience-api portent une copie identique", () => {
     // Pas de `_shared` de premier niveau (voir l'en-tête du module) : la
     // duplication est acceptée, la dérive ne l'est pas.
     const here = readFileSync(new URL("./apiKeyAuth.ts", import.meta.url), "utf8");
-    for (const sibling of ["../../contacts-api/_shared/apiKeyAuth.ts", "../../ai-api/_shared/apiKeyAuth.ts"]) {
+    for (const sibling of [
+      "../../contacts-api/_shared/apiKeyAuth.ts",
+      "../../ai-api/_shared/apiKeyAuth.ts",
+      "../../audience-api/_shared/apiKeyAuth.ts",
+    ]) {
       expect(readFileSync(new URL(sibling, import.meta.url), "utf8")).toBe(here);
     }
   });

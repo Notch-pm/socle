@@ -1,7 +1,7 @@
 # Exploitation & déploiement
 
 > **Public** : ops, devs déployant Socle · **Question traitée** : comment exploiter et déployer
-> Socle (edge functions, secrets, base, CI) ? · **Dernière mise à jour** : 2026-09-08
+> Socle (edge functions, secrets, base, CI) ? · **Dernière mise à jour** : 2026-09-12
 
 Ce document est un runbook. Pour le « pourquoi » des choix, voir
 [architecture.md](./architecture.md) ; pour le détail du schéma, [data-model.md](./data-model.md).
@@ -21,7 +21,7 @@ Ce document est un runbook. Pour le « pourquoi » des choix, voir
 
 ## Edge functions
 
-Sept fonctions Deno dans `supabase/functions/`. Le déploiement passe par l'outil MCP
+Huit fonctions Deno dans `supabase/functions/`. Le déploiement passe par l'outil MCP
 `deploy_edge_function` (ou la CLI équivalente), avec un `verify_jwt` fixé par fonction au
 déploiement. ⚠️ **`supabase/config.toml` gouverne ce réglage pour la CLI** (ajouté le 2026-09-05,
 après l'incident où un redéploiement de `public-api` sans lui a remis le défaut `true` et coupé
@@ -33,6 +33,7 @@ quand la valeur voulue est le défaut.
 | `public-api` | `false` | Auth par clé API (`Authorization: Bearer <clé>`), vérifiée dans le code de la fonction — pas un JWT Supabase |
 | `contacts-api` | `false` | Idem : clé API + scope `contacts`, portée par la fonction |
 | `ai-api` | `false` | Idem : clé API + scope `ai` + **application imputable**. Guichet du fournisseur LLM — la seule fonction qui appelle un tiers **payant** |
+| `audience-api` | `false` | Idem : clé API + scope `audience`. Compteurs de fréquentation du site de démarches, appelée par `portal-api` de Nora. **Écriture seule** — aucun `GET` : la clé vit dans une fonction qui sert des pages publiques |
 | `auth-email-hook` | `false` | Appelée par Supabase Auth (hook « Send Email »), authentifiée par **signature Standard Webhooks** (`AUTH_HOOK_SECRET`), pas par JWT |
 | `invite-user` | `true` | Appelée depuis l'UI Socle avec le JWT de l'utilisateur connecté ; l'autorisation fine (`is_admin_of_self_or_ancestor`, depuis le 2026-09-08 — un admin de racine invite dans ses sous-organisations) est vérifiée en plus, dans le code. Action `resend` : renvoi d'une invitation restée sans suite |
 | `send-test-email` | `true` | Idem : JWT utilisateur + `is_org_admin(organization_id)` |
@@ -152,6 +153,31 @@ fichiers casse la fonction en production alors que les tests passent en local.
   SELECT consumer, feature, resource_type, status, created_at
   FROM public.ai_usage_events ORDER BY created_at DESC LIMIT 10;
   ```
+
+## Mesure d'audience du portail (2026-09-12)
+
+Rien à poser **côté Socle** : `audience-api` n'a aucun secret propre (elle lit `api_keys` avec la
+service role, comme les trois autres). Deux gestes seulement, dans cet ordre :
+
+1. **Le scope `audience` sur la clé plateforme `nora`**, en plus de `read` — depuis
+   `/superadmin/applications`. Une clé par application : ne pas en créer une seconde pour la
+   mesure, ce serait un secret de plus à poser, à faire tourner et à révoquer.
+2. **`SOCLE_AUDIENCE_API_URL`** dans les secrets de **Nora** (projet Supabase du portail) :
+   `https://<ref-socle>.supabase.co/functions/v1/audience-api`, puis redéploiement de `portal-api`.
+
+⚠️ **L'ordre importe peu, et c'est voulu** : sans le scope, le Socle répond 403 et Nora ignore
+l'échec ; sans l'URL, Nora ne compte rien. Dans les deux cas, **aucune page ne casse** — un
+compteur ne fait jamais échouer un portail.
+
+⚠️ **Tant que `SOCLE_AUDIENCE_API_URL` n'est pas posée, le tableau de bord d'une collectivité
+affiche « Aucune visite enregistrée ».** C'est l'état normal, pas une panne : l'écran le dit.
+
+⚠️ **Un environnement de développement ne compte rien** (`import.meta.env.PROD`,
+`navigator.webdriver`) : ne pas poser l'URL sur un projet de test suffit d'ailleurs à l'isoler
+complètement.
+
+Vérification : `POST /v1/page-views` sans clé → 401 ; avec une clé `read` seule → 403 ; avec un
+`tenant_id` hors périmètre → 404 ; avec une clé inconnue dans le corps → 400.
 
 ## Réglages de plateforme et provisioning (2026-09-08)
 

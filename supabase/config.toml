@@ -36,6 +36,12 @@ verify_jwt = false
 [functions.ai-api]
 verify_jwt = false
 
+# Même motif : clé API vérifiée dans le code (compteurs de fréquentation du
+# site de démarches). Appelée par `portal-api` de Nora, jamais par un
+# navigateur — la clé ne doit pas atteindre le poste d'un visiteur.
+[functions.audience-api]
+verify_jwt = false
+
 # Hook « Send Email » de GoTrue : appelé sans JWT, authentifié par signature
 # Standard Webhooks dans le code.
 [functions.auth-email-hook]

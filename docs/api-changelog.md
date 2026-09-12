@@ -1,15 +1,68 @@
 # Journal des évolutions des API publiques
 
 > **Public** : équipes consommatrices (Ariane, Clara, Iris, partenaires) · **Question traitée** :
-> quand un contrat d'API a-t-il changé, et comment ? · **Dernière mise à jour** : 2026-09-10
+> quand un contrat d'API a-t-il changé, et comment ? · **Dernière mise à jour** : 2026-09-12
 
 Journal **append-only** : chaque évolution de la surface de contrat des API publiques
-(`public-api`, `contacts-api`, `ai-api`) — endpoint, paramètre, champ de réponse, comportement
-d'authentification — ajoute une entrée datée en tête de liste. Une entrée n'est jamais réécrite ;
-une correction s'ajoute sous une nouvelle date. Politique de compatibilité et obligations
+(`public-api`, `contacts-api`, `ai-api`, `audience-api`) — endpoint, paramètre, champ de réponse,
+comportement d'authentification — ajoute une entrée datée en tête de liste. Une entrée n'est jamais
+réécrite ; une correction s'ajoute sous une nouvelle date. Politique de compatibilité et obligations
 consommateur : [integration.md](./integration.md#politique-de-compatibilité-v1).
 
 Format d'une entrée : `## AAAA-MM-JJ — <api> — ajout|correctif|rupture`
+
+---
+
+## 2026-09-12 — audience-api — ajout
+
+**Une quatrième API, en ÉCRITURE SEULE : les compteurs de fréquentation du site de démarches.**
+Version du contrat : **1.0.0**. Servie sous `{SUPABASE_URL}/functions/v1/audience-api`,
+`verify_jwt = false`. Aucune rupture : rien n'existait.
+
+Nora tourne dans le navigateur de l'usager et n'a **pas de base de données**. Le Socle détient déjà
+le domaine, le catalogue et la page publiée : c'est donc ici que se compte la fréquentation.
+`public-api` refuse tout ce qui n'est pas `GET` — cette ligne EST son contrat pour tous ses
+consommateurs —, `contacts-api` est la surface des données personnelles, `ai-api` celle de la
+dépense. Quatrième domaine, quatrième fonction, **quatrième scope**.
+
+**Nouveau scope `audience`** sur `api_keys` (la contrainte `api_keys_scopes_known` en connaît
+désormais cinq : `read`, `contacts`, `smtp`, `ai`, `audience`). Il ne donne accès qu'à cette API.
+
+| Route | Corps | Réponse |
+|---|---|---|
+| `POST /v1/page-views` | `{tenant_id, page, procedure_id?, entry?, lang?, device?}` | `202 {recorded}` |
+| `POST /v1/deposits` | `{tenant_id, procedure_id}` | `202 {recorded}` |
+
+- ⚠️ **ÉCRITURE SEULE, ET CE N'EST PAS UN OUBLI.** Aucun `GET` dans tout le document. La clé de
+  Nora est posée dans une edge function qui sert des pages publiques : lui donner le moyen de LIRE
+  la fréquentation ferait d'une clé volée un moyen de connaître le trafic de toutes les
+  collectivités qu'elle sert. Les chiffres se lisent dans le Socle, par RPC, avec le compte d'un
+  agent.
+- ⚠️ **AUCUNE DONNÉE PERSONNELLE NE TRAVERSE CETTE API, ET ELLE NE PEUT PAS EN RECEVOIR.** Toute
+  clé inconnue dans le corps est un **400** — c'est ce qui rend la promesse vérifiable de
+  l'extérieur. `entry` est un **booléen** (l'appelant a déjà lu le référent et l'a jeté), `device`
+  **l'une de trois valeurs** (dérivée du User-Agent par l'appelant, qui ne le transmet jamais),
+  `lang` la langue **servie**. Les deux tables de compteurs n'ont aucune colonne capable de porter
+  un identifiant, une adresse ou un texte libre, et un test SQL en épingle la liste exacte.
+  Conséquence : rien n'est écrit sur le poste du visiteur, aucun consentement n'est à demander
+  (article 82 de la loi Informatique et Libertés).
+- ⚠️ **Une visite est une ARRIVÉE sur le site, pas un visiteur unique** — sans identifiant, la
+  seconde notion n'a pas de sens et n'est pas mesurée. C'est **l'appelant** qui tranche, dans le
+  navigateur, et pose `entry: true`.
+- ⚠️ **Le jour vient du serveur**, en heure de Paris. Aucune date ne traverse le corps : une
+  horloge de navigateur décalée ferait atterrir des vues dans un futur qu'aucune période n'affiche.
+- ⚠️ `tenant_id` est **l'organisme du domaine visité**, pas forcément une racine : une
+  sous-organisation peut tenir son guichet. Il est recoupé avec le périmètre de la clé (sous-arbre
+  de sa racine, ou collectivités abonnées à son application) ; hors périmètre ⇒ **404**, comme
+  partout dans la gamme. `procedure_id` est requis **si et seulement si** `page` n'est pas
+  `accueil`, et doit appartenir au catalogue de la racine du tenant — sinon `recorded: false`, sans
+  erreur : un compteur ne fait pas échouer une page.
+- ⚠️ **Ni `429` ni `502`** dans la liste des erreurs, et la liste courte est le signe que l'API est
+  étroite : il n'y a aucun crédit à épuiser (le frein de cadence vit chez l'appelant, au plus près
+  de l'adresse IP que le Socle ne verra jamais) et elle n'appelle personne.
+
+Documentation : `GET /openapi.json` sur la fonction. **Pour les autres consommateurs de la gamme :
+rien à faire.** Cette API concerne le portail usagers, le seul qui voie des pages s'afficher.
 
 ---
 

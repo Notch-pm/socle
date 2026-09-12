@@ -1,7 +1,7 @@
 # Modèle de données
 
 > **Public** : développeurs, ops · **Question traitée** : qu'est-ce qui existe en base (tables,
-> contraintes, RLS, fonctions, storage) ? · **Dernière mise à jour** : 2026-09-10
+> contraintes, RLS, fonctions, storage) ? · **Dernière mise à jour** : 2026-09-12
 
 Pour le rôle de Socle dans la gamme et les décisions d'architecture, voir [../CLAUDE.md](../CLAUDE.md)
 et [./architecture.md](./architecture.md). Pour les endpoints, schémas de requête/réponse et la
@@ -552,6 +552,48 @@ implémentation, trois lecteurs (le service, l'éditeur, le client).
 
 ---
 
+## Fréquentation du site de démarches
+
+Deux tables de **compteurs**, et rien d'autre. Écrites par `audience-api` (scope `audience`) via
+deux RPC, lues par une troisième. Voir CLAUDE.md, « Tableau de bord et fréquentation du site ».
+
+⚠️ **AUCUN IDENTIFIANT NE PEUT Y ENTRER**, et c'est ce qui dispense d'un bandeau de consentement
+sur les portails (article 82 de la loi Informatique et Libertés) : pas de visiteur, pas de session,
+pas d'adresse IP même hachée, pas de User-Agent, pas de référent. La promesse est **épinglée par un
+test** — `supabase/tests/audience.test.sql` (cas R1) fige la liste EXACTE des colonnes des deux
+tables ; ajouter `visitor_id` le fait tomber. Motif du passe-plat de l'`ai-api`.
+
+### `portal_audience_pages`
+
+- `organization_id` NOT NULL CASCADE — **l'organisme DU DOMAINE visité**, pas forcément une racine :
+  une sous-organisation peut tenir son guichet ; `day` date (heure de Paris, **posée par le
+  serveur**) ; `page` CHECK `accueil|demarche|formulaire` ; `procedure_id` uuid **SANS FK** ;
+  `views`/`visits`/`deposits` integer ≥ 0.
+- CHECK `(page = 'accueil') = (procedure_id is null)` — la forme de la ligne dit à quoi elle se
+  rapporte ; CHECK `deposits = 0 or page = 'formulaire'` — un dépôt part d'un formulaire, et le
+  compter ailleurs fausserait le taux (dépôts / formulaires ouverts).
+- **`unique nulls not distinct (organization_id, day, page, procedure_id)`** (Postgres ≥ 15) :
+  sans `nulls not distinct`, chaque vue de l'accueil créerait une ligne, deux NULL ne se
+  rapprochant jamais. Index `(organization_id, day)`.
+- ⚠️ **`procedure_id` sans clé étrangère, volontairement** : une démarche supprimée garde son
+  historique. Elle est nommée à la lecture par un sous-select, et l'écran libelle « Démarche
+  supprimée » plutôt que d'afficher un uuid nu (motif `resolveDocuments`).
+- **RLS activé, AUCUNE POLICY.** Ni `anon` ni `authenticated` n'entre : l'écriture passe par deux
+  RPC réservées au service role, la lecture par une RPC `SECURITY DEFINER` gardée. Une policy de
+  lecture, même large, ferait du découpage de ces tables un contrat public — or il doit rester
+  libre.
+
+### `portal_audience_breakdown`
+
+- PK `(organization_id, day, dimension, value)` ; `dimension` CHECK `langue|appareil` ; `value`
+  CHECK conditionnel : code BCP 47 (même expression que `is_valid_language_set`) pour `langue`,
+  liste fermée `mobile|tablette|ordinateur` pour `appareil` ; `views`/`visits` integer ≥ 0.
+- Table à part plutôt que des colonnes : les valeurs sont ouvertes (11 langues aujourd'hui) et ne
+  se croisent pas avec les pages — croiser langue × appareil × page multiplierait les lignes sans
+  qu'aucun écran ne le demande. Même RLS sans policy.
+
+---
+
 ## Fonctions SQL
 
 ### Helpers RLS
@@ -571,7 +613,47 @@ Tous `SECURITY DEFINER`, `search_path=public`, EXECUTE ouvert à `anon`/`authent
 `org_subtree_ids`) : toutes les organisations pour une application de scope `plateforme`, l'union
 des `org_subtree_ids` des racines abonnées sinon, `{}` pour une application inconnue. Les trois
 fonctions d'API l'appellent pour une clé plateforme, via la décision pure de
-`_shared/apiKeyAuth.ts` (identique dans les trois, test d'identité).
+`_shared/apiKeyAuth.ts` (identique dans les **quatre**, test d'identité).
+
+### RPC de fréquentation du portail (2026-09-12)
+
+**Écriture** — `plpgsql`, `SECURITY INVOKER`, **EXECUTE réservé à `service_role`** (motif
+`org_subtree_ids` : appelables par `authenticated`, n'importe quel compte fabriquerait des
+chiffres). Elles ne portent que des uuid, trois énumérés courts et un booléen — aucune signature
+ne peut véhiculer un identifiant de personne, et c'est l'un des quatre mécanismes qui tiennent la
+promesse « aucune donnée personnelle ».
+
+- `record_portal_page_view(p_organization_id, p_page, p_procedure_id, p_entry, p_lang, p_device)
+  → boolean` — trois upserts incrémentaux (page, langue, appareil). Le jour vient **toujours** de
+  `now() at time zone 'Europe/Paris'` : une horloge de navigateur décalée ferait atterrir des vues
+  dans un futur qu'aucune période n'affiche. ⚠️ **Renvoie `false` sans rien écrire** — jamais
+  d'exception — quand la démarche n'appartient pas au sous-arbre de sa racine, quand la forme est
+  impossible (accueil avec démarche, démarche sans démarche) ou quand l'organisation est inconnue :
+  un compteur ne fait pas échouer une page. ⚠️ Une langue malformée est **ignorée** sans perdre la
+  vue de page : la ventilation perd une ligne, pas la mesure.
+- `record_portal_deposit(p_organization_id, p_procedure_id) → boolean` — incrémente `deposits` sur
+  la ligne `formulaire` de la démarche, **sans ajouter de vue** (sinon le taux de dépôt dépasserait
+  100 % mécaniquement).
+
+**Lecture** — `plpgsql STABLE`, **`SECURITY DEFINER`**, `search_path` figé, EXECUTE
+`authenticated`. `returns jsonb` et non `returns table` (motif `root_onboarding_status` : une clé
+s'ajoute par un `create or replace`, sans `drop function`, et un lecteur tolérant ne casse pas).
+
+⚠️ **Garde `has_org_access(p_org_id)` + racine obligatoire.** `SECURITY DEFINER` est délibéré :
+sous RLS, un membre ordinaire ne voit pas les sous-organisations et lirait des totaux **partiels** —
+un tableau de bord qui ment est pire qu'un tableau de bord absent. Choix assumé : les noms des
+sous-organisations et leur nombre d'activations deviennent visibles de tout membre direct de la
+racine ; ils sont déjà publics sur le portail.
+
+- `organization_dashboard(p_org_id) → jsonb` — `procedures {total, production}`, `contacts`
+  (**actifs** seulement, par type : un archivé n'est plus un usager du référentiel) et
+  `organizations` : le sous-arbre **actif**, avec `enabled_procedures` par organisme.
+- `portal_audience(p_org_id, p_from, p_to) → jsonb` — `days` (les jours **sans données sont
+  absents** : au lecteur de compléter par des zéros ; transmettre 365 lignes vides n'apprendrait
+  rien), `totals` (dont `form_views`, le dénominateur du taux de dépôt), `pages` (les 10 plus vues,
+  la démarche **nommée à la lecture**, `null` si elle a été supprimée) et `breakdown`. Période
+  bornée à **400 jours** — au-delà, la requête balayerait des années pour un écran qui n'en montre
+  pas.
 
 ### Provisioning d'une racine et mise en service (2026-09-08)
 

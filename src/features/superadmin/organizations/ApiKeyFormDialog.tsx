@@ -42,6 +42,14 @@ const SCOPE_OPTIONS = [
       + "à ne cocher que pour une application de la gamme (Iris, Clara…), jamais pour un "
       + "partenaire. Exige de nommer l'application, pour que la dépense soit imputable.",
   },
+  {
+    scope: "audience",
+    label: "Audience du portail (écriture)",
+    description:
+      "Compteurs de fréquentation du site de démarches — API audience-api. À ne cocher que "
+      + "pour le portail usagers (Nora), le seul qui voie les pages s'afficher. Écriture "
+      + "seule : elle ne permet de lire aucun chiffre.",
+  },
 ] as const;
 
 /** Scope dont la dépense est facturée : il exige une application imputable. */

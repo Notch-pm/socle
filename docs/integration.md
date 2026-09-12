@@ -2,7 +2,7 @@
 
 > **Public** : équipes consommatrices (Ariane, Clara, Iris, partenaires) · **Question traitée** :
 > comment consommer les API de Socle correctement, sans rien casser lors d'une évolution ? ·
-> **Dernière mise à jour** : 2026-09-08
+> **Dernière mise à jour** : 2026-09-12
 
 Socle est le référentiel central de la gamme : organisations, démarches, types de pièce
 justificative, quartiers et usagers. Il expose trois API REST **versionnées** (`/v1`), en HTTPS,
@@ -58,6 +58,7 @@ Une clé porte un ou plusieurs scopes :
 | `contacts` | Usagers (`contacts-api`) | Vérifié — une clé sans ce scope reçoit **403** sur tout appel à `contacts-api` (données personnelles). |
 | `smtp` | Serveur d'envoi (`GET /v1/organizations/{id}/smtp`) | Vérifié — **seule ressource qui sert un secret** (mot de passe du relais). Le scope `read` ne suffit pas : à demander explicitement. La réponse est le relais **applicable** à l'organisation (le sien, ou celui dont elle hérite) ; `source_organization_id` dit lequel. |
 | `ai` | Guichet IA (`ai-api`) | Vérifié depuis le 2026-08-29 — **scope facturé**, réservé aux applications de la gamme, jamais à un partenaire. La clé doit en outre porter une **application imputable** (« Application imputable » à la création) : sans elle, l'appel est refusé, parce qu'une dépense sans imputation ne peut être ni facturée ni expliquée. |
+| `audience` | Fréquentation du portail (`audience-api`) | Vérifié depuis le 2026-09-12 — **écriture seule**, réservé au portail usagers (Nora), le seul qui voie des pages s'afficher. Il ne donne accès à aucune lecture : les chiffres se lisent dans le Socle, avec le compte d'un agent. Aucune donnée personnelle ne traverse cette API — toute clé inconnue dans le corps est un **400**. |
 
 ## Modèle mental des périmètres
 

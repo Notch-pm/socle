@@ -2,7 +2,7 @@
 
 > **Public** : tous (devs Socle, équipes consommatrices) · **Question traitée** : quelles
 > évolutions sont envisagées, et lesquelles ont déjà été livrées ? · **Dernière mise à jour** :
-> 2026-09-10
+> 2026-09-12
 
 Liste d'**intentions**, pas d'engagements — sauf mention explicite d'une date de livraison.
 Née du chantier « Clara délègue ses usagers au Socle » (2026-07-16), enrichie depuis. Pour ce qui
@@ -180,7 +180,28 @@ suppose la précédente.
   `requester_config` (`courriel`, `nom_usuel`, `siret`…) sont celles qu'Iris rapproche du
   référentiel : aucune table de correspondance nulle part.
 
+- **2026-09-12 — La fréquentation du site, mesurée sans cookie.** L'accueil de l'app par
+  organisation cesse d'être un écran d'attente : chiffres du référentiel (démarches, usagers,
+  démarches activées par organisme) et **fréquentation du portail** — visites, pages vues,
+  demandes déposées et taux, pages les plus vues, langues, appareils, sur 7 jours / 30 jours /
+  1 an. Quatrième edge function `audience-api` (scope **`audience`**, contrat 1.0.0, **écriture
+  seule**), tables de compteurs `portal_audience_pages` / `portal_audience_breakdown` sans aucune
+  policy, deux RPC de lecture gardées. Nora envoie un beacon `text/plain` (donc **un seul appel
+  par page vue**, sans `OPTIONS`) et signale le dépôt après l'acceptation par Iris.
+  ⚠️ **Aucun bandeau de consentement, parce qu'aucune donnée personnelle n'est collectée** : rien
+  n'écrit sur le poste du visiteur, et ni l'adresse IP (hachée en mémoire chez Nora, pour le seul
+  frein anti-abus), ni le User-Agent (réduit à un mot parmi trois), ni le référent (réduit à un
+  oui/non par le navigateur) n'atteignent le Socle. Un test SQL fige la liste exacte des colonnes.
+  ⚠️ Une **visite** est une **arrivée** sur le site, pas un visiteur unique — sans identifiant, la
+  seconde notion n'a pas de sens. La **provenance** a été écartée du périmètre.
+
 ### Envisagé, dans l'ordre
+
+0. **Suites possibles de la mesure d'audience** — aucune n'est engagée : la **provenance**
+   (écartée au premier tour : elle demanderait de transmettre le référent, donc de défaire la
+   promesse qui dispense du consentement) ; un **filtre par site** quand une collectivité en tient
+   plusieurs (le domaine est déjà dans les compteurs, seul l'écran manque) ; une **vue super
+   admin** inter-clients, sur le modèle de `/superadmin/ia` ; l'**export** de la période.
 
 1. **Multilingue.** En cours. Fait : les langues activées par la collectivité et les **libellés**
    traduits des démarches et des catégories (2026-09-06), leur **descriptif court** (2026-09-07,

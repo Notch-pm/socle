@@ -29,12 +29,13 @@ import {
 } from "@/features/superadmin/applications/useApplications";
 import { useAuth } from "@/features/auth/AuthProvider";
 
-/** Libellés des scopes de clé (colonne `api_keys.scopes`) — les QUATRE. */
+/** Libellés des scopes de clé (colonne `api_keys.scopes`) — les CINQ. */
 export const SCOPE_LABEL: Record<string, string> = {
   read: "Référentiel (lecture)",
   contacts: "Usagers",
   smtp: "Relais SMTP (mot de passe)",
   ai: "Assistant IA (facturé)",
+  audience: "Audience du portail (écriture)",
 };
 
 const STATUS_LABEL: Record<ApiKeyStatus, string> = {

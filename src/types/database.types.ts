@@ -12,31 +12,6 @@ export type Database = {
   __InternalSupabase: {
     PostgrestVersion: "14.5"
   }
-  graphql_public: {
-    Tables: {
-      [_ in never]: never
-    }
-    Views: {
-      [_ in never]: never
-    }
-    Functions: {
-      graphql: {
-        Args: {
-          extensions?: Json
-          operationName?: string
-          query?: string
-          variables?: Json
-        }
-        Returns: Json
-      }
-    }
-    Enums: {
-      [_ in never]: never
-    }
-    CompositeTypes: {
-      [_ in never]: never
-    }
-  }
   public: {
     Tables: {
       ai_usage_counters: {
@@ -952,6 +927,79 @@ export type Database = {
           },
         ]
       }
+      portal_audience_breakdown: {
+        Row: {
+          day: string
+          dimension: string
+          organization_id: string
+          value: string
+          views: number
+          visits: number
+        }
+        Insert: {
+          day: string
+          dimension: string
+          organization_id: string
+          value: string
+          views?: number
+          visits?: number
+        }
+        Update: {
+          day?: string
+          dimension?: string
+          organization_id?: string
+          value?: string
+          views?: number
+          visits?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "portal_audience_breakdown_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      portal_audience_pages: {
+        Row: {
+          day: string
+          deposits: number
+          organization_id: string
+          page: string
+          procedure_id: string | null
+          views: number
+          visits: number
+        }
+        Insert: {
+          day: string
+          deposits?: number
+          organization_id: string
+          page: string
+          procedure_id?: string | null
+          views?: number
+          visits?: number
+        }
+        Update: {
+          day?: string
+          deposits?: number
+          organization_id?: string
+          page?: string
+          procedure_id?: string | null
+          views?: number
+          visits?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "portal_audience_pages_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       portal_pages: {
         Row: {
           created_at: string
@@ -1381,6 +1429,7 @@ export type Database = {
       normalize_name: { Args: { value: string }; Returns: string }
       normalize_phone: { Args: { raw: string }; Returns: string }
       org_subtree_ids: { Args: { root: string }; Returns: string[] }
+      organization_dashboard: { Args: { p_org_id: string }; Returns: Json }
       parent_branding: {
         Args: { p_org_id: string }
         Returns: {
@@ -1407,6 +1456,10 @@ export type Database = {
           username: string
         }[]
       }
+      portal_audience: {
+        Args: { p_from: string; p_org_id: string; p_to: string }
+        Returns: Json
+      }
       provision_existing_roots: { Args: never; Returns: Json }
       provision_root: { Args: { p_org_id: string }; Returns: Json }
       purge_ai_usage_rate: {
@@ -1420,6 +1473,21 @@ export type Database = {
       recalculate_contact_quartiers: {
         Args: { p_org_id: string }
         Returns: undefined
+      }
+      record_portal_deposit: {
+        Args: { p_organization_id: string; p_procedure_id: string }
+        Returns: boolean
+      }
+      record_portal_page_view: {
+        Args: {
+          p_device?: string
+          p_entry?: boolean
+          p_lang?: string
+          p_organization_id: string
+          p_page: string
+          p_procedure_id?: string
+        }
+        Returns: boolean
       }
       release_stale_ai_reservations: {
         Args: { p_max_age_minutes?: number }
@@ -1638,9 +1706,6 @@ export type CompositeTypes<
     : never
 
 export const Constants = {
-  graphql_public: {
-    Enums: {},
-  },
   public: {
     Enums: {},
   },

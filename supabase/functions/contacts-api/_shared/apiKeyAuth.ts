@@ -1,7 +1,8 @@
 // Authentification par clé API — la décision, pure et testée.
 //
-// ⚠️ IDENTIQUE dans `public-api/_shared/`, `contacts-api/_shared/` et
-// `ai-api/_shared/` — un test d'identité l'exige (`apiKeyAuth.test.ts`). Pas
+// ⚠️ IDENTIQUE dans `public-api/_shared/`, `contacts-api/_shared/`,
+// `ai-api/_shared/` et `audience-api/_shared/` — un test d'identité l'exige
+// (`apiKeyAuth.test.ts`). Pas
 // de `_shared` de premier niveau : le déploiement MCP (`deploy_edge_function`,
 // fichiers relatifs à la racine de la fonction) ne sait pas exprimer
 // `../_shared/`. Avant ce module, le même bloc était copié trois fois à la

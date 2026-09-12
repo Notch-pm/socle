@@ -6,7 +6,7 @@ import { SuperAdminLayout } from "@/components/layout/SuperAdminLayout";
 import { LoginPage } from "@/features/auth/LoginPage";
 import { SetPasswordPage } from "@/features/auth/SetPasswordPage";
 import { ForgotPasswordPage } from "@/features/auth/ForgotPasswordPage";
-import { DashboardPage } from "@/pages/DashboardPage";
+import { DashboardPage } from "@/features/dashboard/DashboardPage";
 import { CategoriesPage } from "@/features/categories/CategoriesPage";
 import { DocumentTypesPage } from "@/features/document-types/DocumentTypesPage";
 import { DocumentsPage } from "@/features/documents/DocumentsPage";
