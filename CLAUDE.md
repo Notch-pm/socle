@@ -991,14 +991,19 @@ démarches ». Ajouter une collectivité au portail = une ligne de domaine, aucu
   `texte-image` : ce qu'une synthèse vocale doit lire, ce sont le titre et le sous-titre, posés
   **dessus**. Elle se rend en CSS, jamais en `<img>` (qui réclamerait un `alt` dont le seul honnête
   serait vide), et elle ne se traduit pas.
-  ⚠️ **Un voile clair à 60 % est posé dessus, et ce chiffre est une garantie, pas un goût**
-  (`IMAGE_VEIL_ALPHA`, `themeStyle.ts`) : la collectivité choisit sa photo, personne ne sait ce
-  qu'elle contient. Le fond le plus sombre qu'on puisse obtenir (`VEILED_DARKEST` = le voile sur du
-  noir pur) garde **5,7 : 1** sous l'encre du portail — au-dessus du seuil AA — et toute vraie photo
-  donne mieux. À 0,5 l'encre tombe à 4,1 : 1 : baisser le voile, c'est reprendre la garantie, et
-  c'est pourquoi ce n'est **pas un réglage** (motif du garde-fou de cadence d'`ai-api`). Le **gris
-  de texte** n'y résiste pas (2,1 : 1) : le sous-titre passe à l'encre pleine sur une image — seule
-  conséquence du voile sur le rendu.
+  ⚠️ **LE VOILE CLAIR A ÉTÉ RETIRÉ le 2026-09-12** (décision produit) : la photo se voit telle que
+  la collectivité l'a choisie, dans l'aperçu comme sur le site. Il faut savoir ce que ça a coûté —
+  ce voile à 60 % était une **garantie** de contraste, pas un effet : il laissait l'encre du
+  portail à **5,7 : 1** sur le pire fond possible, au-dessus du seuil AA, quelle que soit l'image.
+  Sans lui, il n'y a **plus aucune garantie** : sur un gris moyen, l'encre pleine elle-même tombe à
+  **4,1 : 1** (mesuré et épinglé dans `themeStyle.test.ts`, des deux côtés). Ce qui reste comme
+  filet : le sous-titre passe à l'encre pleine sur une image, et les puces de raccourci en blanc
+  plein. Le jour où il faudra y revenir, la bonne forme est un voile **sous le texte seul** — la
+  photo intacte, et le contraste avec.
+  ⚠️ **Un bandeau pleine largeur en tête de page touche l'en-tête** (`flushBanner` dans
+  `PortalCanvas`, `startsWithFullWidthBanner` chez Nora) : symétrique du pied de page collé au bas.
+  Pendant un glisser qui vise la première place, la marge revient — sinon la cible de dépôt n'aurait
+  plus où s'afficher.
   ⚠️ Les deux options sont **conservées** quand l'adresse est effacée (le réglage gouverne l'usage,
   pas la donnée — motif `email_sender_name`) : l'inspecteur les **masque**, le rendu les ignore, et
   recoller une adresse rend le bandeau tel qu'il était. C'est la **frontière** de Nora

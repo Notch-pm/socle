@@ -161,6 +161,13 @@ export function PortalCanvas({
   // qu'on glisse un bloc sous lui — l'ombre a besoin de la place.
   const endsWithFooter = sections[sections.length - 1]?.kind === "footer";
   const flushFooter = endsWithFooter && dropIndex !== sections.length;
+  // Miroir de `startsWithFullWidthBanner` (Nora) : une image qui va d'un bord à
+  // l'autre et commence la page se colle à l'en-tête. Pendant un glisser qui
+  // viserait la première place, on rend la marge — sinon la cible de dépôt
+  // n'aurait plus de place où s'afficher.
+  const first = sections[0];
+  const flushBanner = first !== undefined && first.kind === "recherche" &&
+    first.imageUrl !== null && first.imageFullWidth && dropIndex !== 0;
 
   const addButton = previewing ? null : (
     <button
@@ -367,7 +374,11 @@ export function PortalCanvas({
                 className={cn("flex flex-col", device === "mobile" ? "px-3.5" : "px-6")}
                 style={{
                   gap: "var(--pt-gap)",
-                  paddingTop: "var(--pt-pad)",
+                  // Un bandeau pleine largeur en tête de page touche l'en-tête,
+                  // comme sur le site : sinon l'aperçu montrerait une bande de
+                  // page entre la barre de navigation et l'image. Symétrique du
+                  // pied de page collé au bas (`flushFooter`).
+                  paddingTop: flushBanner ? 0 : "var(--pt-pad)",
                   paddingBottom: flushFooter ? 0 : "var(--pt-pad)",
                 }}
               >

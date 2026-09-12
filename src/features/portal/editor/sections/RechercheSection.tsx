@@ -61,8 +61,9 @@ export function RechercheSection({
       <h2 className="text-center text-[length:var(--pt-h1)] font-extrabold leading-tight tracking-tight text-[color:var(--pt-ink)]">
         {section.title}
       </h2>
-      {/* ⚠️ Le gris de texte passe à l'encre pleine sur une image : sous le
-          voile, il ne tiendrait que 2,1 : 1 (voir `IMAGE_VEIL_ALPHA`). */}
+      {/* ⚠️ Le gris de texte passe à l'encre pleine sur une image : il ne tient
+          sur aucun fond photographique, et le voile clair qui l'aidait a été
+          retiré le 2026-09-12 (voir `imageBackdropStyle`). */}
       <p
         className={cn(
           "text-center text-[length:var(--pt-body)]",
