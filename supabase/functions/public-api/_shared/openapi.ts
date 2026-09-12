@@ -30,7 +30,7 @@ export function buildOpenApiDocument(serverUrl: string): Record<string, unknown>
     openapi: "3.1.0",
     info: {
       title: "API Socle — Référentiel de la gamme",
-      version: "1.19.0",
+      version: "1.20.0",
       description: [
         "API **en lecture seule** exposant le référentiel central de la gamme : les",
         "**organisations** (et sous-organisations) avec l'intégralité de leur configuration,",
@@ -1156,8 +1156,22 @@ export function buildOpenApiDocument(serverUrl: string): Record<string, unknown>
         },
         PortalRechercheSection: {
           type: "object",
-          description: "Champ de recherche de démarche, avec raccourcis facultatifs.",
-          required: ["id", "kind", "title", "subtitle", "placeholder", "show_shortcuts", "shortcuts", "translations"],
+          description:
+            "Champ de recherche de démarche, avec raccourcis facultatifs — et, en option, une " +
+            "**image de fond** qui recouvre le bloc.",
+          required: [
+            "id",
+            "kind",
+            "title",
+            "subtitle",
+            "placeholder",
+            "show_shortcuts",
+            "shortcuts",
+            "image_url",
+            "image_full_width",
+            "image_fixed",
+            "translations",
+          ],
           properties: {
             id: { type: "string" },
             kind: { type: "string", enum: ["recherche"] },
@@ -1169,6 +1183,38 @@ export function buildOpenApiDocument(serverUrl: string): Record<string, unknown>
               type: "array",
               items: { type: "string", format: "uuid" },
               description: "Démarches en raccourci — identifiants de démarches publiées, 4 au plus.",
+            },
+            image_url: {
+              type: "string",
+              description:
+                "Image de **fond** du bloc : elle le recouvre entièrement, cadrée au centre et " +
+                "rognée pour le remplir (`background-size: cover`). Chaîne vide = pas d'image. " +
+                "⚠️ C'est un FOND, pas une illustration — d'où l'absence de texte alternatif, " +
+                "contrairement à `PortalTexteImageSection` : ce qu'une synthèse vocale doit " +
+                "lire, ce sont le titre et le sous-titre, posés dessus. Rendez-la en CSS, pas " +
+                "en `<img>`. ⚠️ **Posez un voile clair par-dessus** si vos textes restent en " +
+                "encre sombre : la collectivité choisit sa photo, personne ne sait ce qu'elle " +
+                "contient. Le Socle rend un blanc à 60 %, ce qui garantit 5,7 : 1 sous l'encre " +
+                "du portail même sur une image noire — au-dessus du seuil AA. ⚠️ URL **libre** " +
+                "saisie par la collectivité : le Socle n'héberge pas le fichier et ne garantit " +
+                "pas qu'il existe encore. Filtrée sur sa forme — `https://…` absolue, rien " +
+                "d'autre.",
+              examples: ["https://medias.ville.fr/accueil/hotel-de-ville.jpg"],
+            },
+            image_full_width: {
+              type: "boolean",
+              description:
+                "L'image va d'un **bord à l'autre** de la page au lieu de s'arrêter aux marges " +
+                "du contenu. ⚠️ Sans objet quand `image_url` est vide : la valeur est conservée " +
+                "telle quelle par le Socle, c'est un réglage de l'image, pas du bloc.",
+            },
+            image_fixed: {
+              type: "boolean",
+              description:
+                "L'image reste **fixe** pendant que la page défile, le bloc glissant par-dessus " +
+                "(`background-attachment: fixed`). ⚠️ Sans objet sans image, comme ci-dessus. " +
+                "⚠️ C'est un **ornement** : les navigateurs mobiles qui ignorent `fixed` " +
+                "affichent le bloc entier, image comprise, simplement sans l'effet.",
             },
             translations: { $ref: "#/components/schemas/PortalSectionTranslations" },
           },

@@ -74,6 +74,72 @@ describe("serializePortalPage — tolérance, comme l'éditeur", () => {
     expect(dto.sections[0]).toMatchObject({ audience_filter: true });
   });
 
+  it("sert le fond du bloc de recherche et ses deux options", () => {
+    const dto = serializePortalPage(
+      {
+        sections: [
+          {
+            id: "r",
+            kind: "recherche",
+            title: "Trouvez votre démarche",
+            imageUrl: "https://medias.ville.fr/hotel-de-ville.jpg",
+            imageFullWidth: true,
+            imageFixed: true,
+          },
+        ],
+      },
+      META,
+      PUBLISHED,
+    );
+    expect(dto.sections[0]).toMatchObject({
+      kind: "recherche",
+      image_url: "https://medias.ville.fr/hotel-de-ville.jpg",
+      image_full_width: true,
+      image_fixed: true,
+    });
+  });
+
+  it("sert un bloc de recherche composé avant l'image : pas de fond, pas d'option", () => {
+    // ⚠️ Les trois champs sortent TOUJOURS, même sur une page publiée avant
+    // qu'ils existent : le consommateur lit `image_url === ""`, il n'a pas à
+    // distinguer un champ absent d'une absence d'image.
+    const dto = serializePortalPage(
+      { sections: [{ id: "r", kind: "recherche", title: "T" }] },
+      META,
+      PUBLISHED,
+    );
+    expect(dto.sections[0]).toEqual({
+      id: "r",
+      kind: "recherche",
+      title: "T",
+      subtitle: "",
+      placeholder: "",
+      show_shortcuts: false,
+      shortcuts: [],
+      image_url: "",
+      image_full_width: false,
+      image_fixed: false,
+      translations: {},
+    });
+  });
+
+  it("ÉCARTE un fond de recherche qui n'est pas une adresse, sans emporter le bloc", () => {
+    for (const imageUrl of ["javascript:alert(1)", "http://exemple.fr/a.jpg", "/media/a.jpg"]) {
+      const dto = serializePortalPage(
+        { sections: [{ id: "r", kind: "recherche", title: "Gardé", imageUrl, imageFullWidth: true }] },
+        META,
+        PUBLISHED,
+      );
+      // Les options restent servies telles quelles : le Socle les conserve, et
+      // c'est au rendu de les ignorer faute d'image à habiller.
+      expect(dto.sections[0], imageUrl).toMatchObject({
+        image_url: "",
+        image_full_width: true,
+        title: "Gardé",
+      });
+    }
+  });
+
   it("sert un bloc texte et image, ordre et texte alternatif compris", () => {
     const dto = serializePortalPage(
       {

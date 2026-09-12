@@ -52,6 +52,14 @@ describe("createSection", () => {
     expect(createSection("recherche")).toMatchObject({ showShortcuts: false, shortcuts: [] });
   });
 
+  it("recherche : aucune image de fond, donc aucune de ses deux options", () => {
+    expect(createSection("recherche")).toMatchObject({
+      imageUrl: "",
+      imageFullWidth: false,
+      imageFixed: false,
+    });
+  });
+
   it("démarches : trois colonnes, rien d'épinglé", () => {
     expect(createSection("demarches")).toMatchObject({ columns: 3, pinnedFirst: false, pinned: [] });
   });
@@ -304,6 +312,76 @@ describe("bloc « texte et image »", () => {
       sections: [{ id: "i", kind: "texte-image", layout: "image-au-milieu" }],
     });
     expect(page.sections).toEqual([]);
+  });
+});
+
+describe("image de fond du bloc de recherche", () => {
+  it("se re-parse à l'identique, options comprises", () => {
+    const built: PortalPage = {
+      version: 1,
+      sections: [
+        {
+          ...createSection("recherche"),
+          imageUrl: "https://medias.ville.fr/hotel-de-ville.jpg",
+          imageFullWidth: true,
+          imageFixed: true,
+        },
+      ],
+    };
+    expect(parsePortalPage(built)).toEqual(built);
+  });
+
+  it("écarte une adresse qui n'en est pas, sans perdre le bloc", () => {
+    // Même parti que `texte-image` : on écarte, on ne nettoie pas — et le
+    // champ de recherche de la collectivité reste debout.
+    for (const imageUrl of [
+      "javascript:alert(1)",
+      "data:image/svg+xml,<svg/>",
+      "exemple.fr/x.jpg",
+      "http://exemple.fr/a.jpg",
+      "/media/a.jpg",
+    ]) {
+      const page = parsePortalPage({
+        version: 1,
+        sections: [{ id: "r", kind: "recherche", title: "Gardé", imageUrl }],
+      });
+      expect(page.sections[0], imageUrl).toMatchObject({ imageUrl: "", title: "Gardé" });
+    }
+  });
+
+  it("CONSERVE les deux options quand l'adresse est effacée", () => {
+    // Le réglage gouverne l'usage, pas la donnée (motif `email_sender_name`) :
+    // recoller une adresse doit rendre le bandeau tel qu'il était. C'est au
+    // rendu de les ignorer tant qu'il n'y a rien à habiller.
+    const page = parsePortalPage({
+      version: 1,
+      sections: [
+        { id: "r", kind: "recherche", imageUrl: "", imageFullWidth: true, imageFixed: true },
+      ],
+    });
+    expect(page.sections[0]).toMatchObject({
+      imageUrl: "",
+      imageFullWidth: true,
+      imageFixed: true,
+    });
+  });
+
+  it("lit une page composée avant l'image comme un bloc sans fond", () => {
+    const page = parsePortalPage({
+      version: 1,
+      sections: [{ id: "r", kind: "recherche", title: "T" }],
+    });
+    expect(page.sections[0]).toMatchObject({
+      imageUrl: "",
+      imageFullWidth: false,
+      imageFixed: false,
+    });
+  });
+
+  it("ne se traduit pas : un fond n'a rien à faire lire", () => {
+    // ⚠️ Contrairement à l'`alt` de `texte-image` : ce qu'une synthèse vocale
+    // doit lire ici, ce sont le titre et le sous-titre, posés DESSUS.
+    expect(fieldsForKind("recherche")).toEqual(["title", "subtitle", "placeholder"]);
   });
 });
 

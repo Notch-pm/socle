@@ -100,7 +100,12 @@ function serializeSection(raw: unknown, publishedIds: Set<string>): PortalSectio
   const title = str(row.title);
 
   switch (row.kind) {
-    case "recherche":
+    case "recherche": {
+      // ⚠️ On ÉCARTE une adresse qu'on n'accepte pas, on ne la nettoie pas —
+      // même parti que `texte-image`. Le bloc reste servi, sans fond : le
+      // champ de recherche d'une collectivité n'a pas à disparaître avec son
+      // habillage.
+      const imageUrl = str(row.imageUrl);
       return {
         id,
         kind: "recherche",
@@ -109,8 +114,16 @@ function serializeSection(raw: unknown, publishedIds: Set<string>): PortalSectio
         placeholder: str(row.placeholder),
         show_shortcuts: bool(row.showShortcuts, false),
         shortcuts: references(row.shortcuts, publishedIds),
+        image_url: IMAGE_URL.test(imageUrl) ? imageUrl : "",
+        // Les deux options n'ont de sens que sous une image, et sont servies
+        // telles quelles même sans elle : le Socle les conserve quand l'adresse
+        // est effacée (le réglage gouverne l'usage, pas la donnée), et c'est au
+        // rendu de les ignorer tant qu'il n'y a rien à habiller.
+        image_full_width: bool(row.imageFullWidth, false),
+        image_fixed: bool(row.imageFixed, false),
         translations: translations(row.translations, ["title", "subtitle", "placeholder"]),
       };
+    }
     case "demarches":
       return {
         id,

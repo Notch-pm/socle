@@ -13,6 +13,53 @@ Format d'une entrée : `## AAAA-MM-JJ — <api> — ajout|correctif|rupture`
 
 ---
 
+## 2026-09-12 — public-api — ajout
+
+**Le bloc de recherche du portail peut porter une image de fond.** La collectivité la choisit dans
+l'éditeur du site de démarches ; le Socle l'enregistre et la publie. Version du contrat :
+**1.20.0**. Ajout **additif** : un consommateur qui l'ignore rend le bloc exactement comme
+aujourd'hui.
+
+**Trois champs sur `PortalRechercheSection`** (`GET /v1/portal/page`), tous **requis** — un
+consommateur n'a pas à distinguer « pas d'image » d'un champ absent :
+
+| Champ | Valeur | Ce qu'il dit |
+|---|---|---|
+| `image_url` | `https://…` ou `""` | L'image de fond du bloc, vide quand il n'y en a pas |
+| `image_full_width` | booléen | L'image va d'un bord à l'autre de la page |
+| `image_fixed` | booléen | L'image reste fixe pendant que la page défile |
+
+- ⚠️ **C'EST UN FOND, PAS UNE ILLUSTRATION** — toute la différence avec
+  `PortalTexteImageSection.image_url`, et c'est pour cela qu'il n'y a **pas de texte alternatif** à
+  chercher ici. Ce qu'une synthèse vocale doit lire, ce sont le `title` et le `subtitle`, posés
+  **dessus**. Rendez-la en CSS (`background-size: cover`), jamais en `<img>` : un `<img>` demande un
+  `alt`, et le seul honnête serait vide.
+- ⚠️ **POSEZ UN VOILE CLAIR PAR-DESSUS** si vos textes restent en encre sombre. C'est la seule
+  chose que ce champ vous oblige à faire : la collectivité choisit sa photo, personne ne sait ce
+  qu'elle contient, et un titre sombre sur une photo sombre est illisible une fois sur deux. Le
+  Socle rend un **blanc à 60 %** — le fond le plus sombre qu'on puisse alors obtenir (`#999999`,
+  le voile sur du noir pur) garde **5,7 : 1** sous l'encre du portail, au-dessus du seuil RGAA AA.
+  Moins de voile, et la garantie tombe : à 50 % l'encre est à 4,1 : 1. Le **gris de texte**, lui,
+  n'y résiste pas (2,1 : 1) : le Socle passe son sous-titre à l'encre pleine sur une image, et
+  c'est la seule conséquence du voile sur le rendu du bloc.
+- ⚠️ **Les deux options sont SANS OBJET quand `image_url` est vide, et servies telles quelles.**
+  Le Socle **conserve** un « pleine largeur » quand l'adresse est effacée — le réglage gouverne
+  l'usage, pas la donnée (motif `email_sender_name`, `publicationPeriodEnabled`) : recoller une
+  adresse rend le bandeau tel qu'il était. C'est donc au rendu de les ignorer tant qu'il n'y a rien
+  à habiller ; les lire comme des réglages du **bloc** afficherait un bandeau sans bandeau.
+- ⚠️ **`image_fixed` est un ORNEMENT.** C'est `background-attachment: fixed`, que plusieurs
+  navigateurs mobiles ignorent (iOS Safari en tête) : l'image y défile normalement. Le bloc reste
+  entier, image comprise — aucune information n'en dépend, et il n'y a rien à compenser.
+- ⚠️ **L'adresse est libre et peut être morte** : le Socle n'héberge pas le fichier et ne garantit
+  pas qu'il existe encore. Elle est filtrée sur sa **forme** — `https://…` absolue, rien d'autre,
+  parce qu'elle finit dans une page publique —, et une adresse refusée sort en `""` : le bloc est
+  servi **sans fond**, jamais perdu. Échappez-la avant de la poser dans une valeur CSS : une URL
+  https peut contenir un guillemet.
+- **Pour les autres consommateurs de la gamme : rien à faire.** Ce champ ne concerne que le
+  portail usagers.
+
+---
+
 ## 2026-09-12 — audience-api — ajout
 
 **Une quatrième API, en ÉCRITURE SEULE : les compteurs de fréquentation du site de démarches.**

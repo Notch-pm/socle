@@ -6,8 +6,11 @@ import {
   DEFAULT_PRIMARY,
   DEFAULT_SECONDARY,
   formatRatio,
+  imageBackdropStyle,
+  IMAGE_VEIL_ALPHA,
   resolveThemeColors,
   themeCssVariables,
+  VEILED_DARKEST,
   type ThemeBranding,
 } from "./themeStyle";
 
@@ -199,5 +202,66 @@ describe("formatRatio", () => {
   it("écrit un rapport à la française", () => {
     expect(formatRatio(4.53)).toBe("4,5 : 1");
     expect(formatRatio(21)).toBe("21,0 : 1");
+  });
+});
+
+describe("le fond image d'un bloc", () => {
+  it("rend `undefined` sans image : un bloc sans fond ne porte aucun style", () => {
+    expect(imageBackdropStyle("", false)).toBeUndefined();
+    expect(imageBackdropStyle("   ", true)).toBeUndefined();
+  });
+
+  it("empile le voile et la photo dans une seule propriété", () => {
+    // Une seule `background-image` : c'est ce qui permet à
+    // `background-attachment` de valoir pour les deux couches d'un coup, sans
+    // un enfant absolu de plus dans chaque section.
+    const style = imageBackdropStyle("https://exemple.fr/a.jpg", false)!;
+    expect(style.backgroundImage).toContain("linear-gradient");
+    expect(style.backgroundImage).toContain('url("https://exemple.fr/a.jpg")');
+    expect(style.backgroundSize).toBe("cover");
+    expect(style.backgroundAttachment).toBe("scroll");
+  });
+
+  it("ancre l'image à la fenêtre quand elle est fixe", () => {
+    expect(imageBackdropStyle("https://exemple.fr/a.jpg", true)!.backgroundAttachment).toBe("fixed");
+  });
+
+  it("échappe l'adresse : un guillemet ne doit pas casser la valeur CSS", () => {
+    // ⚠️ `IMAGE_URL` autorise le guillemet (elle ne refuse que les espaces).
+    // Sans échappement, le navigateur rejetterait la déclaration entière et le
+    // fond disparaîtrait sans que rien ne le dise.
+    const style = imageBackdropStyle('https://exemple.fr/a".jpg', false)!;
+    expect(style.backgroundImage).toContain('url("https://exemple.fr/a\\".jpg")');
+  });
+
+  it("GARANTIT la lisibilité de l'encre sur n'importe quelle photo", () => {
+    // C'est la raison d'être du voile : la collectivité choisit sa photo,
+    // personne ne sait ce qu'elle contient. Le pire cas est le voile posé sur
+    // du noir pur — toute vraie image donne un fond plus clair, donc mieux.
+    const theme = defaultPortalTheme();
+    const normal = resolveThemeColors(theme, CHARTE);
+    const fort = resolveThemeColors(
+      { ...theme, accessibility: { ...theme.accessibility, highContrast: true } },
+      CHARTE,
+    );
+    for (const ink of [normal.ink, fort.ink]) {
+      expect(contrastRatio(ink, VEILED_DARKEST)!).toBeGreaterThanOrEqual(4.5);
+    }
+  });
+
+  it("EXPLIQUE pourquoi le sous-titre passe à l'encre pleine sur une image", () => {
+    // Le gris de texte, lui, ne tient pas sous le voile — d'où la seule
+    // conséquence de ce fond sur le rendu du bloc.
+    const { muted } = resolveThemeColors(defaultPortalTheme(), CHARTE);
+    expect(contrastRatio(muted, VEILED_DARKEST)!).toBeLessThan(4.5);
+  });
+
+  it("ne tient plus sa garantie si on baisse le voile — le chiffre n'est pas un goût", () => {
+    // Épinglé pour que personne ne le « corrige » à la baisse : à 0,5 l'encre
+    // tombe sous le seuil AA.
+    expect(IMAGE_VEIL_ALPHA).toBe(0.6);
+    const lighter = Math.round(255 * 0.5).toString(16).padStart(2, "0");
+    const { ink } = resolveThemeColors(defaultPortalTheme(), CHARTE);
+    expect(contrastRatio(ink, `#${lighter}${lighter}${lighter}`)!).toBeLessThan(4.5);
   });
 });

@@ -261,6 +261,64 @@ function RechercheFields({
           }}
         />
       ) : null}
+      <RechercheImageFields section={section} onChange={onChange} />
+    </>
+  );
+}
+
+/**
+ * L'image de fond du bloc de recherche, et ses deux options.
+ *
+ * ⚠️ Les deux commutateurs n'apparaissent **qu'une fois une adresse saisie** :
+ * ils n'habillent rien tant qu'il n'y a pas d'image, et un réglage sans effet
+ * visible se lit comme un réglage cassé (motif `header.color`, masqué tant que
+ * le bandeau est blanc). Ils sont masqués, pas remis à zéro : effacer l'adresse
+ * puis en recoller une rend le bandeau tel qu'il était.
+ */
+function RechercheImageFields({
+  section,
+  onChange,
+}: {
+  section: RechercheSection;
+  onChange: (section: PortalSection) => void;
+}) {
+  const url = section.imageUrl.trim();
+  const urlError = url !== "" && !IMAGE_URL.test(url);
+  const hasImage = url !== "" && !urlError;
+  return (
+    <>
+      <Field
+        label="Image de fond"
+        htmlFor="insp-recherche-image"
+        hint="Lien https vers un fichier déjà en ligne. L'image recouvre tout le bloc ; un voile clair est posé dessus pour que les textes restent lisibles."
+        error={urlError ? "Adresse attendue : https://…" : undefined}
+      >
+        <Input
+          id="insp-recherche-image"
+          value={section.imageUrl}
+          onChange={(e) => onChange({ ...section, imageUrl: e.target.value })}
+          aria-invalid={urlError}
+          placeholder="https://"
+        />
+      </Field>
+      {hasImage ? (
+        <>
+          <ToggleField
+            id="insp-recherche-image-full"
+            label="Pleine largeur"
+            checked={section.imageFullWidth}
+            onCheckedChange={(checked) => onChange({ ...section, imageFullWidth: checked })}
+            hint="L'image va d'un bord à l'autre de la page, comme un bandeau."
+          />
+          <ToggleField
+            id="insp-recherche-image-fixed"
+            label="Image fixe"
+            checked={section.imageFixed}
+            onCheckedChange={(checked) => onChange({ ...section, imageFixed: checked })}
+            hint="L'image ne bouge pas quand l'usager fait défiler la page. Effet ignoré par certains navigateurs mobiles, où l'image défile normalement."
+          />
+        </>
+      ) : null}
     </>
   );
 }

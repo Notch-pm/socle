@@ -531,6 +531,46 @@ export interface PortalRechercheSectionDto {
   show_shortcuts: boolean;
   /** Démarches en raccourci (identifiants de démarches publiées). */
   shortcuts: string[];
+  /**
+   * Image de **fond** du bloc : elle le recouvre entièrement, cadrée au centre
+   * et rognée pour le remplir (`background-size: cover`). Chaîne vide = pas
+   * d'image, le bloc s'affiche sur le fond de la page.
+   *
+   * ⚠️ C'est un FOND, pas une illustration — d'où l'absence de texte
+   * alternatif, contrairement à `PortalTexteImageSection.image_url`. Ce qu'une
+   * synthèse vocale doit lire, ce sont le titre et le sous-titre, posés dessus.
+   * Rendez-la en CSS, pas en `<img>`.
+   *
+   * ⚠️ **Posez un voile clair par-dessus** si vous laissez les textes du thème
+   * en encre sombre : la collectivité choisit sa photo, personne ne sait ce
+   * qu'elle contient. Le Socle rend un blanc à 60 % — le fond le plus sombre
+   * qu'on puisse alors obtenir garde 5,7 : 1 sous l'encre du portail, au-dessus
+   * du seuil AA. Moins de voile, et la lisibilité n'est plus garantie.
+   *
+   * ⚠️ URL **libre**, saisie par la collectivité : le Socle n'héberge pas le
+   * fichier et ne garantit pas qu'il existe encore. Elle est filtrée sur sa
+   * forme — `https://…` absolue, rien d'autre — parce qu'elle finit dans une
+   * page publique.
+   */
+  image_url: string;
+  /**
+   * L'image va d'un **bord à l'autre** de la page au lieu de s'arrêter aux
+   * marges du contenu.
+   *
+   * ⚠️ **Sans objet quand `image_url` est vide**, et la valeur est alors
+   * conservée telle quelle : ne la lisez pas comme un réglage de mise en page
+   * du bloc, c'est un réglage de l'image.
+   */
+  image_full_width: boolean;
+  /**
+   * L'image reste **fixe** pendant que la page défile, le bloc glissant
+   * par-dessus (`background-attachment: fixed`).
+   *
+   * ⚠️ Même remarque : sans objet sans image. Et c'est un **ornement** — les
+   * navigateurs mobiles qui ignorent `fixed` affichent le bloc entier, avec son
+   * image, simplement sans l'effet. Aucune information n'en dépend.
+   */
+  image_fixed: boolean;
   translations: PortalSectionTranslationsDto;
 }
 

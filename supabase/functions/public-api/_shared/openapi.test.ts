@@ -152,8 +152,8 @@ describe("buildOpenApiDocument", () => {
 describe("contrat — documents et courriers", () => {
   const doc = buildOpenApiDocument("https://example.supabase.co/functions/v1/public-api") as any;
 
-  it("annonce la version 1.19.0 du contrat", () => {
-    expect(doc.info.version).toBe("1.19.0");
+  it("annonce la version 1.20.0 du contrat", () => {
+    expect(doc.info.version).toBe("1.20.0");
   });
 
   it("le thème voyage avec le TENANT : il vaut pour toutes les pages", () => {
@@ -488,6 +488,31 @@ describe("contrat — page publiée du portail", () => {
       const name = ref.$ref.split("/").pop();
       expect(doc.components.schemas[name].required).toContain("kind");
     }
+  });
+
+  it("décrit le fond du bloc de recherche : une image, deux options, et un voile à poser", () => {
+    const schema = doc.components.schemas.PortalRechercheSection;
+    // Les trois champs sont REQUIS : un consommateur n'a pas à distinguer
+    // « pas d'image » de « champ absent ».
+    for (const key of ["image_url", "image_full_width", "image_fixed"]) {
+      expect(schema.required).toContain(key);
+      expect(schema.properties[key]).toBeDefined();
+    }
+    // ⚠️ Ce que le contrat doit dire, parce que ça ne se devine pas : c'est un
+    // FOND (pas une illustration, donc pas d'`alt` à chercher), il faut poser
+    // un voile pour que les textes restent lisibles, et l'adresse peut être
+    // morte.
+    const description = schema.properties.image_url.description;
+    expect(description).toContain("FOND");
+    expect(description).toContain("voile");
+    expect(description).toContain("libre");
+    // Les deux options n'ont de sens que sous une image, et la valeur survit à
+    // son effacement : un consommateur qui l'ignore afficherait un bandeau sans
+    // bandeau.
+    expect(schema.properties.image_full_width.description).toContain("Sans objet");
+    expect(schema.properties.image_fixed.description).toContain("Sans objet");
+    // L'effet fixe est un ornement : personne ne doit le croire nécessaire.
+    expect(schema.properties.image_fixed.description).toContain("ornement");
   });
 
   it("décrit le bloc texte et image : un ORDRE, une URL libre, un alt qui se traduit", () => {

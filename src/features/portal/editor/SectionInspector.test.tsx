@@ -165,6 +165,71 @@ describe("SectionInspector — recherche", () => {
   });
 });
 
+describe("SectionInspector — image de fond du bloc de recherche", () => {
+  it("n'offre les deux options QU'UNE FOIS une image choisie", () => {
+    // Un réglage sans effet visible se lit comme un réglage cassé : « pleine
+    // largeur » et « image fixe » n'habillent rien tant qu'il n'y a pas
+    // d'image.
+    renderInspector(createSection("recherche"));
+    expect(screen.queryByLabelText("Pleine largeur")).toBeNull();
+    expect(screen.queryByLabelText("Image fixe")).toBeNull();
+
+    const withImage = {
+      ...createSection("recherche"),
+      imageUrl: "https://medias.ville.fr/a.jpg",
+    } as PortalSection;
+    renderInspector(withImage);
+    expect(screen.getByLabelText("Pleine largeur")).toBeTruthy();
+    expect(screen.getByLabelText("Image fixe")).toBeTruthy();
+  });
+
+  it("ne les offre pas non plus sur une adresse que la page écartera", () => {
+    const section = {
+      ...createSection("recherche"),
+      imageUrl: "http://exemple.fr/a.jpg",
+    } as PortalSection;
+    renderInspector(section);
+    expect(screen.getByText(/Adresse attendue/)).toBeTruthy();
+    expect(screen.queryByLabelText("Pleine largeur")).toBeNull();
+  });
+
+  it("bascule le bandeau pleine largeur", () => {
+    const section = {
+      ...createSection("recherche"),
+      imageUrl: "https://medias.ville.fr/a.jpg",
+    } as PortalSection;
+    const { onChange } = renderInspector(section);
+
+    fireEvent.click(screen.getByLabelText("Pleine largeur"));
+
+    expect(onChange).toHaveBeenCalledWith(expect.objectContaining({ imageFullWidth: true }));
+  });
+
+  it("bascule l'image fixe sans toucher au reste", () => {
+    const section = {
+      ...createSection("recherche"),
+      imageUrl: "https://medias.ville.fr/a.jpg",
+      imageFullWidth: true,
+    } as PortalSection;
+    const { onChange } = renderInspector(section);
+
+    fireEvent.click(screen.getByLabelText("Image fixe"));
+
+    expect(onChange).toHaveBeenCalledWith(
+      expect.objectContaining({ imageFixed: true, imageFullWidth: true }),
+    );
+  });
+
+  it("prévient que l'effet fixe n'est pas rendu partout", () => {
+    const section = {
+      ...createSection("recherche"),
+      imageUrl: "https://medias.ville.fr/a.jpg",
+    } as PortalSection;
+    renderInspector(section);
+    expect(screen.getByText(/navigateurs mobiles/)).toBeTruthy();
+  });
+});
+
 describe("SectionInspector — actus", () => {
   it("annonce que les actualités ne sont pas encore éditables", () => {
     renderInspector(createSection("actus"));

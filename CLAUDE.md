@@ -949,6 +949,38 @@ démarches ». Ajouter une collectivité au portail = une ligne de domaine, aucu
   `offersByProcedure` qui les écarte : filtrer avant couperait la chaîne des parents, et un service
   interne deviendrait un sommet de liste — donc son propre porteur — et réapparaîtrait sous son
   propre nom. C'est aussi ce qui rend les deux miroirs littéralement identiques.
+- **Fond du bloc de recherche** (`recherche.imageUrl` + `imageFullWidth` / `imageFixed`,
+  2026-09-12) : une image qui **recouvre tout le bloc**, avec deux options — **pleine largeur** (elle
+  va d'un bord à l'autre, comme le pied de page) et **image fixe**
+  (`background-attachment: fixed` : le bloc glisse par-dessus au défilement).
+  ⚠️ **C'EST UN FOND, PAS UNE ILLUSTRATION** — d'où l'absence d'`alt`, contrairement à
+  `texte-image` : ce qu'une synthèse vocale doit lire, ce sont le titre et le sous-titre, posés
+  **dessus**. Elle se rend en CSS, jamais en `<img>` (qui réclamerait un `alt` dont le seul honnête
+  serait vide), et elle ne se traduit pas.
+  ⚠️ **Un voile clair à 60 % est posé dessus, et ce chiffre est une garantie, pas un goût**
+  (`IMAGE_VEIL_ALPHA`, `themeStyle.ts`) : la collectivité choisit sa photo, personne ne sait ce
+  qu'elle contient. Le fond le plus sombre qu'on puisse obtenir (`VEILED_DARKEST` = le voile sur du
+  noir pur) garde **5,7 : 1** sous l'encre du portail — au-dessus du seuil AA — et toute vraie photo
+  donne mieux. À 0,5 l'encre tombe à 4,1 : 1 : baisser le voile, c'est reprendre la garantie, et
+  c'est pourquoi ce n'est **pas un réglage** (motif du garde-fou de cadence d'`ai-api`). Le **gris
+  de texte** n'y résiste pas (2,1 : 1) : le sous-titre passe à l'encre pleine sur une image — seule
+  conséquence du voile sur le rendu.
+  ⚠️ Les deux options sont **conservées** quand l'adresse est effacée (le réglage gouverne l'usage,
+  pas la donnée — motif `email_sender_name`) : l'inspecteur les **masque**, le rendu les ignore, et
+  recoller une adresse rend le bandeau tel qu'il était. C'est la **frontière** de Nora
+  (`pageService.ts`) qui les éteint, comme `show_shortcuts` éteint les raccourcis : le rendu n'a pas
+  à connaître un commutateur.
+  ⚠️ Même URL libre en `https` absolue que `texte-image` (`IMAGE_URL`), signalée à la saisie et
+  écartée des deux côtés ; une adresse refusée fait un bloc **sans fond**, jamais un bloc perdu.
+  ⚠️ L'adresse est échappée (`JSON.stringify`) avant d'entrer dans la valeur CSS : `IMAGE_URL`
+  autorise le guillemet, et une déclaration cassée ferait disparaître le fond sans rien dire.
+  ⚠️ `imageFixed` est un **ornement** : plusieurs navigateurs mobiles ignorent `fixed` et y font
+  défiler l'image — le bloc reste entier, l'inspecteur le dit.
+  **En aval** (contrat 1.20.0) : `image_url`, `image_full_width`, `image_fixed` sur
+  `PortalRechercheSection`, **consommés par Nora**. Code : `imageBackdropStyle` dans
+  `themeStyle.ts` (pur, testé des deux côtés — la garantie de contraste EST le test), rendu dans
+  `editor/sections/RechercheSection.tsx` ; côté Nora, `HomeComposition` rend le bandeau pleine
+  largeur **hors** de son conteneur centré, comme le pied de page.
 - **Texte et image** (`texte-image`, 2026-09-07) : un paragraphe et une illustration, côte à côte
   et **empilés sur mobile**. `layout` (`text-first` / `image-first`) est un **ordre de lecture**,
   pas une position : porté par un seul `order-first`, il vaut dans les deux dispositions — « image
@@ -1023,7 +1055,7 @@ démarches ». Ajouter une collectivité au portail = une ligne de domaine, aucu
   aucune route, `aria-disabled`, « Bientôt disponible ». Le parse accepte quand même `actus` :
   une composition importée plus tard ne sera pas amputée. La vue **« Thème » est ouverte** depuis
   le 2026-09-08 (feature ci-dessous).
-- **API** (tag « Portail » de `public-api`, contrat 1.7.0 → 1.15.0) : `GET /v1/portal/tenant?hostname=`
+- **API** (tag « Portail » de `public-api`, contrat 1.7.0 → 1.20.0) : `GET /v1/portal/tenant?hostname=`
   (**même 404** pour inconnu / hors périmètre / obsolète : on ne renseigne pas sur l'existence des
   collectivités ; porte `languages`, les langues de la collectivité, héritage résolu), `GET /v1/portal/procedures?tenant_id=` (déjà filtrées : `production`, `externe`,
   `portalVisible`, dans leur période **heure de Paris**, **et activées par au moins un organisme

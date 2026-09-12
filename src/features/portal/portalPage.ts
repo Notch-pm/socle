@@ -132,6 +132,40 @@ export interface RechercheSection extends SectionCommon {
   showShortcuts: boolean;
   /** Démarches raccourcies (`procedures.id`), `MAX_SHORTCUTS` au plus. */
   shortcuts: string[];
+  /**
+   * Image de fond du bloc — elle le RECOUVRE entièrement, cadrée au centre et
+   * rognée pour le remplir. Vide = pas d'image, le bloc reste tel quel.
+   *
+   * ⚠️ C'est un FOND, pas une illustration — toute la différence avec
+   * `texte-image`, qui en porte une. Elle n'a donc pas de description
+   * alternative et ne se traduit pas : ce qu'une synthèse vocale doit lire, ce
+   * sont le titre et le sous-titre, qui sont posés DESSUS. Un `alt` sur un fond
+   * ferait annoncer deux fois la même chose.
+   *
+   * ⚠️ URL libre en `https` absolue, comme `texte-image` : le Socle enregistre
+   * et publie, il n'héberge pas le fichier (motif `organizations.logo_url`).
+   */
+  imageUrl: string;
+  /**
+   * L'image va d'un bord à l'autre de la page, au lieu de s'arrêter aux marges
+   * du contenu — un bandeau.
+   *
+   * ⚠️ Sans effet tant qu'il n'y a pas d'image, et CONSERVÉ quand on efface
+   * l'adresse (le réglage gouverne l'usage, pas la donnée — motif
+   * `email_sender_name`, `publicationPeriodEnabled`) : recoller une adresse
+   * rend le bandeau tel qu'il était.
+   */
+  imageFullWidth: boolean;
+  /**
+   * L'image reste fixe pendant que la page défile : le bloc glisse par-dessus
+   * elle. Sans effet sans image, et conservé de la même façon.
+   *
+   * ⚠️ C'est `background-attachment: fixed`, que **plusieurs navigateurs
+   * mobiles ignorent** (iOS Safari en tête) : l'image y défile normalement.
+   * L'effet est un ornement, il ne porte aucune information — le bloc reste
+   * entier partout.
+   */
+  imageFixed: boolean;
 }
 
 export interface DemarchesSection extends SectionCommon {
@@ -273,6 +307,11 @@ const BUILDERS: { [K in SectionKind]: (id: string) => SectionOf<K> } = {
     placeholder: "Rechercher une démarche",
     showShortcuts: false,
     shortcuts: [],
+    // Sans image : un bloc neuf ne présume d'aucun visuel, et les deux options
+    // qui n'ont de sens qu'avec une image partent au repos.
+    imageUrl: "",
+    imageFullWidth: false,
+    imageFixed: false,
   }),
   demarches: (id) => ({
     id,
@@ -536,6 +575,12 @@ const rechercheSchema = z.object({
   placeholder: z.string().default(""),
   showShortcuts: z.boolean().default(false),
   shortcuts: z.array(z.string()).default([]),
+  // Même parti que `texte-image` : une adresse qu'on n'accepte pas fait un bloc
+  // SANS image, jamais un bloc perdu — la collectivité garde son titre, son
+  // sous-titre et ses raccourcis, et voit que l'image manque.
+  imageUrl: z.string().regex(IMAGE_URL).catch("").default(""),
+  imageFullWidth: z.boolean().default(false),
+  imageFixed: z.boolean().default(false),
 });
 
 const demarchesSchema = z.object({
