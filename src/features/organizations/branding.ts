@@ -1,6 +1,6 @@
 /**
- * Charte graphique d'une organisation : logo couleur, logo blanc, couleur
- * principale, couleur secondaire — et le commutateur d'héritage.
+ * Charte graphique d'une organisation : logo couleur, logo blanc, favicon,
+ * couleur principale, couleur secondaire — et le commutateur d'héritage.
  *
  * Logique pure (aucun React, aucun Supabase) : normalisation des couleurs,
  * validation, et surtout la **forme exacte de ce qu'on écrit en base**, qui
@@ -20,6 +20,8 @@ export const DEFAULT_COLOR_PICKER = "#089b59";
 export interface BrandingValues {
   logoUrl: string;
   logoWhiteUrl: string;
+  /** Icône de l'onglet du navigateur, sur le site de démarches. */
+  faviconUrl: string;
   /** Chaîne vide = couleur non définie. */
   primaryColor: string;
   secondaryColor: string;
@@ -30,6 +32,7 @@ export interface BrandingValues {
 export interface BrandingUpdate {
   logo_url: string | null;
   logo_white_url: string | null;
+  favicon_url: string | null;
   primary_color: string | null;
   secondary_color: string | null;
   branding_inherit_parent: boolean;
@@ -39,6 +42,7 @@ export interface BrandingUpdate {
 export interface ResolvedBranding {
   logoUrl: string | null;
   logoWhiteUrl: string | null;
+  faviconUrl: string | null;
   primaryColor: string | null;
   secondaryColor: string | null;
 }
@@ -74,6 +78,7 @@ export function brandingValuesFromOrganization(org: {
   parent_id: string | null;
   logo_url: string | null;
   logo_white_url: string | null;
+  favicon_url: string | null;
   primary_color: string | null;
   secondary_color: string | null;
   branding_inherit_parent: boolean;
@@ -81,6 +86,7 @@ export function brandingValuesFromOrganization(org: {
   return {
     logoUrl: org.logo_url ?? "",
     logoWhiteUrl: org.logo_white_url ?? "",
+    faviconUrl: org.favicon_url ?? "",
     primaryColor: org.primary_color ?? "",
     secondaryColor: org.secondary_color ?? "",
     // Une racine n'hérite de personne, quoi qu'en dise la colonne.
@@ -99,17 +105,27 @@ export function brandingUpdateFromValues(
   return {
     logo_url: values.logoUrl.trim() || null,
     logo_white_url: values.logoWhiteUrl.trim() || null,
+    favicon_url: values.faviconUrl.trim() || null,
     primary_color: normalizeHexColor(values.primaryColor),
     secondary_color: normalizeHexColor(values.secondaryColor),
     branding_inherit_parent: hasParent && values.inheritParent,
   };
 }
 
-/** Un aperçu vide n'a rien à montrer : autant le dire que peindre du blanc sur du blanc. */
+/**
+ * Un aperçu vide n'a rien à montrer : autant le dire que peindre du blanc sur
+ * du blanc.
+ *
+ * ⚠️ Les CINQ éléments comptent. Oublier le favicon ferait annoncer « aucun
+ * élément de charte » à une collectivité qui vient d'en déposer un — et, du
+ * même geste, `configured: false` en aval, où il vaut « retombe sur ton
+ * habillage par défaut ».
+ */
 export function isBrandingEmpty(branding: ResolvedBranding): boolean {
   return (
     !branding.logoUrl?.trim() &&
     !branding.logoWhiteUrl?.trim() &&
+    !branding.faviconUrl?.trim() &&
     !branding.primaryColor &&
     !branding.secondaryColor
   );
@@ -126,12 +142,19 @@ export function previewBranding(
 ): ResolvedBranding {
   if (values.inheritParent) {
     return (
-      parent ?? { logoUrl: null, logoWhiteUrl: null, primaryColor: null, secondaryColor: null }
+      parent ?? {
+        logoUrl: null,
+        logoWhiteUrl: null,
+        faviconUrl: null,
+        primaryColor: null,
+        secondaryColor: null,
+      }
     );
   }
   return {
     logoUrl: values.logoUrl.trim() || null,
     logoWhiteUrl: values.logoWhiteUrl.trim() || null,
+    faviconUrl: values.faviconUrl.trim() || null,
     primaryColor: normalizeHexColor(values.primaryColor),
     secondaryColor: normalizeHexColor(values.secondaryColor),
   };

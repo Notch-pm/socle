@@ -55,6 +55,7 @@ aucun endpoint, il décrit ce qui existe **en base**.
 | `slug` | text nullable, **UNIQUE global**, CHECK `organizations_slug_url_form` (`[a-z0-9-]`, 4 caractères au moins, mots réservés du portail exclus). ⚠️ **Adresse publique** depuis le 2026-09-12 : le site de démarches sert `/<slug>` comme la page de cet organisme (contrat 1.22.0). Il reste aussi le point de départ du label DNS d'une racine (`dns_label_from_slug`) |
 | `type`, `address`, `phone`, `email` | text nullable |
 | `logo_url`, `logo_white_url` | text nullable — charte graphique (logo couleur, logo blanc) |
+| `favicon_url` | text nullable — charte graphique : icône de l'onglet du navigateur, sur le site de démarches (2026-09-12) |
 | `primary_color`, `secondary_color` | text nullable, CHECK `organizations_branding_colors_hex` (`#rrggbb`, casse indifférente) |
 | `branding_inherit_parent` | bool NOT NULL défaut **true**, CHECK `organizations_branding_root_no_inherit` (false obligatoire sur une racine) |
 | `metadata` | jsonb, défaut `{}` |
@@ -705,16 +706,23 @@ fonctions trigger.
 Calquées trait pour trait sur les deux RPC SMTP ci-dessus.
 
 - `resolve_branding(p_org_id) → TABLE(source_organization_id, logo_url, logo_white_url,
-  primary_color, secondary_color)` — SQL `STABLE`, **`SECURITY INVOKER`**, CTE ascendante qui
-  s'arrête d'elle-même au premier ancêtre ne héritant pas (garde 20 niveaux). **Seule
-  implémentation de l'héritage.** EXECUTE **réservé à `service_role`** : elle traverse des
+  favicon_url, primary_color, secondary_color)` — SQL `STABLE`, **`SECURITY INVOKER`**, CTE
+  ascendante qui s'arrête d'elle-même au premier ancêtre ne héritant pas (garde 20 niveaux).
+  **Seule implémentation de l'héritage.** EXECUTE **réservé à `service_role`** : elle traverse des
   organisations que l'appelant n'a pas le droit de lire.
 - `parent_branding(p_org_id) → TABLE(source_organization_id, source_organization_name, configured,
-  logo_url, logo_white_url, primary_color, secondary_color)` — `SECURITY DEFINER`, garde interne
-  `is_admin_of_self_or_ancestor(p_org_id)`, EXECUTE `authenticated` + `service_role`. Aperçu de ce
-  dont une organisation **hérite** (résolution démarrée à son parent) : sans elle, l'admin d'une
-  sous-organisation choisirait d'hériter sans jamais voir de quoi. Renvoie 0 ligne sur une racine.
-  `configured` = au moins un des quatre éléments renseigné au-dessus.
+  logo_url, logo_white_url, favicon_url, primary_color, secondary_color)` — `SECURITY DEFINER`,
+  garde interne `is_admin_of_self_or_ancestor(p_org_id)`, EXECUTE `authenticated` + `service_role`.
+  Aperçu de ce dont une organisation **hérite** (résolution démarrée à son parent) : sans elle,
+  l'admin d'une sous-organisation choisirait d'hériter sans jamais voir de quoi. Renvoie 0 ligne
+  sur une racine. `configured` = au moins un des **cinq** éléments renseigné au-dessus.
+
+⚠️ **Les recréer, c'est leur rendre leurs droits par défaut.** Ajouter une colonne à leur type de
+retour impose un `drop function` ; Supabase accorde alors EXECUTE à `anon` et `authenticated`
+**nommément**, et un `revoke ... from public` ne l'enlève pas. Toute migration qui les redéfinit
+doit reposer les droits en citant les **trois** rôles — la migration
+`branding_functions_revoke_execute` (2026-08-30) le disait déjà, `..._bis` (2026-09-12) a dû le
+redire après l'ajout du favicon.
 
 ### RPC et fonction langues
 
@@ -1059,16 +1067,23 @@ fonctions trigger.
 Calquées trait pour trait sur les deux RPC SMTP ci-dessus.
 
 - `resolve_branding(p_org_id) → TABLE(source_organization_id, logo_url, logo_white_url,
-  primary_color, secondary_color)` — SQL `STABLE`, **`SECURITY INVOKER`**, CTE ascendante qui
-  s'arrête d'elle-même au premier ancêtre ne héritant pas (garde 20 niveaux). **Seule
-  implémentation de l'héritage.** EXECUTE **réservé à `service_role`** : elle traverse des
+  favicon_url, primary_color, secondary_color)` — SQL `STABLE`, **`SECURITY INVOKER`**, CTE
+  ascendante qui s'arrête d'elle-même au premier ancêtre ne héritant pas (garde 20 niveaux).
+  **Seule implémentation de l'héritage.** EXECUTE **réservé à `service_role`** : elle traverse des
   organisations que l'appelant n'a pas le droit de lire.
 - `parent_branding(p_org_id) → TABLE(source_organization_id, source_organization_name, configured,
-  logo_url, logo_white_url, primary_color, secondary_color)` — `SECURITY DEFINER`, garde interne
-  `is_admin_of_self_or_ancestor(p_org_id)`, EXECUTE `authenticated` + `service_role`. Aperçu de ce
-  dont une organisation **hérite** (résolution démarrée à son parent) : sans elle, l'admin d'une
-  sous-organisation choisirait d'hériter sans jamais voir de quoi. Renvoie 0 ligne sur une racine.
-  `configured` = au moins un des quatre éléments renseigné au-dessus.
+  logo_url, logo_white_url, favicon_url, primary_color, secondary_color)` — `SECURITY DEFINER`,
+  garde interne `is_admin_of_self_or_ancestor(p_org_id)`, EXECUTE `authenticated` + `service_role`.
+  Aperçu de ce dont une organisation **hérite** (résolution démarrée à son parent) : sans elle,
+  l'admin d'une sous-organisation choisirait d'hériter sans jamais voir de quoi. Renvoie 0 ligne
+  sur une racine. `configured` = au moins un des **cinq** éléments renseigné au-dessus.
+
+⚠️ **Les recréer, c'est leur rendre leurs droits par défaut.** Ajouter une colonne à leur type de
+retour impose un `drop function` ; Supabase accorde alors EXECUTE à `anon` et `authenticated`
+**nommément**, et un `revoke ... from public` ne l'enlève pas. Toute migration qui les redéfinit
+doit reposer les droits en citant les **trois** rôles — la migration
+`branding_functions_revoke_execute` (2026-08-30) le disait déjà, `..._bis` (2026-09-12) a dû le
+redire après l'ajout du favicon.
 
 ### RPC et fonction langues
 

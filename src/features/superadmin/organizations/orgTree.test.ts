@@ -31,6 +31,7 @@ function org(
     enabled_languages: ["fr"],
     logo_url: null,
     logo_white_url: null,
+    favicon_url: null,
     primary_color: null,
     secondary_color: null,
     branding_inherit_parent: parent_id !== null,

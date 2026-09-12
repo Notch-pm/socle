@@ -43,6 +43,7 @@ const parentBranding = {
   configured: true,
   logo_url: "https://accm.fr/logo.png",
   logo_white_url: "https://accm.fr/logo-blanc.svg",
+  favicon_url: "https://accm.fr/favicon.png",
   primary_color: "#123456",
   secondary_color: "#654321",
 };
@@ -61,6 +62,7 @@ function org(over: Partial<Organization> = {}): Organization {
     enabled_languages: ["fr"],
     logo_url: null,
     logo_white_url: null,
+    favicon_url: null,
     primary_color: null,
     secondary_color: null,
     branding_inherit_parent: true,
@@ -121,12 +123,28 @@ describe("BrandingSection — héritage de la charte", () => {
     expect(screen.getByText(/habillage par défaut/i)).toBeTruthy();
   });
 
+  it("un favicon seul au-dessus est une charte : l'aperçu le montre, il n'annonce pas le vide", () => {
+    h.parent = {
+      ...parentBranding,
+      logo_url: null,
+      logo_white_url: null,
+      primary_color: null,
+      secondary_color: null,
+    };
+    render(<BrandingSection organization={org()} />);
+    expect(screen.queryByText(/habillage par défaut/i)).toBeNull();
+    expect(screen.getAllByAltText("Favicon").length).toBeGreaterThan(0);
+  });
+
   it("désactiver l'héritage ouvre la saisie et enregistre une charte propre", () => {
     h.parent = parentBranding;
     render(<BrandingSection organization={org()} />);
     fireEvent.click(inheritSwitch());
     fireEvent.change(screen.getByLabelText("Logo blanc (URL)"), {
       target: { value: "https://fontvieille.fr/blanc.svg" },
+    });
+    fireEvent.change(screen.getByLabelText("Favicon (URL)"), {
+      target: { value: "https://fontvieille.fr/favicon.png" },
     });
     fireEvent.change(screen.getByLabelText("Couleur principale"), {
       target: { value: "#ABC" },
@@ -135,6 +153,7 @@ describe("BrandingSection — héritage de la charte", () => {
     expect(h.save).toHaveBeenCalledWith({
       logo_url: null,
       logo_white_url: "https://fontvieille.fr/blanc.svg",
+      favicon_url: "https://fontvieille.fr/favicon.png",
       // Normalisée : deux écritures de la même couleur ne doivent pas se lire
       // comme deux couleurs différentes en aval.
       primary_color: "#aabbcc",

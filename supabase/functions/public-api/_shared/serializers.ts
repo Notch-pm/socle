@@ -321,10 +321,18 @@ export function serializeBranding(organizationId: string, row: Row | null): Bran
   const sourceId = nullableStr(row?.source_organization_id);
   const logoUrl = nonEmpty(row?.logo_url);
   const logoWhiteUrl = nonEmpty(row?.logo_white_url);
+  const faviconUrl = nonEmpty(row?.favicon_url);
   const primaryColor = hexColor(row?.primary_color);
   const secondaryColor = hexColor(row?.secondary_color);
+  // ⚠️ Les CINQ éléments comptent. Un `configured: false` rendu à une
+  // collectivité qui n'a déposé que son favicon le ferait ignorer : le
+  // consommateur lit ce drapeau comme « rien à peindre, garde tes défauts ».
   const configured =
-    logoUrl !== null || logoWhiteUrl !== null || primaryColor !== null || secondaryColor !== null;
+    logoUrl !== null ||
+    logoWhiteUrl !== null ||
+    faviconUrl !== null ||
+    primaryColor !== null ||
+    secondaryColor !== null;
 
   return {
     organization_id: organizationId,
@@ -334,6 +342,7 @@ export function serializeBranding(organizationId: string, row: Row | null): Bran
     configured,
     logo_url: logoUrl,
     logo_white_url: logoWhiteUrl,
+    favicon_url: faviconUrl,
     primary_color: primaryColor,
     secondary_color: secondaryColor,
   };

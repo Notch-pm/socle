@@ -323,6 +323,7 @@ describe("serializeBranding — la charte applicable, héritage déjà résolu",
     source_organization_id: "org-racine",
     logo_url: "  https://accm.fr/logo.png  ",
     logo_white_url: "https://accm.fr/blanc.svg",
+    favicon_url: "https://accm.fr/favicon.png",
     primary_color: "#1F8A5B",
     secondary_color: "#FFD166",
     // Colonnes parasites : la whitelist ne doit pas les laisser passer.
@@ -330,9 +331,10 @@ describe("serializeBranding — la charte applicable, héritage déjà résolu",
     key_hash: "deadbeef",
   };
 
-  it("n'expose que les huit champs du contrat", () => {
+  it("n'expose que les neuf champs du contrat", () => {
     expect(Object.keys(serializeBranding("org-enfant", row)).sort()).toEqual([
       "configured",
+      "favicon_url",
       "inherited",
       "logo_url",
       "logo_white_url",
@@ -364,9 +366,23 @@ describe("serializeBranding — la charte applicable, héritage déjà résolu",
       configured: false,
       logo_url: null,
       logo_white_url: null,
+      favicon_url: null,
       primary_color: null,
       secondary_color: null,
     });
+  });
+
+  it("un favicon seul suffit à « configurer » : le drapeau compte les CINQ éléments", () => {
+    const dto = serializeBranding("org-racine", {
+      source_organization_id: "org-racine",
+      logo_url: null,
+      logo_white_url: null,
+      favicon_url: "https://accm.fr/favicon.png",
+      primary_color: null,
+      secondary_color: null,
+    });
+    expect(dto.configured).toBe(true);
+    expect(dto.favicon_url).toBe("https://accm.fr/favicon.png");
   });
 
   it("une source sans aucun élément n'est pas « configurée »", () => {
@@ -374,6 +390,7 @@ describe("serializeBranding — la charte applicable, héritage déjà résolu",
       source_organization_id: "org-racine",
       logo_url: null,
       logo_white_url: "   ",
+      favicon_url: null,
       primary_color: null,
       secondary_color: null,
     });

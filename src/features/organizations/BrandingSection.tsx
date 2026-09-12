@@ -31,6 +31,7 @@ function toResolved(parent: ParentBranding | null | undefined): ResolvedBranding
   return {
     logoUrl: parent.logo_url,
     logoWhiteUrl: parent.logo_white_url,
+    faviconUrl: parent.favicon_url,
     primaryColor: parent.primary_color,
     secondaryColor: parent.secondary_color,
   };
@@ -136,6 +137,46 @@ function LogoPreview({
   );
 }
 
+/**
+ * Vignette de favicon — montrée **à sa taille réelle**, et aux deux tailles que
+ * les navigateurs réclament (32 px, 16 px). L'agrandir la rendrait toujours
+ * lisible, ce qui reviendrait à cacher la seule chose qu'un aperçu de favicon
+ * ait à dire : un blason détaillé disparaît dans un onglet.
+ */
+function FaviconPreview({ url }: { url: string | null }) {
+  const [broken, setBroken] = React.useState(false);
+  React.useEffect(() => setBroken(false), [url]);
+
+  return (
+    <div className="flex flex-col gap-1.5">
+      <p className="text-xs font-medium text-muted-foreground">Favicon</p>
+      <div className="flex h-20 items-center gap-4 rounded-lg border border-border bg-white px-4">
+        {!url ? (
+          <span className="text-xs text-muted-foreground">Non défini</span>
+        ) : broken ? (
+          <span className="flex items-center gap-1.5 text-xs text-muted-foreground">
+            <ImageOff className="size-4" />
+            Image introuvable
+          </span>
+        ) : (
+          [32, 16].map((size) => (
+            <span key={size} className="flex flex-col items-center gap-1">
+              <img
+                src={url}
+                alt={size === 32 ? "Favicon" : ""}
+                onError={() => setBroken(true)}
+                style={{ height: size, width: size }}
+                className="object-contain"
+              />
+              <span className="text-[10px] text-muted-foreground">{size} px</span>
+            </span>
+          ))
+        )}
+      </div>
+    </div>
+  );
+}
+
 function ColorChip({ label, color }: { label: string; color: string | null }) {
   return (
     <div className="flex flex-col gap-1.5">
@@ -166,6 +207,7 @@ function BrandingPreview({ branding }: { branding: ResolvedBranding }) {
         <div className="grid gap-4 sm:grid-cols-2">
           <LogoPreview url={branding.logoUrl} label="Logo couleur" />
           <LogoPreview url={branding.logoWhiteUrl} label="Logo blanc" dark />
+          <FaviconPreview url={branding.faviconUrl} />
           <ColorChip label="Couleur principale" color={branding.primaryColor} />
           <ColorChip label="Couleur secondaire" color={branding.secondaryColor} />
         </div>
@@ -181,7 +223,7 @@ function BrandingPreview({ branding }: { branding: ResolvedBranding }) {
  *
  * ⚠️ Le logo couleur (`logo_url`) vit ici, plus dans « Informations de base » :
  * c'est un élément de charte, gouverné par le même commutateur d'héritage que
- * les trois autres.
+ * les quatre autres.
  */
 export function BrandingSection({ organization }: { organization: Organization }) {
   const hasParent = organization.parent_id !== null;
@@ -230,7 +272,8 @@ export function BrandingSection({ organization }: { organization: Organization }
             <div>
               <CardTitle className="text-base">Charte graphique</CardTitle>
               <CardDescription>
-                Logos et couleurs de cette organisation, repris par les applications de la gamme.
+                Logos, favicon et couleurs de cette organisation, repris par les applications de
+                la gamme et par son site de démarches.
               </CardDescription>
             </div>
           </div>
@@ -295,6 +338,22 @@ export function BrandingSection({ organization }: { organization: Organization }
                     value={values.logoWhiteUrl}
                     onChange={(e) => set("logoWhiteUrl", e.target.value)}
                     placeholder="https://…/logo-blanc.svg"
+                  />
+                </Field>
+              </div>
+
+              <div className="grid gap-4 sm:grid-cols-2">
+                <Field
+                  label="Favicon (URL)"
+                  htmlFor="cg-favicon"
+                  hint="Icône de l'onglet du navigateur sur le site de démarches. Image carrée (PNG, SVG ou ICO), 32 × 32 au minimum."
+                >
+                  <Input
+                    id="cg-favicon"
+                    type="url"
+                    value={values.faviconUrl}
+                    onChange={(e) => set("faviconUrl", e.target.value)}
+                    placeholder="https://…/favicon.png"
                   />
                 </Field>
               </div>

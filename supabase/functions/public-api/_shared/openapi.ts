@@ -448,9 +448,9 @@ export function buildOpenApiDocument(serverUrl: string): Record<string, unknown>
           tags: ["Charte graphique"],
           summary: "Charte graphique applicable à une organisation",
           description: [
-            "Logos et couleurs **applicables à l'organisation demandée** : de quoi présenter une",
-            "interface aux couleurs de la collectivité. Scope `read` — rien ici n'est un secret,",
-            "contrairement au serveur d'envoi.",
+            "Logos, favicon et couleurs **applicables à l'organisation demandée** : de quoi",
+            "présenter une interface aux couleurs de la collectivité. Scope `read` — rien ici",
+            "n'est un secret, contrairement au serveur d'envoi.",
             "",
             "**L'héritage est déjà résolu.** Une charte se définit d'ordinaire sur l'organisation",
             "principale et vaut pour toute sa descendance ; une sous-organisation peut néanmoins en",
@@ -464,7 +464,7 @@ export function buildOpenApiDocument(serverUrl: string): Record<string, unknown>
             "au lieu des couleurs de sa collectivité.",
             "",
             "Aucun élément défini nulle part au-dessus ⇒ **200** avec `configured: false` et les",
-            "quatre champs nuls : le consommateur retombe sur son habillage par défaut. Ce n'est",
+            "cinq champs nuls : le consommateur retombe sur son habillage par défaut. Ce n'est",
             "pas une erreur, seulement une collectivité qui n'a pas encore rempli sa charte.",
           ].join("\n"),
           parameters: [
@@ -1450,13 +1450,22 @@ export function buildOpenApiDocument(serverUrl: string): Record<string, unknown>
             },
             configured: {
               type: "boolean",
-              description: "Au moins un des quatre éléments est défini.",
+              description: "Au moins un des cinq éléments est défini.",
             },
             logo_url: { type: ["string", "null"], format: "uri", description: "Logo couleur." },
             logo_white_url: {
               type: ["string", "null"],
               format: "uri",
               description: "Logo blanc, pour les fonds sombres.",
+            },
+            favicon_url: {
+              type: ["string", "null"],
+              format: "uri",
+              description:
+                "Favicon : l'icône que le navigateur affiche dans l'onglet et les favoris du " +
+                "site de démarches. Image carrée, déposée par la collectivité — le Socle ne " +
+                "la redimensionne pas et ne l'héberge pas. Posez-la en " +
+                "`<link rel=\"icon\">` ; sans elle, gardez la vôtre.",
             },
             primary_color: {
               type: ["string", "null"],
@@ -1476,6 +1485,7 @@ export function buildOpenApiDocument(serverUrl: string): Record<string, unknown>
             configured: true,
             logo_url: "https://exemple.fr/logo.png",
             logo_white_url: "https://exemple.fr/logo-blanc.svg",
+            favicon_url: "https://exemple.fr/favicon.png",
             primary_color: "#1f8a5b",
             secondary_color: "#ffd166",
           },

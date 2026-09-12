@@ -13,6 +13,7 @@ const org = (over: Partial<Parameters<typeof brandingValuesFromOrganization>[0]>
   parent_id: "parent-1",
   logo_url: null,
   logo_white_url: null,
+  favicon_url: null,
   primary_color: null,
   secondary_color: null,
   branding_inherit_parent: true,
@@ -22,6 +23,7 @@ const org = (over: Partial<Parameters<typeof brandingValuesFromOrganization>[0]>
 const values = (over: Partial<BrandingValues> = {}): BrandingValues => ({
   logoUrl: "",
   logoWhiteUrl: "",
+  faviconUrl: "",
   primaryColor: "",
   secondaryColor: "",
   inheritParent: false,
@@ -69,6 +71,7 @@ describe("brandingValuesFromOrganization", () => {
         org({
           logo_url: "https://x/logo.png",
           logo_white_url: "https://x/blanc.svg",
+          favicon_url: "https://x/favicon.png",
           primary_color: "#1f8a5b",
           secondary_color: "#ffd166",
           branding_inherit_parent: false,
@@ -77,6 +80,7 @@ describe("brandingValuesFromOrganization", () => {
     ).toEqual({
       logoUrl: "https://x/logo.png",
       logoWhiteUrl: "https://x/blanc.svg",
+      faviconUrl: "https://x/favicon.png",
       primaryColor: "#1f8a5b",
       secondaryColor: "#ffd166",
       inheritParent: false,
@@ -98,6 +102,7 @@ describe("brandingUpdateFromValues", () => {
         values({
           logoUrl: "  https://x/logo.png  ",
           logoWhiteUrl: "   ",
+          faviconUrl: "  https://x/favicon.png  ",
           primaryColor: "#1F8A5B",
           secondaryColor: "abc",
         }),
@@ -106,6 +111,7 @@ describe("brandingUpdateFromValues", () => {
     ).toEqual({
       logo_url: "https://x/logo.png",
       logo_white_url: null,
+      favicon_url: "https://x/favicon.png",
       primary_color: "#1f8a5b",
       secondary_color: "#aabbcc",
       branding_inherit_parent: false,
@@ -136,6 +142,7 @@ describe("previewBranding", () => {
   const parent = {
     logoUrl: "https://parent/logo.png",
     logoWhiteUrl: null,
+    faviconUrl: "https://parent/favicon.png",
     primaryColor: "#123456",
     secondaryColor: null,
   };
@@ -150,6 +157,7 @@ describe("previewBranding", () => {
       .toEqual({
         logoUrl: "https://propre/logo.png",
         logoWhiteUrl: null,
+        faviconUrl: null,
         primaryColor: "#aabbcc",
         secondaryColor: null,
       });
@@ -170,6 +178,7 @@ describe("isBrandingEmpty", () => {
       isBrandingEmpty({
         logoUrl: null,
         logoWhiteUrl: "   ",
+        faviconUrl: null,
         primaryColor: null,
         secondaryColor: null,
       }),
@@ -178,7 +187,20 @@ describe("isBrandingEmpty", () => {
       isBrandingEmpty({
         logoUrl: null,
         logoWhiteUrl: null,
+        faviconUrl: null,
         primaryColor: "#1f8a5b",
+        secondaryColor: null,
+      }),
+    ).toBe(false);
+  });
+
+  it("un favicon seul est une charte : les CINQ éléments comptent", () => {
+    expect(
+      isBrandingEmpty({
+        logoUrl: null,
+        logoWhiteUrl: null,
+        faviconUrl: "https://x/favicon.png",
+        primaryColor: null,
         secondaryColor: null,
       }),
     ).toBe(false);

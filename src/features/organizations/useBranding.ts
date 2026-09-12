@@ -12,10 +12,11 @@ import type { BrandingUpdate } from "@/features/organizations/branding";
 export interface ParentBranding {
   source_organization_id: string;
   source_organization_name: string;
-  /** Au moins un des quatre éléments est renseigné au-dessus. */
+  /** Au moins un des cinq éléments est renseigné au-dessus. */
   configured: boolean;
   logo_url: string | null;
   logo_white_url: string | null;
+  favicon_url: string | null;
   primary_color: string | null;
   secondary_color: string | null;
 }

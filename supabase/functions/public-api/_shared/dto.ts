@@ -252,6 +252,8 @@ export interface BrandingDto {
   logo_url: string | null;
   /** Logo blanc (URL), pour les fonds sombres. */
   logo_white_url: string | null;
+  /** Favicon (URL) : l'icône de l'onglet du navigateur, sur le site de démarches. */
+  favicon_url: string | null;
   /** Couleur principale, `#rrggbb` minuscule. */
   primary_color: string | null;
   /** Couleur secondaire, `#rrggbb` minuscule. */

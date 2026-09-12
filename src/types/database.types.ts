@@ -824,6 +824,7 @@ export type Database = {
           email_sender_name: string | null
           email_sender_override: boolean
           enabled_languages: string[]
+          favicon_url: string | null
           id: string
           is_internal_service: boolean
           logo_url: string | null
@@ -846,6 +847,7 @@ export type Database = {
           email_sender_name?: string | null
           email_sender_override?: boolean
           enabled_languages?: string[]
+          favicon_url?: string | null
           id?: string
           is_internal_service?: boolean
           logo_url?: string | null
@@ -868,6 +870,7 @@ export type Database = {
           email_sender_name?: string | null
           email_sender_override?: boolean
           enabled_languages?: string[]
+          favicon_url?: string | null
           id?: string
           is_internal_service?: boolean
           logo_url?: string | null
@@ -1434,6 +1437,7 @@ export type Database = {
         Args: { p_org_id: string }
         Returns: {
           configured: boolean
+          favicon_url: string
           logo_url: string
           logo_white_url: string
           primary_color: string
@@ -1524,6 +1528,7 @@ export type Database = {
       resolve_branding: {
         Args: { p_org_id: string }
         Returns: {
+          favicon_url: string
           logo_url: string
           logo_white_url: string
           primary_color: string

@@ -127,7 +127,7 @@ exécutables par `authenticated` : le RLS les évalue avec les droits de l'appel
 
 ### Modèle de données (principales tables)
 
-- `organizations` — hiérarchie auto-référencée via `parent_id` (voir feature ci-dessous) ; `enabled_languages` (langues de la collectivité, **racine uniquement** — voir feature « langues ») ; `is_internal_service` (l'organisme instruit mais ne s'affiche pas au portail — voir feature « services internes »).
+- `organizations` — hiérarchie auto-référencée via `parent_id` (voir feature ci-dessous) ; `favicon_url` (icône de l'onglet du site de démarches, **cinquième élément de la charte** — voir feature) ; `enabled_languages` (langues de la collectivité, **racine uniquement** — voir feature « langues ») ; `is_internal_service` (l'organisme instruit mais ne s'affiche pas au portail — voir feature « services internes »).
 - `users`, `user_organizations` (jointure user↔org + `role`).
 - `categories`, `procedures`, `organization_procedures` (catalogue de démarches) — la colonne
   `translations` des deux premières porte les **textes traduits** (voir feature « langues »).
@@ -159,8 +159,8 @@ migration doit y avoir son fichier miroir `{version}_{nom}.sql`.
 - **Admin d'organisation** : gère son org **et toute sa descendance** (créer/modifier/rendre
   obsolète), pas de suppression.
 - Champs : `name` (obligatoire), `address`, `phone`, `email`, `status`
-  (`active` | `obsolete`, obsolescence **réversible**), + `slug`, `type` hérités. Les quatre
-  colonnes de **charte graphique** (`logo_url`, `logo_white_url`, `primary_color`,
+  (`active` | `obsolete`, obsolescence **réversible**), + `slug`, `type` hérités. Les cinq
+  colonnes de **charte graphique** (`logo_url`, `logo_white_url`, `favicon_url`, `primary_color`,
   `secondary_color`) + `branding_inherit_parent` ont leur propre onglet — voir feature ci-dessous.
 - RLS `organizations` : SELECT `has_org_access(id) OR is_admin_of_self_or_ancestor(id)` ·
   INSERT super_admin ou (parent défini ET admin d'un ancêtre) · UPDATE admin self/ancêtre ·
@@ -273,10 +273,22 @@ garde sa modale (`OrganizationsManager` reçoit `onEditOrganization` seulement c
   consommée en aval (Ariane/Clara). Écriture couverte par le RLS UPDATE `organizations`
   (`is_admin_of_self_or_ancestor`).
 - **Onglet « Charte graphique »** (`BrandingSection`, visible sur **toute** organisation) :
-  `logo_url` (logo couleur), `logo_white_url` (logo blanc, fonds sombres), `primary_color`,
+  `logo_url` (logo couleur), `logo_white_url` (logo blanc, fonds sombres), `favicon_url` (icône de
+  l'onglet du navigateur sur le site de démarches — 2026-09-12), `primary_color`,
   `secondary_color` (hexadécimal `#rrggbb`, CHECK en base ; la saisie normalise `#ABC` → `#aabbcc`
   — deux écritures de la même couleur ne doivent pas se lire comme deux couleurs en aval). Le Socle
   **enregistre et publie** : aucun habillage de l'app ne change, l'aval s'y adosse.
+  ⚠️ **Le favicon est un élément de CHARTE, pas de thème** (motif de la couleur, à l'envers) : le
+  thème du portail dit COMMENT peindre, la charte dit AVEC QUOI — et une icône est une image de la
+  collectivité. Il hérite donc comme les logos, ce qui donne son icône à une sous-organisation qui
+  tient son propre guichet sans que personne la ressaisisse. C'est une **URL libre** comme les
+  logos : le Socle n'héberge rien, ne redimensionne rien, ne vérifie pas que l'image est carrée —
+  c'est Nora qui écarte ce qu'elle ne peut pas peindre (`https` seulement, règle commune aux
+  logos et aux images de blocs).
+  ⚠️ **Les CINQ éléments comptent dans « configuré »** (`isBrandingEmpty` ici, `configured` du DTO
+  et de `parent_branding` en aval, testés des deux côtés) : à quatre, une collectivité qui n'aurait
+  déposé que son favicon s'entendrait répondre qu'elle n'a pas de charte, et le consommateur
+  retomberait sur son habillage par défaut en ignorant le seul élément qu'elle a rempli.
   **Héritage** : sur une sous-organisation, un commutateur **« Utiliser la charte graphique de
   l'organisme parent »** (`branding_inherit_parent`, **activé par défaut**) remplace le formulaire
   par l'aperçu de la charte héritée (RPC `parent_branding`) ; le désactiver ouvre la saisie d'une
@@ -294,9 +306,15 @@ garde sa modale (`OrganizationsManager` reçoit `onEditOrganization` seulement c
   Le logo a aussi disparu de l'`OrganizationFormDialog` (création/édition superadmin) : posé là,
   il aurait été enregistré puis ignoré sur une sous-organisation qui hérite.
   **En aval** : la charte est servie **résolue** par `GET /v1/organizations/{id}/branding`
-  (`public-api`, scope `read`, contrat 1.5.0 — voir feature « API publique »). ⚠️ Les trois
-  colonnes ajoutées ne sont **pas** exposées sur `OrganizationDto` et ne doivent pas l'être :
-  brutes, elles sont nulles sur une organisation qui hérite.
+  (`public-api`, scope `read`, contrat 1.5.0 ; `favicon_url` en **1.21.0** — voir feature
+  « API publique »). ⚠️ Les quatre colonnes ajoutées ne sont **pas** exposées sur
+  `OrganizationDto` et ne doivent pas l'être : brutes, elles sont nulles sur une organisation qui
+  hérite. ⚠️ Migrations `organizations_favicon` + `branding_functions_revoke_execute_bis` :
+  ajouter une colonne au type de retour de `resolve_branding` / `parent_branding` impose de les
+  **déposer**, et les recréer leur **rend les EXECUTE par défaut** d'`anon`/`authenticated` — que
+  `revoke ... from public` n'enlève pas. Reposer les droits en citant les **trois** rôles.
+  Côté Nora, le favicon se pose en `<link rel="icon">` (`src/features/portal/favicon.ts`) :
+  ⚠️ **son absence n'est pas un effacement**, l'onglet garde ce qu'il affichait.
 - **Onglet « Langues »** (`LanguagesSection`, **organisation principale uniquement** — une
   sous-organisation y lit qu'elle suit sa racine) : quelles langues la collectivité active pour
   s'adresser à ses usagers. Voir feature « Langues et libellés traduits ».
@@ -334,7 +352,7 @@ garde sa modale (`OrganizationsManager` reçoit `onEditOrganization` seulement c
 - Code : `src/features/organizations/` — `OrganizationEditorPage`, `OrganizationInfoTab`,
   `OrganizationProceduresTab`, `useOrganizationProcedures.ts`, `organizationProcedures.ts` (pur,
   testé), `BrandingSection.tsx`, `useBranding.ts`, `branding.ts` (pur, testé : normalisation des
-  couleurs, forme de l'écriture, aperçu résolu). Helpers d'arbre purs `findRootAncestor` / `collectDescendantIdsFlat` dans `orgTree.ts`.
+  couleurs, forme de l'écriture, aperçu résolu, « une charte vide » à cinq éléments). Helpers d'arbre purs `findRootAncestor` / `collectDescendantIdsFlat` dans `orgTree.ts`.
 
 ## Feature : paramétrage des démarches (`procedures`)
 
@@ -773,7 +791,7 @@ avec **`verify_jwt = false`** (l'auth est portée par la fonction, pas par la pa
   `list_quartiers_geojson` ; sans elle, aucune géométrie — la colonne `geom` binaire n'est
   jamais exposée), `documents/signed-url?path=` (URL signée temporaire, bucket privé
   `procedure-documents`), `organizations/{id}/branding` (**charte graphique applicable**,
-  héritage résolu — logos et couleurs ; scope `read`), `organizations/{id}/smtp` (**serveur
+  héritage résolu — logos, favicon et couleurs ; scope `read`), `organizations/{id}/smtp` (**serveur
   d'envoi applicable** à l'organisation, héritage résolu — cf. sérialisation ci-dessous).
   Docs : `openapi.json` (public) et `docs`
   (Redoc, cf. ci-dessous).

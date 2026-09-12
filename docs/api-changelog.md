@@ -51,6 +51,38 @@ exactement comme aujourd'hui.
 
 ## 2026-09-12 — public-api — ajout
 
+**La charte graphique porte le favicon de la collectivité.** L'icône que le navigateur affiche
+dans l'onglet et les favoris du site de démarches. Version du contrat : **1.21.0**. Ajout
+**additif** : un consommateur qui l'ignore se comporte exactement comme aujourd'hui.
+
+**Un champ sur `Branding`** (`GET /v1/organizations/{id}/branding`) :
+
+| Champ | Valeur | Ce qu'il dit |
+|---|---|---|
+| `favicon_url` | `https://…` ou `null` | L'icône du site, telle que la collectivité l'a déposée |
+
+- C'est un **cinquième élément de la charte**, pas un réglage du thème : le thème dit COMMENT
+  peindre, la charte dit AVEC QUOI. Il suit donc l'héritage comme les logos et les couleurs —
+  une sous-organisation qui tient son propre guichet reçoit l'icône de sa collectivité sans que
+  personne ait eu à la ressaisir, et `source_organization_id` dit toujours qui la porte.
+- ⚠️ **`configured` compte désormais CINQ éléments.** Si vous vous servez de ce drapeau pour
+  décider s'il y a quelque chose à peindre, sachez qu'il passe maintenant à `true` pour une
+  collectivité qui n'aurait déposé que son favicon. C'est voulu : le lire autrement reviendrait à
+  ignorer le seul élément qu'elle a rempli.
+- ⚠️ **C'est une URL, pas un fichier.** Le Socle enregistre et publie, il n'héberge rien, ne
+  redimensionne rien et ne vérifie pas que l'image est carrée — comme pour les logos. Posez-la en
+  `<link rel="icon">` ; **son absence n'est pas une demande d'effacement**, gardez alors l'icône
+  que vous affichiez.
+- ⚠️ **Ne la reconstituez pas depuis `GET /v1/organizations/{id}`** : `favicon_url` n'est **pas**
+  exposé sur `OrganizationDto`, pour la raison qui vaut déjà pour les quatre autres colonnes de
+  charte — brute, elle est nulle sur une organisation qui hérite.
+
+**Consommateur** : Nora la pose dès qu'elle est publiée. Rien à faire pour les autres.
+
+---
+
+## 2026-09-12 — public-api — ajout
+
 **Le bloc de recherche du portail peut porter une image de fond.** La collectivité la choisit dans
 l'éditeur du site de démarches ; le Socle l'enregistre et la publie. Version du contrat :
 **1.20.0**. Ajout **additif** : un consommateur qui l'ignore rend le bloc exactement comme
