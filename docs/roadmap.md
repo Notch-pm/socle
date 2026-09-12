@@ -195,6 +195,34 @@ suppose la précédente.
   ⚠️ Une **visite** est une **arrivée** sur le site, pas un visiteur unique — sans identifiant, la
   seconde notion n'a pas de sens. La **provenance** a été écartée du périmètre.
 
+- **2026-09-12 — Une page par organisme, et le menu « Ma ville ».**
+  `laurentville.edilumen.fr/<slug>` sert les démarches d'UN organisme, à SA charte (le thème reste
+  celui de la collectivité : le thème dit comment peindre, la charte avec quoi). L'usager reste sous
+  le préfixe jusqu'au dépôt. Contrats **1.22.0** (`slug`) puis **1.23.0** (`logo_url`) sur
+  `PortalOrganizationRef` ; migration `organization_slug_url` (le slug devient une adresse
+  publique : `[a-z0-9-]`, **4 caractères au moins**, mots réservés du portail exclus).
+  ⚠️ **Qui a une page se déduit du catalogue**, sans réglage : un organisme est atteignable tant
+  qu'il propose au moins une démarche publiée. La racine est écartée (sa page est l'accueil), et un
+  **service interne** n'apparaît jamais — c'est son porteur qui est nommé, et son adresse qui sort.
+  ⚠️ **La longueur minimale du slug est une décision de contrat** : le portail décide sur la seule
+  forme du premier segment d'une adresse s'il lit une langue (`/en`) ou un organisme, sans rien
+  demander au serveur. Un slug de trois caractères rendrait la page inatteignable, en silence.
+  ⚠️ **`logo_url` sort BRUT**, héritage non résolu — seul endroit du contrat dans ce cas : dans une
+  liste de communes, un logo hérité donnerait la même image à chaque ligne.
+  ⚠️ La **marque de l'en-tête reste celle de la collectivité** (nom + logo) : le bandeau du haut dit
+  sur quel site on est, le bloc dessous quelle mairie on visite.
+  **Restent ouverts** : (1) la **page de repli** (collectivité qui n'a rien composé) n'a aucun
+  en-tête — donc ni langue, ni compte, ni « Ma ville » ; (2) les pages d'organisme **ne sont pas
+  comptées** dans l'audience (voir point 0).
+- **2026-09-12 — Le voile de l'image de fond est retiré** (décision produit). La photo se voit telle
+  qu'elle a été choisie.
+  ⚠️ **Ce voile était une garantie, pas un effet** : il laissait l'encre du portail à 5,7 : 1 sur le
+  pire fond possible, au-dessus du seuil AA, quelle que soit l'image. Il n'y a **plus aucune
+  garantie** : sur un gris moyen, l'encre pleine tombe à 4,1 : 1 — mesuré et épinglé par un test des
+  deux côtés. Filet restant : sous-titre à l'encre pleine, puces en blanc plein.
+  **Reste ouvert** : un voile **sous le texte seul**, qui rendrait la photo intacte et le contraste
+  avec. C'est un petit lot.
+
 ### Envisagé, dans l'ordre
 
 0. **Suites possibles de la mesure d'audience** — aucune n'est engagée : la **provenance**
@@ -202,6 +230,12 @@ suppose la précédente.
    promesse qui dispense du consentement) ; un **filtre par site** quand une collectivité en tient
    plusieurs (le domaine est déjà dans les compteurs, seul l'écran manque) ; une **vue super
    admin** inter-clients, sur le modèle de `/superadmin/ia` ; l'**export** de la période.
+   S'y ajoute depuis le 2026-09-12 : **compter les pages d'organisme**. `page` n'a que trois valeurs
+   (`accueil`, `demarche`, `formulaire`) et la contrainte SQL les fige — en ajouter une quatrième
+   demande une migration coordonnée, et une **dimension organisme** dans les répartitions pour que
+   le chiffre serve à quelque chose. ⚠️ Les vues de démarche et de formulaire atteintes PAR une page
+   d'organisme sont, elles, déjà comptées : c'était le piège du lot, et un test l'épingle chez
+   Nora.
 
 1. **Multilingue.** En cours. Fait : les langues activées par la collectivité et les **libellés**
    traduits des démarches et des catégories (2026-09-06), leur **descriptif court** (2026-09-07,
