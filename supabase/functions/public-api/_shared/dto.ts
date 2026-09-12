@@ -445,6 +445,19 @@ export interface PortalOrganizationRefDto {
   id: string;
   name: string;
   /**
+   * Identifiant lisible de l'organisme, ou `null`. **Contrat 1.22.0.**
+   *
+   * C'est ce qui lui donne une adresse sur un portail usagers : Nora sert
+   * `/<slug>` comme la page de cet organisme — ses démarches, ses couleurs, son
+   * logo. Quatre caractères au moins, `[a-z0-9-]` (contrainte
+   * `organizations_slug_url_form`) : en dessous, un portail le lirait comme un
+   * code de langue.
+   *
+   * ⚠️ C'est le slug du **porteur**, jamais celui du service interne qui
+   * instruit — même règle que `name`.
+   */
+  slug: string | null;
+  /**
    * L'organisation qui **instruit** réellement, quand ce n'est pas l'organisme
    * affiché — `null` sinon. C'est un UUID et rien d'autre : le **nom** du
    * service interne ne sort pas, la collectivité a choisi de ne pas le montrer.

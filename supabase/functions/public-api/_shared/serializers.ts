@@ -441,6 +441,7 @@ export function readAudiences(raw: unknown): Array<"citoyen" | "entreprise" | "a
 export interface PortalOrganizationInput {
   id: string;
   name: string;
+  slug: string | null;
   handlingOrganizationId: string | null;
 }
 
@@ -458,6 +459,7 @@ export function serializePortalProcedure(
     organizations: organizations.map((org) => ({
       id: str(org.id),
       name: str(org.name),
+      slug: nullableStr(org.slug),
       handling_organization_id: nullableStr(org.handlingOrganizationId),
     })),
     audiences: readAudiences(row.requester_config),

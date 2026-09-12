@@ -15,6 +15,42 @@ Format d'une entrée : `## AAAA-MM-JJ — <api> — ajout|correctif|rupture`
 
 ## 2026-09-12 — public-api — ajout
 
+**Un organisme peut avoir sa propre adresse sur le site de démarches.** Son identifiant lisible
+(`slug`) voyage désormais avec chaque démarche, ce qui permet à un portail de servir une page par
+organisme : `/<slug>` y montre les démarches de cet organisme, à ses couleurs et avec son logo.
+Version du contrat : **1.22.0**. Ajout **additif** : un consommateur qui l'ignore se comporte
+exactement comme aujourd'hui.
+
+**Un champ sur `PortalOrganizationRef`** (`GET /v1/portal/procedures` et
+`GET /v1/portal/procedures/{id}`) :
+
+| Champ | Valeur | Ce qu'il dit |
+|---|---|---|
+| `slug` | `mairie-d-arles` ou `null` | L'identifiant lisible de l'organisme affiché |
+
+- ⚠️ **C'est le slug du PORTEUR**, jamais celui du service interne qui instruit — même règle que
+  `name`. Un service interne ne s'affiche pas au portail, et son adresse ne sort donc pas non plus :
+  elle mènerait à une vitrine que la collectivité a choisi de ne pas montrer.
+- ⚠️ **`null` est un cas normal**, pas une anomalie : personne n'a donné d'identifiant lisible à cet
+  organisme. Il reste nommé sur les cartes et dans les filtres, il n'a simplement pas de page. Ne
+  fabriquez pas d'adresse à sa place à partir de son nom : elle changerait au premier renommage, et
+  les liens déjà partagés mourraient.
+- ⚠️ **Quatre caractères au moins, `[a-z0-9-]`** (contrainte `organizations_slug_url_form`, unique
+  sur toute la plateforme). La longueur minimale est une décision de contrat, pas une coquetterie :
+  un portail qui porte la langue dans un préfixe de chemin (`/en`, `/gsw`) doit pouvoir décider, sur
+  la seule forme du premier segment, s'il lit une langue ou un organisme. Un slug de trois
+  caractères serait lu comme une langue, et la page de l'organisme deviendrait inatteignable.
+- **Qui a une page se déduit du catalogue**, sans réglage : les organismes qui apparaissent dans
+  `organizations` sont ceux qui proposent au moins une démarche publiée. Le jour où un organisme n'en
+  propose plus, son adresse s'éteint d'elle-même plutôt que de mener à une page vide.
+- Le slug d'une **collectivité racine** voyage aussi (c'est le même champ), mais son site est déjà à
+  la racine du domaine : lui servir en plus une page sous son slug ferait deux adresses pour la même
+  page. Nora écarte donc la racine.
+
+---
+
+## 2026-09-12 — public-api — ajout
+
 **Le bloc de recherche du portail peut porter une image de fond.** La collectivité la choisit dans
 l'éditeur du site de démarches ; le Socle l'enregistre et la publie. Version du contrat :
 **1.20.0**. Ajout **additif** : un consommateur qui l'ignore rend le bloc exactement comme

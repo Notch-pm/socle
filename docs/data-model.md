@@ -52,7 +52,7 @@ aucun endpoint, il décrit ce qui existe **en base**.
 | `id` | uuid PK, `gen_random_uuid()` |
 | `parent_id` | uuid, self-FK **ON DELETE CASCADE** |
 | `name` | text NOT NULL |
-| `slug` | text nullable, **UNIQUE global** |
+| `slug` | text nullable, **UNIQUE global**, CHECK `organizations_slug_url_form` (`[a-z0-9-]`, 4 caractères au moins, mots réservés du portail exclus). ⚠️ **Adresse publique** depuis le 2026-09-12 : le site de démarches sert `/<slug>` comme la page de cet organisme (contrat 1.22.0). Il reste aussi le point de départ du label DNS d'une racine (`dns_label_from_slug`) |
 | `type`, `address`, `phone`, `email` | text nullable |
 | `logo_url`, `logo_white_url` | text nullable — charte graphique (logo couleur, logo blanc) |
 | `primary_color`, `secondary_color` | text nullable, CHECK `organizations_branding_colors_hex` (`#rrggbb`, casse indifférente) |

@@ -675,14 +675,26 @@ describe("serializePortalProcedure — le paramétrage d'instruction ne sort pas
 
   it("recopie les organismes qui proposent la démarche, dans l'ordre reçu, et rien d'autre d'eux", () => {
     const dto = serializePortalProcedure(row, [
-      { id: "accm", name: "ACCM", handlingOrganizationId: null, status: "active", email: "x@y" } as never,
-      { id: "arles", name: "Mairie d'Arles", handlingOrganizationId: "service-etat-civil" },
+      { id: "accm", name: "ACCM", slug: "laurentville", handlingOrganizationId: null, status: "active", email: "x@y" } as never,
+      {
+        id: "arles",
+        name: "Mairie d'Arles",
+        slug: "mairie-d-arles",
+        handlingOrganizationId: "service-etat-civil",
+      },
     ]);
     expect(dto.organizations).toEqual([
-      { id: "accm", name: "ACCM", handling_organization_id: null },
+      { id: "accm", name: "ACCM", slug: "laurentville", handling_organization_id: null },
       // Le service interne qui instruit voyage par son IDENTIFIANT seul : son
-      // nom ne sort pas, la collectivité a choisi de ne pas le montrer.
-      { id: "arles", name: "Mairie d'Arles", handling_organization_id: "service-etat-civil" },
+      // nom ne sort pas — ni son slug, qui serait une adresse vers un service
+      // que la collectivité a choisi de ne pas montrer. Ce sont ceux du
+      // PORTEUR qui sortent.
+      {
+        id: "arles",
+        name: "Mairie d'Arles",
+        slug: "mairie-d-arles",
+        handling_organization_id: "service-etat-civil",
+      },
     ]);
   });
 
@@ -741,7 +753,7 @@ describe("serializePortalProcedureDetail — le formulaire sort, l'instruction n
   it("ajoute au public de la liste la catégorie et les deux schémas de saisie", () => {
     const dto = serializePortalProcedureDetail(
       row,
-      [{ id: "accm", name: "ACCM", handlingOrganizationId: null }],
+      [{ id: "accm", name: "ACCM", slug: "laurentville", handlingOrganizationId: null }],
       detail,
       category,
     );
@@ -752,7 +764,9 @@ describe("serializePortalProcedureDetail — le formulaire sort, l'instruction n
       user_description: "Adressée au service état civil.",
       input_duration_minutes: 5,
       access_mode: "libre",
-      organizations: [{ id: "accm", name: "ACCM", handling_organization_id: null }],
+      organizations: [
+        { id: "accm", name: "ACCM", slug: "laurentville", handling_organization_id: null },
+      ],
       audiences: ["citoyen"],
       translations: { br: { name: "Testeni ganedigezh" } },
       category: { id: "cat-1", name: "État civil", translations: { br: { name: "Stad-civil" } } },

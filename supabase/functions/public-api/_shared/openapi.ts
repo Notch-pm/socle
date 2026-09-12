@@ -30,7 +30,7 @@ export function buildOpenApiDocument(serverUrl: string): Record<string, unknown>
     openapi: "3.1.0",
     info: {
       title: "API Socle — Référentiel de la gamme",
-      version: "1.20.0",
+      version: "1.22.0",
       description: [
         "API **en lecture seule** exposant le référentiel central de la gamme : les",
         "**organisations** (et sous-organisations) avec l'intégralité de leur configuration,",
@@ -1045,10 +1045,20 @@ export function buildOpenApiDocument(serverUrl: string): Record<string, unknown>
             "s'affiche jamais au portail, c'est son porteur (premier ancêtre qui n'est pas un " +
             "service interne) qui est nommé à sa place. Recouper cette liste avec les " +
             "activations brutes donnerait donc un écart, et c'est normal.",
-          required: ["id", "name", "handling_organization_id"],
+          required: ["id", "name", "slug", "handling_organization_id"],
           properties: {
             id: { type: "string", format: "uuid" },
             name: { type: "string" },
+            slug: {
+              type: ["string", "null"],
+              description:
+                "Identifiant lisible de l'organisme **AFFICHÉ** (celui de `name`), ou `null` " +
+                "quand il n'en a pas. C'est ce qui lui donne une adresse sur un portail " +
+                "usagers : `/<slug>` y sert la page de cet organisme — ses démarches, ses " +
+                "couleurs, son logo. Quatre caractères au moins, `[a-z0-9-]` : en dessous, un " +
+                "portail le lirait comme un code de langue. ⚠️ Un organisme sans slug reste " +
+                "nommé sur les cartes, il n'a simplement pas de page.",
+            },
             handling_organization_id: {
               type: ["string", "null"],
               format: "uuid",
@@ -1064,6 +1074,7 @@ export function buildOpenApiDocument(serverUrl: string): Record<string, unknown>
           example: {
             id: "d5227d25-f327-493a-a9a2-278397531e33",
             name: "Mairie de Saint-Martin-de-Crau",
+            slug: "mairie-de-saint-martin-de-crau",
             handling_organization_id: "3f2a1b9c-0d4e-4a6b-9c8d-1e2f3a4b5c6d",
           },
         },

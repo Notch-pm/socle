@@ -19,6 +19,7 @@ import {
   OrganizationFormDialog,
   type OrganizationFormValues,
 } from "@/features/superadmin/organizations/OrganizationFormDialog";
+import { slugIssue, slugPathPreview } from "./organizationSlug";
 
 /** Exporté pour que le test cible l'interrupteur par son nom accessible. */
 export const INTERNAL_SERVICE_SWITCH_LABEL = "Service interne";
@@ -75,9 +76,15 @@ export function GeneralInfoForm({ organization }: { organization: Organization }
     ? bearerByOrganization(allOrgs ?? []).get(organization.parent_id)
     : undefined;
 
+  // Ce que la base refuserait, dit en français et avant l'aller-retour. Sur
+  // une sous-organisation, ce champ est une ADRESSE PUBLIQUE du site de
+  // démarches : une erreur de saisie ne doit pas revenir en code Postgres.
+  const slugProblem = slugIssue(slug);
+
   function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     if (!name.trim()) return;
+    if (slugProblem !== null) return;
     updateOrg.mutate({
       id: organization.id,
       name: name.trim(),
@@ -161,7 +168,18 @@ export function GeneralInfoForm({ organization }: { organization: Organization }
         />
       </Field>
 
-      <Field label="Slug" htmlFor="oi-slug" hint="Identifiant lisible dans les URLs">
+      <Field
+        label="Slug"
+        htmlFor="oi-slug"
+        error={slugProblem ?? undefined}
+        hint={
+          organization.parent_id === null
+            ? "Identifiant lisible. Il sert de point de départ au sous-domaine fourni par la plateforme."
+            : slugPathPreview(slug) === null
+            ? "Identifiant lisible. Il ouvre la page de cet organisme sur le site de démarches."
+            : `Adresse de cet organisme sur le site de démarches : ${slugPathPreview(slug)}`
+        }
+      >
         <Input
           id="oi-slug"
           value={slug}

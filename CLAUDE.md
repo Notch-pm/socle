@@ -213,6 +213,17 @@ service interne — qui est nommé à sa place, **même s'il n'a pas activé la 
   dépose dans Iris), pas à afficher. `is_internal_service` est aussi exposé sur `OrganizationDto` —
   contrairement aux colonnes de charte, la valeur brute ne ment pas, il n'y a pas d'héritage à
   résoudre.
+- **En aval (contrat 1.22.0)** : `PortalOrganizationRef` porte aussi `slug` — l'identifiant lisible
+  du **porteur**, qui donne à cet organisme une ADRESSE sur le site de démarches (`/<slug>` y sert
+  ses démarches, à ses couleurs et avec son logo). Même règle que `name` : le slug d'un service
+  interne ne sort pas. ⚠️ `organizations.slug` a donc changé de statut — il était un confort
+  d'administration (point de départ du label DNS), il est devenu **public** : d'où la contrainte
+  `organizations_slug_url_form` (4 caractères au moins, `[a-z0-9-]`, mots réservés du portail
+  exclus). La longueur minimale n'est pas cosmétique : Nora décide sur la seule forme du premier
+  segment d'une adresse s'il lit une langue (`/en`) ou un organisme, sans rien demander au serveur.
+- **Qui a une page** se déduit du catalogue, sans réglage : un organisme est atteignable tant qu'il
+  propose au moins une démarche publiée. La racine est écartée par Nora — son site est déjà à la
+  racine du domaine.
 - Code : `bearerByOrganization` dans `src/features/superadmin/organizations/orgTree.ts` (pur,
   testé), `bearerGroupSiblings` / `offersHeldBySiblings` dans
   `src/features/organizations/organizationProcedures.ts` (purs, testés),

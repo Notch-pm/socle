@@ -32,6 +32,17 @@ export interface PortalOrganizationRef {
   id: string;
   name: string;
   /**
+   * L'identifiant lisible de l'organisme — ce qui lui donne une ADRESSE sur le
+   * portail usagers (`/<slug>` ouvre sa page : ses démarches, ses couleurs, son
+   * logo).
+   *
+   * ⚠️ C'est le slug du PORTEUR, jamais celui du service interne qui instruit :
+   * comme le nom, il désigne l'organisme que la collectivité a choisi de
+   * montrer. `null` quand personne ne lui en a donné — l'organisme reste alors
+   * nommé sur les cartes, mais n'a pas de page.
+   */
+  slug: string | null;
+  /**
    * Le **service interne** qui instruit réellement, quand ce n'est pas
    * l'organisme affiché — `null` sinon. Le portail ne le montre pas : la
    * collectivité a choisi de ne pas le montrer. Il voyage pour que l'aval
@@ -44,6 +55,8 @@ export interface PortalOrganizationRef {
 export interface TreeOrganization {
   id: string;
   name: string;
+  /** Identifiant lisible, qui sert d'adresse au portail. `null` s'il manque. */
+  slug: string | null;
   parent_id: string | null;
   status: string;
   is_internal_service: boolean;
@@ -177,6 +190,7 @@ export function offersByProcedure(
       list.push({
         id: bearer.id,
         name: bearer.name,
+        slug: bearer.slug,
         handlingOrganizationId: bearer.id === org.id ? null : org.id,
       });
       offers.set(procedureId, list);
