@@ -19,6 +19,7 @@ import {
   Calendar,
   Vote,
   Recycle,
+  Droplets,
   Tag,
   type LucideIcon,
 } from "lucide-react";
@@ -50,6 +51,7 @@ export const ICON_OPTIONS: IconOption[] = [
   { value: "calendar", label: "Rendez-vous", Icon: Calendar },
   { value: "vote", label: "Élections", Icon: Vote },
   { value: "recycle", label: "Déchets", Icon: Recycle },
+  { value: "droplets", label: "Eau et assainissement", Icon: Droplets },
 ];
 
 export const DEFAULT_ICON = Tag;
