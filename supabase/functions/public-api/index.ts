@@ -112,7 +112,7 @@ async function loadPortalCatalogue(
     // `is_internal_service` : un service interne ne s'affiche pas au portail,
     // c'est son porteur qui est nommé à sa place (`bearerByOrganization`) —
     // c'est donc aussi le slug du porteur qui sert d'adresse.
-    .select("id, name, slug, parent_id, status, is_internal_service")
+    .select("id, name, slug, logo_url, parent_id, status, is_internal_service")
     .in("id", treeIds);
   if (organizationsError) throw organizationsError;
   const tree = (organizations ?? []) as TreeOrganization[];

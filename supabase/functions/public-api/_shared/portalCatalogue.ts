@@ -31,6 +31,8 @@ type Row = Record<string, unknown>;
 export interface PortalOrganizationRef {
   id: string;
   name: string;
+  /** Le logo propre du porteur, ou `null` — voir `TreeOrganization.logo_url`. */
+  logoUrl: string | null;
   /**
    * L'identifiant lisible de l'organisme — ce qui lui donne une ADRESSE sur le
    * portail usagers (`/<slug>` ouvre sa page : ses démarches, ses couleurs, son
@@ -57,6 +59,17 @@ export interface TreeOrganization {
   name: string;
   /** Identifiant lisible, qui sert d'adresse au portail. `null` s'il manque. */
   slug: string | null;
+  /**
+   * Le logo PROPRE de l'organisation, tel qu'il est en colonne — jamais résolu
+   * par héritage.
+   *
+   * ⚠️ C'est une différence assumée avec `GET /v1/organizations/{id}/branding`,
+   * et elle vient de l'usage : dans une liste de communes, servir le logo
+   * hérité donnerait à chaque ligne la même image, celle de
+   * l'intercommunalité. Mieux vaut pas de logo qu'un logo qui ne distingue
+   * rien.
+   */
+  logo_url: string | null;
   parent_id: string | null;
   status: string;
   is_internal_service: boolean;
@@ -191,6 +204,7 @@ export function offersByProcedure(
         id: bearer.id,
         name: bearer.name,
         slug: bearer.slug,
+        logoUrl: bearer.logo_url,
         handlingOrganizationId: bearer.id === org.id ? null : org.id,
       });
       offers.set(procedureId, list);

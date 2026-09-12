@@ -30,7 +30,7 @@ export function buildOpenApiDocument(serverUrl: string): Record<string, unknown>
     openapi: "3.1.0",
     info: {
       title: "API Socle — Référentiel de la gamme",
-      version: "1.22.0",
+      version: "1.23.0",
       description: [
         "API **en lecture seule** exposant le référentiel central de la gamme : les",
         "**organisations** (et sous-organisations) avec l'intégralité de leur configuration,",
@@ -1045,7 +1045,7 @@ export function buildOpenApiDocument(serverUrl: string): Record<string, unknown>
             "s'affiche jamais au portail, c'est son porteur (premier ancêtre qui n'est pas un " +
             "service interne) qui est nommé à sa place. Recouper cette liste avec les " +
             "activations brutes donnerait donc un écart, et c'est normal.",
-          required: ["id", "name", "slug", "handling_organization_id"],
+          required: ["id", "name", "slug", "logo_url", "handling_organization_id"],
           properties: {
             id: { type: "string", format: "uuid" },
             name: { type: "string" },
@@ -1058,6 +1058,17 @@ export function buildOpenApiDocument(serverUrl: string): Record<string, unknown>
                 "couleurs, son logo. Quatre caractères au moins, `[a-z0-9-]` : en dessous, un " +
                 "portail le lirait comme un code de langue. ⚠️ Un organisme sans slug reste " +
                 "nommé sur les cartes, il n'a simplement pas de page.",
+            },
+            logo_url: {
+              type: ["string", "null"],
+              format: "uri",
+              description:
+                "Logo de l'organisme affiché, ou `null` s'il n'en a pas — de quoi le " +
+                "reconnaître dans une liste (un menu « Ma ville », par exemple). ⚠️ C'est son " +
+                "logo **PROPRE**, l'héritage n'est PAS résolu ici, contrairement à " +
+                "`GET /v1/organizations/{id}/branding` : dans une liste de communes, un logo " +
+                "hérité donnerait la même image à chaque ligne. `null` signifie donc « pas de " +
+                "logo à elle » — affichez un repli neutre, pas celui de la collectivité.",
             },
             handling_organization_id: {
               type: ["string", "null"],
@@ -1075,6 +1086,7 @@ export function buildOpenApiDocument(serverUrl: string): Record<string, unknown>
             id: "d5227d25-f327-493a-a9a2-278397531e33",
             name: "Mairie de Saint-Martin-de-Crau",
             slug: "mairie-de-saint-martin-de-crau",
+            logo_url: "https://exemple.fr/logos/saint-martin-de-crau.png",
             handling_organization_id: "3f2a1b9c-0d4e-4a6b-9c8d-1e2f3a4b5c6d",
           },
         },

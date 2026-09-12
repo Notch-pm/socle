@@ -15,6 +15,37 @@ Format d'une entrée : `## AAAA-MM-JJ — <api> — ajout|correctif|rupture`
 
 ## 2026-09-12 — public-api — ajout
 
+**Le logo d'un organisme voyage avec le catalogue.** De quoi le reconnaître dans une liste : le
+portail usagers en fait un menu « Ma ville », qui mène aux pages d'organisme ouvertes par le
+contrat 1.22.0. Version du contrat : **1.23.0**. Ajout **additif** : un consommateur qui l'ignore
+se comporte exactement comme aujourd'hui.
+
+**Un champ sur `PortalOrganizationRef`** (`GET /v1/portal/procedures` et
+`GET /v1/portal/procedures/{id}`) :
+
+| Champ | Valeur | Ce qu'il dit |
+|---|---|---|
+| `logo_url` | `https://…` ou `null` | Le logo **propre** de l'organisme affiché |
+
+- ⚠️ **L'héritage n'est PAS résolu ici**, contrairement à
+  `GET /v1/organizations/{id}/branding`, et c'est délibéré : dans une liste de communes, servir le
+  logo hérité donnerait à chaque ligne la même image — celle de l'intercommunalité. `null` veut
+  donc dire « cette organisation n'a pas de logo à elle » : affichez un repli neutre, jamais celui
+  de la collectivité. C'est le seul endroit du contrat où une valeur de charte sort **brute**, et
+  c'est l'usage qui le justifie.
+- ⚠️ C'est le logo du **PORTEUR**, comme `name` et `slug` : le logo d'un service interne ne sort
+  pas plus que son nom.
+- **URL libre**, comme partout dans la charte : le Socle enregistre et publie, il n'héberge rien et
+  ne redimensionne rien. Écartez ce que vous ne pouvez pas peindre — une adresse non `https`, par
+  exemple.
+- **Qui figure dans une telle liste** reste ce que dit le catalogue : les organismes qui proposent
+  au moins une démarche publiée. Un organisme qui ne publie rien n'a pas de page, et n'a donc rien
+  à faire dans un menu qui y mène.
+
+---
+
+## 2026-09-12 — public-api — ajout
+
 **Un organisme peut avoir sa propre adresse sur le site de démarches.** Son identifiant lisible
 (`slug`) voyage désormais avec chaque démarche, ce qui permet à un portail de servir une page par
 organisme : `/<slug>` y montre les démarches de cet organisme, à ses couleurs et avec son logo.

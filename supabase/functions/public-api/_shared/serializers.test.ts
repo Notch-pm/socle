@@ -692,16 +692,25 @@ describe("serializePortalProcedure — le paramétrage d'instruction ne sort pas
 
   it("recopie les organismes qui proposent la démarche, dans l'ordre reçu, et rien d'autre d'eux", () => {
     const dto = serializePortalProcedure(row, [
-      { id: "accm", name: "ACCM", slug: "laurentville", handlingOrganizationId: null, status: "active", email: "x@y" } as never,
+      { id: "accm", name: "ACCM", slug: "laurentville", logoUrl: "https://exemple.fr/accm.png", handlingOrganizationId: null, status: "active", email: "x@y" } as never,
       {
         id: "arles",
         name: "Mairie d'Arles",
         slug: "mairie-d-arles",
+        // Pas de logo à elle : la liste affichera un repli neutre, pas celui de
+        // l'intercommunalité.
+        logoUrl: null,
         handlingOrganizationId: "service-etat-civil",
       },
     ]);
     expect(dto.organizations).toEqual([
-      { id: "accm", name: "ACCM", slug: "laurentville", handling_organization_id: null },
+      {
+        id: "accm",
+        name: "ACCM",
+        slug: "laurentville",
+        logo_url: "https://exemple.fr/accm.png",
+        handling_organization_id: null,
+      },
       // Le service interne qui instruit voyage par son IDENTIFIANT seul : son
       // nom ne sort pas — ni son slug, qui serait une adresse vers un service
       // que la collectivité a choisi de ne pas montrer. Ce sont ceux du
@@ -710,6 +719,7 @@ describe("serializePortalProcedure — le paramétrage d'instruction ne sort pas
         id: "arles",
         name: "Mairie d'Arles",
         slug: "mairie-d-arles",
+        logo_url: null,
         handling_organization_id: "service-etat-civil",
       },
     ]);
@@ -770,7 +780,7 @@ describe("serializePortalProcedureDetail — le formulaire sort, l'instruction n
   it("ajoute au public de la liste la catégorie et les deux schémas de saisie", () => {
     const dto = serializePortalProcedureDetail(
       row,
-      [{ id: "accm", name: "ACCM", slug: "laurentville", handlingOrganizationId: null }],
+      [{ id: "accm", name: "ACCM", slug: "laurentville", logoUrl: null, handlingOrganizationId: null }],
       detail,
       category,
     );
@@ -782,7 +792,13 @@ describe("serializePortalProcedureDetail — le formulaire sort, l'instruction n
       input_duration_minutes: 5,
       access_mode: "libre",
       organizations: [
-        { id: "accm", name: "ACCM", slug: "laurentville", handling_organization_id: null },
+        {
+          id: "accm",
+          name: "ACCM",
+          slug: "laurentville",
+          logo_url: null,
+          handling_organization_id: null,
+        },
       ],
       audiences: ["citoyen"],
       translations: { br: { name: "Testeni ganedigezh" } },

@@ -451,6 +451,7 @@ export interface PortalOrganizationInput {
   id: string;
   name: string;
   slug: string | null;
+  logoUrl: string | null;
   handlingOrganizationId: string | null;
 }
 
@@ -469,6 +470,7 @@ export function serializePortalProcedure(
       id: str(org.id),
       name: str(org.name),
       slug: nullableStr(org.slug),
+      logo_url: nullableStr(org.logoUrl),
       handling_organization_id: nullableStr(org.handlingOrganizationId),
     })),
     audiences: readAudiences(row.requester_config),

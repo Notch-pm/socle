@@ -447,6 +447,25 @@ export interface PortalOrganizationRefDto {
   id: string;
   name: string;
   /**
+   * Logo de l'organisme **AFFICHÉ**, ou `null` s'il n'en a pas. **Contrat
+   * 1.23.0.**
+   *
+   * De quoi le reconnaître dans une liste — un menu « Ma ville » sur un portail
+   * usagers, par exemple.
+   *
+   * ⚠️ C'est le logo **PROPRE** de l'organisation, pas celui qu'elle hérite :
+   * contrairement à `GET /v1/organizations/{id}/branding`, l'héritage n'est pas
+   * résolu ici, et c'est délibéré. Dans une liste de communes, un logo hérité
+   * donnerait la même image à chaque ligne — celle de l'intercommunalité.
+   * `null` veut donc dire « cette organisation n'a pas de logo à elle » :
+   * affichez un repli neutre, pas le logo de la collectivité.
+   *
+   * ⚠️ URL libre, comme partout dans la charte : le Socle enregistre et publie,
+   * il n'héberge rien et ne redimensionne rien. Écartez ce que vous ne pouvez
+   * pas peindre (une adresse non `https`, par exemple).
+   */
+  logo_url: string | null;
+  /**
    * Identifiant lisible de l'organisme, ou `null`. **Contrat 1.22.0.**
    *
    * C'est ce qui lui donne une adresse sur un portail usagers : Nora sert

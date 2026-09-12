@@ -224,6 +224,11 @@ service interne — qui est nommé à sa place, **même s'il n'a pas activé la 
 - **Qui a une page** se déduit du catalogue, sans réglage : un organisme est atteignable tant qu'il
   propose au moins une démarche publiée. La racine est écartée par Nora — son site est déjà à la
   racine du domaine.
+- **En aval (contrat 1.23.0)** : `PortalOrganizationRef` porte aussi `logo_url` — de quoi
+  reconnaître l'organisme dans une liste (Nora en fait un menu « Ma ville »). ⚠️ **Logo PROPRE,
+  héritage non résolu**, seul endroit du contrat où une valeur de charte sort brute : dans une
+  liste de communes, le logo hérité donnerait la même image à chaque ligne. `null` = pas de logo à
+  elle, le consommateur met un repli neutre.
 - Code : `bearerByOrganization` dans `src/features/superadmin/organizations/orgTree.ts` (pur,
   testé), `bearerGroupSiblings` / `offersHeldBySiblings` dans
   `src/features/organizations/organizationProcedures.ts` (purs, testés),
