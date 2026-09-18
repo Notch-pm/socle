@@ -204,6 +204,7 @@ export function serializeProcedure(row: Row, templatesById: Map<string, Row>): P
     form_schema: row.form_schema ?? null,
     knowledge_base: row.knowledge_base ?? null,
     communication_config: row.communication_config ?? null,
+    user_communication: row.user_communication ?? null,
     documents: serializeProcedureDocuments(row.communication_config, templatesById),
     translations: row.translations ?? null,
     created_at: nullableStr(row.created_at),
@@ -506,5 +507,8 @@ export function serializePortalProcedureDetail(
           },
     form_schema: detail?.form_schema ?? null,
     requester_config: detail?.requester_config ?? null,
+    // ⚠️ Depuis `detail`, jamais depuis `row` : comme `form_schema`, cette
+    // colonne n'est lue en base qu'APRÈS la décision de publication.
+    user_communication: detail?.user_communication ?? null,
   };
 }

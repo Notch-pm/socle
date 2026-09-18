@@ -94,6 +94,30 @@ export interface ProcedureDto {
    */
   communication_config: unknown;
   /**
+   * Ce que la collectivité écrit POUR SES USAGERS — **transmis tel quel**.
+   * Quatre blocs : `delays` (durée habituelle d'INSTRUCTION, valeur + unité),
+   * `audience.note` (précision éditoriale), `attachments.items` (pièces
+   * annoncées) et `faq.items` (questions fréquentes). `null` = la collectivité
+   * n'a rien écrit ; les défauts de cette colonne sont VIDES, à l'inverse de
+   * `communication_config` dont un `null` se lit « visible ».
+   *
+   * ⚠️ **Le descriptif usager n'est PAS ici** : c'est `user_description`, servi
+   * à côté, et rédigé en **Markdown** depuis le 2026-09-18.
+   * ⚠️ **`delays` n'est pas `input_duration_minutes`** : celui-ci dit combien de
+   * temps l'usager met à REMPLIR, celui-là combien de temps la collectivité met
+   * à RÉPONDRE. L'unité est dans la donnée, jamais déduite du nombre, et `0`
+   * n'existe pas — ce serait promettre une réponse immédiate.
+   * ⚠️ **`audience.note` ne filtre rien** : les publics admis restent
+   * `audiences`, dérivé de `requester_config`. En cas de contradiction,
+   * `audiences` fait foi.
+   * ⚠️ **`attachments.items` n'est pas la liste des pièces à téléverser** : ce
+   * sont les champs `attachment` de `form_schema`. Celle-ci est un texte
+   * d'annonce, qui peut les recouper. Ne les concaténez pas.
+   * ⚠️ **Deux FAQ existent, une seule sort** : celle de `knowledge_base` est
+   * écrite pour l'agent et n'a jamais traversé vers un portail public.
+   */
+  user_communication: unknown;
+  /**
    * Documents et courriers accessibles à l'agent, **résolus** (libellé, type,
    * nom de fichier) — de quoi les afficher sans second appel. Reconstruire cette
    * liste depuis `communication_config` obligerait chaque application à
@@ -503,7 +527,8 @@ export interface PortalCategoryRefDto {
  * `GET /v1/portal/procedures/{id}`, ce qu'il faut pour afficher une démarche
  * et la faire remplir.
  *
- * Elle ajoute au public de la liste les deux schémas de SAISIE :
+ * Elle ajoute au public de la liste les deux schémas de SAISIE et ce que la
+ * collectivité écrit pour l'usager (`user_communication`) :
  * `form_schema` (les questions de la démarche) et `requester_config` (les
  * publics admis et les informations demandées au requérant). Ces deux-là ne
  * sont pas du paramétrage d'instruction — ils SONT le formulaire de l'usager,
@@ -528,6 +553,30 @@ export interface PortalProcedureDetailDto extends PortalProcedureDto {
    * `null` = jamais paramétré : aucun public n'est proposé.
    */
   requester_config: unknown;
+  /**
+   * Ce que la collectivité écrit POUR SES USAGERS — **transmis tel quel**.
+   * Quatre blocs : `delays` (durée habituelle d'INSTRUCTION, valeur + unité),
+   * `audience.note` (précision éditoriale), `attachments.items` (pièces
+   * annoncées) et `faq.items` (questions fréquentes). `null` = la collectivité
+   * n'a rien écrit ; les défauts de cette colonne sont VIDES, à l'inverse de
+   * `communication_config` dont un `null` se lit « visible ».
+   *
+   * ⚠️ **Le descriptif usager n'est PAS ici** : c'est `user_description`, servi
+   * à côté, et rédigé en **Markdown** depuis le 2026-09-18.
+   * ⚠️ **`delays` n'est pas `input_duration_minutes`** : celui-ci dit combien de
+   * temps l'usager met à REMPLIR, celui-là combien de temps la collectivité met
+   * à RÉPONDRE. L'unité est dans la donnée, jamais déduite du nombre, et `0`
+   * n'existe pas — ce serait promettre une réponse immédiate.
+   * ⚠️ **`audience.note` ne filtre rien** : les publics admis restent
+   * `audiences`, dérivé de `requester_config`. En cas de contradiction,
+   * `audiences` fait foi.
+   * ⚠️ **`attachments.items` n'est pas la liste des pièces à téléverser** : ce
+   * sont les champs `attachment` de `form_schema`. Celle-ci est un texte
+   * d'annonce, qui peut les recouper. Ne les concaténez pas.
+   * ⚠️ **Deux FAQ existent, une seule sort** : celle de `knowledge_base` est
+   * écrite pour l'agent et n'a jamais traversé vers un portail public.
+   */
+  user_communication: unknown;
 }
 
 /**

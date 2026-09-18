@@ -1,7 +1,7 @@
 # Modèle de données
 
 > **Public** : développeurs, ops · **Question traitée** : qu'est-ce qui existe en base (tables,
-> contraintes, RLS, fonctions, storage) ? · **Dernière mise à jour** : 2026-09-12
+> contraintes, RLS, fonctions, storage) ? · **Dernière mise à jour** : 2026-09-18
 
 Pour le rôle de Socle dans la gamme et les décisions d'architecture, voir [../CLAUDE.md](../CLAUDE.md)
 et [./architecture.md](./architecture.md). Pour les endpoints, schémas de requête/réponse et la
@@ -241,13 +241,14 @@ aucun endpoint, il décrit ce qui existe **en base**.
 | `type` | text NOT NULL défaut `externe`, CHECK `interne`\|`externe` |
 | `status` | text NOT NULL défaut `brouillon`, CHECK `brouillon`\|`production` |
 | `access_mode` | text NOT NULL défaut `libre`, CHECK `libre`\|`authentifie` — conditions d'accès pour l'usager |
-| `short_description`, `user_description`, `agent_description` | text |
+| `short_description`, `agent_description` | text |
+| `user_description` | text — descriptif usager, **Markdown** depuis le 2026-09-18, saisi à l'étape « Communication usager » |
 | `keywords` | `text[]` |
 | `input_duration_minutes` | int, CHECK `NULL OR >= 0` |
 | `order_index` | int, défaut 0 |
 | `is_active_global` | bool défaut true |
 | `translations` | jsonb nullable, défaut `{}`, CHECK `procedures_translations_object_check` — contrat possédé depuis le 2026-09-06 |
-| `requester_config`, `form_schema`, `knowledge_base`, `communication_config` | jsonb — contrats possédés, voir [Contrats JSONB possédés](#contrats-jsonb-possédés) |
+| `requester_config`, `form_schema`, `knowledge_base`, `communication_config`, `user_communication` | jsonb — contrats possédés, voir [Contrats JSONB possédés](#contrats-jsonb-possédés) |
 | `created_at`, `updated_at` | timestamp sans fuseau, **pas de trigger `set_updated_at`** |
 
 - **Trigger** `trg_enforce_procedure_root_org` (BEFORE INSERT/UPDATE OF `organization_id`).
@@ -836,7 +837,8 @@ seulement) — voir `smtp_settings.password` plus haut.
 ## Contrats JSONB possédés
 
 `procedures.form_schema`, `procedures.requester_config`, `procedures.knowledge_base`,
-`procedures.communication_config`, `procedures.translations` et `categories.translations` (ainsi
+`procedures.communication_config`, `procedures.user_communication`, `procedures.translations`
+et `categories.translations` (ainsi
 que `metadata`) portent des
 commentaires SQL en base les qualifiant de **contrats possédés**, consommés en aval par
 Ariane/Clara. `public-api` les **transmet tels quels**
@@ -844,7 +846,22 @@ Ariane/Clara. `public-api` les **transmet tels quels**
 
 Leur structure n'est **pas** décrite ici (propriété du code applicatif et de l'OpenAPI) :
 - Code source faisant foi : `src/features/procedures/*.ts` (`formSchema.ts`, `requesterFields.ts`,
-  `knowledgeBase.ts`, `communication.ts`, `conditions.ts`, `formats.ts` — tous testés).
+  `knowledgeBase.ts`, `communication.ts`, `userCommunication.ts`, `conditions.ts`, `formats.ts`
+  — tous testés).
+- ⚠️ `user_communication` (2026-09-18, étape « Communication usager ») porte un invariant que les
+  autres n'ont pas : **tout ce qu'elle contient est PUBLIC**. C'est ce qui permet à `public-api`
+  de la servir telle quelle sur le détail portail, sans whitelist clé par clé. Rien de ce qui
+  sert à **instruire** n'y entre : cela vit dans `knowledge_base` (agent et IA) ou dans
+  `communication_config` (diffusion, documents de l'agent), qui ne traversent ni l'un ni
+  l'autre. Quatre blocs : `delays`, `audience`, `attachments`, `faq`.
+  ⚠️ Ses défauts sont **VIDES** (NULL = « la collectivité n'a rien écrit »), à l'inverse du bloc
+  `visibility` de `communication_config`. ⚠️ **Le descriptif usager n'y est pas** : c'est la
+  colonne `user_description`. ⚠️ **`delays` n'est pas `input_duration_minutes`** — celui-ci est
+  la durée de SAISIE, celui-là la durée d'INSTRUCTION (avec son unité, jamais déduite du
+  nombre). ⚠️ **`attachments.items` n'est pas la liste des pièces à téléverser** (ce sont les
+  champs `attachment` de `form_schema`) : c'est un texte d'annonce, qui peut les recouper.
+  ⚠️ **Deux FAQ coexistent sur la même ligne** : `user_communication.faq` est publiée,
+  `knowledge_base.faq` ne l'a jamais été.
 - ⚠️ `communication_config` **NULL** n'est pas « non publiée » : c'est une démarche jamais passée
   par l'étape, à lire comme les valeurs par défaut (visible, non bornée). Le parseur applicatif
   le fait ; un consommateur SQL direct doit le faire aussi. ⚠️ Le bloc `documents` du même JSON

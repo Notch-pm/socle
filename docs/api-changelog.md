@@ -1,7 +1,7 @@
 # Journal des évolutions des API publiques
 
 > **Public** : équipes consommatrices (Ariane, Clara, Iris, partenaires) · **Question traitée** :
-> quand un contrat d'API a-t-il changé, et comment ? · **Dernière mise à jour** : 2026-09-12
+> quand un contrat d'API a-t-il changé, et comment ? · **Dernière mise à jour** : 2026-09-18
 
 Journal **append-only** : chaque évolution de la surface de contrat des API publiques
 (`public-api`, `contacts-api`, `ai-api`, `audience-api`) — endpoint, paramètre, champ de réponse,
@@ -10,6 +10,62 @@ réécrite ; une correction s'ajoute sous une nouvelle date. Politique de compat
 consommateur : [integration.md](./integration.md#politique-de-compatibilité-v1).
 
 Format d'une entrée : `## AAAA-MM-JJ — <api> — ajout|correctif|rupture`
+
+---
+
+## 2026-09-18 — public-api — ajout
+
+**Une démarche porte désormais ce que la collectivité écrit POUR SES USAGERS.** Durée habituelle
+d'instruction, précision sur le public concerné, pièces demandées, foire aux questions : la sixième
+étape du paramétrage (« Communication usager ») remplit une colonne dédiée, servie telle quelle.
+Version du contrat : **1.24.0**. Ajout **additif** : un consommateur qui l'ignore se comporte
+exactement comme aujourd'hui.
+
+**Un champ sur `Procedure`** (`GET /v1/procedures`, `GET /v1/procedures/{id}`) **et sur
+`PortalProcedureDetail`** (`GET /v1/portal/procedures/{id}`) :
+
+| Champ | Valeur | Ce qu'il dit |
+|---|---|---|
+| `user_communication` | objet ou `null` | Ce que l'usager lit avant de déposer |
+| `…delays.processingTimeValue` | entier 1–999, ou `null` | Durée habituelle d'**instruction** |
+| `…delays.processingTimeUnit` | `jour_ouvre` · `jour` · `semaine` · `mois` | Son unité — **jamais déduite** |
+| `…audience.note` | texte, souvent vide | Précision éditoriale sur le public concerné |
+| `…attachments.items` | `{ label, description }[]` | Pièces **annoncées** à l'usager |
+| `…faq.items` | `{ question, answer }[]` | FAQ **usager** |
+
+- ⚠️ **Le descriptif usager n'est PAS dans cet objet.** Il reste dans `user_description`, servi à
+  côté depuis le premier contrat — et il est désormais **rédigé en Markdown** (`**gras**`, listes,
+  titres, liens). Aucun écran ne le remplissait jusqu'ici : il était **vide sur les 51 démarches de
+  la plateforme**, aucune valeur existante ne change donc de sens. Rendez-le comme du Markdown, en
+  échappant le HTML.
+- ⚠️ **Trois durées, et aucune ne se déduit d'une autre.** `input_duration_minutes` = combien de
+  temps l'usager met à **remplir** (en minutes) · `user_communication.delays` = combien de temps la
+  collectivité met à **répondre** (valeur + unité explicite) ·
+  `communication_config.visibility.publicationStart`/`publicationEnd` = **entre quelles dates** la
+  démarche est proposée. Les deux premières sont servies côte à côte au portail : c'est là qu'on se
+  trompe. ⚠️ `0` n'existe pas et ne sortira jamais — ce serait promettre une réponse immédiate.
+- ⚠️ **`audience.note` ne filtre rien.** Le filtre « Je suis… » reste `audiences` (servi sur la
+  liste comme sur le détail, dérivé de `requester_config`). Une note qui dirait « réservée aux
+  résidents » ne retire la démarche d'aucun public : c'est une phrase, pas une règle. En cas de
+  contradiction, **`audiences` fait foi**.
+- ⚠️ **`attachments.items` n'est PAS la liste des pièces à téléverser.** Celles-ci sont les champs
+  `attachment` de `form_schema`, servi sur le **même** détail, avec leur `documentTypeId`, leur
+  `required` et leurs conditions. `items` est un texte d'**annonce** : il peut les recouper
+  volontairement (on n'annonce pas une pièce comme on la collecte) et porter ce qui ne se dépose pas
+  en ligne — un original à présenter au guichet. Les **concaténer** afficherait deux fois la même
+  pièce ; n'afficher que `items` en cacherait certaines du formulaire. `items` habille la page de
+  présentation, `form_schema` construit le formulaire.
+- ⚠️ **Deux FAQ existent, une seule sort.** `user_communication.faq.items` est la FAQ **usager**.
+  Celle de `knowledge_base.faq` est écrite pour l'agent et son assistant : elle n'a jamais traversé
+  vers un portail public et ne traversera pas. Ne les fusionnez pas.
+- ⚠️ **`null` = la collectivité n'a rien écrit**, et les défauts de cette colonne sont **vides** —
+  à l'inverse de `communication_config`, dont un `null` se lit « visible sur le portail ».
+  N'affichez pas de section « Délai d'instruction » quand la valeur est `null`, et ne composez
+  aucun texte à sa place.
+- **Rien ne change sur la LISTE** `GET /v1/portal/procedures` : ses neuf champs sont inchangés. Ce
+  contenu appartient à la page d'une démarche, pas à un catalogue — un test l'épingle des deux
+  côtés.
+- **Consommateur** : Nora l'affichera sur la page d'une démarche. Rien à faire pour les autres.
 
 ---
 
