@@ -29,6 +29,7 @@ function procedure(over: Partial<Procedure> = {}): Procedure {
     keywords: [],
     short_description: "En ligne, sous 3 jours.",
     user_description: null,
+    user_communication: null,
     agent_description: null,
     input_duration_minutes: null,
     order_index: null,

@@ -41,6 +41,7 @@ const procedure = {
   is_active_global: null,
   agent_description: null,
   user_description: null,
+  user_communication: null,
   translations: null,
   requester_config: null,
   form_schema: null,

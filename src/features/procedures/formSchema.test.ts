@@ -1,5 +1,6 @@
 import { describe, it, expect } from "vitest";
 import {
+  attachmentFields,
   attachmentFieldsMissingDocumentType,
   conditionSourceFields,
   createField,
@@ -155,6 +156,44 @@ describe("attachmentFieldsMissingDocumentType", () => {
       ],
     };
     expect(attachmentFieldsMissingDocumentType(schema)).toEqual([]);
+  });
+});
+
+describe("attachmentFields", () => {
+  it("aplatit les pièces jointes racine + sections, dans l'ordre, et rien d'autre", () => {
+    const schema: FormSchema = {
+      version: 1,
+      content: [
+        { id: "t0", key: "nom", type: "text", label: "Nom" },
+        { id: "a0", key: "pj0", type: "attachment", label: "Racine", acceptedFormats: ["pdf"], maxFiles: 1 },
+        {
+          id: "s1",
+          kind: "section",
+          title: "S",
+          fields: [
+            { id: "f1", key: "a", type: "select", label: "A", options: [] },
+            { id: "a1", key: "pj1", type: "attachment", label: "Section", acceptedFormats: [], maxFiles: 2 },
+          ],
+        },
+        { id: "a2", key: "pj2", type: "attachment", label: "Après la section", acceptedFormats: [], maxFiles: 1 },
+      ],
+    };
+    expect(attachmentFields(schema).map((f) => f.id)).toEqual(["a0", "a1", "a2"]);
+    expect(attachmentFields(schema).map((f) => f.label)).toEqual([
+      "Racine",
+      "Section",
+      "Après la section",
+    ]);
+  });
+
+  it("renvoie une liste vide quand le formulaire ne demande aucune pièce", () => {
+    expect(attachmentFields(defaultFormSchema())).toEqual([]);
+    expect(
+      attachmentFields({
+        version: 1,
+        content: [{ id: "t0", key: "nom", type: "text", label: "Nom" }],
+      }),
+    ).toEqual([]);
   });
 });
 

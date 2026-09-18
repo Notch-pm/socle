@@ -30,7 +30,7 @@ export function buildOpenApiDocument(serverUrl: string): Record<string, unknown>
     openapi: "3.1.0",
     info: {
       title: "API Socle — Référentiel de la gamme",
-      version: "1.23.0",
+      version: "1.24.0",
       description: [
         "API **en lecture seule** exposant le référentiel central de la gamme : les",
         "**organisations** (et sous-organisations) avec l'intégralité de leur configuration,",
@@ -1096,8 +1096,9 @@ export function buildOpenApiDocument(serverUrl: string): Record<string, unknown>
             {
               type: "object",
               description:
-                "Ce que la liste ne porte pas : la catégorie, et les schémas de saisie.",
-              required: ["category", "form_schema", "requester_config"],
+                "Ce que la liste ne porte pas : la catégorie, les schémas de saisie, et " +
+                "ce que la collectivité écrit pour l'usager.",
+              required: ["category", "form_schema", "requester_config", "user_communication"],
               properties: {
                 category: {
                   description: "Catégorie de la démarche. `null` si elle n'en a pas.",
@@ -1121,6 +1122,7 @@ export function buildOpenApiDocument(serverUrl: string): Record<string, unknown>
                     "Un champ vaut `masque`, `visible` ou `obligatoire` ; un public non " +
                     "`enabled` n'est pas proposé. `null` = jamais paramétré.",
                 },
+                user_communication: { $ref: "#/components/schemas/UserCommunication" },
               },
             },
           ],
@@ -1634,12 +1636,24 @@ export function buildOpenApiDocument(serverUrl: string): Record<string, unknown>
                 "Défaut `libre`, y compris pour les démarches d'avant le réglage.",
             },
             keywords: { type: "array", items: { type: "string" } },
-            short_description: { type: ["string", "null"] },
-            user_description: { type: ["string", "null"] },
+            short_description: {
+              type: ["string", "null"],
+              description: "Résumé d'une ligne, en texte brut.",
+            },
+            user_description: {
+              type: ["string", "null"],
+              description:
+                "Descriptif destiné à l'usager, en **Markdown** depuis le 2026-09-18 " +
+                "(`**gras**`, listes, titres, liens). Aucun écran ne le remplissait " +
+                "auparavant : il était vide partout, aucune valeur existante ne change " +
+                "de sens. Rendez-le comme du Markdown, en échappant le HTML.",
+            },
             agent_description: { type: ["string", "null"] },
             input_duration_minutes: {
               type: ["integer", "null"],
-              description: "Durée estimée de saisie (minutes).",
+              description:
+                "Durée estimée de SAISIE du formulaire, en minutes. ⚠️ Ce n'est pas le " +
+                "délai de réponse : celui-ci vit dans `user_communication.delays`.",
             },
             order_index: { type: ["integer", "null"], description: "Rang d'affichage." },
             requester_config: {
@@ -1648,6 +1662,7 @@ export function buildOpenApiDocument(serverUrl: string): Record<string, unknown>
             form_schema: { $ref: "#/components/schemas/FormSchema" },
             knowledge_base: { $ref: "#/components/schemas/KnowledgeBase" },
             communication_config: { $ref: "#/components/schemas/CommunicationConfig" },
+            user_communication: { $ref: "#/components/schemas/UserCommunication" },
             documents: { $ref: "#/components/schemas/ProcedureDocuments" },
             translations: { $ref: "#/components/schemas/Translations" },
             created_at: { type: ["string", "null"], format: "date-time" },
@@ -1895,6 +1910,118 @@ export function buildOpenApiDocument(serverUrl: string): Record<string, unknown>
           properties: {
             url: { type: "string", format: "uri" },
             description: { type: "string" },
+          },
+        },
+        UserCommunication: {
+          type: ["object", "null"],
+          description:
+            "Ce que la collectivité écrit POUR SES USAGERS, organisé en blocs et transmis " +
+            "tel quel. ⚠️ `null` = elle n'a rien écrit, et les défauts de cette colonne " +
+            "sont **vides** — à l'inverse de `communication_config`, dont un `null` se lit " +
+            "« visible ». N'affichez aucune section, et ne composez aucun texte à sa place. " +
+            "⚠️ **Le descriptif n'est pas ici** : c'est `user_description`, servi à côté.",
+          properties: {
+            delays: { $ref: "#/components/schemas/UserCommunicationDelays" },
+            audience: {
+              type: "object",
+              description:
+                "⚠️ **Ne filtre rien.** `note` est une phrase que l'usager lit, pas une " +
+                "règle qu'une machine applique. Les publics admis restent `audiences` " +
+                "(dérivé de `requester_config`, servi sur la liste comme sur le détail) : " +
+                "en cas de contradiction, **`audiences` fait foi**.",
+              properties: {
+                note: { type: "string", description: "Souvent vide." },
+              },
+            },
+            attachments: {
+              type: "object",
+              description:
+                "⚠️ **Ce n'est PAS la liste des pièces à téléverser.** Celles-ci sont les " +
+                "champs `attachment` de `form_schema`, servi sur le même détail, avec leur " +
+                "`documentTypeId`, leur `required` et leurs conditions. `items` est un " +
+                "texte d'ANNONCE : il peut les recouper, et porter des pièces qui ne se " +
+                "déposent pas en ligne (un original à présenter au guichet). Les " +
+                "**concaténer** afficherait deux fois la même pièce ; n'afficher que " +
+                "`items` en cacherait certaines du dépôt.",
+              properties: {
+                items: {
+                  type: "array",
+                  items: { $ref: "#/components/schemas/UserCommunicationPiece" },
+                },
+              },
+            },
+            faq: {
+              type: "object",
+              description:
+                "⚠️ **Deux FAQ existent, une seule sort.** Celle-ci est la FAQ **usager**. " +
+                "Celle de `knowledge_base` est écrite pour l'agent et son assistant : elle " +
+                "n'a jamais traversé vers un portail public et ne traversera pas. Ne les " +
+                "fusionnez pas.",
+              properties: {
+                items: {
+                  type: "array",
+                  items: { $ref: "#/components/schemas/UserCommunicationFaqItem" },
+                },
+              },
+            },
+          },
+          example: {
+            delays: { processingTimeValue: 3, processingTimeUnit: "semaine" },
+            audience: { note: "Réservée aux personnes résidant sur la commune." },
+            attachments: {
+              items: [
+                { label: "Justificatif de domicile", description: "De moins de trois mois" },
+              ],
+            },
+            faq: {
+              items: [{ question: "Où retirer l'acte ?", answer: "À l'accueil de la mairie." }],
+            },
+          },
+        },
+        UserCommunicationDelays: {
+          type: "object",
+          description:
+            "Combien de temps la collectivité met à RÉPONDRE. ⚠️ **Troisième durée du " +
+            "modèle** : `input_duration_minutes` dit combien de temps l'usager met à " +
+            "REMPLIR (en minutes), et `communication_config.visibility.publicationStart`/" +
+            "`publicationEnd` entre quelles dates la démarche est proposée. Aucune ne se " +
+            "déduit d'une autre.",
+          properties: {
+            processingTimeValue: {
+              type: ["integer", "null"],
+              minimum: 1,
+              maximum: 999,
+              description:
+                "`null` = aucun délai annoncé. ⚠️ `0` n'existe pas : ce serait promettre " +
+                "une réponse immédiate.",
+            },
+            processingTimeUnit: {
+              type: "string",
+              enum: ["jour_ouvre", "jour", "semaine", "mois"],
+              description:
+                "⚠️ Toujours dans la donnée, **jamais déduite du nombre** : « 30 » ne dit " +
+                "pas si ce sont trente jours ou trente jours ouvrés. Sans valeur, elle ne " +
+                "veut rien dire.",
+            },
+          },
+        },
+        UserCommunicationPiece: {
+          type: "object",
+          description: "Une pièce annoncée à l'usager.",
+          properties: {
+            label: { type: "string", description: "Ex. « Justificatif de domicile »." },
+            description: {
+              type: "string",
+              description: "Précision facultative — ex. « De moins de trois mois ». Souvent vide.",
+            },
+          },
+        },
+        UserCommunicationFaqItem: {
+          type: "object",
+          description: "Une question d'usager et sa réponse. Les deux sont toujours remplies.",
+          properties: {
+            question: { type: "string" },
+            answer: { type: "string" },
           },
         },
         CommunicationConfig: {

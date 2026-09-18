@@ -444,6 +444,7 @@ Deno.serve(async (req: Request) => {
       //
       // Le `form_schema` n'est donc lu en base qu'APRÈS la décision de
       // publication : il ne peut pas sortir pour une démarche en brouillon.
+      // Même chose pour `user_communication`, lu dans le même select.
       if (segments.length === 4) {
         const procedureId = segments[3];
         if (!isUuid(procedureId)) {
@@ -456,7 +457,10 @@ Deno.serve(async (req: Request) => {
 
         const { data: detail, error: detailError } = await admin
           .from("procedures")
-          .select("id, category_id, form_schema, requester_config")
+          // ⚠️ Toute colonne absente de ce select arrive `undefined`, que le
+          // sérialiseur transforme en `null` SANS erreur : le portail servirait
+          // du vide, tests verts. Ajouter le champ au DTO ne suffit donc pas.
+          .select("id, category_id, form_schema, requester_config, user_communication")
           .eq("id", procedureId)
           .maybeSingle();
         if (detailError) throw detailError;

@@ -75,6 +75,8 @@ describe("buildOpenApiDocument", () => {
         "FormSchema",
         "KnowledgeBase",
         "CommunicationConfig",
+        "UserCommunication",
+        "UserCommunicationDelays",
         "VisibilityConfig",
         "DocumentType",
         "Quartier",
@@ -149,11 +151,75 @@ describe("buildOpenApiDocument", () => {
   });
 });
 
+describe("contrat — ce que la collectivité écrit pour ses usagers", () => {
+  const doc = buildOpenApiDocument("https://example.supabase.co/functions/v1/public-api") as any;
+  const schemas = doc.components.schemas;
+
+  it("le champ est servi sur la démarche complète ET sur le détail portail", () => {
+    expect(schemas.Procedure.properties.user_communication.$ref).toBe(
+      "#/components/schemas/UserCommunication",
+    );
+    const detail = schemas.PortalProcedureDetail.allOf[1];
+    expect(detail.properties.user_communication.$ref).toBe(
+      "#/components/schemas/UserCommunication",
+    );
+    expect(detail.required).toContain("user_communication");
+  });
+
+  it("⚠️ mais PAS sur la liste du portail : ses neuf champs ne bougent pas", () => {
+    // Une liste répond à « quelles démarches ? », un détail à « que dois-je
+    // savoir avant de déposer ? ». Ce test tombe si quelqu'un l'y ajoute.
+    expect(schemas.PortalProcedure.properties).not.toHaveProperty("user_communication");
+  });
+
+  it("⚠️ le schéma nomme les TROIS durées, pour qu'on ne les confonde pas", () => {
+    const delays = schemas.UserCommunicationDelays;
+    expect(delays.description).toContain("input_duration_minutes");
+    expect(delays.description).toContain("publicationStart");
+    expect(delays.properties.processingTimeUnit.enum).toEqual([
+      "jour_ouvre",
+      "jour",
+      "semaine",
+      "mois",
+    ]);
+    // L'unité est dans la donnée, et « 0 » n'est pas un délai.
+    expect(delays.properties.processingTimeUnit.description).toContain("jamais déduite");
+    expect(delays.properties.processingTimeValue.description).toContain("0");
+  });
+
+  it("⚠️ le schéma dit que la note de public ne filtre rien", () => {
+    const audience = schemas.UserCommunication.properties.audience;
+    expect(audience.description).toContain("Ne filtre rien");
+    expect(audience.description).toContain("audiences");
+  });
+
+  it("⚠️ le schéma dit que les pièces annoncées ne sont pas celles du formulaire", () => {
+    const attachments = schemas.UserCommunication.properties.attachments;
+    expect(attachments.description).toContain("form_schema");
+    expect(attachments.description).toContain("concaténer");
+  });
+
+  it("⚠️ le schéma dit que la FAQ de la base de connaissances ne sort toujours pas", () => {
+    expect(schemas.UserCommunication.properties.faq.description).toContain("knowledge_base");
+  });
+
+  it("⚠️ un objet absent vaut « rien d'écrit » : défauts VIDES, contrairement à la diffusion", () => {
+    expect(schemas.UserCommunication.description).toContain("vides");
+    // Le contraste est le piège : le meme `null` ne veut pas dire la meme chose
+    // dans les deux colonnes voisines.
+    expect(schemas.CommunicationConfig.description).toContain("visible sur le portail");
+  });
+
+  it("le descriptif usager est annoncé comme du Markdown", () => {
+    expect(schemas.Procedure.properties.user_description.description).toContain("Markdown");
+  });
+});
+
 describe("contrat — documents et courriers", () => {
   const doc = buildOpenApiDocument("https://example.supabase.co/functions/v1/public-api") as any;
 
-  it("annonce la version 1.23.0 du contrat", () => {
-    expect(doc.info.version).toBe("1.23.0");
+  it("annonce la version 1.24.0 du contrat", () => {
+    expect(doc.info.version).toBe("1.24.0");
   });
 
   it("le thème voyage avec le TENANT : il vaut pour toutes les pages", () => {

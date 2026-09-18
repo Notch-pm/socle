@@ -774,6 +774,12 @@ describe("serializePortalProcedureDetail — le formulaire sort, l'instruction n
     category_id: "cat-1",
     form_schema: { version: 1, content: [{ id: "f1", key: "nom", type: "text", label: "Nom" }] },
     requester_config: { citoyen: { enabled: true, fields: { courriel: "obligatoire" } } },
+    user_communication: {
+      delays: { processingTimeValue: 3, processingTimeUnit: "semaine" },
+      audience: { note: "Réservée aux résidents." },
+      attachments: { items: [{ label: "Justificatif de domicile", description: "3 mois" }] },
+      faq: { items: [{ question: "Où déposer ?", answer: "En ligne." }] },
+    },
   };
   const category = { id: "cat-1", name: "État civil", translations: { br: { name: "Stad-civil" } } };
 
@@ -805,7 +811,30 @@ describe("serializePortalProcedureDetail — le formulaire sort, l'instruction n
       category: { id: "cat-1", name: "État civil", translations: { br: { name: "Stad-civil" } } },
       form_schema: detail.form_schema,
       requester_config: detail.requester_config,
+      user_communication: detail.user_communication,
     });
+  });
+
+  it("⚠️ user_communication vient du DÉTAIL, pas de la ligne du catalogue", () => {
+    // Comme `form_schema` : la colonne n'est lue en base qu'APRÈS la décision de
+    // publication. Une démarche non publiée ne peut donc pas en laisser sortir.
+    const dto = serializePortalProcedureDetail(
+      { ...row, user_communication: { faq: { items: [{ question: "Q", answer: "R" }] } } },
+      [],
+      null,
+      null,
+    );
+    expect(dto.user_communication).toBeNull();
+  });
+
+  it("transmet le bloc TEL QUEL, sans le réinterpréter", () => {
+    const dto = serializePortalProcedureDetail(row, [], detail, null);
+    expect(dto.user_communication).toBe(detail.user_communication);
+  });
+
+  it("⚠️ la LISTE ne le porte pas : ce contenu appartient à la page d'une démarche", () => {
+    const list = serializePortalProcedure({ ...row, user_communication: detail.user_communication });
+    expect(list).not.toHaveProperty("user_communication");
   });
 
   it("recopie le schéma TEL QUEL — le réécrire ici en ferait une seconde grammaire", () => {

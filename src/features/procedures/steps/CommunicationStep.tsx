@@ -43,10 +43,17 @@ function ToggleRow({
 }
 
 /**
- * Étape « Communication » : paramètres de diffusion de la démarche. Deux blocs,
- * « Visibilité » et « Documents et courriers » — persistés dans
- * `procedures.communication_config` (schéma possédé), exposés par l'API publique
- * et exploités en aval (portail usagers, Iris).
+ * Étape « Publication » : où et quand la démarche est proposée, et ce que
+ * l'agent peut produire depuis elle. Deux blocs, « Visibilité » et
+ * « Documents et courriers » — persistés dans `procedures.communication_config`
+ * (schéma possédé), exposés par l'API publique et exploités en aval (portail
+ * usagers, Iris).
+ *
+ * ⚠️ Le LIBELLÉ de l'étape est « Publication » depuis le 2026-09-18, mais la
+ * clé, le fichier et la colonne restent `communication` : la clé suit la
+ * colonne, le libellé suit l'agent. Sans ce renommage, deux entrées
+ * « Communication » se seraient suivies dans le stepper — celle-ci et
+ * « Communication usager », qui ne se recouvrent en rien.
  */
 export function CommunicationStep({
   formId,
@@ -86,9 +93,9 @@ export function CommunicationStep({
   return (
     <form id={formId} onSubmit={handleSubmit} className="flex max-w-5xl flex-col gap-5">
       <div>
-        <h2 className="text-lg font-semibold">Communication</h2>
+        <h2 className="text-lg font-semibold">Publication</h2>
         <p className="mt-1 text-sm text-muted-foreground">
-          Paramètres de diffusion de la démarche auprès des usagers.
+          Où et quand la démarche est proposée, et ce que l'agent peut produire depuis elle.
         </p>
       </div>
 

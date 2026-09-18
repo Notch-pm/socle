@@ -9,11 +9,14 @@ export function FaqEditor({
   hint,
   value,
   onChange,
+  addLabel = "Ajouter une question",
 }: {
   label: string;
   hint?: string;
   value: FaqItem[];
   onChange: (value: FaqItem[]) => void;
+  /** Libellé du bouton d'ajout — deux FAQ coexistent dans le stepper (agent / usager). */
+  addLabel?: string;
 }) {
   const update = (index: number, patch: Partial<FaqItem>) =>
     onChange(value.map((item, i) => (i === index ? { ...item, ...patch } : item)));
@@ -44,7 +47,7 @@ export function FaqEditor({
             <RemoveButton onClick={() => remove(index)} label="Retirer cette question" />
           </div>
         ))}
-        <AddButton onClick={add}>Ajouter une question</AddButton>
+        <AddButton onClick={add}>{addLabel}</AddButton>
       </div>
     </Field>
   );

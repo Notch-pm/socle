@@ -36,6 +36,7 @@ function makeProcedure(requesterConfig: unknown = null): Procedure {
     is_active_global: null,
     agent_description: null,
     user_description: null,
+    user_communication: null,
     translations: null,
     requester_config: requesterConfig as Procedure["requester_config"],
     form_schema: null,

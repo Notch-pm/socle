@@ -2,7 +2,7 @@
 
 > **Public** : tous (devs Socle, équipes consommatrices) · **Question traitée** : quelles
 > évolutions sont envisagées, et lesquelles ont déjà été livrées ? · **Dernière mise à jour** :
-> 2026-09-12
+> 2026-09-18
 
 Liste d'**intentions**, pas d'engagements — sauf mention explicite d'une date de livraison.
 Née du chantier « Clara délègue ses usagers au Socle » (2026-07-16), enrichie depuis. Pour ce qui
@@ -87,7 +87,8 @@ existe réellement aujourd'hui : [architecture.md](./architecture.md),
 - **Exposition par `public-api`** (contrat 1.6.0) : catalogue `GET /v1/document-templates`
   (+ `/{id}`, filtre `type`), téléchargement par URL signée, et sélection **résolue** dans
   `Procedure.documents` — 2026-09-01.
-- **Rattachement aux démarches** : bloc « Documents et courriers » de l'étape Communication, avec
+- **Rattachement aux démarches** : bloc « Documents et courriers » de l'étape « Publication »
+  (« Communication » jusqu'au 2026-09-18), avec
   restriction de visibilité **par document** selon l'issue de la demande — 2026-09-01.
 - **Modèle de données, bucket privé et UI Socle** (`/documents` côté admin, section « Documents »
   d'`OrgSettingsPage` côté superadmin) : dépôt de modèles `.doc`/`.docx`/`.odt` par organisation
@@ -249,8 +250,15 @@ suppose la précédente.
    l'ajout étant purement additif (écrire un `version: 2` que le parse actuel refuse ferait
    retomber la page entière sur `defaultPortalPage()`) —, les **~100 chaînes propres au portail**
    (dictionnaire statique à la manière d'Ariane, jeu de langues couvertes déclaré et repli
-   français **par clé**), et le **descriptif usager** (`user_description`), qui rejoindra
-   `translations` en clé voisine sans reprise. Enfin, les langues de France sans code ISO (gallo,
+   français **par clé**), et le **descriptif usager** (`user_description`) : il est **saisi
+   depuis le 2026-09-18** (étape « Communication usager », en Markdown), il reste à le traduire
+   — il rejoindra `translations` en clé voisine, sans reprise, et son `TranslationFields` vivra
+   dans cette étape avec `fields = ["user_description"]` seulement (un écran n'efface que les
+   champs qu'il affiche). ⚠️ Les autres textes de cette étape — note de public, pièces
+   annoncées, FAQ usager — vivent dans un **JSONB** (`user_communication`) et non dans des
+   colonnes : ils ne peuvent pas rejoindre `translations` tel quel, et demandent leur propre
+   décision (une clé `translations` par entrée, comme les sections du portail ?). Rien n'est
+   engagé. Enfin, les langues de France sans code ISO (gallo,
    poitevin-saintongeais, francique lorrain) attendent une convention de nommage — voir l'en-tête
    de `src/features/languages/languages.ts`.
 2. **Les autres templates.** Gabarits de page et variantes de mise en page au-delà de la
