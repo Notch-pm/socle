@@ -69,6 +69,60 @@ exactement comme aujourd'hui.
 
 ---
 
+## 2026-09-13 — contacts-api — ajout
+
+**Le référentiel enregistre les consentements RGPD d'un usager, et leur preuve.** Deux questions
+posées systématiquement au dépôt d'une demande, quelle que soit la démarche — elles **remplacent**,
+dans ce qu'on demande à l'usager, « accepte les mails / accepte les SMS » :
+
+| `kind` | Question | Régime |
+|---|---|---|
+| `traitement` | Utilisation des informations pour instruire la demande | **Obligatoire** au dépôt |
+| `partage` | Partage aux services de la collectivité, pour ce dossier et les suivants | Facultatif, proposé coché |
+
+Version du contrat : **1.2.0**. Ajout **additif** : un consommateur qui l'ignore se comporte
+exactement comme aujourd'hui.
+
+**Un endpoint** — `POST /v1/contacts/{id}/consents` (corps `ContactConsentsCreate`) :
+
+| Champ | Valeur | Ce qu'il dit |
+|---|---|---|
+| `source_app` | `iris`, `nora`, un code de partenaire… | Qui a **affiché la case** et recueilli la réponse |
+| `source_reference` | libre, ou absent | Le dépôt d'origine — porte l'**idempotence** |
+| `collected_at` | ISO 8601, défaut « maintenant » | La date qui fait foi |
+| `consents[].kind` | `traitement` \| `partage` | — |
+| `consents[].granted` | booléen | — |
+| `consents[].statement` | **requis** | La phrase exacte que l'usager a lue |
+
+**Quatre champs d'état et un historique sur `Contact`** : `consent_traitement`,
+`consent_traitement_at`, `consent_partage`, `consent_partage_at`, et `consents[]`
+(`ContactConsent` : `kind`, `granted`, `statement`, `source_app`, `source_reference`,
+`collected_at`).
+
+- ⚠️ **`statement` vient de VOUS, et c'est requis.** Le référentiel enregistre un fait, il n'écrit
+  pas la phrase : seule l'application qui a affiché la case sait sa langue, sa formulation et le
+  nom d'organisme qu'elle y a interpolé. La composer ici la ferait diverger de ce que l'usager a
+  lu — et la preuve ne prouverait plus rien (art. 7.1 RGPD : le responsable doit pouvoir
+  **démontrer** le consentement, pas seulement l'affirmer).
+- ⚠️ **L'état ne s'écrit pas.** `consent_traitement` et `consent_partage` sont **dérivés** de
+  l'historique par trigger, depuis le recueil le plus **récent** — un recueil antérieur consigné
+  après coup (dépôt papier repris) n'écrase donc pas un consentement retiré depuis. Un `PATCH`
+  qui tenterait de les poser directement ne les atteint pas.
+- ⚠️ **`consents[]` est vide dans les réponses de LISTE et de rapprochement**, comme `quartier` est
+  `null` quand la jointure n'a pas été demandée : la preuve ne se lit que sur la fiche
+  (`GET /v1/contacts/{id}`). L'état, lui, voyage partout.
+- **Idempotent** par (`contact_id`, `kind`, `source_app`, `source_reference`) : rejouer le même
+  dépôt met la ligne à jour au lieu d'en créer une seconde. Sans `source_reference`, chaque appel
+  est un fait nouveau.
+- **Le référentiel n'exige RIEN** : il accepte `granted: false` sur le consentement obligatoire.
+  Cette exigence-là appartient au dépôt (Iris la tient), et un **retrait** de consentement doit
+  pouvoir se consigner.
+- **`consent_email` et `consent_sms` sont marqués OBSOLÈTES** — conservés tant que Clara les écrit,
+  aucun nouveau consommateur ne doit s'y fier. Leur retrait fera l'objet d'une entrée « rupture »
+  quand Clara aura basculé.
+
+---
+
 ## 2026-09-12 — public-api — ajout
 
 **Le logo d'un organisme voyage avec le catalogue.** De quoi le reconnaître dans une liste : le

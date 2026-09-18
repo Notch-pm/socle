@@ -15,11 +15,30 @@ describe("openapi (contacts-api)", () => {
       "/v1/contacts/match",
       "/v1/contacts/{id}",
       "/v1/contacts/{id}/archive",
+      "/v1/contacts/{id}/consents",
       "/v1/contacts/{id}/restore",
     ]);
     for (const operations of Object.values(doc.paths) as Record<string, unknown>[]) {
       expect("delete" in operations).toBe(false);
     }
+  });
+
+  it("expose les consentements RGPD et marque les anciens obsolètes", () => {
+    const contact = doc.components.schemas.Contact.properties;
+    expect(contact.consent_traitement.type).toBe("boolean");
+    expect(contact.consent_partage.type).toBe("boolean");
+    expect(contact.consents.items.$ref).toBe("#/components/schemas/ContactConsent");
+    expect(contact.consent_email.deprecated).toBe(true);
+    expect(contact.consent_sms.deprecated).toBe(true);
+  });
+
+  it("exige la phrase soumise à l'usager pour consigner un consentement", () => {
+    const body = doc.paths["/v1/contacts/{id}/consents"].post.requestBody;
+    expect(body.content["application/json"].schema.$ref)
+      .toBe("#/components/schemas/ContactConsentsCreate");
+    const item = doc.components.schemas.ContactConsentsCreate.properties.consents.items;
+    expect(item.required).toEqual(["kind", "granted", "statement"]);
+    expect(item.properties.kind.enum).toEqual(["traitement", "partage"]);
   });
 
   it("référence le serveur fourni et l'auth par clé", () => {

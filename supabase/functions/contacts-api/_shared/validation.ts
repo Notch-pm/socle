@@ -657,3 +657,125 @@ export function resolveRootOrgId(rows: OrgParentRow[], orgId: string): string | 
   }
   return current.id;
 }
+
+// ── Consentements RGPD ──────────────────────────────────────────────────────
+
+/** Les deux consentements du catalogue. La table porte la même contrainte. */
+export const CONSENT_KINDS = ["traitement", "partage"] as const;
+export type ConsentKind = (typeof CONSENT_KINDS)[number];
+
+/** Un recueil tel qu'il sera écrit dans `contact_consents`. */
+export interface ConsentInput {
+  kind: ConsentKind;
+  granted: boolean;
+  statement: string;
+  source_app: string;
+  source_reference: string | null;
+  collected_at: string;
+}
+
+export type ConsentsOutcome =
+  | { ok: true; value: ConsentInput[] }
+  | { ok: false; message: string };
+
+const CONSENT_KEYS = new Set(["kind", "granted", "statement"]);
+const CONSENT_BODY_KEYS = new Set(["consents", "source_app", "source_reference", "collected_at"]);
+const STATEMENT_MAX = 2000;
+
+/**
+ * Payload de `POST /v1/contacts/{id}/consents`.
+ *
+ * ⚠️ Le `statement` vient de l'APPELANT et c'est délibéré : le référentiel
+ * enregistre un fait, il n'écrit pas la phrase. Seule l'application qui a
+ * affiché la case sait ce qui a été lu — sa langue, sa formulation, le nom
+ * d'organisme qu'elle a interpolé. Le composer ici le ferait diverger de ce
+ * que l'usager a vu, et la preuve ne prouverait plus rien.
+ *
+ * Le référentiel n'impose PAS non plus qu'un consentement obligatoire soit
+ * accordé : cette exigence appartient au dépôt (Iris la tient), et un retrait
+ * de consentement doit pouvoir être consigné ici.
+ */
+export function parseConsentsPayload(body: unknown): ConsentsOutcome {
+  if (typeof body !== "object" || body === null || Array.isArray(body)) {
+    return { ok: false, message: "Corps JSON attendu." };
+  }
+  const raw = body as Record<string, unknown>;
+  const unknownKeys = Object.keys(raw).filter((k) => !CONSENT_BODY_KEYS.has(k));
+  if (unknownKeys.length > 0) {
+    return { ok: false, message: `Clés inconnues : ${unknownKeys.join(", ")}.` };
+  }
+
+  const sourceApp = typeof raw.source_app === "string" ? raw.source_app.trim() : "";
+  if (sourceApp === "" || sourceApp.length > 60) {
+    return { ok: false, message: "source_app : nom de l'application appelante requis (60 caractères au plus)." };
+  }
+
+  let sourceReference: string | null = null;
+  if (raw.source_reference !== undefined && raw.source_reference !== null) {
+    if (typeof raw.source_reference !== "string") {
+      return { ok: false, message: "source_reference : texte ou null attendu." };
+    }
+    const trimmed = raw.source_reference.trim();
+    if (trimmed.length > 200) {
+      return { ok: false, message: "source_reference : 200 caractères au plus." };
+    }
+    sourceReference = trimmed === "" ? null : trimmed;
+  }
+
+  let collectedAt = new Date().toISOString();
+  if (raw.collected_at !== undefined && raw.collected_at !== null) {
+    if (typeof raw.collected_at !== "string" || Number.isNaN(Date.parse(raw.collected_at))) {
+      return { ok: false, message: "collected_at : date ISO 8601 attendue." };
+    }
+    collectedAt = new Date(raw.collected_at).toISOString();
+  }
+
+  if (!Array.isArray(raw.consents) || raw.consents.length === 0) {
+    return { ok: false, message: "consents : tableau non vide attendu." };
+  }
+  if (raw.consents.length > CONSENT_KINDS.length) {
+    return { ok: false, message: "consents : plus de consentements que le catalogue n'en compte." };
+  }
+
+  const seen = new Set<string>();
+  const value: ConsentInput[] = [];
+  for (const [i, entry] of raw.consents.entries()) {
+    if (typeof entry !== "object" || entry === null || Array.isArray(entry)) {
+      return { ok: false, message: `consents[${i}] : objet attendu.` };
+    }
+    const row = entry as Record<string, unknown>;
+    const extra = Object.keys(row).filter((k) => !CONSENT_KEYS.has(k));
+    if (extra.length > 0) {
+      return { ok: false, message: `consents[${i}] : clés inconnues (${extra.join(", ")}).` };
+    }
+    if (typeof row.kind !== "string" || !(CONSENT_KINDS as readonly string[]).includes(row.kind)) {
+      return { ok: false, message: `consents[${i}].kind : une valeur parmi ${CONSENT_KINDS.join(", ")}.` };
+    }
+    if (seen.has(row.kind)) {
+      return { ok: false, message: `consents[${i}].kind : ${row.kind} transmis deux fois.` };
+    }
+    seen.add(row.kind);
+    if (typeof row.granted !== "boolean") {
+      return { ok: false, message: `consents[${i}].granted : booléen attendu.` };
+    }
+    const statement = typeof row.statement === "string" ? row.statement.trim() : "";
+    if (statement === "") {
+      return {
+        ok: false,
+        message: `consents[${i}].statement : la phrase soumise à l'usager est requise — c'est elle qui fait la preuve.`,
+      };
+    }
+    if (statement.length > STATEMENT_MAX) {
+      return { ok: false, message: `consents[${i}].statement : ${STATEMENT_MAX} caractères au plus.` };
+    }
+    value.push({
+      kind: row.kind as ConsentKind,
+      granted: row.granted,
+      statement,
+      source_app: sourceApp,
+      source_reference: sourceReference,
+      collected_at: collectedAt,
+    });
+  }
+  return { ok: true, value };
+}

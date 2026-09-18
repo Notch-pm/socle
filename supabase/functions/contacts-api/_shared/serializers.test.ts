@@ -111,3 +111,37 @@ describe("serializeContactRole", () => {
     ).toEqual({ id: "r-1", organization_id: "org-1", name: "Élu", created_at: null });
   });
 });
+
+describe("serializeContact — consentements RGPD", () => {
+  const baseRow = {
+    id: "c-9", organization_id: "org-1", contact_type: "personne",
+    civility: "monsieur", display_name: "Durand Paul", country: "France", status: "active",
+  };
+
+  it("expose l'état courant et l'historique quand il est fourni", () => {
+    const dto = serializeContact(
+      { ...baseRow, consent_traitement: true, consent_traitement_at: "2026-09-13T08:00:00Z",
+        consent_partage: false, consent_partage_at: "2026-09-13T08:00:00Z" },
+      [], [], [], [],
+      [{
+        id: "c1", kind: "traitement", granted: true, statement: "J'accepte…",
+        source_app: "iris", source_reference: "r1",
+        collected_at: "2026-09-13T08:00:00Z", created_at: "2026-09-13T08:00:01Z",
+      }],
+    );
+    expect(dto.consent_traitement).toBe(true);
+    expect(dto.consent_partage).toBe(false);
+    expect(dto.consents).toEqual([{
+      id: "c1", kind: "traitement", granted: true, statement: "J'accepte…",
+      source_app: "iris", source_reference: "r1",
+      collected_at: "2026-09-13T08:00:00Z", created_at: "2026-09-13T08:00:01Z",
+    }]);
+  });
+
+  it("rend un historique vide quand il n'a pas été chargé (liste, rapprochement)", () => {
+    const dto = serializeContact(baseRow, [], []);
+    expect(dto.consents).toEqual([]);
+    expect(dto.consent_traitement).toBe(false);
+    expect(dto.consent_traitement_at).toBeNull();
+  });
+});

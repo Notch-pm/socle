@@ -24,6 +24,27 @@ existe réellement aujourd'hui : [architecture.md](./architecture.md),
 
 ### Envisagé
 
+- **Retirer `consent_email` et `consent_sms`** — ⚠️ **rupture de contrat, bloquée par Clara.**
+  Les deux colonnes sont marquées OBSOLÈTES depuis le 2026-09-13 : ce qu'on demande à l'usager,
+  ce sont désormais les consentements RGPD (`consent_traitement`, `consent_partage`, historique
+  `contact_consents`). Elles n'ont pas été supprimées parce que **Clara les écrit et les affiche
+  encore** (`src/pages/Contacts.tsx` : formulaire, et « Accepte les mails : oui / non » sur la
+  fiche ; `src/services/socleContactService.ts` les type en entrée comme en sortie). Les retirer
+  aujourd'hui casserait sa fiche contact.
+  - **Ordre à tenir** : (1) Clara bascule son bloc « consentements » sur les nouveaux champs —
+    en lecture seule, comme Iris, le recueil se faisant au dépôt ; (2) une migration Socle
+    supprime les deux colonnes, le DTO et le schéma OpenAPI ; (3) une entrée **`rupture`** est
+    ajoutée à [api-changelog.md](./api-changelog.md) et la majeure du contrat `contacts-api`
+    passe à **2.0.0**.
+  - **À ne pas confondre avec une simple suppression de colonnes** : `consent_email` porte une
+    sémantique que rien ne reprend — « accepte de recevoir des courriels ». Le consentement
+    `partage` ne dit pas la même chose. Si des collectivités s'en servent réellement pour
+    filtrer des envois, il faut d'abord savoir quoi en faire (le migrer vers
+    `preferred_channel` ? vers un consentement `communication` du nouveau catalogue ?) —
+    sinon la « rupture » perdra une donnée métier au lieu de nettoyer un doublon.
+  - Consommateurs à prévenir : Clara, Iris (qui ne les lit pas — sa whitelist `socle-proxy` les
+    écarte explicitement), Nora.
+
 - **Pagination avec total** (`X-Total-Count` ou enveloppe `{items, total}`) et/ou curseur — un
   consommateur qui liste tous les contacts pagine aujourd'hui à l'aveugle (page pleine ⇒ page
   suivante).

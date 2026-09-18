@@ -356,7 +356,10 @@ Modèles de documents et de courriers (`.doc`/`.docx`/`.odt`) porteurs de variab
 
 **Autres colonnes notables** : adresse à plat (`address_line1/2`, `postal_code`, `city`, `country`
 défaut `France`), `address_lat`/`address_lon` (float8, géocodage), `quartier_id` FK **ON DELETE
-SET NULL**, `quartier_auto` bool défaut true, `consent_email`/`consent_sms`, `internal_notes`
+SET NULL**, `quartier_auto` bool défaut true, **consentements RGPD** (`consent_traitement`,
+`consent_traitement_at`, `consent_partage`, `consent_partage_at` — **dérivés par trigger** de
+`contact_consents`, jamais écrits directement) et les OBSOLÈTES `consent_email`/`consent_sms`
+(remplacés le 2026-09-13 ; conservés tant que Clara les écrit), `internal_notes`
 (commentée en base « ne jamais exposer au portail citoyen » — voir Points de vigilance),
 `created_at`/`updated_at` timestamptz.
 
@@ -402,6 +405,39 @@ d'écriture** : INSERT/UPDATE/DELETE impossibles côté client, réservés au se
   `(organization_id, source, external_id)`.
 - **Trigger** `set_updated_at`.
 - **RLS** : lecture `has_org_access` seulement — aucune écriture côté client.
+
+### `contact_consents` — consentements RGPD (2026-09-13)
+
+La **preuve** du consentement, et pas seulement son état. Une ligne par recueil.
+
+- `contact_id` CASCADE ; `organization_id` **dénormalisée par trigger**
+  `sync_contact_consent_org` (motif `contact_external_references`) ; `kind` CHECK
+  ∈ (`traitement`|`partage`) ; `granted` bool ; `statement` (CHECK non vide) ; `source_app`
+  (CHECK non vide) ; `source_reference` (nullable, **sans FK** — référence inter-projets) ;
+  `collected_at`, `created_at`, `updated_at`.
+- **`statement` = la phrase exacte soumise à l'usager**, nom d'organisme déjà interpolé, **jamais
+  réécrite**. C'est elle qui fait la preuve (art. 7.1 RGPD), pas le booléen : la collectivité peut
+  être renommée et le libellé reformulé, ce qui a été accepté ne change pas. Le référentiel ne la
+  compose pas — seule l'application qui a affiché la case sait ce qui a été lu.
+- **Index** : `(contact_id, kind, collected_at desc)` · `organization_id` · **unique**
+  `(contact_id, kind, source_app, source_reference)` — l'idempotence : rejouer un dépôt met à
+  jour, il ne duplique pas.
+  ⚠️ **Cet index ne doit PAS être partiel** (correctif `20260913100100`). Il l'était d'abord
+  (`WHERE source_reference IS NOT NULL`), et `ON CONFLICT` ne sait pas inférer un index partiel
+  sans que la requête répète son prédicat — ce qu'un client PostgREST ne peut pas exprimer :
+  `42P10`, donc 500 à chaque consignation. La version ordinaire a la **même** sémantique, les
+  NULL étant distincts dans un index unique : un recueil sans `source_reference` se répète
+  librement. **Règle générale : un index qui porte une idempotence d'API n'est jamais partiel.**
+- **Trigger `sync_contact_consent_state`** (AFTER INSERT/UPDATE, `SECURITY DEFINER`) : recopie
+  l'état sur la fiche **seulement si `collected_at` est au moins aussi récent** que la date déjà
+  posée. Consigner après coup un dépôt papier de l'an dernier n'efface donc pas un consentement
+  retiré la semaine dernière. C'est ce trigger qui fait de l'historique la **seule** source de
+  l'état — deux sources pour un même fait finiraient par diverger.
+- **RLS** : lecture `has_org_access(organization_id)` seulement — aucune écriture côté client
+  (passe par `contacts-api`, `POST /v1/contacts/{id}/consents`).
+- ⚠️ **Le référentiel n'exige aucun consentement** : il accepte `granted: false` même sur
+  `traitement`. L'obligation appartient au **dépôt** (Iris la tient), et un **retrait** doit
+  pouvoir être consigné ici.
 
 ### `contact_relations` — relations dirigées entre contacts
 

@@ -5,6 +5,7 @@
  * accident. Logique pure et testée.
  */
 import type {
+  ContactConsentDto,
   ContactDto,
   ContactExternalReferenceDto,
   ContactQuartierDto,
@@ -68,12 +69,31 @@ export function serializeContactRelation(row: Row): ContactRelationDto {
   };
 }
 
+/**
+ * Recueil de consentement. `kind` est recopié tel quel : la colonne porte une
+ * contrainte CHECK, le DTO n'a pas à redouter une troisième valeur — et s'il y
+ * en avait une un jour, la masquer ici la rendrait invisible au consommateur.
+ */
+export function serializeContactConsent(row: Row): ContactConsentDto {
+  return {
+    id: str(row.id),
+    kind: str(row.kind) as ContactConsentDto["kind"],
+    granted: Boolean(row.granted),
+    statement: str(row.statement),
+    source_app: str(row.source_app),
+    source_reference: nullableStr(row.source_reference),
+    collected_at: nullableStr(row.collected_at),
+    created_at: nullableStr(row.created_at),
+  };
+}
+
 export function serializeContact(
   row: Row,
   roles: Row[],
   externalRefs: Row[],
   relations: Row[] = [],
   reverseRelations: Row[] = [],
+  consents: Row[] = [],
 ): ContactDto {
   return {
     id: str(row.id),
@@ -103,6 +123,11 @@ export function serializeContact(
     preferred_channel: nullableStr(row.preferred_channel),
     consent_email: Boolean(row.consent_email),
     consent_sms: Boolean(row.consent_sms),
+    consent_traitement: Boolean(row.consent_traitement),
+    consent_traitement_at: nullableStr(row.consent_traitement_at),
+    consent_partage: Boolean(row.consent_partage),
+    consent_partage_at: nullableStr(row.consent_partage_at),
+    consents: consents.map(serializeContactConsent),
     internal_notes: nullableStr(row.internal_notes),
     status: str(row.status),
     roles: roles.map(serializeContactRoleRef),

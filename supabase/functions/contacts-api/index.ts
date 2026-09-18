@@ -34,6 +34,7 @@ import {
   isUuid,
   mergeContactShape,
   normalizePhoneNumber,
+  parseConsentsPayload,
   parseContactPayload,
   parseMatchPayload,
   parsePagination,
@@ -211,7 +212,29 @@ async function loadRelations(
   return { outByContact, inByContact };
 }
 
-/** Fiche complète sérialisée (contact + rôles + références + relations), ou null si absente. */
+/**
+ * Historique des consentements d'UNE fiche, du plus récent au plus ancien.
+ *
+ * Volontairement absent des réponses de LISTE et de rapprochement : l'état
+ * courant (`consent_*`, colonnes de la fiche) y suffit, et joindre la preuve
+ * de 200 usagers pour afficher un annuaire serait du poids pur. `consents`
+ * vaut donc `[]` ailleurs qu'ici — comme `quartier` vaut `null` quand la
+ * jointure n'a pas été demandée.
+ */
+const CONSENT_HISTORY_LIMIT = 50;
+
+async function loadConsents(admin: AdminClient, contactId: string): Promise<Row[]> {
+  const { data, error } = await admin
+    .from("contact_consents")
+    .select("id, kind, granted, statement, source_app, source_reference, collected_at, created_at")
+    .eq("contact_id", contactId)
+    .order("collected_at", { ascending: false })
+    .limit(CONSENT_HISTORY_LIMIT);
+  if (error) throw error;
+  return (data ?? []) as Row[];
+}
+
+/** Fiche complète sérialisée (contact + rôles + références + relations + consentements), ou null si absente. */
 async function fetchContactDto(admin: AdminClient, orgId: string, id: string) {
   const { data, error } = await admin
     .from("contacts")
@@ -221,9 +244,10 @@ async function fetchContactDto(admin: AdminClient, orgId: string, id: string) {
     .maybeSingle();
   if (error) throw error;
   if (!data) return null;
-  const [{ rolesByContact, refsByContact }, { outByContact, inByContact }] = await Promise.all([
+  const [{ rolesByContact, refsByContact }, { outByContact, inByContact }, consents] = await Promise.all([
     loadRolesAndRefs(admin, [id]),
     loadRelations(admin, [id]),
+    loadConsents(admin, id),
   ]);
   return serializeContact(
     data,
@@ -231,6 +255,7 @@ async function fetchContactDto(admin: AdminClient, orgId: string, id: string) {
     refsByContact.get(id) ?? [],
     outByContact.get(id) ?? [],
     inByContact.get(id) ?? [],
+    consents,
   );
 }
 
@@ -884,6 +909,58 @@ Deno.serve(async (req: Request) => {
 
       const dto = await fetchContactDto(admin, orgId, id);
       return jsonResponse(200, dto, corsHeaders);
+    }
+
+    // POST /v1/contacts/{id}/consents — consigner un recueil de consentement.
+    //
+    // Sous-ressource dédiée, et non des champs du PATCH de la fiche : un
+    // consentement n'est pas une propriété qu'on écrase, c'est un ÉVÉNEMENT
+    // daté. L'état courant de la fiche en est dérivé par trigger — l'API n'y
+    // touche jamais, sans quoi il y aurait deux sources pour un même fait.
+    //
+    // Idempotent : rejouer le même dépôt (même `source_app` + `source_reference`)
+    // met à jour la ligne au lieu d'en créer une seconde. Une edge function qui
+    // réessaie après un échec réseau ne double donc pas l'historique.
+    if (segments.length === 4 && segments[3] === "consents") {
+      if (req.method !== "POST") {
+        return errorResponse("method_not_allowed", "Seule la méthode POST est autorisée ici.", corsHeaders);
+      }
+      const { data: target, error: targetErr } = await admin
+        .from("contacts")
+        .select("id")
+        .eq("id", id)
+        .eq("organization_id", orgId)
+        .maybeSingle();
+      if (targetErr) throw targetErr;
+      if (!target) return errorResponse("not_found", "Usager introuvable.", corsHeaders);
+
+      let body: unknown;
+      try {
+        body = await req.json();
+      } catch (_) {
+        return errorResponse("bad_request", "Corps JSON invalide.", corsHeaders);
+      }
+      const parsed = parseConsentsPayload(body);
+      if (!parsed.ok) return errorResponse("bad_request", parsed.message, corsHeaders);
+
+      const rows = parsed.value.map((c) => ({ ...c, contact_id: id }));
+      // `organization_id` est posée par trigger depuis le contact : l'omettre
+      // ici est délibéré — une organisation venue de l'appelant pourrait
+      // désigner une autre racine que celle du contact.
+      //
+      // UN SEUL upsert pour les deux cas. L'index d'idempotence n'est pas
+      // partiel (correctif `20260913100100`, sans quoi `ON CONFLICT` ne saurait
+      // pas l'inférer) et les NULL y sont DISTINCTS : un recueil sans
+      // `source_reference` n'entre en conflit avec rien et s'insère — un fait
+      // nouveau à chaque appel —, tandis qu'un recueil avec référence reste
+      // unique par dépôt et se met à jour au rejeu.
+      const { error: upErr } = await admin
+        .from("contact_consents")
+        .upsert(rows, { onConflict: "contact_id,kind,source_app,source_reference" });
+      if (upErr) return writeErrorResponse(upErr);
+
+      const dto = await fetchContactDto(admin, orgId, id);
+      return jsonResponse(201, dto, corsHeaders);
     }
 
     // POST /v1/contacts/{id}/archive | /restore

@@ -39,7 +39,7 @@ export function buildOpenApiDocument(serverUrl: string): Record<string, unknown>
     openapi: "3.1.0",
     info: {
       title: "API Socle — Référentiel des usagers",
-      version: "1.1.0",
+      version: "1.2.0",
       description: [
         "API du **référentiel des usagers** de la gamme (contacts : personnes physiques,",
         "entreprises, associations, administrations). Elle permet de **consulter, créer,",
@@ -331,6 +331,31 @@ export function buildOpenApiDocument(serverUrl: string): Record<string, unknown>
           },
         },
       },
+      "/v1/contacts/{id}/consents": {
+        post: {
+          tags: ["Usagers"],
+          summary: "Consigner un recueil de consentement RGPD",
+          description:
+            "Enregistre un ou deux consentements recueillis auprès de l'usager, avec **la phrase " +
+            "exacte qui lui a été soumise** — c'est elle qui fait la preuve (art. 7.1 RGPD), pas le " +
+            "booléen. L'état courant de la fiche (`consent_traitement`, `consent_partage`) en est " +
+            "**dérivé** : il ne s'écrit pas directement, et seul le recueil le plus récent le fixe.\n\n" +
+            "**Idempotent** par (`source_app`, `source_reference`) : rejouer le même dépôt met la " +
+            "ligne à jour au lieu d'en créer une seconde. Un recueil sans `source_reference` est " +
+            "un fait nouveau à chaque appel.\n\n" +
+            "Le référentiel **n'exige pas** qu'un consentement soit accordé : cette règle appartient " +
+            "au dépôt (Iris la tient), et un **retrait** de consentement doit pouvoir se consigner ici.",
+          parameters: [ID_PARAM, X_ORGANIZATION_ID_PARAM],
+          requestBody: {
+            required: true,
+            content: { "application/json": { schema: { $ref: "#/components/schemas/ContactConsentsCreate" } } },
+          },
+          responses: {
+            "201": CONTACT_RESPONSE,
+            ...errorResponses("400", "401", "403", "404", "500"),
+          },
+        },
+      },
       "/v1/contact-roles": {
         get: {
           tags: ["Rôles"],
@@ -547,8 +572,37 @@ export function buildOpenApiDocument(serverUrl: string): Record<string, unknown>
                 "true = rattachement automatique d'après l'adresse ; false = forcé manuellement.",
             },
             preferred_channel: { type: ["string", "null"], enum: ["email", "telephone", "courrier", null] },
-            consent_email: { type: "boolean" },
-            consent_sms: { type: "boolean" },
+            consent_email: {
+              type: "boolean",
+              deprecated: true,
+              description: "**Obsolète (2026-09-13)** — remplacé par `consent_traitement` / `consent_partage`.",
+            },
+            consent_sms: {
+              type: "boolean",
+              deprecated: true,
+              description: "**Obsolète (2026-09-13)** — remplacé par `consent_traitement` / `consent_partage`.",
+            },
+            consent_traitement: {
+              type: "boolean",
+              description:
+                "Consentement RGPD à l'utilisation des informations pour le traitement des demandes " +
+                "(obligatoire au dépôt). Dérivé de `consents` — ne s'écrit pas directement.",
+            },
+            consent_traitement_at: { type: ["string", "null"], format: "date-time" },
+            consent_partage: {
+              type: "boolean",
+              description:
+                "Consentement RGPD au partage aux services de la collectivité (facultatif). " +
+                "Dérivé de `consents` — ne s'écrit pas directement.",
+            },
+            consent_partage_at: { type: ["string", "null"], format: "date-time" },
+            consents: {
+              type: "array",
+              items: { $ref: "#/components/schemas/ContactConsent" },
+              description:
+                "Historique des recueils, du plus récent au plus ancien (50 au plus). **Vide dans les " +
+                "réponses de liste et de rapprochement** : la preuve ne se lit que sur la fiche.",
+            },
             internal_notes: {
               type: ["string", "null"],
               description: "Note interne **réservée aux agents** (ne jamais montrer à l'usager).",
@@ -571,6 +625,81 @@ export function buildOpenApiDocument(serverUrl: string): Record<string, unknown>
             },
             created_at: { type: ["string", "null"], format: "date-time" },
             updated_at: { type: ["string", "null"], format: "date-time" },
+          },
+        },
+        ContactConsent: {
+          type: "object",
+          description:
+            "Un recueil de consentement — la preuve, pas seulement l'état. La phrase soumise est " +
+            "conservée telle quelle : la collectivité peut être renommée ou le libellé reformulé, " +
+            "ce qui a été accepté ne change pas.",
+          properties: {
+            id: { type: "string", format: "uuid" },
+            kind: {
+              type: "string",
+              enum: ["traitement", "partage"],
+              description:
+                "`traitement` = utilisation des informations pour instruire la demande (obligatoire " +
+                "au dépôt) ; `partage` = partage aux services de la collectivité (facultatif).",
+            },
+            granted: { type: "boolean" },
+            statement: {
+              type: "string",
+              description: "Phrase exacte soumise à l'usager, nom de l'organisme déjà interpolé.",
+            },
+            source_app: { type: "string", description: "Application qui a recueilli (iris, nora, clara…)." },
+            source_reference: {
+              type: ["string", "null"],
+              description: "Dépôt d'origine tel que l'application le désigne (UUID nu, référence de dossier).",
+            },
+            collected_at: { type: ["string", "null"], format: "date-time" },
+            created_at: { type: ["string", "null"], format: "date-time" },
+          },
+        },
+        ContactConsentsCreate: {
+          type: "object",
+          required: ["source_app", "consents"],
+          properties: {
+            source_app: {
+              type: "string",
+              maxLength: 60,
+              description: "Application appelante (iris, nora, clara…). Code libre.",
+            },
+            source_reference: {
+              type: ["string", "null"],
+              maxLength: 200,
+              description:
+                "Dépôt d'origine. Porte l'**idempotence** avec `source_app` : le rejeu met à jour " +
+                "au lieu de dupliquer. Absent = fait nouveau à chaque appel.",
+            },
+            collected_at: {
+              type: "string",
+              format: "date-time",
+              description:
+                "Date du recueil (défaut : maintenant). C'est elle qui fait foi : consigner après " +
+                "coup un dépôt papier ancien n'écrase pas un consentement retiré depuis.",
+            },
+            consents: {
+              type: "array",
+              minItems: 1,
+              maxItems: 2,
+              items: {
+                type: "object",
+                required: ["kind", "granted", "statement"],
+                properties: {
+                  kind: { type: "string", enum: ["traitement", "partage"] },
+                  granted: { type: "boolean" },
+                  statement: {
+                    type: "string",
+                    maxLength: 2000,
+                    description:
+                      "**Requis** : la phrase telle que l'usager l'a lue. Le référentiel ne la compose " +
+                      "pas — seule l'application qui a affiché la case sait sa langue, sa formulation " +
+                      "et le nom d'organisme qu'elle a interpolé.",
+                  },
+                },
+              },
+            },
           },
         },
         ContactCreate: {
@@ -614,8 +743,8 @@ export function buildOpenApiDocument(serverUrl: string): Record<string, unknown>
                 "l'assignation automatique d'après l'adresse ; `null` rétablit l'automatique.",
             },
             preferred_channel: { type: ["string", "null"], enum: ["email", "telephone", "courrier", null] },
-            consent_email: { type: "boolean", default: false },
-            consent_sms: { type: "boolean", default: false },
+            consent_email: { type: "boolean", default: false, deprecated: true },
+            consent_sms: { type: "boolean", default: false, deprecated: true },
             internal_notes: { type: ["string", "null"] },
             role_ids: {
               type: "array",
