@@ -20,6 +20,10 @@ import { DescriptifStep, type DescriptifValues } from "@/features/procedures/ste
 import { DemandeurStep } from "@/features/procedures/steps/DemandeurStep";
 import { FormulaireStep } from "@/features/procedures/steps/FormulaireStep";
 import { CommunicationStep } from "@/features/procedures/steps/CommunicationStep";
+import {
+  UserCommunicationStep,
+  type UserCommunicationValues,
+} from "@/features/procedures/steps/UserCommunicationStep";
 import { KnowledgeBaseStep } from "@/features/procedures/steps/KnowledgeBaseStep";
 import { PlaceholderStep } from "@/features/procedures/steps/PlaceholderStep";
 import type { RequesterConfig } from "@/features/procedures/requesterFields";
@@ -37,6 +41,7 @@ import type { Json } from "@/types/database.types";
 const DESCRIPTIF_FORM_ID = "procedure-descriptif-form";
 const DEMANDEUR_FORM_ID = "procedure-demandeur-form";
 const FORMULAIRE_FORM_ID = "procedure-formulaire-form";
+const USAGER_FORM_ID = "procedure-usager-form";
 const COMMUNICATION_FORM_ID = "procedure-communication-form";
 const CONNAISSANCES_FORM_ID = "procedure-connaissances-form";
 const LAST_STEP = PROCEDURE_STEPS.length - 1;
@@ -46,6 +51,7 @@ const STEP_FORM_IDS: readonly string[] = [
   DESCRIPTIF_FORM_ID,
   DEMANDEUR_FORM_ID,
   FORMULAIRE_FORM_ID,
+  USAGER_FORM_ID,
   COMMUNICATION_FORM_ID,
   CONNAISSANCES_FORM_ID,
 ];
@@ -72,7 +78,11 @@ export function ProcedureEditor({
   const createProc = useCreateProcedure();
   const updateProc = useUpdateProcedure();
 
-  const [current, setCurrent] = React.useState(initialStep);
+  // ⚠️ L'étape vient de l'URL (`?step=`) : hors bornes, `PROCEDURE_STEPS[current]` serait
+  // `undefined` et l'éditeur planterait. On borne au lieu de faire confiance.
+  const [current, setCurrent] = React.useState(() =>
+    Math.min(Math.max(Math.trunc(initialStep) || 0, 0), LAST_STEP),
+  );
   // Le bouton cliqué décide si l'enregistrement avance le stepper ou non.
   const advanceRef = React.useRef(true);
   const [justSaved, setJustSaved] = React.useState(false);
@@ -155,6 +165,22 @@ export function ProcedureEditor({
     );
   }
 
+  /**
+   * ⚠️ Seule étape qui écrit une colonne TEXTE en plus de son JSON, et les deux
+   * partent dans la MÊME mutation : un descriptif enregistré sans sa FAQ (ou
+   * l'inverse) laisserait l'agent devant un écran à moitié sauvegardé.
+   */
+  function handleUsagerSubmit(values: UserCommunicationValues) {
+    updateProc.mutate(
+      {
+        id: procedureId!,
+        user_description: values.userDescription,
+        user_communication: values.config as unknown as Json,
+      },
+      { onSuccess: afterSave },
+    );
+  }
+
   function handleCommunicationSubmit(config: CommunicationConfig) {
     updateProc.mutate(
       { id: procedureId!, communication_config: config as unknown as Json },
@@ -229,12 +255,18 @@ export function ProcedureEditor({
                 onSubmit={handleFormulaireSubmit}
               />
             ) : current === 3 && procedure ? (
+              <UserCommunicationStep
+                formId={USAGER_FORM_ID}
+                procedure={procedure}
+                onSubmit={handleUsagerSubmit}
+              />
+            ) : current === 4 && procedure ? (
               <CommunicationStep
                 formId={COMMUNICATION_FORM_ID}
                 procedure={procedure}
                 onSubmit={handleCommunicationSubmit}
               />
-            ) : current === 4 && procedure ? (
+            ) : current === 5 && procedure ? (
               <KnowledgeBaseStep
                 formId={CONNAISSANCES_FORM_ID}
                 procedure={procedure}

@@ -336,6 +336,63 @@ export type Database = {
           },
         ]
       }
+      contact_consents: {
+        Row: {
+          collected_at: string
+          contact_id: string
+          created_at: string
+          granted: boolean
+          id: string
+          kind: string
+          organization_id: string
+          source_app: string
+          source_reference: string | null
+          statement: string
+          updated_at: string
+        }
+        Insert: {
+          collected_at?: string
+          contact_id: string
+          created_at?: string
+          granted: boolean
+          id?: string
+          kind: string
+          organization_id: string
+          source_app: string
+          source_reference?: string | null
+          statement: string
+          updated_at?: string
+        }
+        Update: {
+          collected_at?: string
+          contact_id?: string
+          created_at?: string
+          granted?: boolean
+          id?: string
+          kind?: string
+          organization_id?: string
+          source_app?: string
+          source_reference?: string | null
+          statement?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "contact_consents_contact_id_fkey"
+            columns: ["contact_id"]
+            isOneToOne: false
+            referencedRelation: "contacts"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "contact_consents_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       contact_external_references: {
         Row: {
           contact_id: string
@@ -512,7 +569,11 @@ export type Database = {
           city: string | null
           civility: string | null
           consent_email: boolean
+          consent_partage: boolean
+          consent_partage_at: string | null
           consent_sms: boolean
+          consent_traitement: boolean
+          consent_traitement_at: string | null
           contact_type: string
           country: string
           created_at: string
@@ -546,7 +607,11 @@ export type Database = {
           city?: string | null
           civility?: string | null
           consent_email?: boolean
+          consent_partage?: boolean
+          consent_partage_at?: string | null
           consent_sms?: boolean
+          consent_traitement?: boolean
+          consent_traitement_at?: string | null
           contact_type: string
           country?: string
           created_at?: string
@@ -580,7 +645,11 @@ export type Database = {
           city?: string | null
           civility?: string | null
           consent_email?: boolean
+          consent_partage?: boolean
+          consent_partage_at?: string | null
           consent_sms?: boolean
+          consent_traitement?: boolean
+          consent_traitement_at?: string | null
           contact_type?: string
           country?: string
           created_at?: string
@@ -1104,6 +1173,7 @@ export type Database = {
           translations: Json | null
           type: string
           updated_at: string | null
+          user_communication: Json | null
           user_description: string | null
         }
         Insert: {
@@ -1127,6 +1197,7 @@ export type Database = {
           translations?: Json | null
           type?: string
           updated_at?: string | null
+          user_communication?: Json | null
           user_description?: string | null
         }
         Update: {
@@ -1150,6 +1221,7 @@ export type Database = {
           translations?: Json | null
           type?: string
           updated_at?: string | null
+          user_communication?: Json | null
           user_description?: string | null
         }
         Relationships: [

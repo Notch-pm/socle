@@ -209,6 +209,27 @@ export function attachmentFieldsMissingDocumentType(schema: FormSchema): string[
   return missing;
 }
 
+/**
+ * Toutes les pièces justificatives du formulaire (racine + sections), à plat et
+ * dans l'ordre. Miroir de `conditionSourceFields`, qui les exclut : ici on ne
+ * veut qu'elles.
+ *
+ * Usage : le récapitulatif en lecture seule de l'étape « Communication usager »,
+ * qui montre à l'agent ce que le formulaire collecte déjà — pour qu'il n'ait pas
+ * à le deviner en rédigeant la liste qu'il ANNONCE à l'usager.
+ */
+export function attachmentFields(schema: FormSchema): AttachmentField[] {
+  const attachments: AttachmentField[] = [];
+  const collect = (field: Field) => {
+    if (field.type === "attachment") attachments.push(field);
+  };
+  for (const node of schema.content) {
+    if (isSection(node)) node.fields.forEach(collect);
+    else collect(node);
+  }
+  return attachments;
+}
+
 // ---- Validation / parsing --------------------------------------------------
 
 const conditionSchema = z.object({

@@ -40,6 +40,7 @@ const h = vi.hoisted(() => {
     is_active_global: null,
     agent_description: null,
     user_description: null,
+    user_communication: null,
     translations: null,
     requester_config: null,
     form_schema: null,
@@ -151,8 +152,8 @@ describe("ProcedureEditor — pied de page du stepper", () => {
     expect(screen.queryByRole("switch", { name: /Activer le public Citoyens/i })).toBeNull();
   });
 
-  it("étape « Communication » : enregistre le bloc visibilité et avance", () => {
-    const { onStepChange } = renderEditor(3);
+  it("étape « Publication » (rang 4) : enregistre le bloc visibilité et avance", () => {
+    const { onStepChange } = renderEditor(4);
 
     fireEvent.click(screen.getByRole("switch", { name: "Visible sur le portail" }));
     fireEvent.click(screen.getByRole("button", { name: "Enregistrer et continuer" }));
@@ -170,11 +171,11 @@ describe("ProcedureEditor — pied de page du stepper", () => {
         documents: { restrictVisibility: false, documents: [], letters: [] },
       },
     });
-    expect(onStepChange).toHaveBeenCalledWith(4);
+    expect(onStepChange).toHaveBeenCalledWith(5);
   });
 
   it("dernière étape : « Enregistrer » seul (rien à continuer)", () => {
-    const { onStepChange } = renderEditor(4);
+    const { onStepChange } = renderEditor(5);
 
     expect(screen.queryByRole("button", { name: "Enregistrer et continuer" })).toBeNull();
 
@@ -183,13 +184,42 @@ describe("ProcedureEditor — pied de page du stepper", () => {
     expect(onStepChange).not.toHaveBeenCalled();
   });
 
+  it("⚠️ étape « Communication usager » : le descriptif et la config partent dans UNE seule mutation", () => {
+    // C'est la seule étape du stepper qui écrit une colonne TEXTE en plus de son
+    // JSON. Les scinder en deux mutations laisserait l'agent devant un écran à
+    // moitié enregistré sans qu'il puisse le savoir.
+    const { onStepChange } = renderEditor(3);
+
+    fireEvent.change(screen.getByLabelText("Descriptif de la démarche"), {
+      target: { value: "Ce que l'usager lit." },
+    });
+    fireEvent.change(screen.getByLabelText("Durée habituelle d'instruction"), {
+      target: { value: "3" },
+    });
+    fireEvent.change(screen.getByLabelText("Unité"), { target: { value: "semaine" } });
+    fireEvent.click(screen.getByRole("button", { name: "Enregistrer et continuer" }));
+
+    expect(h.mutateUpdate).toHaveBeenCalledTimes(1);
+    expect(h.mutateUpdate.mock.calls[0][0]).toEqual({
+      id: "proc-1",
+      user_description: "Ce que l'usager lit.",
+      user_communication: {
+        delays: { processingTimeValue: 3, processingTimeUnit: "semaine" },
+        audience: { note: "" },
+        attachments: { items: [] },
+        faq: { items: [] },
+      },
+    });
+    expect(onStepChange).toHaveBeenCalledWith(4);
+  });
+
   it("une démarche en brouillon porte le tag dans l'en-tête", () => {
     renderEditor(0);
     expect(screen.getByText("Brouillon")).toBeTruthy();
   });
 
   it("bout du stepper sur un brouillon : propose la mise en production", () => {
-    renderEditor(4);
+    renderEditor(5);
 
     expect(screen.queryByRole("alertdialog")).toBeNull();
     fireEvent.click(screen.getByRole("button", { name: "Enregistrer" }));

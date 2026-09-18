@@ -153,8 +153,8 @@ export function KnowledgeBaseStep({
       >
         <div className="grid items-start gap-4 lg:grid-cols-2">
           <FaqEditor
-            label="FAQ"
-            hint="Questions fréquentes et leurs réponses de référence."
+            label="FAQ interne (agent et IA)"
+            hint="Questions fréquentes et leurs réponses de référence. ⚠️ Non publiée : l'usager ne la voit jamais — la FAQ qu'il lit se saisit à l'étape « Communication usager »."
             value={kb.faq}
             onChange={(v) => set("faq", v)}
           />

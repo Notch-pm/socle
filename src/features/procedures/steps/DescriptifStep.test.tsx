@@ -43,6 +43,7 @@ const procedure = {
   is_active_global: null,
   agent_description: null,
   user_description: null,
+  user_communication: null,
   // « oc » n'est plus dans les langues actives : sa traduction doit survivre.
   translations: { en: { name: "Birth certificate" }, oc: { name: "Acte de naissença" } },
   requester_config: null,
