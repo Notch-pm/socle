@@ -167,7 +167,7 @@ Alias d'import `@/` → `src/`. Le code métier vit sous `src/features/<domaine>
 `src/components/shared/`. Neuf features aujourd'hui : `auth`, `organizations`, `superadmin`,
 `procedures`, `categories`, `document-types`, `quartiers`, `users`, `public-api-docs`. Il n'existe
 **pas** de feature `contacts` côté frontend : les contacts n'existent que via `contacts-api`, sans
-UI Socle pour l'instant (voir la feature « référentiel des usagers » de `CLAUDE.md`).
+UI Socle pour l'instant (voir [`features/referentiel-usagers.md`](./features/referentiel-usagers.md)).
 
 ### 4.2 Données serveur : TanStack Query
 
@@ -202,8 +202,8 @@ disposition**, pas sa **couleur** : chaque application peint le sien. Au 2026-09
 Socle est en secondaire beurre (`#FFCC57`) à icônes bleu nuit (`#0B132B`), celui de Clara en bleu
 nuit à icônes blanches, ceux d'Iris et d'Ariane en primaire verte — ce n'est pas un écart à
 réaligner. Socle et Clara portent chacun leur couleur dans un jeton `--rail` / `--rail-foreground` ;
-aucun rail ne se sert des jetons `--sidebar-*` (forêt). Détail et contrastes : `CLAUDE.md`,
-« Shell de l'app par organisation ».
+aucun rail ne se sert des jetons `--sidebar-*` (forêt). Détail et contrastes :
+[`features/shell-et-lanceur.md`](./features/shell-et-lanceur.md).
 
 ### 4.5 Logique métier en modules purs testés
 
@@ -212,7 +212,7 @@ réordonnancement par glisser-déposer, moteur de conditions, formats de fichier
 base de connaissances, arbre d'organisations, génération de clé API, GeoJSON des quartiers…)
 vivent dans des fichiers `.ts` sans effet de bord, testés par vitest indépendamment des
 composants. Cette séparation permet de tester le cœur métier sans monter de DOM. L'inventaire
-exhaustif par feature est maintenu dans [`../CLAUDE.md`](../CLAUDE.md) (une ligne « logique pure
+exhaustif par feature est maintenu dans les fiches [`features/`](./features/) (une ligne « logique pure
 testée » par feature) plutôt que dupliqué ici.
 
 ## 5. APIs & contrats publics
@@ -247,7 +247,7 @@ base de données, servie sous le domaine de chaque collectivité. Le Socle lui r
 visité (`GET /v1/portal/tenant?hostname=`, table `organization_domains`, `hostname` unique sur
 toute la plateforme), lui sert le catalogue déjà filtré (`/v1/portal/procedures`), la composition
 **publiée** de la page d'accueil (`/v1/portal/page`, table `portal_pages` — éditée dans le Socle
-par l'écran « Site de démarches », voir `CLAUDE.md`) et la charte résolue. Nora ne connaît que ces
+par l'écran « Site de démarches », voir [`features/site-de-demarches.md`](./features/site-de-demarches.md)) et la charte résolue. Nora ne connaît que ces
 routes ; la traduction vers son propre vocabulaire se fait chez lui, en un seul endroit, et il
 ignore toute section qu'il ne sait pas rendre — le Socle peut apprendre un bloc avant le portail.
 
@@ -272,6 +272,7 @@ ignore toute section qu'il ne sait pas rendre — le Socle peut apprendre un blo
 | 2026-09-08 | **Une clé par application, bornée par abonnement.** Registre `applications`, abonnements `organization_applications` par racine ; une clé plateforme est rattachée à une application et voit les seules collectivités abonnées (`application_scope_ids`). `consumer` devient une clé étrangère, `scopes` un CHECK. Remplace « clé plateforme = toutes les organisations » (2026-07-17). | Onboarder un client exigeait un secret par client et par application, transmis à la main ; ou une clé plateforme dont l'isolation vivait dans le code de chaque application (une application compromise lisait tout). Le périmètre vit désormais au Socle, et l'arrivée d'un client se réduit à cocher ses applications. Rien n'était en production : rupture assumée, racines existantes abonnées à tout par la migration. |
 | 2026-09-08 | **Une racine naît équipée** : trigger `provision_root_organization` (rôles de contact, plafond IA par défaut, sous-domaine fourni `<slug>.<zone>`), réglages de plateforme dans `platform_settings`, check-list de mise en service (`root_onboarding_status`) en tête de la page d'un client, catégories et activations accessibles au super administrateur. | Trois pièges silencieux à chaque client (rôles jamais seedés, plafond absent = illimité, SMTP absent à l'invitation) et deux écrans interdits au super administrateur (catégories, activations) obligeaient à du SQL. Le provisioning est idempotent et jamais bloquant : la création de l'organisation reste l'acte principal. |
 | 2026-09-08 | **Relais de plateforme en repli** (`PLATFORM_SMTP_*`) pour les seuls courriels d'authentification ; les courriels métier restent sur le relais de la collectivité. Les domaines du portail s'écrivent par le super administrateur seul ; les administrateurs les lisent et voient la cible CNAME. | Poule et œuf : inviter le premier administrateur exigeait un SMTP que seul un administrateur pouvait saisir. Un domaine personnalisé suppose un CNAME chez le client et un enregistrement chez l'hébergeur — un travail de l'éditeur, et l'unicité globale permettait de réserver par erreur le domaine d'un autre client. |
+| 2026-09-18 | `CLAUDE.md` devient un **index** : le détail de chaque feature (invariants, pièges, pointeurs de code) part, tel quel, dans une fiche `docs/features/*.md` ; `CLAUDE.md` garde les règles transverses et, par feature, ce qu'il faut savoir avant d'ouvrir la fiche. Un test (`src/claudeMd.test.ts`) le tient sous 40 000 caractères et vérifie que fiches et index se citent. | Chargé en entier à chaque session d'agent, il avait atteint 150 000 caractères, près de quatre fois la limite au-delà de laquelle Claude Code le signale. Une fiche par feature se lit quand on touche la feature — et seulement alors. |
 
 ## 7. Risques acceptés & dette
 
@@ -309,5 +310,6 @@ Ajoutés le 2026-09-05 (éditeur du site de démarches) :
 - [`./integration.md`](./integration.md) — guide consommateurs (Ariane/Clara/Iris) : clés, scopes, garanties, compatibilité.
 - [`./operations.md`](./operations.md) — déploiement, secrets, migrations, advisors, CI.
 - [`./onboarding.md`](./onboarding.md) — mise en service : la plateforme une fois, puis chaque client sans SQL.
-- [`../CLAUDE.md`](../CLAUDE.md) — règles de développement, invariants, pièges, pointeurs de code.
+- [`../CLAUDE.md`](../CLAUDE.md) — règles de développement transverses et index des features.
+- [`./features/`](./features/) — une fiche par feature : invariants, pièges, pointeurs de code.
 - [`../README.md`](../README.md) — porte d'entrée du projet.

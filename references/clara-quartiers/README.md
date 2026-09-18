@@ -31,7 +31,7 @@ ils ne sont ni buildés ni maintenus.
 État au 2026-07-17 : **étapes 1, 2 et 3 livrées côté Socle** — migrations
 `quartiers_referentiel` + `assign_contact_quartier_recompute_on_null`,
 `src/features/quartiers/`, endpoints déployés ; voir les features « Quartiers »,
-« API publique » et « API usagers » de CLAUDE.md. Colonnes nommées
+« API publique » et « API usagers » (fiches `docs/features/`). Colonnes nommées
 `address_lat`/`address_lon` (préfixe des champs d'adresse de `contacts`).
 Reste l'étape 4 (Clara).
 

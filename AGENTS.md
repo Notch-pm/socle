@@ -23,17 +23,25 @@ application élu, etc. Socle est le socle de paramétrage commun à tous ces pro
 Porte d'entrée : `README.md` (racine). Corpus dans `docs/` : `architecture.md` (frontières,
 zones, sécurité, décisions), `data-model.md` (tables, RLS, triggers, RPC, storage),
 `integration.md` (guide des équipes consommatrices), `api-changelog.md` (journal du contrat
-public, append-only), `operations.md` (runbook), `roadmap.md` (évolutions souhaitées).
+public, append-only), `operations.md` (runbook), `onboarding.md` (mise en service d'un client),
+`roadmap.md` (évolutions souhaitées), et **`features/`** — une **fiche par feature** (invariants,
+pièges ⚠️, pointeurs de code), indexée plus bas.
 **Règle de propriété unique** : la liste des endpoints vit dans les OpenAPI
 (`supabase/functions/*/_shared/openapi.ts`, publiés sur `/api-doc`, `/api-doc-usagers` et
-`/api-doc-ia`), le
-schéma détaillé dans `docs/data-model.md` — les autres docs renvoient sans dupliquer ; CLAUDE.md
-garde les invariants, pièges (⚠️) et pointeurs de code. ⚠️ Toute PR qui touche une **surface de
+`/api-doc-ia`), le schéma détaillé dans `docs/data-model.md`, le détail d'une feature dans sa
+fiche — les autres docs renvoient sans dupliquer ; CLAUDE.md garde les règles transverses et
+l'**index des features**. ⚠️ Toute PR qui touche une **surface de
 contrat** (`supabase/functions/*/_shared/{dto,serializers,openapi}.ts`,
 `src/features/procedures/{formSchema,requesterFields,knowledgeBase,communication,userCommunication}.ts`)
 ajoute une entrée datée
-à `docs/api-changelog.md` ; une doc périmée par une PR se met à jour **dans cette PR**.
-`docs/archive/` = instantanés historiques non maintenus.
+à `docs/api-changelog.md` ; une doc périmée par une PR — fiche de feature comprise — se met à
+jour **dans cette PR**. `docs/archive/` = instantanés historiques non maintenus.
+
+⚠️ **CLAUDE.md reste sous 40 000 caractères** : au-delà, Claude Code le signale comme trop lourd.
+Il en faisait 150 000 le 2026-09-18, jour où les features sont parties dans `docs/features/`
+(déplacées telles quelles, rien de réécrit). Un détail de feature va dans **sa fiche**, jamais
+ici ; l'index n'en garde que ce qu'il faut savoir avant même d'ouvrir la fiche. Un test l'épingle
+— `src/claudeMd.test.ts`, qui vérifie aussi que chaque fiche citée existe.
 
 ⚠️ **`AGENTS.md` est une copie BYTE-IDENTIQUE de ce fichier** (c'est le nom que lisent les
 outils autres que Claude Code), et un test l'épingle — `src/agentsMirror.test.ts`, motif
@@ -152,6 +160,7 @@ exécutables par `authenticated` : le RLS les évalue avec les droits de l'appel
 - `organization_domains` (domaines du portail usagers, `hostname` **unique sur toute la plateforme** — voir feature « site de démarches »).
 - `portal_pages` (composition des pages du portail, `draft` autosauvegardé / `published` explicite — voir feature « site de démarches »).
 - `portal_themes` (apparence du site de démarches — une ligne par racine, `draft`/`published` comme `portal_pages` ; **aucune couleur** : elles vivent dans la charte — voir feature « thème du site »).
+- `portal_contents` (pages de **texte** du site, une par `(racine, slug)`, `draft`/`published` ; aujourd'hui la **déclaration d'accessibilité** — voir feature « site de démarches »).
 
 Types TS générés dans `src/types/database.types.ts` — **ne pas éditer à la main**,
 régénérer depuis le schéma live (Supabase MCP `generate_typescript_types` / CLI).
@@ -159,1559 +168,174 @@ Les migrations passent par `apply_migration` (Supabase MCP) ou la CLI ; l'histor
 est **versionné dans `supabase/migrations/`** (rapatrié le 2026-08-12) — toute nouvelle
 migration doit y avoir son fichier miroir `{version}_{nom}.sql`.
 
-## Feature : hiérarchie d'organisations
+## Index des features
 
-- Arbre auto-référencé (`organizations.parent_id`), **10 niveaux max** (racine + 9),
-  imposé par le trigger DB `enforce_org_depth` (bloque aussi les cycles).
-- **Super admin** : agit sur toute la plateforme ; seul à créer des **organisations racines**
-  et à **supprimer** (uniquement des sous-organisations, jamais une racine).
-- **Admin d'organisation** : gère son org **et toute sa descendance** (créer/modifier/rendre
-  obsolète), pas de suppression.
-- Champs : `name` (obligatoire), `address`, `phone`, `email`, `status`
-  (`active` | `obsolete`, obsolescence **réversible**), + `slug`, `type` hérités. Les cinq
-  colonnes de **charte graphique** (`logo_url`, `logo_white_url`, `favicon_url`, `primary_color`,
-  `secondary_color`) + `branding_inherit_parent` ont leur propre onglet — voir feature ci-dessous.
-- RLS `organizations` : SELECT `has_org_access(id) OR is_admin_of_self_or_ancestor(id)` ·
-  INSERT super_admin ou (parent défini ET admin d'un ancêtre) · UPDATE admin self/ancêtre ·
-  DELETE `is_super_admin() AND parent_id IS NOT NULL`.
+Chaque feature a sa **fiche** dans [`docs/features/`](docs/features/) : invariants, pièges (⚠️),
+pointeurs de code, tests. ⚠️ **Lire la fiche avant de modifier la feature**, et la mettre à jour
+dans la même PR. Ci-dessous, seulement ce qu'il faut savoir avant même de l'ouvrir.
 
-### Services internes (`is_internal_service`) — instruire sans apparaître
+Trois motifs reviennent dans presque toutes les fiches — les connaître évite de les redécouvrir :
+- **Multi-tenant strict** : un référentiel (démarches, catégories, types de PJ, documents,
+  contacts, quartiers…) se rattache à une **organisation principale (racine)**, imposé par un
+  trigger `enforce_*_root_org` ; RLS typique : lecture `has_org_access`, écriture
+  `is_org_admin`.
+- **Le réglage gouverne l'usage, pas la donnée** (motif `email_sender_name`) : désactiver un
+  commutateur **conserve** les valeurs qu'il masque, pour que le retour en arrière soit gratuit.
+  Un consommateur qui lit la valeur sans lire le commutateur se trompe.
+- **Miroirs front / edge** : une edge function n'importe rien de `src/` ; une règle partagée
+  (`bearerByOrganization`, `readAccessMode`, `readLanguages`, `enabledAudiences`…) est écrite
+  des deux côtés et **testée des deux côtés** (motif `readDocumentIds`).
 
-Une collectivité découpe son organigramme plus finement que ce qu'elle montre à ses usagers.
-« État civil », « Direction du Cabinet » instruisent des demandes, mais un usager du portail n'a
-pas à choisir entre eux : il s'adresse à **sa mairie**. Le commutateur **« Service interne »**
-(colonne `organizations.is_internal_service`, sous-organisations uniquement) retire l'organisme du
-**site de démarches** ; c'est son **porteur** — le premier ancêtre (elle comprise) qui n'est pas un
-service interne — qui est nommé à sa place, **même s'il n'a pas activé la démarche lui-même**.
+### [Organisations](docs/features/organisations.md)
+Hiérarchie, édition en pleine page (onglets Informations, Charte graphique, Langues, Démarches,
+Emails, Domaines), gestion superadmin (`OrgSettingsPage`, menu latéral par client).
+- Arbre `parent_id`, **10 niveaux max** (`enforce_org_depth`, bloque aussi les cycles). Le super
+  admin seul crée les racines et supprime (jamais une racine) ; un admin d'org gère tout son
+  sous-arbre, sans suppression. Les racines sont les **clients** : aucune vue n'en fond plusieurs.
+- ⚠️ **Héritage résolu à la lecture, jamais recopié** : charte (`resolve_branding`,
+  `branding_inherit_parent`) et SMTP (`resolve_smtp_settings`). ⚠️ Une racine n'hérite jamais —
+  le trigger la **corrige** au lieu de refuser (`enforce_branding_root_no_inherit`).
+- ⚠️ Charte = **cinq** éléments (deux logos, favicon, deux couleurs), tous comptent dans
+  « configuré ». Ses colonnes brutes ne vont **jamais** sur `OrganizationDto` (nulles quand on
+  hérite). Recréer `resolve_branding`/`parent_branding` rend les EXECUTE par défaut : reposer les
+  droits en citant les trois rôles.
+- Code : `src/features/organizations/`, `src/features/superadmin/organizations/` (`orgTree.ts`
+  pur et testé, `useOrganizationsAdmin.ts`, `OrgSettingsPage`).
 
-- ⚠️ **Une racine n'est jamais un service interne** : elle n'a personne au-dessus d'elle pour la
-  porter. Le trigger `enforce_internal_service_not_root` la **corrige** à `false` au lieu de
-  refuser (motif `enforce_branding_root_no_inherit`) — promouvoir un service en racine est une
-  réorganisation légitime. C'est l'invariant qui garantit que **tout service interne a un
-  porteur**, donc que la remontée se termine.
-- ⚠️ Le réglage **gouverne l'usage, pas la donnée** (motif `email_sender_name`,
-  `branding_inherit_parent`) : le décocher rend l'organisme au portail sans que rien n'ait été
-  perdu ; les activations restent en place.
-- ⚠️ **UNE DÉMARCHE, UN SEUL INSTRUCTEUR PAR PORTEUR** — le porteur lui-même compris. Deux services
-  internes de la même mairie ne peuvent pas activer la même démarche, ni un service et sa mairie :
-  une demande déposée au nom de la mairie n'aurait pas de destinataire déterminé. La règle est
-  écrite **une seule fois** en base (`internal_service_offer_conflicts`) et appliquée par **deux
-  triggers AFTER** — l'un à l'activation (`organization_procedures`), l'autre quand on coche la
-  case ou qu'on déplace un service (`organizations`) : le conflit peut naître sans qu'aucune
-  activation ne bouge. Détail : [docs/data-model.md](docs/data-model.md).
-- ⚠️ **Le statut n'entre pas dans la règle d'unicité** (cohérence du paramétrage, pas affichage) —
-  mais il entre dans le **catalogue** : une activation ne compte que si l'organisation **et son
-  porteur** sont actifs. Un service interne sous une mairie obsolète n'est proposé par personne ;
-  le faire remonter d'un cran de plus le rattacherait à une agglomération qui ne l'instruit pas.
-- **UI** : commutateur dans l'onglet « Informations de base » (`OrganizationInfoTab`, rendu
-  seulement si `parent_id !== null`) et dans l'`OrganizationFormDialog` du superadmin (rendu
-  seulement si un parent est choisi) ; **badge « Service interne »** en lecture dans
-  `OrganizationTree`, à côté d'« Obsolète » — l'organigramme est ce qu'on lit là.
-  ⚠️ L'aperçu du porteur se résout **depuis le PARENT**, jamais depuis l'organisation elle-même :
-  tant que la case n'est pas enregistrée elle est encore son propre porteur, et l'écran
-  annoncerait son propre nom (même piège que `parent_branding`).
-- **Onglet « Démarches »** : les démarches déjà portées ailleurs dans le groupe ont leur
-  interrupteur **désactivé**, avec la mention « Déjà activée par « Urbanisme » ».
-  ⚠️ **Confort, pas garantie** (motif `document_types`) : un administrateur qui n'a pas le droit de
-  lire le service frère ne verra rien de désactivé et recevra le message du trigger, déjà en
-  français, par le bandeau d'erreur existant. La base reste la seule barrière.
-  ⚠️ Une démarche activée **ici** n'est jamais verrouillée : il faut pouvoir la relâcher.
-- **En aval** (contrat 1.16.0) : `PortalOrganizationRef` porte `handling_organization_id` — l'UUID
-  du service qui instruit, `null` quand le porteur instruit lui-même. ⚠️ **Le NOM du service ne
-  sort pas** : la collectivité a choisi de ne pas le montrer. L'identifiant sert à router (Nora
-  dépose dans Iris), pas à afficher. `is_internal_service` est aussi exposé sur `OrganizationDto` —
-  contrairement aux colonnes de charte, la valeur brute ne ment pas, il n'y a pas d'héritage à
-  résoudre.
-- **En aval (contrat 1.22.0)** : `PortalOrganizationRef` porte aussi `slug` — l'identifiant lisible
-  du **porteur**, qui donne à cet organisme une ADRESSE sur le site de démarches (`/<slug>` y sert
-  ses démarches, à ses couleurs et avec son logo). Même règle que `name` : le slug d'un service
-  interne ne sort pas. ⚠️ `organizations.slug` a donc changé de statut — il était un confort
-  d'administration (point de départ du label DNS), il est devenu **public** : d'où la contrainte
-  `organizations_slug_url_form` (4 caractères au moins, `[a-z0-9-]`, mots réservés du portail
-  exclus). La longueur minimale n'est pas cosmétique : Nora décide sur la seule forme du premier
-  segment d'une adresse s'il lit une langue (`/en`) ou un organisme, sans rien demander au serveur.
-- **Qui a une page** se déduit du catalogue, sans réglage : un organisme est atteignable tant qu'il
-  propose au moins une démarche publiée. La racine est écartée par Nora — son site est déjà à la
-  racine du domaine.
-- **En aval (contrat 1.23.0)** : `PortalOrganizationRef` porte aussi `logo_url` — de quoi
-  reconnaître l'organisme dans une liste (Nora en fait un menu « Ma ville »). ⚠️ **Logo PROPRE,
-  héritage non résolu**, seul endroit du contrat où une valeur de charte sort brute : dans une
-  liste de communes, le logo hérité donnerait la même image à chaque ligne. `null` = pas de logo à
-  elle, le consommateur met un repli neutre.
-- Code : `bearerByOrganization` dans `src/features/superadmin/organizations/orgTree.ts` (pur,
-  testé), `bearerGroupSiblings` / `offersHeldBySiblings` dans
-  `src/features/organizations/organizationProcedures.ts` (purs, testés),
-  `OrganizationProceduresTab.test.tsx`. Miroir edge : `bearerByOrganization` dans
-  `public-api/_shared/portalCatalogue.ts` (une edge function n'importe rien de `src/` — testé des
-  deux côtés, motif `readDocumentIds`). Migration `organizations_service_interne`.
+### [Services internes](docs/features/services-internes.md)
+- `is_internal_service` retire l'organisme du portail ; son **porteur** (premier ancêtre non
+  interne) est nommé à sa place. Une racine n'est jamais service interne (corrigée par trigger).
+- ⚠️ **Une démarche, un seul instructeur par porteur** : règle unique
+  `internal_service_offer_conflicts`, appliquée par **deux** triggers AFTER (activation *et*
+  modification de l'organisation). Le verrou de l'UI est un confort, la base la seule barrière.
+- ⚠️ L'aperçu du porteur se résout depuis le **parent**. En aval sort `handling_organization_id`,
+  **jamais le nom** du service ; le `slug` du porteur est public (`organizations_slug_url_form`).
 
-### Où est le code
+### [Démarches (`procedures`)](docs/features/demarches.md)
+- Stepper à 6 étapes, une colonne par étape. ⚠️ **La clé suit la colonne, le libellé suit
+  l'agent** : l'étape « Publication » a pour clé `communication` (colonne
+  `communication_config`), « Communication usager » a pour clé `usager` (`user_communication` +
+  `user_description`) — table de correspondance dans la fiche.
+- ⚠️ Notions indépendantes, à ne pas confondre : `status` (paramétrage fini ; au doute
+  **brouillon**), `organization_procedures.is_enabled` (qui la propose),
+  `communication_config.visibility` (où et quand ; NULL = défauts **actifs**),
+  `is_internal_service` (sous quel nom). `access_mode` **ne filtre rien** (au doute `libre`), et
+  `user_communication` ne dit rien de la publication.
+- ⚠️ **Tout ce que porte `user_communication` est public** (servi tel quel au portail, défauts
+  vides) ; rien de ce qui sert à instruire n'y entre. Deux FAQ qui ne se fusionnent jamais :
+  `knowledge_base.faq` (agent et IA) ne traverse jamais vers le portail.
+- JSON possédés = **contrats publics** (`form_schema`, `requester_config`,
+  `communication_config`, `knowledge_base`, `user_communication`) : parseurs robustes testés.
+  Documents de la base de connaissances : bucket privé `procedure-documents`, 1er segment du
+  chemin = la racine (le RLS storage s'appuie dessus). Code : `src/features/procedures/`.
 
-- `src/features/organizations/` — UI **partagée** : `OrganizationTree` (arbre récursif),
-  `OrganizationsManager` (conteneur CRUD + dialogues), `OrganizationsPage` (route admin).
-- `src/features/superadmin/organizations/` — hooks (`useOrganizationsAdmin.ts` : requêtes,
-  mutations, `buildOrgTree`, `MAX_ORG_DEPTH`), `OrganizationFormDialog`, et `OrgSettingsPage`
-  (page d'une org : arborescence + cartes de paramétrage — infos, utilisateurs, SMTP…).
-- Le même `OrganizationsManager` sert les deux zones : `canManageRoots=false` côté admin ;
-  `canManageRoots` + `rootOrganizationId` (arbre **borné au sous-arbre** de l'org) + `onConfigure`
-  côté superadmin, en accueil d'`OrgSettingsPage`.
-- **Menu latéral superadmin** (`SuperAdminSidebar`) : chaque **organisation principale** (racine
-  stricte, `parent_id` null) est une entrée de sous-menu sous « Organisations » (libellé **non
-  cliquable**), triée par nom (helper pur `sortedRootOrganizations` dans `orgTree.ts`, testé) →
-  mène à son `OrgSettingsPage`, dont l'accueil affiche l'**arbre du sous-arbre** (racine +
-  sous-organisations). Les racines sont les **clients** : aucune vue ne fond tous les clients
-  dans un même arbre (`/superadmin/organisations` **n'existe plus**, redirection vers
-  `/superadmin`). La création d'une racine se fait par le bouton icône « + » de la ligne
-  « Organisations » (même `OrganizationFormDialog`). Sous les organisations, l'entrée **« Applications »**
-  (`/superadmin/applications`, une clé plateforme par application) et l'entrée **« Plateforme »**
-  (`/superadmin/plateforme`, réglages de plateforme et rejeu du provisioning) — voir features
-  « Applications et abonnements » et « Mise en service d'un client ».
-
-### Édition d'organisation en pleine page (app par organisation)
-
-Côté **admin** (`/organisations`), l'action « éditer » ouvre une **page dédiée à onglets**
-(`OrganizationEditorPage`, route `organisations/:orgId`) au lieu de la modale — le superadmin
-garde sa modale (`OrganizationsManager` reçoit `onEditOrganization` seulement côté admin).
-
-- **Onglet « Informations de base »** (`OrganizationInfoTab`) : formulaire complet
-  (nom, parent, adresse, téléphone, courriel, type, slug — ⚠️ **plus le logo**, parti dans
-  l'onglet « Charte graphique » le 2026-08-30) enregistré via
-  `useUpdateOrganization` + liste des **sous-organisations** (bouton « Éditer » → même page pour
-  l'enfant, « Ajouter » via `OrganizationFormDialog`). Inclut aussi, **pour toute organisation
-  (sous-orgs comprises)**, un toggle **« Expéditeur spécifique pour les e-mails »** :
-  colonnes `organizations.email_sender_override` (bool, défaut false) + `email_sender_name` (text).
-  Si activé, on saisit un nom d'expéditeur propre à l'org ; sinon le nom du SMTP applicable
-  (celui de l'org ou celui dont elle hérite) est utilisé.
-  Le nom est **conservé** en base quand on désactive (le flag gouverne l'usage). L'edge function
-  `send-test-email` applique ce nom quand `email_sender_override` est vrai. La colonne est
-  consommée en aval (Ariane/Clara). Écriture couverte par le RLS UPDATE `organizations`
-  (`is_admin_of_self_or_ancestor`).
-- **Onglet « Charte graphique »** (`BrandingSection`, visible sur **toute** organisation) :
-  `logo_url` (logo couleur), `logo_white_url` (logo blanc, fonds sombres), `favicon_url` (icône de
-  l'onglet du navigateur sur le site de démarches — 2026-09-12), `primary_color`,
-  `secondary_color` (hexadécimal `#rrggbb`, CHECK en base ; la saisie normalise `#ABC` → `#aabbcc`
-  — deux écritures de la même couleur ne doivent pas se lire comme deux couleurs en aval). Le Socle
-  **enregistre et publie** : aucun habillage de l'app ne change, l'aval s'y adosse.
-  ⚠️ **Le favicon est un élément de CHARTE, pas de thème** (motif de la couleur, à l'envers) : le
-  thème du portail dit COMMENT peindre, la charte dit AVEC QUOI — et une icône est une image de la
-  collectivité. Il hérite donc comme les logos, ce qui donne son icône à une sous-organisation qui
-  tient son propre guichet sans que personne la ressaisisse. C'est une **URL libre** comme les
-  logos : le Socle n'héberge rien, ne redimensionne rien, ne vérifie pas que l'image est carrée —
-  c'est Nora qui écarte ce qu'elle ne peut pas peindre (`https` seulement, règle commune aux
-  logos et aux images de blocs).
-  ⚠️ **Les CINQ éléments comptent dans « configuré »** (`isBrandingEmpty` ici, `configured` du DTO
-  et de `parent_branding` en aval, testés des deux côtés) : à quatre, une collectivité qui n'aurait
-  déposé que son favicon s'entendrait répondre qu'elle n'a pas de charte, et le consommateur
-  retomberait sur son habillage par défaut en ignorant le seul élément qu'elle a rempli.
-  **Héritage** : sur une sous-organisation, un commutateur **« Utiliser la charte graphique de
-  l'organisme parent »** (`branding_inherit_parent`, **activé par défaut**) remplace le formulaire
-  par l'aperçu de la charte héritée (RPC `parent_branding`) ; le désactiver ouvre la saisie d'une
-  charte propre. Même motif que le relais SMTP : rien n'est recopié, la résolution se fait à la
-  lecture (`resolve_branding`, service_role). Écriture par le RLS UPDATE `organizations`
-  (`is_admin_of_self_or_ancestor`) — pas de table dédiée, ce sont des colonnes de l'organisation.
-  ⚠️ Une organisation qui hérite **garde ses valeurs propres** (le commutateur gouverne l'usage,
-  pas la donnée — motif `email_sender_name`) : le retour en arrière est toujours possible.
-  ⚠️ Une **racine n'hérite jamais** : le trigger `enforce_branding_root_no_inherit` la **corrige**
-  à `false` au lieu de refuser, la colonne valant `true` par défaut (sans quoi toute création de
-  racine échouerait). ⚠️ La migration a repassé en « charte propre » les sous-organisations qui
-  **portaient déjà un logo** : les basculer en héritage leur aurait silencieusement substitué
-  celui de leur parent.
-  Côté superadmin, la même section est une carte d'`OrgSettingsPage` (`?section=charte`).
-  Le logo a aussi disparu de l'`OrganizationFormDialog` (création/édition superadmin) : posé là,
-  il aurait été enregistré puis ignoré sur une sous-organisation qui hérite.
-  **En aval** : la charte est servie **résolue** par `GET /v1/organizations/{id}/branding`
-  (`public-api`, scope `read`, contrat 1.5.0 ; `favicon_url` en **1.21.0** — voir feature
-  « API publique »). ⚠️ Les quatre colonnes ajoutées ne sont **pas** exposées sur
-  `OrganizationDto` et ne doivent pas l'être : brutes, elles sont nulles sur une organisation qui
-  hérite. ⚠️ Migrations `organizations_favicon` + `branding_functions_revoke_execute_bis` :
-  ajouter une colonne au type de retour de `resolve_branding` / `parent_branding` impose de les
-  **déposer**, et les recréer leur **rend les EXECUTE par défaut** d'`anon`/`authenticated` — que
-  `revoke ... from public` n'enlève pas. Reposer les droits en citant les **trois** rôles.
-  Côté Nora, le favicon se pose en `<link rel="icon">` (`src/features/portal/favicon.ts`) :
-  ⚠️ **son absence n'est pas un effacement**, l'onglet garde ce qu'il affichait.
-- **Onglet « Langues »** (`LanguagesSection`, **organisation principale uniquement** — une
-  sous-organisation y lit qu'elle suit sa racine) : quelles langues la collectivité active pour
-  s'adresser à ses usagers. Voir feature « Langues et libellés traduits ».
-- **Onglet « Démarches »** (`OrganizationProceduresTab`) : **activation par organisation**. Liste
-  le catalogue de l'**organisation principale** (ancêtre racine, `findRootAncestor`) avec un
-  `Switch` par démarche. L'activation est **opt-in** : une démarche est active ⇔ une liaison
-  `organization_procedures` existe avec `is_enabled = true` (helper pur `buildEnabledProcedureIds`,
-  testé). Écriture par **upsert** sur la contrainte unique `(organization_id, procedure_id)`
-  (`useSetProcedureEnabled`), lecture via `useOrganizationProcedureBindings`.
-  ⚠️ Une démarche déjà portée par le **porteur ou un service interne frère** a son interrupteur
-  désactivé (« Déjà activée par « X » ») : un seul instructeur par porteur — voir la feature
-  « Services internes ».
-- RLS `organization_procedures` : lecture `has_org_access(organization_id) OR
-  is_admin_of_self_or_ancestor(organization_id)` · écriture (INSERT/UPDATE/DELETE)
-  `is_admin_of_self_or_ancestor(organization_id)` — un admin active les démarches sur **tout son
-  sous-arbre** (migration `org_procedures_rls_admin_subtree` ; l'ancien `is_org_admin` bloquait les
-  sous-orgs en 403).
-- **Onglet « Emails (SMTP) »** (visible sur **toute** organisation depuis le 2026-08-23) :
-  réutilise le composant partagé `SmtpSettingsSection` (+ `useSmtpSettings`, edge function
-  `send-test-email`), déjà utilisé côté superadmin dans `OrgSettingsPage`. Champs : hôte, port,
-  identifiant, mot de passe, e-mail/nom expéditeur, TLS, + envoi d'un **mail de test**.
-  **Héritage** : sur une sous-organisation, un commutateur **« Utiliser la configuration de
-  l'organisme parent »** (activé par défaut) remplace le formulaire par un résumé en lecture seule
-  du relais hérité (organisation source, serveur, expéditeur, TLS — **jamais le mot de passe**,
-  via la RPC `parent_smtp_settings`) ; le désactiver ouvre la saisie d'une configuration propre.
-  ⚠️ Modifier le relais d'un parent modifie **de facto** celui de toute sa descendance non
-  spécifique : rien n'est recopié, la résolution se fait à la lecture
-  (`resolve_smtp_settings`, côté service role — voir `docs/data-model.md`). Une ligne repassée en
-  « hérité » **garde ses valeurs** (retour en arrière possible). RLS `smtp_settings` : lecture et
-  écriture `is_admin_of_self_or_ancestor(organization_id)` — élargi depuis `is_org_admin`
-  (migrations `smtp_settings_org_admin_write` puis `smtp_settings_heritage_parent`), sans quoi un
-  admin de principale ne pourrait pas régler l'héritage de ses sous-organisations.
-  `send-test-email` autorise via `is_admin_of_self_or_ancestor` et envoie par le relais **résolu**
-  (comme `invite-user` et `auth-email-hook`).
-- Code : `src/features/organizations/` — `OrganizationEditorPage`, `OrganizationInfoTab`,
-  `OrganizationProceduresTab`, `useOrganizationProcedures.ts`, `organizationProcedures.ts` (pur,
-  testé), `BrandingSection.tsx`, `useBranding.ts`, `branding.ts` (pur, testé : normalisation des
-  couleurs, forme de l'écriture, aperçu résolu, « une charte vide » à cinq éléments). Helpers d'arbre purs `findRootAncestor` / `collectDescendantIdsFlat` dans `orgTree.ts`.
-
-## Feature : paramétrage des démarches (`procedures`)
-
-Catalogue des démarches, **multi-tenant strict** : une démarche est rattachée à une
-**organisation principale (racine, `parent_id IS NULL`)** — imposé par le trigger DB
-`enforce_procedure_root_org`. L'**activation par organisation** (via `organization_procedures`)
-est fonctionnelle (voir feature « Édition d'organisation » ci-dessous). Paramétrage par **admin**
-(sa principale) et **superadmin** (toutes).
-
-- **Formulaire = stepper horizontal à 6 étapes** (`src/features/procedures/steps.ts`) : Descriptif,
-  Informations demandeur, Formulaire, **Communication usager**, **Publication**, Base de
-  connaissances. **Les 6 sont fonctionnelles** (Communication usager depuis le 2026-09-18),
-  chacune persistée dans sa propre colonne de `procedures`.
-  ⚠️ **LA CLÉ SUIT LA COLONNE, LE LIBELLÉ SUIT L'AGENT**, et deux d'entre eux ne coïncident plus
-  depuis le 2026-09-18 : l'ancienne étape « Communication » s'appelle désormais
-  **« Publication »** à l'écran (c'est elle qui règle où et quand la démarche est proposée),
-  mais sa clé, son fichier et sa colonne restent `communication` / `CommunicationStep.tsx` /
-  `communication_config`. Renommer la clé aurait fait perdre le fil vers la colonne ; garder
-  l'ancien libellé aurait mis deux « Communication » côte à côte dans le stepper, alors que les
-  deux notions ne se recouvrent en rien. D'où la table de correspondance :
-
-  | Étape (écran) | Clé | Colonne(s) |
-  |---|---|---|
-  | Descriptif | `descriptif` | colonnes plates + `translations` |
-  | Informations demandeur | `demandeur` | `requester_config` |
-  | Formulaire | `formulaire` | `form_schema` |
-  | **Communication usager** | `usager` | **`user_communication`** + `user_description` |
-  | **Publication** | `communication` | `communication_config` |
-  | Base de connaissances | `connaissances` | `knowledge_base` |
- Chaque étape a un `<form id>` soumis depuis le pied de `ProcedureEditor`
-  (`currentFormId`) et persiste via `useUpdateProcedure`. Le pied propose **deux boutons** :
-  « Enregistrer » (reste sur l'étape, confirmation « Enregistré ✓ » éphémère) et « Enregistrer et
-  continuer » (avance) — dernière étape : « Enregistrer » seul. L'étape courante est **reflétée dans
-  `?step=`** (`onStepChange` → `setSearchParams` en `replace`) : position restaurée après rechargement.
-- **Cycle de vie = `procedures.status`** (`brouillon` | `production`, défaut **brouillon**, CHECK
-  en base). Commutateur **« Production »** par ligne dans la liste des démarches (composant partagé
-  `ProceduresListPanel` → écran admin `/demarches` **et** section catalogue du superadmin) ; tag
-  **« Brouillon »** dans la liste et dans l'en-tête de l'éditeur. **Au bout du stepper**, un
-  enregistrement sur la dernière étape propose la mise en production par une modale — le moment où
-  la question se pose d'elle-même. Le geste est **réversible** dans les deux sens.
-  ⚠️ Ne pas confondre avec les deux autres notions qui s'y cumulent : `organization_procedures.
-  is_enabled` (quelles organisations la proposent) et `communication_config.visibility` (où et
-  quand). `status` dit si le **paramétrage est fini** ; une démarche en brouillon n'est proposée
-  nulle part, quelles que soient les deux autres. Une quatrième s'y ajoute sans s'y substituer :
-  `organizations.is_internal_service` ne dit pas SI la démarche est proposée, mais **sous quel nom**
-  — celui du porteur — et il borne l'activation (un seul instructeur par porteur). ⚠️ Les démarches **antérieures au 2026-08-30 sont
-  toutes en brouillon** (la notion n'existait pas — rien n'a été affirmé à leur place) : un
-  consommateur qui filtre sur `production` n'obtient rien tant que le catalogue n'a pas été basculé.
-  Logique pure `procedureStatus.ts` (testée : au moindre doute, **brouillon** — le doute ne publie rien).
-  ⚠️ **`access_mode` n'entre dans aucune de ces quatre notions** : il ne dit pas si la démarche est
-  proposée, ni sous quel nom, mais à quelles **conditions** on la dépose — voir ci-dessous.
-  ⚠️ **`user_communication` n'en est pas une cinquième non plus** : elle ne dit rien de la
-  publication, seulement ce que l'usager **lit** une fois la démarche proposée.
-- **Descriptif** → colonnes `procedures` : `name` (obligatoire), `category_id` (obligatoire, catégories
-  de la racine), `type` (`interne`/`externe`), `access_mode` (accès — voir ci-dessous),
-  `keywords` (text[], CSV), `short_description`,
-  `input_duration_minutes`, `order_index` (rang, défaut max+1), + `translations` (libellé **et
-  descriptif court** traduits dans chaque langue activée par la racine — voir feature « Langues et
-  libellés traduits »).
-- **Accès = `procedures.access_mode`** (`libre` | `authentifie`, défaut **libre**, CHECK en base —
-  2026-09-10) : la démarche se dépose-t-elle sans compte, ou faut-il être connecté à son espace
-  usager ? Sélecteur **« Accès »** de l'étape Descriptif, à côté du type — c'est de la même nature,
-  ce que la démarche EST avant ce qu'elle demande.
-  ⚠️ **CE N'EST PAS UNE CINQUIÈME RÈGLE DE PUBLICATION**, et c'est le seul piège de ce réglage : une
-  démarche réservée reste au **catalogue** du portail et doit s'y voir — c'est en la lisant que
-  l'usager apprend qu'il doit se connecter. La retirer la cacherait à ceux-là mêmes qui ont un
-  compte. La connexion se demande au moment de **déposer**, pas au moment de montrer ; c'est écrit
-  aux trois endroits où un consommateur regarde (DTO, schéma OpenAPI, description de la route).
-  ⚠️ **Défaut `libre`, lignes existantes comprises** : c'est ce qui était vrai (le portail dépose
-  sans compte depuis le 2026-09-06), et le défaut inverse aurait fermé d'un coup un catalogue que
-  personne n'avait déclaré fermé. Même raison pour le parseur : **au moindre doute, `libre`** —
-  l'inverse de `procedureStatus` (là le doute ne publie rien, ici il ne **ferme** rien).
-  ⚠️ Le Socle **enregistre et publie**, il ne garde aucune porte (motif de la charte graphique et de
-  l'étape « Publication ») : tant que Nora ne lit pas le champ, une démarche réservée se dépose comme
-  les autres. L'espace usager est à la roadmap (« Démarches avec compte »).
-  **En aval** (contrat 1.19.0) : `access_mode` sur `Procedure` **et** sur `PortalProcedure` (liste
-  et détail) — le portail en a besoin pour l'annoncer, l'application qui instruit pour refuser un
-  dépôt anonyme. Logique pure `procedureAccess.ts` (testée) ; miroir edge `readAccessMode` dans
-  `public-api/_shared/serializers.ts` (testé des deux côtés, motif `readDocumentIds`). Migration
-  `procedures_acces_libre_authentifie`.
-- **Informations demandeur** → colonne `procedures.requester_config` (JSONB). Publics
-  citoyen/entreprise/association activables ; par public, chaque donnée vaut `masque`/`visible`/
-  `obligatoire`. Logique pure + parseur robuste `requesterFields.ts` (testé), UI `steps/DemandeurStep.tsx`.
-  `enabledAudiences` en extrait les publics **activés** : c'est le seul morceau de cette colonne
-  qui concerne un usager avant qu'il ait choisi sa démarche, et c'est ce que le portail sert
-  (`PortalProcedure.audiences`) et ce sur quoi il filtre.
-- **Formulaire** → colonne `procedures.form_schema` (JSONB) : **form builder maison**, schéma
-  **possédé** (contrat public consommé en aval). Contenu = liste ordonnée de nœuds *champ* ou *section* ;
-  champs simples / choix (options) / **pièce justificative** (1–5 fichiers, formats, obligatoire +
-  conditionnel) ; **conditions** d'affichage & d'obligation (moteur pur `conditions.ts`). Ajout des
-  champs par **palette** (glisser-déposer positionné, ou clic → ajout à la fin). La palette propose
-  aussi un bloc **« Lieu d'intervention »** : une **section pré-remplie** des champs d'adresse
-  (numéro, BTQ, voie, complément, appartement, code postal, ville ; clés `intervention_*`,
-  fabrique `createLieuInterventionSection`) — section ordinaire du schéma (pas de type dédié dans
-  le contrat), entièrement modifiable après insertion. Les champs
-  **existants** se déplacent au glisser-déposer entre racine et sections (entrée/sortie/changement
-  de section) : un **seul `DndContext`** couvre tout le canevas (pas de contexte imbriqué dans
-  `SectionEditor`, sinon les champs restent prisonniers de leur conteneur) ; logique pure
-  `formReorder.ts` (`insertNode`/`moveNode`, testée), position avant/après déduite du point de dépôt.
-- **Communication** → colonne `procedures.communication_config` (JSONB) : schéma **possédé**
-  (contrat consommé en aval), organisé en **blocs** pour que les réglages à venir de l'étape
-  s'ajoutent en clés voisines sans déplacer l'existant. Premier bloc, **`visibility`** :
-  `portalVisible` (proposée sur le portail usagers), `publicationPeriodEnabled` +
-  `publicationStart`/`publicationEnd` (`AAAA-MM-JJ`, **bornes incluses**, chacune facultative).
-  Aucun comportement branché pour l'instant — le Socle **enregistre et publie**, l'aval s'y adosse.
-  ⚠️ Les deux commutateurs sont **actifs par défaut**, et une colonne **NULL** (démarche jamais
-  passée par l'étape — c'est le cas de toutes les existantes) se lit comme ces défauts : la traiter
-  comme « non publiée » dépublierait tout le catalogue d'un coup. ⚠️ Désactiver la période
-  **conserve** les dates (le commutateur gouverne l'usage, pas la donnée — même parti que
-  `email_sender_name`) : un consommateur qui applique les dates sans regarder le commutateur
-  dépublie à tort. Une fin antérieure au début est refusée à la saisie (`publicationPeriodError`) :
-  elle ne publierait jamais. Logique pure + parseur robuste `communication.ts` (testé), UI
-  `steps/CommunicationStep.tsx`.
-  Second bloc, **`documents`** (« Documents et courriers », 2026-09-01) : quels documents du
-  catalogue (`document_templates`) l'agent peut produire depuis cette démarche. Deux listes
-  distinctes — `documents` puise dans les types `interne`/`externe`, `letters` dans `courrier` —
-  plus `restrictVisibility`. Chaque entrée est `{id, visibility}` où `visibility` vaut `toujours`,
-  `positive` ou `negative` (l'issue de la demande).
-  ⚠️ La condition est **par document**, pas globale au bloc : c'est ce qui permet à une même
-  démarche de porter une lettre d'acceptation *et* une lettre de refus. ⚠️ `restrictVisibility`
-  **faux** rend toutes les conditions sans effet, et les conserve (motif `publicationPeriodEnabled`) :
-  un consommateur qui applique les `visibility` sans lire le drapeau masque des documents rendus
-  visibles. ⚠️ Défauts **vides**, contrairement à `visibility` dont les défauts sont actifs : une
-  colonne NULL ne doit pas déverser le catalogue dans chaque démarche. ⚠️ Le JSON ne porte **pas de
-  clé étrangère** : une sélection survit à la suppression de son document — l'UI comme l'API
-  **écartent** les références mortes (`resolveDocuments`, testé). UI : `steps/communication/DocumentsBlock.tsx`.
-  **En aval** : servi **résolu** dans `Procedure.documents` par `public-api` (contrat 1.6.0), à
-  côté du catalogue `GET /v1/document-templates` — voir feature « API publique ».
-- **Base de connaissances** → colonne `procedures.knowledge_base` (JSONB) : informations à destination
-  de **l'agent et de son assistant LLM**, schéma **possédé** (contrat consommé en aval). Champs : texte
-  d'aide agent & procédures (**Markdown**, aperçu via `markdown.ts` — rendu HTML échappé, aucune
-  dépendance), liens utiles agent + sources IA (`{url, description}`), FAQ (`{question, answer}`),
-  garde-fous (liste). Deux jeux de **documents** (aide agent PDF/image ; entraînement IA formats
-  étendus, 10 fichiers max chacun) : **téléversement fonctionnel** vers le bucket privé Supabase
-  `procedure-documents` (voir feature ci-dessous), référencés dans le JSON par `{path, name}`
-  (`agentDocuments`/`trainingDocuments`). Logique pure + parseur robuste `knowledgeBase.ts`
-  (testé), UI `steps/KnowledgeBaseStep.tsx` (+ `steps/connaissances/*`).
-- **Communication usager** (2026-09-18) → colonne `procedures.user_communication` (JSONB) : ce que
-  la collectivité écrit **pour ses usagers**, schéma **possédé**, organisé en **blocs** voisins
-  comme `communication_config`. `delays` (durée habituelle d'instruction : valeur + unité),
-  `audience.note` (précision éditoriale), `attachments.items` (`{label, description}` — pièces
-  annoncées), `faq.items` (`{question, answer}` — FAQ usager).
-  ⚠️ **INVARIANT : TOUT CE QUE PORTE CETTE COLONNE EST PUBLIC.** C'est ce qui permet de la servir
-  **telle quelle** au portail, sans whitelist clé par clé — comme `form_schema` et
-  `requester_config`. Rien de ce qui sert à INSTRUIRE n'y entre : cela vit dans `knowledge_base`
-  (agent et IA) ou dans `communication_config` (diffusion, documents de l'agent), qui ne
-  traversent ni l'un ni l'autre. Le jour où l'on sera tenté d'y poser un réglage interne, il faut
-  lui trouver une autre maison.
-  ⚠️ **Défauts VIDES**, à l'inverse du bloc `visibility` de `communication_config` dont les
-  défauts sont actifs : une colonne NULL veut dire « la collectivité n'a rien écrit ». Lui
-  inventer un délai ou une FAQ publierait en son nom ce qu'elle n'a pas dit.
-  ⚠️ **LE DESCRIPTIF N'EST PAS DANS CE JSON** : c'est la colonne `user_description`, qui existait,
-  qui était **déjà publiée** (liste **et** détail portail) et que plus aucun écran ne remplissait.
-  Lui créer une clé JSONB voisine aurait fait deux sources de vérité pour un même texte. Elle est
-  en **Markdown** depuis le 2026-09-18 — décidé pendant qu'elle était nulle sur les 51 démarches
-  de la plateforme ; le même choix pris après coup aurait réinterprété des textes déjà publiés.
-  ⚠️ **TROIS DESCRIPTIFS COHABITENT** : `short_description` (résumé d'une ligne, étape
-  « Descriptif », texte brut, traduit), `user_description` (le descriptif complet, étape
-  « Communication usager », Markdown) et `agent_description` (interne, publié sur `Procedure`
-  mais **jamais** au portail).
-  ⚠️ **TROIS DURÉES, aucune ne se déduit d'une autre** : `input_duration_minutes` (étape
-  « Descriptif », en **minutes**) = combien de temps l'usager met à **remplir** ·
-  `user_communication.delays` (valeur + **unité explicite** : `jour_ouvre`, `jour`, `semaine`,
-  `mois`) = combien de temps la collectivité met à **répondre** ·
-  `communication_config.visibility.publicationStart/End` = **entre quelles dates** la démarche est
-  proposée. Les deux premières sont servies au portail côte à côte et se confondent au premier
-  coup d'œil : les libellés d'écran (« Durée de saisie (minutes) » / « Durée habituelle
-  d'instruction ») et les descriptions OpenAPI les séparent explicitement. ⚠️ **L'unité est dans
-  la donnée, jamais déduite du nombre** ; ⚠️ **`0` est relu comme non renseigné** — afficher
-  « 0 jour » promettrait une réponse immédiate.
-  ⚠️ **LE PUBLIC CONCERNÉ NE SE RÈGLE QU'À UN ENDROIT** : l'étape « Informations demandeur »
-  (`requester_config`), d'où `enabledAudiences` tire les publics publiés en
-  `PortalProcedure.audiences` — le filtre « Je suis… » du portail. L'étape « Communication
-  usager » les **rappelle en lecture seule** et n'ajoute qu'une note éditoriale.
-  ⚠️ **Cette note ne filtre rien** (motif `access_mode`, qui ne publie ni ne dépublie) : c'est une
-  phrase que l'usager lit, pas une règle qu'une machine applique. En cas de contradiction avec
-  `audiences`, **`audiences` fait foi** — écrit aux trois endroits où un consommateur regarde
-  (DTO, schéma OpenAPI, changelog).
-  ⚠️ **`attachments.items` N'EST PAS LA LISTE DES PIÈCES À TÉLÉVERSER** : ce sont les champs
-  `attachment` de `form_schema`, typés (`documentTypeId`), parfois conditionnels, et servis sur
-  le **même** détail portail. `items` est un texte d'**annonce** : il peut les recouper
-  volontairement (on n'annonce pas une pièce comme on la collecte) et porter ce qui ne se dépose
-  pas en ligne. L'étape affiche les pièces du formulaire **en lecture seule** (helper pur
-  `attachmentFields`) précisément pour que personne ne les recopie. ⚠️ En aval, **ne pas les
-  concaténer** (la même pièce s'afficherait deux fois) ni n'afficher `items` seul.
-  ⚠️ **DEUX FAQ, UNE SEULE SORT** : `user_communication.faq.items` est publiée sur le site de
-  démarches ; `knowledge_base.faq` est écrite pour **l'agent et son assistant LLM** et n'a jamais
-  traversé vers le portail (test anti-fuite de `serializers.test.ts`). Même forme
-  (`{question, answer}`), deux destinataires : **elles ne se fusionnent jamais**. Les libellés
-  d'écran les séparent (« FAQ usager » / « FAQ interne (agent et IA) ») — c'est la seule
-  protection contre un agent qui répondrait à l'usager dans la mauvaise case.
-  ⚠️ **L'étape écrit DEUX colonnes dans UNE seule mutation** (`user_description` +
-  `user_communication`) : c'est le seul endroit du stepper où une étape persiste une colonne
-  texte en plus de son JSON. Les scinder laisserait l'agent devant un écran à moitié enregistré
-  sans qu'il puisse le savoir — un test l'épingle.
-  ⚠️ **Pas de traduction pour l'instant** : les textes de ce JSON ne rejoignent pas
-  `translations` (qui ne porte que des colonnes). `user_description`, lui, y a sa place —
-  roadmap, § Multilingue.
-  **En aval** (contrat 1.24.0) : `user_communication` sur `Procedure` **et** sur
-  `PortalProcedureDetail`, transmis tel quel. ⚠️ **Rien sur la LISTE** `GET
-  /v1/portal/procedures` : ce contenu appartient à la page d'une démarche, pas à un catalogue —
-  un test épingle ses neuf champs des deux côtés. ⚠️ Toute colonne absente du **select explicite**
-  du détail (`index.ts`) arrive `undefined` et devient `null` en silence : ajouter le champ au DTO
-  ne suffit pas.
-  Logique pure + parseur robuste `userCommunication.ts` (testé), UI
-  `steps/UserCommunicationStep.tsx` (+ `steps/usager/*` : `PiecesEditor`, `Recaps`).
-  Migration `procedures_communication_usager`.
-- RLS `procedures` : écriture `is_super_admin() OR is_org_admin(organization_id)` (la policy
-  permissive `write procedures` par `global_role` a été retirée → isolation tenant). Suppression
-  réservée au superadmin (UI).
-- Code : `src/features/procedures/` — `useProcedures.ts`, `useWritableRootOrganizations.ts`,
-  `Stepper.tsx`, `ProcedureEditor.tsx`, `ProceduresListPanel.tsx`, `ProceduresPage.tsx` (admin
-  `/demarches`), `ProcedureEditorPage.tsx` (`variant` admin/superadmin). Étapes : `steps/DescriptifStep`,
-  `steps/DemandeurStep`, `steps/FormulaireStep` (+ `steps/formulaire/*` : `FieldPalette`, `SectionEditor`,
-  `FieldRow`, `ConditionEditor`, `FormPreview`, `FormatsPicker`),
-  `steps/UserCommunicationStep` (+ `steps/usager/*`), `steps/CommunicationStep`,
-  `steps/KnowledgeBaseStep` (+
-  `steps/connaissances/*` : `MarkdownField`, `LinkListEditor`, `FaqEditor`, `StringListEditor`,
-  `DocumentsUploader`, `controls`), `steps/PlaceholderStep`. Stockage des documents :
-  `procedureStorage.ts` (logique pure de chemin/validation, testée) + `useProcedureDocuments.ts`
-  (upload/suppression/URL signée). Logique pure **testée** : `requesterFields.ts`,
-  `formSchema.ts`, `formReorder.ts`, `conditions.ts`, `formats.ts`, `knowledgeBase.ts`,
-  `communication.ts`, `userCommunication.ts`, `procedureStatus.ts`, `procedureAccess.ts`,
-  `markdown.ts`, `procedureStorage.ts`.
-  Superadmin : section « Catalogue de démarches » dans `OrgSettingsPage` (racine uniquement).
-- Prérequis : une racine sans **catégorie** ne permet pas de créer une démarche (catégorie
-  obligatoire) → créer d'abord des catégories via `/categories`.
-- La **pièce justificative** porte un `documentTypeId?: string` référençant un type du catalogue
-  `document_types` (voir feature ci-dessous). Le type est **obligatoire à la saisie** : `FormulaireStep`
-  bloque l'enregistrement tant qu'une PJ n'est pas typée (helper pur `attachmentFieldsMissingDocumentType`,
-  testé) et signale les champs fautifs. Le sélecteur charge le catalogue de la racine via
-  `useDocumentTypesForOrg`. Les **formats acceptés** se saisissent via `FormatsPicker` (puces
-  retirables + formats courants en un clic + saisie libre ; logique pure `formats.ts`, testée).
-  L'**aperçu** (`FormPreview`) affiche les formats autorisés et le nombre de fichiers max, et applique
-  la borne `maxFiles` (l'attribut HTML `multiple` seul n'impose aucune limite) : une sélection trop
-  grande est refusée.
-
-### Stockage des documents (bucket privé `procedure-documents`)
-
-Les documents de la **base de connaissances** sont stockés dans un **bucket Supabase privé**
-`procedure-documents` (25 Mio max/fichier), **multi-tenant strict** comme les démarches — mais
-l'isolation est portée par le **RLS de `storage.objects`**, pas par une colonne.
-
-- **Convention de chemin** (le RLS s'appuie dessus) :
-  `{organization_id}/{procedure_id}/{agent|training}/{uid}-{fichier}`. Le **1er segment est
-  l'organisation principale (racine)** de la démarche.
-- **RLS `storage.objects`** (policies scopées `bucket_id = 'procedure-documents'`, rôle
-  `authenticated`) : lecture `has_org_access(org_id)`, écriture (INSERT/UPDATE/DELETE)
-  `is_org_admin(org_id)` — où `org_id = ((storage.foldername(name))[1])::uuid`. Reflète l'écriture
-  des `procedures` (`is_super_admin` court-circuité par `is_org_admin`).
-- **Consultation** via **URL signée temporaire** (bucket privé, pas d'accès public).
-- Référence stockée dans `procedures.knowledge_base` : `{ path, name }` (`KbDocument`). Upload
-  **immédiat** à la sélection (le chemin est persisté à l'enregistrement de l'étape ; un fichier
-  téléversé puis abandonné sans enregistrer laisse un objet orphelin — acceptable pour l'instant).
-- Code : `procedureStorage.ts` (pur, testé : chemin, formats, taille), `useProcedureDocuments.ts`
-  (hooks upload/suppression + `createSignedDocumentUrl`), UI `steps/connaissances/DocumentsUploader`.
-
-## Feature : langues et libellés traduits (`enabled_languages`, `translations`)
-
-Une collectivité choisit les langues dans lesquelles elle s'adresse à ses usagers ; les libellés
-des **démarches** et des **catégories** se traduisent dans chacune, et depuis le 2026-09-07 le
-**descriptif court** d'une démarche avec eux. Le réglage vit sur
-l'**organisation principale** (racine) : les langues d'une collectivité ne se découpent pas par
-service — motif du catalogue de démarches, des quartiers, du plafond IA.
-
-- **Le français est la langue pivot** : c'est lui que portent les colonnes (`name`,
-  `short_description`). Il est toujours actif, ne se retire pas, et n'a **jamais** d'entrée dans
-  `translations` — l'y écrire créerait une seconde source de vérité pour un même texte, et rien ne
-  dirait laquelle fait foi le jour où elles divergent.
-- **Catalogue figé dans le code** (`src/features/languages/languages.ts`), comme
-  `documentVariables.ts` : c'est un **contrat de nommage** consommé en aval (le portail en fait son
-  sélecteur, les clés de `translations` sont ces codes), pas une donnée de client. Deux groupes —
-  **langues mondiales** et **langues régionales de France** (métropole et outre-mer). Codes
-  **BCP 47** : ISO 639-1 quand il existe (`en`, `br`, `oc`), ISO 639-3 sinon (`gsw`, `frp`, `gcr`,
-  `swb`, `dhv`). ⚠️ Quelques langues de France n'ont **aucun code ISO** (gallo,
-  poitevin-saintongeais, francique lorrain, champenois…) : elles ne sont pas au catalogue, et les
-  ajouter demande de **choisir une convention** (`fr-x-gallo`, usage privé BCP 47) — décision de
-  nommage public, donc entrée au changelog d'API. La LSF n'y est pas : pas de forme écrite.
-- **Base** : `organizations.enabled_languages` (`text[]`, défaut `{fr}`), CHECK
-  `is_valid_language_set` — la base valide la **forme** (au moins `fr`, sans doublon, codes bien
-  formés), **pas la liste** : ajouter une langue ne doit pas demander une migration. Trigger
-  `enforce_languages_root_org` : poser des langues sur une sous-organisation est **refusé**, mais
-  **rattacher** une organisation sous une autre est accepté (sa liste revient au défaut) — refuser
-  bloquerait une réorganisation sans rien protéger.
-- **Traductions** : `procedures.translations` (colonne préexistante, jamais utilisée, qui prend ici
-  une forme possédée) et `categories.translations` (nouvelle). Forme
-  `{ "<code>": { "name": "…", "short_description": "…" } }` — un objet par langue, dont les clés
-  sont celles des **colonnes françaises** correspondantes. C'est ce choix qui a permis au
-  descriptif court de rejoindre le libellé le 2026-09-07 **sans déplacer une seule entrée** ; le
-  descriptif usager s'ajoutera de la même façon. `short_description` n'existe que sur `procedures`
-  (une catégorie n'a pas de descriptif) ; les champs traduisibles sont déclarés une fois pour
-  toutes dans `TRANSLATABLE_FIELDS` (front) et `FIELD_SPECS` (fonction). CHECK
-  `jsonb_typeof = 'object'` des deux côtés.
-- **Troisième porteur (2026-09-07)** : les **textes de la page composée** du portail
-  (`portal_pages.draft/published`), sous la même forme, avec le jeu de champs
-  `PORTAL_SECTION_FIELDS` (`title`, `subtitle`, `placeholder`, `body`, `alt` — le texte alternatif
-  d'une image du bloc `texte-image` : le laisser en français ne traduirait la page que pour ceux
-  qui la voient). La traduction vit **sur la
-  section** — elle voyage donc avec son bloc au glisser-déposer, à la duplication, à la
-  suppression, et les sous-blocs du pied de page en héritent (ce sont des sections). ⚠️ Le schéma
-  **reste en `version: 1`** : l'ajout est purement additif, et `parsePortalPage` refuse tout autre
-  numéro — écrire un `2` ferait retomber la page entière sur `defaultPortalPage()`, c'est-à-dire
-  perdre la composition d'une collectivité. ⚠️ **Zod strippe les clés inconnues** : `translations`
-  doit être déclaré dans les six schémas de section, sans quoi une traduction saisie survit à la
-  frappe puis disparaît au rechargement de l'éditeur (test d'aller-retour dédié).
-- ⚠️ **CHAQUE CHAMP EST INDÉPENDANT, ET LE REPLI SE FAIT CHAMP PAR CHAMP** : une langue peut
-  porter le libellé traduit sans le descriptif — c'est le cas normal, pas une traduction
-  inachevée. Un consommateur qui replierait la **langue entière** parce qu'un champ manque
-  masquerait un libellé que la collectivité a bel et bien écrit, et qu'elle voit à son écran.
-- ⚠️ **Un écran n'efface que les champs qu'il affiche** : `translationsForWrite` reçoit la liste
-  des champs gouvernés (dernier argument). Sans elle, enregistrer une catégorie — qui n'affiche
-  que le libellé — effacerait tout descriptif traduit vivant dans la même colonne.
-- ⚠️ **Désactiver une langue n'efface pas ses traductions** (le réglage gouverne l'usage, pas la
-  donnée — motif `email_sender_name`, `publicationPeriodEnabled`) : `translationsForWrite` part de
-  l'existant et ne touche qu'aux langues **actives**. La réactiver rend le travail déjà fait.
-- ⚠️ **Une traduction vide n'est pas stockée** : c'est l'absence de traduction. Un consommateur qui
-  lirait la chaîne vide afficherait un texte vide là où il devait **retomber sur le français**. Une
-  langue dont plus aucun champ n'est rempli **disparaît** de la colonne : une entrée vide se
-  compterait comme « traduit en anglais » alors que rien ne l'est.
-- **UI** : `LanguagesSection` (onglet « Langues » de `OrganizationEditorPage` côté admin, section
-  `?section=langues` d'`OrgSettingsPage` côté superadmin — motif `BrandingSection`) : deux groupes
-  de cases à cocher, recherche, français coché et verrouillé, récapitulatif des langues actives.
-  ⚠️ Une réponse de traduction s'applique **d'un seul geste** (`onApply`), jamais case par case :
-  un appelant qui possède un objet plus gros (la page composée) repart de l'état de son rendu à
-  chaque appel, et trois cases écrites dans le même tick n'en laisseraient qu'une (bogue du
-  2026-09-07 : titre et sous-titre perdus, seul le placeholder rempli).
-  `TranslationFields` (partagé) affiche, par langue active, un champ par texte traduisible
-  (`fields`) : libellé **et** descriptif court dans l'étape **Descriptif** d'une démarche, libellé
-  seul dans le **dialogue de catégorie**. Avec deux textes, chaque langue devient un groupe
-  (`fieldset`/`legend`) ; avec un seul, le nom de la langue reste l'étiquette du champ — encadrer
-  un champ unique n'ajouterait qu'une boîte. ⚠️ Le bloc est placé **sous** les textes français
-  qu'il traduit : demander à un agent la traduction d'un descriptif qu'il n'a pas encore écrit ne
-  peut donner que des cases vides. `TranslatedIn` montre dans les deux listes les langues déjà
-  traduites.
-- **Traduction automatique** (2026-09-06, étendue au descriptif court le 2026-09-07) : bouton
-  **« Traduire automatiquement »** dans `TranslationFields` — donc dans les **deux** écrans,
-  démarches et catégories, puisque c'est le même geste sur le même type de texte. ⚠️ **Un seul
-  appel pour tous les textes d'une ligne**, jamais un par champ : un seul débit sur le crédit de
-  la collectivité, un seul coup de cadence, et le modèle traduit le descriptif en sachant de
-  quelle démarche il parle. Edge function **`translate-labels`** (JWT de session,
-  `verify_jwt = true`), qui **appelle `ai-api`** avec la clé plateforme `SOCLE_AI_API_KEY`
-  (consommateur `socle`, scope `ai`) : le Socle est ici sa propre application consommatrice, sous
-  le plafond et la cadence de la collectivité, visible dans sa ventilation. ⚠️ Ne jamais la
-  « simplifier » en lisant `MISTRAL_API_KEY` directement — ce serait un **second appelant du
-  fournisseur**, donc un second endroit où plafond, cadence et journal peuvent diverger.
-  ⚠️ **Elle ne remplit que les cases vides**, langue par langue **et champ par champ** : une
-  traduction relue par un agent ne se distingue pas à l'écran de celle qu'il vient de recevoir,
-  l'écraser en silence lui ferait perdre un travail qu'il ne saurait même pas avoir perdu. La
-  garde est évaluée **à l'arrivée de la réponse** (`valueRef`), pas au clic : une case saisie
-  pendant l'appel est protégée elle aussi. L'appel ne demande d'ailleurs que ce qui manque — les
-  textes absents quelque part, les langues incomplètes. « Tout retraduire » existe, sous
-  `AlertDialog`.
-  ⚠️ **Rien n'est persisté par la fonction** : la proposition se pose dans les champs, c'est
-  l'enregistrement du formulaire qui l'écrit — l'agent garde le dernier mot (d'où « relisez avant
-  d'enregistrer »). ⚠️ **Un texte qui ne se traduit pas est RECOPIÉ, pas écarté** (décision du 2026-09-07, après
-  usage — la règle inverse tenait jusque-là). Un bandeau intitulé « ACCM » avec une adresse pour
-  texte revenait entièrement vide : le modèle avait raison, mais à l'écran ça se lit comme un
-  échec, et l'agent ne sait pas si son bloc est traité ou oublié. ⚠️ **Ce que ça coûte, et qui est
-  assumé** : une copie stockée est **gelée** — le jour où le français change, elle continue de
-  s'afficher à sa place, là où une absence serait retombée sur le français à jour. ⚠️ La
-  distinction que tient le prompt : un **texte** intraduisible se recopie, une **langue** que le
-  modèle ne maîtrise pas s'omet — recopier du français dans un champ breton ne dirait pas
-  « identique », mais « pas fait ». Le français est par ailleurs affiché **en filigrane** de chaque
-  case : le repli cesse d'être une règle à connaître pour devenir quelque chose qu'on voit. ⚠️ **Autorisation = `is_org_admin`**, évaluée avec les droits de
-  l'appelant : le miroir exact du RLS d'écriture de `procedures`/`categories` — traduire pour une
-  organisation où l'on ne pourrait rien enregistrer se paierait sur son crédit pour rien. ⚠️ Les
-  langues demandées sont **recoupées côté serveur** avec `enabled_languages` ; le **libellé** de
-  chaque langue, lui, vient du front, seul propriétaire du catalogue (le dupliquer dans la fonction
-  ferait deux listes pour un seul contrat de nommage). Sans le secret, la fonction répond
-  `503 not_configured` et l'écran le dit — voir `docs/operations.md`.
-- **En aval** (contrat 1.11.0 ; `short_description` traduit servi en **1.13.0**) :
-  `GET /v1/portal/tenant` porte `languages` (héritage **résolu** par
-  la RPC `resolve_org_languages`, EXECUTE réservé au service role — motif `resolve_branding`), et
-  `translations` est servi **tel quel** sur `Category`, `Procedure` et `PortalProcedure` (schéma
-  OpenAPI partagé `Translations`). ⚠️ `enabled_languages` n'est **pas** exposé sur
-  `OrganizationDto` : brute, la colonne d'une sous-organisation vaut `{fr}` et ferait croire à une
-  collectivité monolingue — même piège que les colonnes de charte graphique.
-- Code : `src/features/languages/` — `languages.ts` (catalogue + `parseEnabledLanguages`,
-  `enabledLanguagesForWrite`, `sortLanguageCodes`), `translations.ts` (`TRANSLATABLE_FIELDS`,
-  `PORTAL_SECTION_FIELDS`, `parseTranslations`, `translationsForWrite`,
-  `localizedField`/`localizedName`) — les deux **purs et testés**, et les trois règles n'y sont
-  écrites **qu'une fois** : `parseTranslations` et `translationsForWrite` prennent un paramètre
-  `known` (ce que la colonne peut porter) distinct de `fields` (ce que l'écran a le droit
-  d'effacer) — les confondre ferait effacer précisément ce que `fields` protège —,
-  `useOrganizationLanguages.ts`, `LanguagesSection.tsx` (testé), `TranslationFields.tsx` (**testé** :
-  ce qu'il complète et ce qu'il n'écrase pas), `TranslatedIn.tsx`, `useTranslateLabels.ts`. Miroir
-  côté edge function : `readLanguages` dans `public-api/_shared/serializers.ts` (testé des deux
-  côtés, motif `readDocumentIds`). Traduction automatique :
-  `supabase/functions/translate-labels/` — `index.ts` + `_shared/translate.ts` (pur, **testé** :
-  whitelist du payload, recoupement des langues, prompt, parseur tolérant de la réponse) et
-  `_shared/passthrough.test.ts` (le libellé traverse, il n'est jamais journalisé — motif `ai-api`).
-- Migration : `langues_et_traductions`.
-
-## Feature : types de pièce justificative (`document_types`)
-
-Catalogue des types de pièce justificative, **multi-tenant strict** comme les démarches : chaque
-type est rattaché à une **organisation principale (racine)** — imposé par le trigger DB
-`enforce_document_type_root_org` (calqué sur `enforce_procedure_root_org`). Il **alimente le champ
-pièce justificative** du form builder (`documentTypeId`, obligatoire — cf. feature démarches).
-
-- Champs : `name` (**obligatoire**, **unique par organisation, insensible à la casse** via l'index
-  `document_types_org_name_unique` sur `(organization_id, lower(name))`), `organization_id` (FK
-  racine, `ON DELETE CASCADE`).
-- RLS `document_types` (calqué sur `categories`) : lecture `has_org_access(organization_id)` ·
-  écriture (ALL) `is_org_admin(organization_id)`. Pas de policy super_admin dédiée (`is_org_admin`
-  court-circuite déjà le super admin).
-- Unicité vérifiée côté client (feedback immédiat) **et** garantie en base (repli sur l'erreur
-  Postgres `23505`).
-- **Deux points d'entrée**, tous deux via le composant partagé `DocumentTypesManager` (liste + CRUD) :
-  - **Admin** : écran **`/types-pieces`** dans l'app par organisation (comme `/categories`) — mode
-    « toutes mes racines », le dialogue propose un sélecteur d'organisation (masqué s'il n'y en a qu'une).
-  - **Superadmin** : section « Types de pièce justificative » de `OrgSettingsPage` (racine uniquement) —
-    mode **org fixée** : `DocumentTypesManager organizationId=…`, le dialogue **verrouille** l'organisation
-    (`fixedOrganizationId`) et la liste n'affiche que les types de cette organisation.
-- Code : `src/features/document-types/` — `useDocumentTypes.ts` (`useDocumentTypesQuery(enabled?)`,
-  `useDocumentTypesForOrg(orgId)`, mutations), `DocumentTypesManager`, `DocumentTypeFormDialog`,
-  `DocumentTypesPage` (fin conteneur). Sélecteur d'organisation via `useWritableRootOrganizations`.
-
-## Feature : catalogue de documents (`document_templates`)
-
-Modèles de documents et de courriers d'une collectivité — accusés de réception, notifications,
-fiches internes — déposés une fois et porteurs de **variables** (`{{usager.nom}}`). **Multi-tenant
-strict** comme les démarches : rattachés à une **organisation principale (racine)**, trigger
-`enforce_document_template_root_org`. ⚠️ Ne pas confondre avec `document_types` (les **pièces
-demandées à l'usager**) ni avec le bucket `procedure-documents` (les **documents d'aide à
-l'agent**) : ce sont des **gabarits**, d'où le nom `document_templates` alors que l'UI dit
-« Documents ».
-
-⚠️ **Le Socle enregistre et publie, il ne fusionne rien** — même parti que la charte graphique et
-l'étape « Publication ». Il n'inspecte pas le contenu des fichiers (Word découpe volontiers
-`{{usager.nom}}` en plusieurs fragments XML : une détection naïve signalerait des variables
-absentes qui sont bien là), et ne sait pas valoriser la plupart des variables qu'il publie.
-
-- Champs : `name` (**obligatoire**, **unique par organisation, insensible à la casse** via l'index
-  `document_templates_org_name_unique`), `description` (facultatif), `type`
-  (`interne`/`externe`/`courrier`, CHECK en base — même mot que `procedures.type`, plus
-  `courrier`), `file_path` + `file_name`, `created_at`/`updated_at` (trigger partagé
-  `set_updated_at`).
-- RLS `document_templates` (calqué sur `document_types`) : lecture `has_org_access(organization_id)`
-  · écriture (ALL) `is_org_admin(organization_id)`. Unicité vérifiée côté client (feedback
-  immédiat) **et** garantie en base (repli sur l'erreur Postgres `23505`).
-- **Stockage : bucket privé `document-templates`** (25 Mio/fichier), formats `.doc`/`.docx`/`.odt`.
-  Convention de chemin **`{organization_id}/{uid}-{fichier}`** — pas de segment de document : le
-  fichier est déposé **avant** que la ligne existe, le `uid` (`crypto.randomUUID()`) suffit à
-  écarter les collisions. RLS `storage.objects` scopé `bucket_id` : lecture `has_org_access`,
-  écriture `is_org_admin` sur `((storage.foldername(name))[1])::uuid` — motif
-  `procedure-documents`. Consultation par **URL signée temporaire**.
-- ⚠️ **Ordre des écritures**, à ne pas inverser : à la **création**, le fichier part avant la ligne
-  (abandon de la modale ⇒ objet orphelin, assumé ; un échec de l'insert **compense** en retirant le
-  fichier) ; au **remplacement**, l'ancien objet n'est retiré qu'**après** succès de l'update (sans
-  quoi un échec laisserait un document introuvable) ; à la **suppression**, la ligne part d'abord
-  (le RLS peut refuser), le fichier ensuite en best-effort.
-- **Catalogue de variables** (`documentVariables.ts`) : figé dans le code — c'est un **contrat de
-  nommage**, pas une donnée client. Syntaxe `{{domaine.cle}}` (moteurs de fusion courants :
-  docxtemplater, carbone.io). **Trois domaines** : **`usager.*`** (16 variables — identité, adresse
-  complète *et* ses composantes, coordonnées, quartier), **`demande.*`** (13 variables — démarche,
-  suivi, dates, état, agent instructeur) et **`organisme.*`** (8 variables — nom, adresse,
-  téléphone, courriel, deux logos, deux couleurs). ⚠️ La liste des pièces est une **boucle**
-  (`{{#demande.pieces}}{{libelle}} : {{statut}}{{/demande.pieces}}`), pas une variable plate : elle
-  a autant de lignes que le dossier compte de pièces.
-  ⚠️ **La plupart de ces variables n'ont pas de source dans le Socle** : les composantes d'adresse
-  manquent à `contacts` (roadmap), et toute la famille `demande.*` vit dans Ariane/Clara. Le
-  catalogue dit comment **nommer**, pas ce que le Socle sait remplir.
-  **`organisme.*` est la seule exception, et elle est entière** : les quatre coordonnées sont des
-  colonnes d'`organizations`, la charte vient de `resolve_branding` / `GET
-  /v1/organizations/{id}/branding`. ⚠️ La charte s'entend **résolue** — une sous-organisation qui
-  hérite a ses colonnes de charte **nulles**, un consommateur qui lirait `organizations` en direct
-  peindrait du vide (même mise en garde qu'au changelog du 2026-08-30). ⚠️ Les logos sont des
-  **URL d'image** et les couleurs des `#rrggbb` : un moteur de fusion doit savoir *insérer une
-  image*, sinon le courrier affiche une adresse web à la place du logo — d'où les `hint` du
-  catalogue, **testés**.
-- **Deux points d'entrée**, tous deux via le composant partagé `DocumentTemplatesManager` (liste +
-  CRUD), motif `document_types` :
-  - **Admin** : écran **`/documents`** dans l'app par organisation — mode « toutes mes racines », le
-    dialogue propose un sélecteur d'organisation (masqué s'il n'y en a qu'une).
-  - **Superadmin** : section « Documents » d'`OrgSettingsPage` (`?section=documents`, racine
-    uniquement) — mode **org fixée** (`fixedOrganizationId`).
-  Colonnes de la liste : **libellé, nom fichier, type**. Un bouton **« Variables disponibles »**
-  ouvre `VariablesDialog` (titre + jeton + copie par variable) — au-dessus de la liste, là où
-  l'agent en a besoin au moment de préparer son fichier.
-- **Exposé par `public-api`** depuis le 2026-09-01 (contrat 1.6.0) : catalogue
-  `GET /v1/document-templates` (+ `/{id}`, filtre `type`), téléchargement par
-  `GET /v1/document-templates/{id}/signed-url` (URL signée 5 min ; ⚠️ le `file_path` n'est **jamais**
-  exposé — la garde de périmètre porte sur la ligne, pas sur une chaîne fournie par l'appelant), et
-  sélection **résolue** dans `Procedure.documents`. ⚠️ Ne pas confondre avec
-  `GET /v1/documents/signed-url`, qui sert la base de connaissances (bucket `procedure-documents`)
-  — c'est d'ailleurs pourquoi l'endpoint s'appelle `document-templates` et non `documents`.
-- **Rattachement aux démarches** : fait, par le bloc `documents` de l'étape « Publication » (voir la
-  feature « paramétrage des démarches »).
-- Code : `src/features/documents/` — `documentVariables.ts` et `documentTemplates.ts` (purs,
-  **testés**), `useDocumentTemplates.ts` (CRUD + upload/suppression/URL signée),
-  `DocumentTemplatesManager`, `DocumentTemplateFormDialog`, `VariablesDialog` (testé),
-  `DocumentsPage` (fin conteneur). Helpers de fichier **partagés** avec les démarches dans
-  `src/lib/fileStorage.ts` (`fileExtension`, `sanitizeFileName`, `isFormatAllowed`,
-  `acceptAttribute`, `validateFile`) — `procedureStorage.ts` les réexporte.
-- Migration : `document_templates`.
-
-## Feature : API publique (lecture seule) — `public-api`
-
-Socle expose son référentiel via une **API REST versionnée en lecture seule** (`GET` uniquement),
-**contrat public** consommé en aval (Ariane, Clara, partenaires). C'est une **Edge Function Deno**
-`supabase/functions/public-api`, servie sous `{SUPABASE_URL}/functions/v1/public-api/…`, déployée
-avec **`verify_jwt = false`** (l'auth est portée par la fonction, pas par la passerelle).
-
-- **Authentification = clé API** en `Authorization: Bearer <clé>`. Table `api_keys` (secret **haché
-  SHA-256** dans `key_hash`, jamais en clair ; `key_prefix` affiché pour repérage ; `expires_at`,
-  `revoked_at`, `last_used_at`). Le scope **`read`** est requis (403 sinon — vérifié depuis le
-  2026-08-12). Une clé est **rattachée à une organisation principale (racine)** —
-  trigger `enforce_api_key_root_org` (calqué sur `enforce_procedure_root_org`) — ou **plateforme**
-  (`organization_id` NULL, autorisé depuis le 2026-07-17) : périmètre = **toutes** les organisations,
-  toutes racines confondues — c'est la liaison unique avec Clara (une clé, deux plateformes
-  multi-tenant). Les géométries de quartiers exigent alors le paramètre `organization_id`.
-  RLS `api_keys` = `is_super_admin()` pour tout (gestion super admin uniquement). L'UI gère les
-  clés **par racine** (section « API publique » d'`OrgSettingsPage`) et les clés **plateforme** sur
-  la page **`/superadmin/applications`** (`ApplicationsPage`, une liste par application ; carte de
-  comptage sur le tableau de bord). ⚠️ Depuis le 2026-09-08 une clé plateforme est **rattachée à une
-  application** et ne voit que les collectivités **abonnées** — voir feature « Applications et
-  abonnements » ; « périmètre = toutes les organisations » n'existe plus que pour le Socle lui-même.
-- **Isolation** : la fonction lit avec la **service role** (hors RLS) mais **restreint chaque requête
-  au sous-arbre** de l'org de la clé, via `public.org_subtree_ids(root uuid) returns uuid[]`
-  (récursif, `SECURITY INVOKER`, `EXECUTE` réservé à `service_role` — révoqué de
-  `anon`/`authenticated` le 2026-08-12, migration `org_subtree_ids_revoke_execute`).
-  C'est LE point où vit l'isolation → couvert par tests + vérif bout en bout.
-- **Endpoints** (préfixe `/v1`) : `organizations` (+`/{id}`, filtres `status`, `tree=true`),
-  `categories`, `procedures` (+`/{id}`, filtres `category_id`, `type`, `enabled_for`),
-  `document-types`, `quartiers` (option `geometry=true` → polygones **GeoJSON** via la RPC
-  `list_quartiers_geojson` ; sans elle, aucune géométrie — la colonne `geom` binaire n'est
-  jamais exposée), `documents/signed-url?path=` (URL signée temporaire, bucket privé
-  `procedure-documents`), `organizations/{id}/branding` (**charte graphique applicable**,
-  héritage résolu — logos, favicon et couleurs ; scope `read`), `organizations/{id}/smtp` (**serveur
-  d'envoi applicable** à l'organisation, héritage résolu — cf. sérialisation ci-dessous).
-  Docs : `openapi.json` (public) et `docs`
-  (Redoc, cf. ci-dessous).
-- **Erreurs** : enveloppe `{ "error": { code, message } }` → `400`/`401`/`403`/`404`/`405`/`500`.
-  Ressource hors périmètre = **404** (on ne révèle pas son existence).
-- **Sérialisation = whitelist stricte** (`_shared/serializers.ts`) : aucune colonne sensible
-  (`key_hash`, réglages IMAP…) ne peut fuir même sur un `select *`. Les JSON possédés
-  (`form_schema`, `requester_config`, `knowledge_base`, `translations`, `metadata`) sont
-  **transmis tels quels**. **Une seule exception, explicite et gardée** (2026-08-23) :
-  `GET /v1/organizations/{id}/smtp` sert le relais de messagerie **mot de passe compris**
-  (`serializeSmtpSettings`), parce que les applications de la gamme expédient les mails de la
-  collectivité par SON relais et que le Socle en est propriétaire — Iris s'en sert pour
-  alimenter son miroir plutôt que de faire ressaisir les identifiants. Deux gardes
-  cumulatives : scope **`smtp`** sur la clé (le scope `read` ne suffit pas) et organisation dans
-  le périmètre de la clé ; `configured: false` quand rien n'est défini. La garde « racine
-  uniquement » a été **levée le 2026-08-23** avec l'héritage : toute organisation du périmètre
-  répond, avec le relais **résolu** et `source_organization_id` qui dit qui le porte.
-- **Logique pure co-localisée** dans `supabase/functions/public-api/_shared/` (`dto`, `serializers`,
-  `scope`, `errors`, `openapi`) — **sans dépendance Deno/`@/`**, donc **testée par vitest**
-  (`include` étendu dans `vite.config.ts` à `supabase/functions/**`) **et** déployée avec la fonction
-  (tableau `files` de `deploy_edge_function`). Le déploiement inclut `index.ts` + tout `_shared/*.ts`.
-- **Documentation humaine (type Swagger)** = **page in-app `/api-doc`** (`ApiDocsPage`, route
-  **publique**) qui charge **Redoc** (CDN) pointé sur `…/public-api/openapi.json`. ⚠️ Pourquoi pas
-  servie par la function : la passerelle Supabase force les réponses **HTML** des functions en
-  `text/plain` + CSP `sandbox` (anti-hameçonnage sur `*.supabase.co`) → un rendu HTML depuis la
-  function ne s'affiche pas. Le `openapi.json` (JSON) est, lui, servi normalement.
-- **Gestion des clés (super admin)** : section **« API publique »** de `OrgSettingsPage`
-  (**racine uniquement**), à côté de SMTP / catalogue / types de PJ, et page **« Applications »**
-  (`/superadmin/applications`, `ApiKeysList` montée une fois par application). Les deux partagent `ApiKeysList` (liste + révocation via
-  `AlertDialog`) + `ApiKeyFormDialog` (**génération + hachage navigateur** via `apiKeys.ts`, secret
-  **affiché une seule fois**) + `useApiKeys.ts` (`useApiKeys`/`useCreateApiKey`/`useRevokeApiKey`,
-  paramétrés par un `ApiKeyOwner` = id de racine **ou `null` = plateforme** (`organization_id IS
-  NULL`) ; la liste **ne sélectionne pas** `key_hash`). En mode plateforme, le dialogue affiche un
-  avertissement « périmètre global » et exige une **case d'assentiment** avant de créer (testé,
-  `ApiKeyFormDialog.test.tsx`). `created_by` = `profile.id`.
-- Logique pure **testée** : `_shared/{serializers,scope,errors,openapi}.ts`,
-  `superadmin/organizations/apiKeys.ts` (génération/hachage, `apiKeyStatus`, `countActiveApiKeys`).
-
-## Feature : mise en service d'un client (provisioning, check-list, plateforme)
-
-Procédure complète : [docs/onboarding.md](docs/onboarding.md). **La règle** : par client, rien
-dans Supabase — tout dans le Socle ; dans Supabase, une fois, pour la plateforme.
-
-- **Réglages de plateforme** (`platform_settings`, ligne unique, page `/superadmin/plateforme`,
-  `src/features/superadmin/platform/`) : zone des sous-domaines fournis, cible CNAME des domaines
-  personnalisés, plafond IA par défaut. Lisible par tout `authenticated` (aucun secret n'y vit —
-  l'écran des domaines affiche la cible CNAME), UPDATE super admin. Bouton **« Rejouer le
-  provisioning »** (`provision_existing_roots`) pour les racines créées avant les réglages.
-- **Une racine naît équipée** : trigger `provision_root_organization` (AFTER INSERT OR UPDATE OF
-  `parent_id`, racines seulement) → `provision_root` pose les **8 rôles de contact** (le seed du
-  2026-07-15 ne se rejouait jamais : `contacts-api` refusait tout rôle à un client récent), le
-  **plafond IA par défaut** (insert direct dans `ai_usage_quotas` — `set_ai_usage_quota` exige
-  `auth.uid()`, nul dans un trigger) et le **sous-domaine fourni** `<slug>.<zone>`.
-  ⚠️ **Idempotent et jamais bloquant** : `on conflict do nothing`, collision de hostname →
-  `raise warning`, et le trigger avale toute erreur (`exception when others`) — la création de
-  l'organisation est l'acte principal. ⚠️ Tout script qui insère des racines en hérite :
-  `plafond-ia.test.sql` neutralise le plafond par défaut en tête de transaction.
-  ⚠️ Le **slug n'est pas sûr pour un nom DNS** (« Sète » → `s-te` par l'ancien `slugify`) :
-  `dns_label_from_slug` (SQL) / `dnsLabelFromSlug` (TS, `organizationDomains.ts`, tests jumeaux)
-  dérivent le label — et `OrganizationFormDialog` slugifie désormais avec lui. Un slug renommé
-  ensuite **ne renomme pas** le sous-domaine.
-- **Check-list « Mise en service »** en tête de la page d'une racine (`OnboardingChecklistCard`,
-  logique pure `onboardingChecklist.ts`, RPC `root_onboarding_status` — `jsonb`, pour qu'une
-  clé s'ajoute sans `drop function`) : SMTP, premier admin, applications souscrites, catégories,
-  démarche en production, activation, domaine, page publiée (facultatif), plafond IA décidé, logo
-  (facultatif), rôles. Chaque ligne mène à sa section (`?section=`). ⚠️ Lecteur **tolérant** :
-  une clé absente vaut « pas fait », jamais une exception.
-- **Le super administrateur peut tout faire** depuis `OrgSettingsPage` : sections
-  `categories` (`CategoriesManager`, motif `DocumentTypesManager`), `activations`
-  (`ActivationsSection` = sélecteur sur le sous-arbre + `OrganizationProceduresTab`), et
-  `GeneralInfoSection` monte le `GeneralInfoForm` complet de l'app par organisation (adresse,
-  téléphone, courriel, expéditeur). Avant, `ProtectedRoute` le redirigeait hors des deux écrans
-  qui créent une catégorie et activent une démarche : un client ne se livrait pas sans SQL.
-- **Plafond IA : « illimité » est une décision.** Ligne absente = non décidé (la check-list le
-  signale) ; ligne `is_active = false` = illimité **explicite**, valeur conservée pour le retour
-  en arrière (`AiUsageSection` : « Passer en illimité », `useAiUsage` expose `configuredLimit`).
-- **Courriels d'authentification en repli de plateforme** (`PLATFORM_SMTP_*`, module pur
-  `_shared/smtp.ts` **identique** dans `invite-user` et `auth-email-hook`, test d'identité) :
-  la collectivité d'abord (`resolve_smtp_settings`), la plateforme ensuite, rien sinon. Couvre
-  l'invitation du premier administrateur avant tout SMTP, et le super admin sans organisation.
-  ⚠️ Les courriels **métier** ne connaissent pas ce repli. `invite-user` : garde
-  `is_admin_of_self_or_ancestor` (motif `send-test-email`), action `resend` (bouton
-  « Renvoyer l'invitation », 409 si le compte est déjà actif).
-- Tests SQL auto-annulés : `supabase/tests/provisioning.test.sql`, `applications.test.sql`.
-  Migrations : `platform_settings`, `provision_root_organization`, `root_onboarding_status`,
-  `organization_domains_superadmin_write`.
-
-## Feature : applications et abonnements (`applications`, `organization_applications`)
-
-**Une clé par application, bornée par abonnement** (décision PO du 2026-09-08, contrat
-public-api 1.18.0 / contacts-api 1.1.0 / ai-api 1.2.0 — rupture pour les clés plateforme, rien
-n'étant en production).
-
-- `applications` = le **registre** (`id` de la forme de `consumer`, `name`, `scope` :
-  `abonnement` ou `plateforme`). Seed `nora`, `iris`, `clara`, `socle` (plateforme : la clé
-  de `translate-labels` sert toute racine). `api_keys.consumer` est une **FK** vers ce registre
-  (plus de texte libre : une faute de frappe ne crée plus un consommateur fantôme dans le journal
-  IA) ; CHECK `api_keys_platform_requires_consumer` (une clé plateforme vivante porte une
-  application ; révoquée, dispensée) ; CHECK `scopes <@ '{read,contacts,smtp,ai,audience}'`.
-- `organization_applications (racine, application)` = l'**abonnement**, coché par le super admin
-  dans la section « Applications souscrites » (`ApplicationsSection`). C'est **tout** l'onboarding
-  côté clés : aucun secret ne circule. RLS écriture super admin (décision commerciale), lecture
-  `has_org_access OR is_admin_of_self_or_ancestor`. ⚠️ La migration a abonné **toutes les racines
-  existantes à toutes les applications** : aucune régression le jour du déploiement ; les suivantes
-  sont opt-in.
-- **Périmètre d'une clé plateforme** = `application_scope_ids(app)` (service role seulement, motif
-  `org_subtree_ids`) : les sous-arbres des racines abonnées ; toutes les organisations pour le scope
-  `plateforme` ; `{}` pour une application inconnue. `public-api` : `GET /v1/organizations` rend
-  exactement les clients de l'application, `/v1/portal/tenant` répond **404** pour une collectivité
-  non abonnée (même message qu'un domaine inconnu) ; `contacts-api` / `ai-api` : racine résolue de
-  `X-Organization-Id` hors abonnement → **404** ; `audience-api` : `tenant_id` hors périmètre →
-  **404** (il vient du CORPS, l'appelant étant un relais multi-collectivités).
-- ⚠️ **Une clé plateforme sans application → 403** (« son périmètre ne peut pas être déterminé ») :
-  la décision vit dans `_shared/apiKeyAuth.ts` (`evaluateApiKey`, `scopeRequest`), **identique
-  dans les quatre fonctions** (test d'identité `apiKeyAuth.test.ts`) — avant, le bloc était copié
-  trois fois sans test. Pas de `_shared` de premier niveau : le déploiement MCP ne sait pas
-  exprimer `../_shared/`.
-- ⚠️ **Ordre de déploiement d'un changement de périmètre** : migration → abonnements et
-  rattachement des clés dans l'UI → déploiement des fonctions. Inverser les deux derniers coupe le
-  portail. Les clés d'avant le registre se rattachent depuis `/superadmin/applications`
-  (« À rattacher », `useAssignApiKeyApplication`).
-- UI : `src/features/superadmin/applications/` (`useApplications.ts`, `ApplicationsPage` —
-  une `ApiKeysList` par application + « Nouvelle application »), `ApiKeyFormDialog` (sélecteur
-  d'application, requis pour une clé plateforme et pour le scope `ai`), `ApiKeysList` affiche les
-  **cinq** scopes et l'application. Les clés **liées** (partenaires) ne changent pas.
-- Migration `applications_et_abonnements` ; changelog du 2026-09-08. **Hors dépôt** : Iris et
-  Clara doivent créer leurs tenants à la synchronisation (leur clé rend exactement leurs clients),
-  Nora prendre une clé d'ingestion Iris plateforme.
-
-## Feature : site de démarches — portail usagers (`organization_domains`, `portal_pages`)
-
-Le portail usagers est **Nora** (dépôt `Notch-pm/Nora`) : une instance unique, **sans base de
-données**, qui sert toutes les collectivités. Elle demande au Socle à qui appartient le domaine
-visité, puis ce qu'elle doit afficher. Le Socle est donc la source de vérité de trois choses : le
-**domaine** (`organization_domains`), le **catalogue public** (`/v1/portal/procedures`) et la
-**composition de la page d'accueil** (`portal_pages`), éditée ici, dans l'écran « Site de
-démarches ». Ajouter une collectivité au portail = une ligne de domaine, aucun déploiement.
-
-- **Domaines** (`organization_domains`) : `hostname` **unique sur toute la plateforme** (un domaine
-  désigne exactement une collectivité — c'est l'invariant de toute la résolution de tenant),
-  normalisé par trigger à l'écriture, au plus un `is_primary` par organisation, **pas** restreint
-  à une racine (une sous-organisation peut tenir son guichet). Écran `DomainsSection` : onglet
-  « Domaines du portail » de l'éditeur d'organisation (admin) et section `?section=domaines`
-  d'`OrgSettingsPage` (superadmin). ⚠️ **Écriture réservée au super administrateur** depuis le
-  2026-09-08 (RLS `is_super_admin()`) : le sous-domaine fourni se pose au provisioning, un domaine
-  personnalisé suppose un CNAME chez le client et un enregistrement chez l'hébergeur du portail ;
-  les administrateurs lisent leurs domaines et la cible CNAME (`platform_settings`). ⚠️ Un doublon
-  peut appartenir à une organisation que l'administrateur n'a pas le droit de voir : l'erreur ne
-  dit pas laquelle. `localhost` est
-  refusé par CHECK — le développement de Nora simule un domaine réel (`<label>.localhost` →
-  `<label>.<PORTAL_DEV_DOMAIN_SUFFIX>`).
-- **Composition** (`portal_pages`, une ligne par `(organization_id, slug)`, racine uniquement) :
-  deux colonnes, **`draft`** et **`published`**. ⚠️ **Sauvegarder n'est pas publier** — et c'est
-  structurel, pas une option : le brouillon est **autosauvegardé** (`useSaveDraft`, 800 ms après
-  la dernière modification, n'écrit que `draft`, flush au démontage et au `beforeunload`) ; la
-  publication est un geste explicite (`usePublishPortalPage`, `AlertDialog` qui ne se ferme que
-  sur succès — un refus RLS doit rester visible) ; « Annuler » = `draft := published`. Le portail
-  ne sert **que** `published` (404 = jamais publiée). Test dédié : une rafale de modifications ne
-  produit qu'une écriture, jamais sur `published`.
-- **Schéma possédé** (`src/features/portal/portalPage.ts`, motif `formSchema.ts`) :
-  `{ version: 1, sections }`, kinds `recherche` / `demarches` / `actus` / `compte` / `texte` /
-  `texte-image` / `footer`. Parse **tolérant section par section** (une section illisible est écartée, les autres
-  restent — une page d'accueil de collectivité ne s'efface pas pour un bloc abîmé) ; repli total
-  sur `defaultPortalPage()` si ce n'est pas une page. Les épinglages et raccourcis référencent des
-  **`procedures.id`**, jamais des libellés. ⚠️ Les couleurs (`footer.background`) n'entrent que
-  sous la forme `#rrggbb` : ce sont des valeurs CSS injectées dans une page publique — on écarte,
-  on ne nettoie pas. « Contact et horaires » n'est pas un kind mais un **preset** de `texte`
-  composé depuis `organizations.address / phone / email` (pas de colonne d'horaires : l'agent les
-  tape).
-- **Catalogue** (`catalogue.ts`) : la liste d'épinglage montre **tout** le catalogue de la racine
-  avec sa visibilité portail (`brouillon` / `interne` / `masquee` / `hors-periode` /
-  `non-activee` / `visible`, calculée par les règles existantes de `communication.ts` plus
-  l'activation) — on surface, on ne masque pas. **Le canevas rend la liste réelle** (2026-09-06) :
-  les seules démarches `visible`, chacune avec les **organismes qui la proposent**
-  (`organization_procedures.is_enabled` sur l'arbre de la racine — `portalTreeOrganizations`,
-  `useEnabledProcedureBindings`, `buildCatalogue`), et le filtre par organisme figé dans
-  l'en-tête dès que deux organismes proposent quelque chose. ⚠️ Une démarche que **personne**
-  n'active n'est pas servie par le portail, même en `production` : c'est le badge « Non activée ».
-  La règle est le **miroir volontaire** de `public-api/_shared/portalCatalogue.ts`.
-  ⚠️ **L'organisme affiché n'est pas toujours celui qui a activé** : un **service interne**
-  s'efface derrière son porteur (voir la feature « Services internes »), et c'est le porteur qui
-  entre dans la liste — dédoublonné, sans quoi deux cartes identiques apparaîtraient.
-  ⚠️ `portalTreeOrganizations` renvoie **tout** le sous-arbre, obsolètes comprises, et c'est
-  `offersByProcedure` qui les écarte : filtrer avant couperait la chaîne des parents, et un service
-  interne deviendrait un sommet de liste — donc son propre porteur — et réapparaîtrait sous son
-  propre nom. C'est aussi ce qui rend les deux miroirs littéralement identiques.
-- **Fond du bloc de recherche** (`recherche.imageUrl` + `imageFullWidth` / `imageFixed`,
-  2026-09-12) : une image qui **recouvre tout le bloc**, avec deux options — **pleine largeur** (elle
-  va d'un bord à l'autre, comme le pied de page) et **image fixe**
-  (`background-attachment: fixed` : le bloc glisse par-dessus au défilement).
-  ⚠️ **C'EST UN FOND, PAS UNE ILLUSTRATION** — d'où l'absence d'`alt`, contrairement à
-  `texte-image` : ce qu'une synthèse vocale doit lire, ce sont le titre et le sous-titre, posés
-  **dessus**. Elle se rend en CSS, jamais en `<img>` (qui réclamerait un `alt` dont le seul honnête
-  serait vide), et elle ne se traduit pas.
-  ⚠️ **LE VOILE CLAIR A ÉTÉ RETIRÉ le 2026-09-12** (décision produit) : la photo se voit telle que
-  la collectivité l'a choisie, dans l'aperçu comme sur le site. Il faut savoir ce que ça a coûté —
-  ce voile à 60 % était une **garantie** de contraste, pas un effet : il laissait l'encre du
-  portail à **5,7 : 1** sur le pire fond possible, au-dessus du seuil AA, quelle que soit l'image.
-  Sans lui, il n'y a **plus aucune garantie** : sur un gris moyen, l'encre pleine elle-même tombe à
-  **4,1 : 1** (mesuré et épinglé dans `themeStyle.test.ts`, des deux côtés). Ce qui reste comme
-  filet : le sous-titre passe à l'encre pleine sur une image, et les puces de raccourci en blanc
-  plein. Le jour où il faudra y revenir, la bonne forme est un voile **sous le texte seul** — la
-  photo intacte, et le contraste avec.
-  ⚠️ **Un bandeau pleine largeur en tête de page touche l'en-tête** (`flushBanner` dans
-  `PortalCanvas`, `startsWithFullWidthBanner` chez Nora) : symétrique du pied de page collé au bas.
-  Pendant un glisser qui vise la première place, la marge revient — sinon la cible de dépôt n'aurait
-  plus où s'afficher.
-  ⚠️ Les deux options sont **conservées** quand l'adresse est effacée (le réglage gouverne l'usage,
-  pas la donnée — motif `email_sender_name`) : l'inspecteur les **masque**, le rendu les ignore, et
-  recoller une adresse rend le bandeau tel qu'il était. C'est la **frontière** de Nora
-  (`pageService.ts`) qui les éteint, comme `show_shortcuts` éteint les raccourcis : le rendu n'a pas
-  à connaître un commutateur.
-  ⚠️ Même URL libre en `https` absolue que `texte-image` (`IMAGE_URL`), signalée à la saisie et
-  écartée des deux côtés ; une adresse refusée fait un bloc **sans fond**, jamais un bloc perdu.
-  ⚠️ L'adresse est échappée (`JSON.stringify`) avant d'entrer dans la valeur CSS : `IMAGE_URL`
-  autorise le guillemet, et une déclaration cassée ferait disparaître le fond sans rien dire.
-  ⚠️ `imageFixed` est un **ornement** : plusieurs navigateurs mobiles ignorent `fixed` et y font
-  défiler l'image — le bloc reste entier, l'inspecteur le dit.
-  **En aval** (contrat 1.20.0) : `image_url`, `image_full_width`, `image_fixed` sur
-  `PortalRechercheSection`, **consommés par Nora**. Code : `imageBackdropStyle` dans
-  `themeStyle.ts` (pur, testé des deux côtés — la garantie de contraste EST le test), rendu dans
-  `editor/sections/RechercheSection.tsx` ; côté Nora, `HomeComposition` rend le bandeau pleine
-  largeur **hors** de son conteneur centré, comme le pied de page.
-- **Texte et image** (`texte-image`, 2026-09-07) : un paragraphe et une illustration, côte à côte
-  et **empilés sur mobile**. `layout` (`text-first` / `image-first`) est un **ordre de lecture**,
-  pas une position : porté par un seul `order-first`, il vaut dans les deux dispositions — « image
-  à gauche » n'a plus de sens sur un téléphone, « image d'abord » si. Titre **facultatif** (comme
-  le pied de page) : ce bloc illustre autant qu'il annonce. ⚠️ `imageUrl` est une **URL libre**,
-  motif `organizations.logo_url` : le Socle enregistre et publie, il n'héberge pas le fichier — mais
-  il filtre la **forme** (`IMAGE_URL` : **`https` absolue, rien d'autre**), parce que la valeur finit
-  dans le `src` d'une page publique ; on **écarte**, on ne nettoie pas (motif `footer.background`),
-  et le bloc reste servi sans image plutôt que perdu. ⚠️ `http://` et les chemins absolus sont
-  refusés **à la saisie** alors que le Socle pourrait les stocker sans risque : c'est le portail qui
-  ne peut pas les rendre (servi en https, et il n'héberge aucun média de collectivité), et une
-  adresse acceptée ici mais écartée là-bas ne se découvrirait qu'en production. Le champ le **signale à la saisie** : sans
-  cela, le parseur l'écarterait en silence au rechargement. ⚠️ `alt` **se traduit** — c'est ce que
-  lit une synthèse vocale, le laisser en français ne traduirait la page que pour ceux qui la voient
-  (d'où sa présence dans `PORTAL_SECTION_FIELDS` et dans `FIELD_SPECS` de `translate-labels`) ;
-  **vide = image décorative**, jamais le titre recopié à sa place.
-- **Filtre « Je suis… »** de la grille de démarches (`demarches.audienceFilter`, 2026-09-07) :
-  citoyen / entreprise / association, d'après les publics activés à l'étape « Informations
-  demandeur » (`enabledAudiences`, pur et testé, lu dans `PortalCatalogueEntry.audiences`).
-  ⚠️ Il se **cumule** avec le filtre par organisme, il ne le remplace pas : deux dimensions de la
-  même grille — qui je suis, et à qui je m'adresse. ⚠️ Le réglage dit ce que la collectivité
-  **veut** ; c'est le catalogue affiché qui dit s'il a un **sens** : sous deux publics représentés
-  (`catalogueAudiences`), la pastille ne s'affiche pas — un filtre à un seul choix n'en est pas un.
-  Même règle que le filtre par organisme, et les deux pastilles sont décoratives dans le canevas.
-  ⚠️ **Le défaut de la fabrique (`true`) diverge de celui du parseur (`false`)**, et c'est voulu :
-  une grille neuve le propose, une page composée avant qu'il existe ne gagne pas un filtre que
-  personne n'y a mis. ⚠️ Une démarche **sans public déclaré** ne répond à aucun choix (elle reste
-  visible sans filtre) : la lire comme « tous publics » la ferait apparaître là où elle n'est pas
-  ouverte.
-- **Éditeur** (`PortalEditorPage` → `PortalEditor` → `editor/*`) : entrée de menu « Site de
-  démarches » (`/site-de-demarches`, `?org=` quand plusieurs racines) et
-  `/superadmin/organisations/:orgId/portail`. Le bandeau de la maquette porte le **logo de la
-  collectivité** (`organizations.logo_url`), avec repli sur la pastille — même règle que Nora
-  (`PageHeader`), et si l'URL ne charge pas : une vignette cassée dans une maquette se lit comme
-  un défaut de la page. ⚠️ Pas de `resolve_branding` ici : l'éditeur est toujours sur une **racine**,
-  qui n'hérite jamais, donc la colonne porte déjà la valeur résolue que Nora reçoit de
-  `GET /v1/organizations/{id}/branding`. Palette / canevas / inspecteur, aperçu = le canevas
-  sans son chrome, Bureau / Tablette / Mobile (`device.ts`, largeur de page fixe mise à l'échelle
-  par CSS `zoom` — pas `transform`, pour que le conteneur défilant suive ; ajustement à la fenêtre
-  et Ctrl/⌘ + molette). Glisser-déposer dnd-kit avec la logique pure dans `portalReorder.ts` :
-  **`dropIndex`** est le nombre unique que partagent l'ombre affichée et le dépôt (ce qu'on voit
-  est là où le bloc va) ; `transition: null` + `dropAnimation={null}` (aucun effet de « retour »
-  après dépôt) ; un dépôt sur sa propre place ne remonte pas au parent (sinon une sauvegarde
-  partirait pour rien). **Retirer un bloc** : bouton « Supprimer la section » de l'inspecteur
-  (hors du panneau grisé des actualités — on doit pouvoir retirer ce qu'on ne peut pas éditer),
-  corbeille de la pastille du bloc (qui **annule le zoom** de la page pour rester cliquable), ou
-  Suppr / Retour arrière hors d'un champ. Sans confirmation : c'est un brouillon.
-- **Pied de page** (`footer`) : pleine largeur (annule les marges de la page), fond configurable
-  (défaut sombre `#0f1f18`, texte clair ou sombre selon la luminance — `isDarkColor`), 1 à 3
-  colonnes de sous-blocs `texte`. **En dernière position, il EST le bas de la page** : pas de
-  marge sous lui, « Ajouter une section » passe au-dessus, et `appendIndex` glisse tout bloc
-  ajouté « en fin de page » au-dessus de lui (un second pied de page s'ajoute après).
-- **Multilingue (2026-09-07)** : chaque bloc porte ses textes traduits (`translations` sur la
-  section — voir feature « Langues »). ⚠️ `setSectionTranslation` **n'élague pas** la valeur,
-  contrairement à `translationsForWrite` : ici l'état EST le JSON, et élaguer à chaque frappe
-  supprime l'espace au moment où on le tape — les espaces devenaient impossibles à saisir.
-  L'élagage se fait à la lecture (`parseTranslations`), comme partout. L'inspecteur propose **un seul bloc de traduction par
-  section**, replié (`<details>`), en bas du panneau donc **sous les textes français qu'il
-  traduit** ; un bloc par sous-bloc du pied de page. ⚠️ Un bloc par CHAMP produirait un appel au
-  guichet IA par champ, contre la règle « un seul appel pour tous les textes d'une ligne ».
-  ⚠️ **Rien ne s'affiche si la collectivité est monolingue** — le garde est dans l'inspecteur, pas
-  dans `TranslationFields` (les écrans de paramétrage gardent leur phrase explicative ; un canevas
-  n'explique pas un réglage qui vit ailleurs). ⚠️ `TranslationFields` reçoit ici `reviewHint` /
-  `overwriteHint` : ses phrases par défaut parlent d'« enregistrer » et de « valider le
-  formulaire », deux gestes qui **n'existent pas dans l'éditeur** (le brouillon s'autosauvegarde,
-  le dernier mot est **Publier**). Le canevas montre en outre **la place du sélecteur de langue**
-  de l'usager dans son chrome de page — décoratif comme la nav, affiché seulement au-delà d'une
-  langue, et **visible même en mobile** : c'est le seul élément qu'un visiteur non francophone
-  doit pouvoir atteindre. Les langues viennent de `useOrganizationLanguages(racine)`, **jamais**
-  des clés de `translations` (une langue activée mais pas encore traduite doit apparaître).
-- **Grisé, pas caché** : le bloc « Actualités » (palette et inspecteur) et la vue « Contenus » —
-  aucune route, `aria-disabled`, « Bientôt disponible ». Le parse accepte quand même `actus` :
-  une composition importée plus tard ne sera pas amputée. La vue **« Thème » est ouverte** depuis
-  le 2026-09-08 (feature ci-dessous).
-- **API** (tag « Portail » de `public-api`, contrat 1.7.0 → 1.20.0) : `GET /v1/portal/tenant?hostname=`
-  (**même 404** pour inconnu / hors périmètre / obsolète : on ne renseigne pas sur l'existence des
-  collectivités ; porte `languages`, les langues de la collectivité, héritage résolu), `GET /v1/portal/procedures?tenant_id=` (déjà filtrées : `production`, `externe`,
-  `portalVisible`, dans leur période **heure de Paris**, **et activées par au moins un organisme
-  actif de l'arbre du tenant** — chaque démarche porte `organizations`, dans l'ordre de l'arbre ;
-  règle pure `_shared/portalCatalogue.ts`, lectures dans `loadPortalCatalogue` : sous-arbre,
-  organisations, activations, catalogue de la **racine** du tenant ; depuis **1.15.0** chaque
-  démarche porte aussi `audiences`, l'extrait de `requester_config` qui dit à **qui** elle
-  s'adresse — ⚠️ seuls les NOMS des publics traversent, jamais les champs demandés au requérant,
-  qui restent au détail ; ⚠️ une liste **vide** = aucun public déclaré, surtout pas « tous publics ».
-  Miroir volontaire d'`enabledAudiences`, testé des deux côtés — motif `readDocumentIds` ; depuis
-  **1.19.0** chaque démarche porte `access_mode` — ⚠️ qui **ne filtre rien** : une démarche réservée
-  aux usagers authentifiés est servie comme les autres et doit s'afficher comme les autres, la
-  connexion se demande au **dépôt**), `GET /v1/portal/procedures/{id}?tenant_id=`
-  (le **détail** : le public de la liste, plus la catégorie et les DEUX schémas de saisie
-  `form_schema` et `requester_config` — ils *sont* le formulaire de l'usager ; `knowledge_base`,
-  `agent_description` et les documents ne franchissent toujours pas. Même `publishedCatalogue`,
-  donc **404** pour une démarche non publiée, et son `form_schema` n'est pas même lu.
-  ⚠️ clé machine d'un champ = `key` ; l'`id` ne sert qu'aux conditions),
-  `GET /v1/portal/page?tenant_id=&slug=`
-  (`published` seulement, références résolues sur ce même catalogue ; chaque section porte
-  `translations` depuis le contrat **1.14.0** — schéma `PortalSectionTranslations`, **distinct** de
-  `Translations` qui décrit `name`/`short_description`, et servi **par whitelist des champs du
-  kind** : un `body` égaré sur une `recherche` ne sort pas ; en **1.15.0** s'ajoutent la section
-  `PortalTexteImageSection` (avec la clé traduisible `alt`) et `audience_filter` sur la grille ; en **1.16.0** chaque organisme porte
-  `handling_organization_id` — le service interne qui instruit, **identifiant seul, jamais son
-  nom**). La charte vient de
-  `GET /v1/organizations/{id}/branding` (résolue). ⚠️ `supabase/config.toml` déclare
-  `verify_jwt = false` pour `public-api` : un déploiement sans ce fichier remet le défaut `true`
-  et coupe **tous** les consommateurs (incident du 2026-09-05).
-- Code : `src/features/portal/` — `portalPage.ts` (+ `fieldsForKind`, `sectionText`,
-  `setSectionTranslation`, `hasTranslations`), `portalReorder.ts`, `catalogue.ts` (purs,
-  **testés** — `catalogue.ts` porte aussi `audiences` par entrée, `catalogueAudiences` et
-  `AUDIENCE_FILTER_LABELS`, les publics au **singulier** : ils complètent « Je suis… », là où le
-  paramétrage les nomme au pluriel), `usePortalPage.ts` (`usePortalPage`, `useEnsurePortalPage`, `useSaveDraft`,
-  `usePublishPortalPage`, `useDiscardDraft`), `PortalEditorPage.tsx` (chargement, autosave,
-  publier / annuler — **testé**), `PortalEditor.tsx` (shell, état du glisser), `editor/`
-  (`PortalCanvas`, `SectionBlock`, `SectionInspector`, `SectionTranslations`, `SectionPalette`,
-  `ProcedurePickList`,
-  `sections/*` — l'implémentation **de référence** du rendu de chaque kind ; Nora est le rendu
-  réel). `src/components/ui/segmented-control.tsx` (promu pour l'éditeur ; `TabButton` /
-  `ModeButton` restent à y rallier). Domaines : `src/features/organizations/{organizationDomains.ts,
-  useOrganizationDomains.ts, DomainsSection.tsx}` (testés). Migrations `organization_domains`,
+### [Langues et libellés traduits](docs/features/langues.md)
+- `enabled_languages` sur la **racine** ; catalogue figé dans le code (`languages.ts`, codes
+  BCP 47 — contrat de nommage). `translations` sur `procedures`, `categories` et les sections de
   `portal_pages`.
-- Suite prévue (démarches « pour de vrai », multilingue, comptes usagers, échanges, pièces
-  jointes, FranceConnect…) : `docs/roadmap.md`, section « Portail usagers ».
+- ⚠️ Le français est la langue pivot : il vit dans les colonnes, **jamais** dans `translations`.
+  ⚠️ Repli **champ par champ** ; traduction vide = non stockée ; désactiver une langue n'efface
+  rien ; un écran n'efface que les champs qu'il affiche (`translationsForWrite(…, fields)`).
+- Traduction automatique : `translate-labels` → **`ai-api`** (clé `SOCLE_AI_API_KEY`), ⚠️ jamais
+  le fournisseur en direct ; un seul appel par ligne, ne remplit que les cases vides, ne persiste
+  rien. Code : `src/features/languages/`, `supabase/functions/translate-labels/`.
 
-## Feature : thème du site de démarches (`portal_themes`)
+### [Types de pièce justificative (`document_types`)](docs/features/types-pieces.md)
+- Par racine, nom unique insensible à la casse ; alimentent le champ PJ du form builder
+  (`documentTypeId`, obligatoire à la saisie). Code : `src/features/document-types/`.
 
-L'apparence que chaque collectivité donne à SON portail — typographie, formes, densité, en-tête,
-accessibilité —, réglée dans l'onglet **« Thème »** de l'éditeur (ouvert le 2026-09-08, grisé
-jusque-là). **Nora l'applique** depuis le même jour : le réglage n'est pas décoratif, il change le
-site.
+### [Catalogue de documents (`document_templates`)](docs/features/documents.md)
+- Gabarits à variables `{{domaine.cle}}`, bucket privé `document-templates`. ⚠️ Ni
+  `document_types` (pièces demandées à l'usager), ni `procedure-documents` (aide à l'agent).
+- ⚠️ Le Socle enregistre et publie, **il ne fusionne rien** ; catalogue de variables figé
+  (`documentVariables.ts`). ⚠️ Ordre des écritures fichier / ligne à ne pas inverser.
+  Code : `src/features/documents/`.
 
-- ⚠️ **LE THÈME NE PORTE AUCUNE COULEUR.** Elles vivent dans la **charte graphique** de
-  l'organisation (`primary_color` / `secondary_color`, servies résolues par
-  `GET /v1/organizations/{id}/branding`) et n'ont pas à exister deux fois. Le thème dit COMMENT
-  peindre, la charte dit AVEC QUOI. Seule exception, et elle ne touche pas la donnée :
-  `accessibility.darkPrimary` **fonce la couleur au rendu** (clarté × 0,75, teinte et saturation
-  inchangées), sans modifier la colonne.
-- ⚠️ **Le thème vaut pour TOUT LE SITE, jamais bloc par bloc** — d'où sa table plutôt qu'une clé
-  dans `portal_pages` (qui est `(organisation, slug)`). Un thème par section multiplierait le
-  contrat public par le nombre de blocs et rendrait toute cohérence visuelle impossible à tenir.
-- ⚠️ **Pas de `version` dans le schéma**, contrairement à `portalPage.ts` : c'est un sac de
-  valeurs énumérées dont chacune retombe sur SON défaut (`.catch`), il ne peut pas être « faux »,
-  seulement partiellement inconnu. Un littéral de version y recréerait le piège que la roadmap
-  signale pour la page. L'évolution se fait en **blocs voisins**, motif `communication_config`.
-- ⚠️ **Un réglage conservé n'est pas un réglage appliqué** (motif `email_sender_name`) :
-  `header.color` et `header.logoWhite` restent en base quand `fill` repasse à `"white"` — l'UI
-  les masque, elle ne les efface pas.
-- ⚠️ **« Aperçu gros texte » N'EST PAS ENREGISTRÉ** : c'est une simulation d'éditeur, comme le
-  choix d'appareil (son libellé dit « Aperçu », son aide dit « Simule »). Le persister imposerait
-  à tous les visiteurs un grossissement que seuls certains demandent, et qui entrerait en conflit
-  avec le zoom de leur navigateur. Il vit dans l'état de `PortalEditor`, jamais dans `PortalTheme`.
-- **Polices** : catalogue de **4** figé dans le code (`portalFonts.ts`) — Système, Nunito Sans,
-  Rubik, Public Sans. C'est un **contrat de nommage** (motif `languages.ts`,
-  `documentVariables.ts`) : l'`id` traverse la base puis l'API, en ajouter un est une entrée au
-  changelog. ⚠️ **C'est le seul réglage du thème qui coûte quelque chose** — tout le reste est
-  une variable CSS. Une seule famille chargée par site, deux graisses, `font-display: swap` ;
-  « Système » ne télécharge rien. ⚠️ **Critère d'entrée : une licence qui autorise la
-  REDISTRIBUTION** — un portail public ne référence pas une police, il la sert à chaque visiteur.
-  Les trois familles web sont donc sous OFL 1.1 et **auto-hébergées** (`public/fonts/`, ici comme
-  chez Nora ; `index.html` déclare les faces, inertes tant qu'aucun texte ne les utilise). C'est ce
-  qui exclut **Marianne**, la police de l'État, dont la licence lui est propre — et ce qui interdit
-  Google Fonts au rendu : l'IP de chaque visiteur partirait chez un tiers, sans base légale, sur le
-  site d'une collectivité.
-- **Préréglages** (4, figés) : ⚠️ **déduits, jamais stockés** (`presetName` compare) — un nom en
-  base se désynchroniserait du premier réglage manuel. Ils gouvernent l'apparence, pas le contenu :
-  la déclaration RGAA et `darkPrimary` leur survivent.
-- **Contrôle des contrastes** : mesuré sur les couleurs **réelles** de la collectivité, telles
-  qu'elles seront peintes (`resolveThemeColors` sert à la fois le rendu et le diagnostic — un
-  diagnostic sur autre chose ne diagnostiquerait rien). Seuils RGAA AA (4,5 : 1 texte, 3 : 1
-  interface, séparateurs « décoratifs » en dessous). ⚠️ Le correctif « Assombrir » n'est proposé
-  **que s'il fait effectivement passer la ligne** : un bouton qui ne corrige rien ferait croire le
-  problème traité. Quand un cran ne suffit pas, la bonne réponse est de changer la couleur dans
-  « Charte graphique » — c'est ce que dit le pied du panneau.
-- **Rendu = variables CSS**, jamais des props (`themeStyle.ts` → `--pt-*` posées sur la racine de
-  la page). ⚠️ C'est **le** point de performance : bouger un curseur recalcule un objet de style,
-  pas sept arbres de composants ; et côté portail, tout le thème tient en quelques centaines
-  d'octets de CSS. ⚠️ Le rembourrage **horizontal** de la page reste FIXE : le pied de page
-  l'annule par des marges négatives chiffrées (`FooterSection`), le rendre variable le ferait
-  dépasser à chaque changement de densité.
-- **Le canevas de la COMPOSITION est thémé lui aussi** (c'est le même `PortalCanvas`) : depuis le
-  2026-09-08 il rend la page aux couleurs réelles de la collectivité, plus aux jetons du Socle. Un
-  éditeur qui montre une autre page que celle qu'il publie ment. La vue « Thème » réutilise le
-  canevas en `previewing` — on y règle l'apparence, pas la composition.
-- **Publication** : l'agent publie « son site », donc `PortalEditorPage` publie **page ET thème**
-  d'un seul geste (deux `mutateAsync` enchaînés), et l'`AlertDialog` ne se ferme que si les deux
-  réussissent. Un demi-échec est sans piège (thème neuf sur composition ancienne, ou l'inverse :
-  deux pages valides). Même minuteur de 800 ms pour les deux, et `flush` **n'écrit que ce qui a
-  changé**.
-- **En aval** (contrat 1.17.0, **consommé par Nora**) : `theme` sur `Tenant`
-  (`GET /v1/portal/tenant`), là où `languages`
-  a été mis — site-wide, nécessaire avant le premier pixel, sans aller-retour de plus. ⚠️ **Rien
-  de publié ⇒ les DÉFAUTS du Socle, jamais `null`** : deux jeux de défauts finiraient par diverger,
-  et c'est ce qui rendra indolore l'ajout d'un réglage. DTO en **snake_case** (`text_scale`,
-  `logo_white`, `high_contrast`, `dark_primary`).
-- Code : `src/features/portal/` — `portalTheme.ts` (schéma possédé, défauts, parse, préréglages),
-  `portalFonts.ts` (catalogue), `contrast.ts` (luminance, rapport WCAG, `darkenColor`,
-  `readableInk`, `withAlpha` — **seule** implémentation de la luminance du projet ; `portalPage.ts`
-  y réexporte `HEX_COLOR` et `isDarkColor`), `themeStyle.ts` (palette dérivée, variables CSS,
-  `contrastRows`) — les quatre **purs et testés** —, `usePortalTheme.ts`, `useFontPreview.ts`
-  (Google Fonts chargées **seulement** à l'ouverture de l'onglet), `editor/ThemePanel.tsx`
-  (testé). Miroir côté edge function : `public-api/_shared/portalTheme.ts` (testé des deux côtés,
-  motif `readDocumentIds`). Migration `portal_themes`.
+### [API publique (`public-api`)](docs/features/public-api.md)
+- Lecture seule (`GET`), clé `api_keys` hachée SHA-256, scope `read` ; isolation au sous-arbre
+  par `org_subtree_ids` (service role) ; hors périmètre = **404**.
+- ⚠️ Sérialisation en **whitelist stricte** (`_shared/serializers.ts`). Seule exception, gardée
+  par le scope `smtp` : `organizations/{id}/smtp`, mot de passe compris.
+- ⚠️ `verify_jwt = false` est déclaré dans `supabase/config.toml` : déployer sans ce fichier
+  coupe **tous** les consommateurs (incident du 2026-09-05). Logique pure dans `_shared/` (sans
+  Deno, testée par vitest, déployée avec `index.ts`). Doc humaine = page in-app `/api-doc`.
 
-## Feature : référentiel des usagers (`contacts`)
+### [Mise en service d'un client](docs/features/mise-en-service.md)
+- Par client, rien dans Supabase — tout dans le Socle (procédure : `docs/onboarding.md`). Une
+  racine naît équipée (trigger `provision_root_organization`) — ⚠️ idempotent et jamais bloquant.
+- Check-list `root_onboarding_status` (`jsonb`, lecteur tolérant). Plafond IA : ligne absente =
+  non décidé, `is_active = false` = illimité **explicite**. Courriels d'authentification : SMTP de
+  la collectivité, sinon `PLATFORM_SMTP_*`.
 
-Référentiel **partagé par toute la gamme** (Ariane, Clara, Iris, portail citoyen), **multi-tenant
-strict** : un contact est rattaché à une **organisation principale (racine)** — trigger
-`enforce_contact_root_org` (motif habituel) ; les sous-organisations partagent le même référentiel.
-⚠️ **Écriture uniquement via l'API dédiée `contacts-api`** (voir feature ci-dessous) :
-**aucune policy RLS d'écriture** côté client sur les fiches ; pas d'UI Socle pour l'instant.
+### [Applications et abonnements](docs/features/applications.md)
+- Registre `applications` (`nora`, `iris`, `clara`, `socle`) + `organization_applications`
+  (abonnements, super admin). Une clé plateforme appartient à une application et ne voit que les
+  racines abonnées (`application_scope_ids`) ; sans application → **403**.
+- ⚠️ Décision d'auth dans `_shared/apiKeyAuth.ts`, **identique dans les quatre fonctions** (test
+  d'identité). ⚠️ Ordre de déploiement : migration → abonnements et clés dans l'UI → fonctions.
 
-- **`contacts`** (une seule table pour les 4 types) : `contact_type`
-  (`personne`/`entreprise`/`association`/`administration`), identité personne (`civility`
-  madame/monsieur, `first_name`, `last_name`, `usage_name` nom d'usage, `birth_date`), structure
-  (`legal_name`, `siret` 14 chiffres), coordonnées (`email`, `mobile_phone`, `landline_phone`),
-  adresse à plat (`address_line1/2`, `postal_code`, `city`, `country` défaut France),
-  `preferred_channel` (`email`/`telephone`/`courrier`), `consent_email`/`consent_sms`,
-  `internal_notes` (**agents uniquement — à exclure de toute sérialisation publique**), `status`
-  (`active`/`archived`, réversible), `display_name` **colonne générée** (nom d'usage/nom + prénom,
-  ou raison sociale). **Invariants par type via CHECK** : civilité obligatoire ⟺ personne ;
-  raison sociale obligatoire ⟺ structure ; SIRET et champs personne interdits sur le type opposé.
-  **Unicité** : SIRET unique par org (index partiel) ; **pas de contrainte dure** sur l'identité
-  pivot des personnes (homonymes réels — l'app avertira, choix validé).
-- **`contact_roles`** : catalogue de rôles **par racine** (motif `document_types`), nom unique par
-  org insensible à la casse. **Seed** : 8 rôles d'exemple insérés pour les racines existantes
-  (Habitant, Représentant d'entreprise, Président d'association, Élu, Agent, Propriétaire,
-  Demandeur, Bénéficiaire). Seule table du référentiel **modifiable côté client** (admins d'org).
-- **`contact_role_assignments`** : n-n contact↔rôle, unique `(contact_id, role_id)`, trigger
-  `enforce_contact_role_same_org` (contact et rôle de la même racine).
-- **`contact_external_references`** : identifiants tiers (`source` libre : `portail_citoyen`,
-  `logiciel_population`…). `organization_id` **dénormalisée par trigger**
-  (`sync_contact_external_ref_org`) pour porter l'unicité `(org, source, external_id)` ; unique
-  aussi `(contact_id, source)`.
-- **`contact_relations`** : relations **dirigées** contact→contact (« X est *rôle* de Y »),
-  typées par un rôle du catalogue : `contact_id`, `related_contact_id`, `role_id` (FK
-  `contact_roles` **sans ON DELETE** — un rôle utilisé dans une relation bloque sa suppression),
-  unique `(contact_id, related_contact_id, role_id)`, CHECK anti-auto-relation. Trigger
-  `sync_contact_relation_org` (SECURITY DEFINER) : dénormalise `organization_id` depuis le
-  contact porteur, impose la même racine (deux contacts + rôle) et **interdit de cibler une
-  personne physique** (cible = entreprise/association/administration uniquement). RLS : SELECT
-  `has_org_access` ; écriture via `contacts-api` seulement (payload `relations`, remplacement
-  d'ensemble) ; la fiche expose `relations` (sortantes) et `reverse_relations` (entrantes).
-- **RLS** : SELECT `has_org_access(organization_id)` partout (assignments via `EXISTS` sur le
-  contact) ; écriture seulement `contact_roles` (`is_org_admin`). Les 4 fonctions trigger sont
-  `SECURITY DEFINER` avec **`EXECUTE` révoqué** de `anon`/`authenticated` (advisor).
-  **Étanchéité inter-tenants vérifiée de bout en bout** (2026-07-15) : test SQL simulant deux
-  racines + `auth.uid()` de chaque tenant + anonyme — visibilité croisée nulle, écritures client
-  refusées, unicité des refs externes bien scopée par org (transaction de test annulée).
-  Nuance : `has_org_access` exige l'appartenance à la **racine** — un membre d'une sous-org ne
-  voit aucun contact (comme `categories`).
-- Volontairement exclus (validé) : alias, historique, documents, workflow, dédoublonnage/fusion
-  automatique, données sensibles (NIR, CNI, IBAN), modèle d'adresses complexe.
-- Migrations : `contacts_referentiel_usagers`, `contacts_trigger_functions_revoke_execute`.
+### [Site de démarches — portail usagers](docs/features/site-de-demarches.md)
+- Le portail est **Nora** (dépôt `Notch-pm/Nora`, sans base) ; le Socle détient le domaine
+  (`organization_domains`, `hostname` unique sur la plateforme, écriture super admin), le
+  catalogue public et la page composée (`portal_pages`).
+- ⚠️ **Sauvegarder n'est pas publier** : `draft` autosauvegardé, `published` par geste explicite ;
+  le portail ne sert que `published`.
+- ⚠️ Schéma de page en `version: 1` — **ne pas l'incrémenter** (le parseur retomberait sur la page
+  par défaut) ; parse tolérant section par section ; Zod strippe les clés inconnues : tout nouveau
+  champ se déclare dans les schémas de section. URL d'image `https` absolue, couleurs `#rrggbb` :
+  on écarte, on ne nettoie pas.
+- ⚠️ Règle du catalogue = miroir de `public-api/_shared/portalCatalogue.ts`. Code :
+  `src/features/portal/`.
+- **Accessibilité** : la *mention* du pied de page se règle dans « Composition » (ce n'est pas une
+  section — sélection à part) et vit dans le thème ; la *déclaration* se rédige dans « Contenus »
+  (`portal_contents`). ⚠️ Le lien ne mène jamais à une page vide (`declaration_link` résolu par
+  l'API) ; « Publier » publie composition, thème et contenus d'un geste.
 
-## Feature : API usagers (lecture/écriture) — `contacts-api`
+### [Thème du site de démarches (`portal_themes`)](docs/features/theme-du-site.md)
+- ⚠️ **Le thème ne porte aucune couleur** (elles vivent dans la charte) ; il vaut pour tout le
+  site ; pas de `version` ; « Aperçu gros texte » n'est pas enregistré. Publié avec la page, d'un
+  seul geste.
+- ⚠️ Polices : catalogue figé, licence de redistribution exigée, auto-hébergées — **jamais Google
+  Fonts au rendu**. Rendu par variables CSS (`themeStyle.ts`) ; `contrast.ts` est la seule
+  implémentation de la luminance. En aval : rien de publié ⇒ défauts, jamais `null`.
 
-Edge Function Deno **séparée de `public-api`** (qui reste contractuellement en lecture seule),
-servie sous `{SUPABASE_URL}/functions/v1/contacts-api/…`, déployée `verify_jwt = false` (l'auth
-est portée par la fonction). Permet de **consulter, créer, modifier, archiver** un usager —
-**aucune suppression** (pas de DELETE, méthode → 405).
+### [Référentiel des usagers (`contacts`)](docs/features/referentiel-usagers.md)
+- Partagé par toute la gamme ; ⚠️ écriture **uniquement via `contacts-api`** (aucune policy
+  d'écriture client, sauf `contact_roles`), pas d'UI Socle. Invariants par type en CHECK ;
+  `internal_notes` réservé aux agents ; la cible d'une relation n'est jamais une personne.
 
-- **Auth = clé `api_keys`** (Bearer, SHA-256) comme `public-api`, **mais scope `contacts` requis**
-  (colonne `scopes` ; les clés `read` → 403 : les usagers sont des données personnelles).
-  Depuis le 2026-08-12, `public-api` vérifie symétriquement le scope `read` — l'asymétrie
-  historique (toute clé valide lisait le référentiel) est corrigée et déployée. Les
-  scopes se choisissent à la création de clé (`ApiKeyFormDialog`, switches « Référentiel
-  (lecture) » / « Usagers (lecture + écriture) ») et s'affichent en badges (`ApiKeysSection`).
-- **Isolation** : service role (hors RLS) mais chaque requête bornée à une organisation **racine**
-  (les contacts y sont rattachés) — égalité stricte, pas de sous-arbre. Clé liée :
-  `organization_id = organisation de la clé`. Clé **plateforme** : la racine servie est celle de
-  l'organisation portée par l'en-tête **`X-Organization-Id`** (requis, 400 sinon ;
-  `resolveRootOrgId` remonte les `parent_id`, protégé des cycles). **Vérifiée bout en bout** (2026-07-15, 32 assertions :
-  cross-tenant 404/liste vide, 401/403, conflits 409, invariants 400, archive/restore, données de
-  test nettoyées).
-- **Endpoints** (préfixe `/v1`) : `contacts` GET (filtres `type`, `status`, `search` sur
-  `display_name`, `email` exact, `phone` — égalité sur chiffres significatifs, mobile ET fixe,
-  `quartier_id` — UUID ou littéral `null` pour les sans-quartier,
-  lookup `source`+`external_id`, pagination `limit`/`offset` max 500) + POST ·
-  `contacts/match` POST (rapprochement d'identités, voir ci-dessous) ·
-  `contacts/{id}` GET + PATCH (partiel ; `contact_type` immuable ; `status` refusé) ·
-  `contacts/{id}/archive` et `/restore` POST (obsolescence réversible, idempotent) ·
-  `contact-roles` GET (catalogue → `role_ids`). Racine `/` + `openapi.json` publics.
-- **Rapprochement d'identités (détection de doublons)** : `POST /v1/contacts/match` — **lecture
-  seule** malgré le POST (identité trop riche pour une query string). Requête = identité
-  partielle (tous champs optionnels, au moins un critère ; un prénom seul ne suffit pas) ;
-  réponse = candidats classés `[{contact, score, reasons}]`, `contact` = **même sérialiseur**
-  que la liste. Motifs : `email`/`phone`/`siret` (égalités normalisées), `name_exact` /
-  `name_similar` (normalisation sans accents/casse/ponctuation ; similarité **pg_trgm ≥ 0.5**
-  sur le nom complet + **garde-fou prénom ≥ 0.1** quand les deux prénoms sont connus — un
-  homonyme de nom de famille seul, « Marie Dupont » pour « Jean Dupont », n'est **pas** proposé ;
-  noms de naissance ET d'usage comparés des deux côtés), `birth_date` (renfort, jamais suffisant
-  seul). Score (classement uniquement, documenté OpenAPI) : email +100 · phone +80 · siret +120 ·
-  name_exact +60 · name_similar +arrondi(40×sim) · birth_date +20. Archivées exclues par défaut
-  (`status: null` = tous). Le rapprochement vit dans la **RPC `match_contacts`** (SECURITY
-  INVOKER, `EXECUTE` réservé à service_role — motif `org_subtree_ids`), bornée à l'org de la clé.
-  Support (tient à 10⁵ contacts) : extensions `pg_trgm` + `unaccent` (schéma `extensions`),
-  colonnes **générées** `mobile_phone_normalized`/`landline_phone_normalized` (fonction
-  `normalize_phone` : chiffres seuls, +33/0033 et 0 initial retirés — mêmes règles que
-  `normalizePhoneNumber` TS, miroir testé) + index b-tree partiels, index **GIN trigram** sur
-  `match_full_name(last_name|usage_name, first_name)` et `normalize_name(legal_name)`
-  (`immutable_unaccent` fige le dictionnaire pour l'indexabilité). Migrations :
-  `match_extensions_pg_trgm_unaccent`, `contacts_match_identites`. **Vérifié bout en bout**
-  (2026-07-17) : les 10 critères d'acceptation Clara + sérialiseur identique, filtre `phone`,
-  400/405, OpenAPI — données de test nettoyées.
-- **Géocodage & quartier** : quand l'adresse change (`address_line1`/`postal_code`/`city`)
-  sans coordonnées fournies, l'API **géocode côté serveur** via la BAN (Géoplateforme IGN,
-  `_shared/geocoding.ts` pur/testé + `fetch` best-effort 5 s dans `index.ts` : échec → coordonnées
-  nulles, jamais d'erreur d'écriture ; score < 0.4 rejeté). Un consommateur peut fournir
-  `address_lat`/`address_lon` directement (paire exigée sur l'état fusionné). `quartier_id`
-  dans le payload = rattachement **manuel** (`quartier_auto` passe à false, vérif d'appartenance
-  à l'org → 400) ; `quartier_id: null` = retour à l'**auto** (recalcul immédiat par le trigger).
-  La fiche expose `address_lat`, `address_lon`, `quartier_id`, `quartier_auto`, plus (2026-07-18)
-  l'objet **`quartier`** (`id`, `name`, `color`) — le quartier **résolu**, pour que le consommateur
-  l'affiche sans second appel (`GET /v1/quartiers` porte les géométries : hors de proportion pour
-  un libellé). Il vient d'un embed PostgREST `quartier:quartiers(id, name, color)` centralisé dans
-  la constante **`CONTACT_SELECT`** : ⚠️ toute nouvelle requête dont le résultat part dans
-  `serializeContact` doit l'utiliser — un `select("*")` laisserait `quartier` à `null` sans erreur.
-  (Le `select("*")` du PATCH est volontairement resté nu : il sert au merge, pas à la sérialisation.)
-- **Payloads** : whitelist stricte des clés (clé inconnue → 400), chaînes normalisées (trim,
-  `""`→`null`), invariants par type vérifiés sur l'**état fusionné** au PATCH (messages français ;
-  les CHECK DB restent le garde-fou). `role_ids` / `external_references` / `relations` fournis
-  **remplacent** l'ensemble (omis = intouchés ; remplacement par différence/upsert, pas de
-  delete-all). Relations : pas d'auto-relation, cible jamais une personne physique. Création :
-  compensation (delete) si rôles/refs/relations échouent après l'insert. Erreurs `{error:{code,message}}`
-  + **409 `conflict`** (SIRET dupliqué, réf externe prise — mappage des contraintes 23505).
-- ⚠️ `internal_notes` **est exposée** (API serveur-à-serveur pour les apps agents) : un
-  consommateur servant des usagers finaux ne doit jamais la retransmettre — documenté dans l'OpenAPI.
-- **Docs** : `/api-doc-usagers` (route publique, `ApiDocsPage api="contacts-api"` — Redoc pointé
-  sur `…/contacts-api/openapi.json`) ; liens depuis la section « APIs de la gamme » de
-  `OrgSettingsPage`.
-- Code : `supabase/functions/contacts-api/` — `index.ts` + `_shared/{dto,errors,validation,
-  serializers,openapi}.ts` (logique pure **testée** par vitest, sans dépendance Deno, déployée avec
-  la fonction). Le déploiement (`deploy_edge_function`) doit inclure `index.ts` + tout `_shared/*.ts`.
+### [API usagers (`contacts-api`)](docs/features/contacts-api.md)
+- Lecture/écriture, scope `contacts`, **aucune suppression** ; bornée à la racine (égalité
+  stricte), `X-Organization-Id` pour une clé plateforme.
+- ⚠️ Toute requête sérialisée passe par `CONTACT_SELECT` (sinon `quartier` arrive `null` sans
+  erreur). Géocodage BAN best-effort ; rapprochement par la RPC `match_contacts`.
 
-## Feature : guichet IA (`ai-api`) — la clé du fournisseur et le décompte
+### [Guichet IA (`ai-api`)](docs/features/ai-api.md)
+- Le Socle détient la clé du fournisseur, compte les jetons, refuse au-delà du plafond ;
+  l'application décide ce qui est dit. Scope `ai` ; l'imputation vient de la **clé**, jamais du
+  corps.
+- ⚠️ **Passe-plat** : aucun contenu persisté ni journalisé (tests sur les colonnes et sur le
+  source). ⚠️ Délais fournisseur 55 s < Socle 60 s < consommateur. Cadence avant plafond, seuil
+  non réglable. Le plafond ne s'écrit que côté superadmin.
 
-Troisième edge function, `{SUPABASE_URL}/functions/v1/ai-api/…`, `verify_jwt = false`. **Le
-Socle détient la clé du fournisseur LLM, compte les jetons et refuse au-delà du plafond** ; les
-applications de la gamme composent leur prompt et le lui confient (décision PO du 2026-08-29,
-première consommatrice : Iris). Depuis le 2026-09-06, **le Socle en est lui-même consommateur**
-(`consumer = 'socle'`, clé plateforme `SOCLE_AI_API_KEY`) pour la traduction automatique des
-libellés — par `translate-labels`, jamais en appelant le fournisseur directement (voir la feature
-« Langues et libellés traduits »).
+### [Tableau de bord et fréquentation](docs/features/tableau-de-bord.md)
+- ⚠️ **Aucune donnée personnelle** (ni cookie, ni IP, ni User-Agent, ni référent) : c'est ce qui
+  dispense de bandeau, et des tests le vérifient. Une visite = une arrivée sur le site ; le jour
+  vient du serveur, heure de Paris.
+- `audience-api` : **écriture seule**, scope `audience`. Tables sans policy (RPC seulement).
+  ApexCharts épinglé (3.54.1 / wrapper 1.5.0) ; `charts/*` copiés d'Iris à l'identique.
 
-**La frontière tombe là : l'application décide CE QUI EST DIT, le Socle décide SI ÇA PEUT
-L'ÊTRE et CE QUE ÇA A COÛTÉ.** Le Socle ne sait pas ce qu'est une demande, un courrier ou un
-dossier, et n'a pas à le savoir — il ne compose aucun prompt.
+### [Quartiers](docs/features/quartiers.md)
+- Polygones PostGIS par racine, import GeoJSON seulement — ⚠️ l'import **remplace** le découpage,
+  dans une seule transaction. Rattachement automatique des contacts par trigger
+  (`assign_contact_quartier`, `quartier_auto`). `react-leaflet@4` (la v5 exige React 19).
 
-- **Pourquoi une troisième fonction** : `public-api` est contractuellement en lecture seule (sa
-  garde `req.method !== "GET"` *est* son contrat) ; `contacts-api` est la surface des données
-  personnelles, gardée par le scope `contacts`. Troisième domaine ⇒ troisième fonction ⇒
-  troisième scope, ce qui est déjà la décision de la maison.
-- **Auth** : clé `api_keys` + scope **`ai`** + **`api_keys.consumer` non nul**. L'imputation
-  vient de la CLÉ, jamais du corps — sans quoi une application ferait porter sa dépense à une
-  autre. Le périmètre suit `contacts-api` (`X-Organization-Id` + `resolveRootOrgId`) : le budget
-  étant celui d'une **collectivité**, l'appel d'une sous-organisation débite sa racine.
-- **Routes** : `POST /v1/completions` (l'appel), `GET /v1/usage?period=AAAA-MM` (plafond,
-  consommation, ventilation par application), `/` et `/openapi.json` publiques.
-- ⚠️ **Ce que l'appelant NE décide PAS** (400, message français) : `model` et `agent_id` — le
-  Socle reste l'**autorité sur le coût**, l'appelant passe un **alias** `agent` résolu en secret ;
-  `consumer` et `organization_id` (dérivés de la clé) ; `tools`/`tool_choice` (chaque outil est
-  un second chemin d'accès aux données, non audité) ; `stream` (le `usage` n'arrive qu'au dernier
-  événement SSE) ; `temperature` et consorts ; `role: "system"` dans `messages` — le prompt
-  système a son propre champ.
-- ⚠️ **PASSE-PLAT : le Socle voit le prompt, il ne le garde pas.** Ce n'est pas une déclaration
-  mais une propriété **vérifiable**, par ordre de force : (1) aucune colonne du journal ne peut
-  porter un contenu — un test épingle l'ensemble exact des 17 colonnes ; (2) les signatures de
-  RPC ne portent que des bigints, des uuid et deux énumérés ; (3) l'appel fournisseur est isolé
-  dans `_shared/provider.ts`, qui ne reçoit **ni client Supabase, ni logger** ; (4) un test **lit
-  le source** pour interdire tout `console.*` mentionnant le contenu et l'URL
-  `/v1/conversations`, qui stockerait le fil chez le fournisseur. La limite est écrite partout :
-  la promesse porte sur la **persistance**, pas sur l'exposition.
-- ⚠️ **Chaîne de délais, à ne pas inverser** : fournisseur 55 s < Socle 60 s < consommateur.
-  Inversée, le consommateur abandonne des appels que le Socle termine et **facture**. Il n'y a
-  pas de clé d'idempotence — elle exigerait de stocker la réponse, ce que le passe-plat interdit.
-- **Réserver → appeler → solder** dans une seule fonction, sans frontière réseau au milieu :
-  `reserve_ai_usage` fait UN `UPDATE` conditionnel (zéro ligne ⇒ refus **sans jamais appeler le
-  fournisseur**), `settle_ai_usage` corrige avec la consommation réelle. Un échec ne consomme
-  rien. Détail : [`docs/data-model.md`](docs/data-model.md) § « Plafond et journal d'utilisation IA ».
-- **Écrans** : `/superadmin/ia` (inter-clients : qui coûte quoi, qui n'est pas bordé — **lecture
-  seule**), Organisations › « Assistant IA » (plafond, consommation par application, 20
-  derniers appels — **le seul écran qui écrit**, par les RPC) et, dans l'app par organisation,
-  **`/consommation-ia`** (`AiUsagePage`, **consultation seule** pour l'admin de la collectivité).
-  Les sections d'`OrgSettingsPage` sont adressables (`?section=ia`), ce qui rend la table
-  inter-clients cliquable.
-- Les trois cartes (jauge, ventilation par application, derniers appels) sont **un seul
-  composant**, `src/features/ai-usage/AiUsageOverview.tsx`, qui **n'écrit rien** : la commande de
-  réglage lui est glissée par `action`, que seul l'écran superadmin fournit. Le client n'a donc
-  aucun chemin vers l'écriture dans l'arbre rendu (**testé**), et le serveur dit la même chose —
-  RLS en SELECT seul, garde `is_super_admin()` **dans** les RPC de réglage. ⚠️ Un plafond que son
-  porteur pourrait lever ne serait pas un plafond : ouvrir la **lecture** (migration
-  `ai_usage_lecture_admin`, `is_admin_of_self_or_ancestor`) n'ouvre pas le réglage.
-- Code : `src/features/ai-usage/` — `aiQuota.ts` (pur, **testé** : jauge, formats, période),
-  `useAiUsage.ts` (lecture + les deux mutations superadmin), `AiUsageOverview.tsx`,
-  `AiUsagePage.tsx`, `useAdminRootOrganizations.ts` (⚠️ racines **administrées**, pas simplement
-  visibles : un membre ordinaire y lirait un « 0 jeton » faux, produit par le RLS). Côté
-  superadmin : `SuperAdminAiUsagePage` + `aiUsageAll.ts` (pur, testé) et
-  `organizations/sections/AiUsageSection.tsx` (la part qui écrit).
-- **Garde-fou de DÉBIT** (`ai_usage_rate`, 2026-08-29) — un plafond mensuel n'est pas un
-  rate-limit : il dit *combien*, jamais *à quelle vitesse*, et une boucle brûlerait le mois en
-  quelques minutes. `reserve_ai_usage` a donc **deux portes** : la cadence **puis** le plafond.
-  Les seuils dépendent de la NATURE de l'appel — conversationnel 20/minute par agent (120 sans
-  agent), lot d'OCR 60 (360) : un humain qui lit 150 mots entre deux questions n'a pas le
-  rythme d'une machine qui enchaîne des documents. Les deux natures ont des compteurs
-  **SÉPARÉS** (`bucket` dans la clé) : sans quoi un lot de courrier mangerait le budget de
-  questions du même agent. La nature vient de `p_resource_type`, **dérivé côté serveur** —
-  un appelant ne peut pas se déclarer « lot ». Type inconnu ⇒ seuil conversationnel, le plus
-  strict. Refus = `429 ai_rate_limited`
-  + `Retry-After` — distinct du plafond, parce que le crédit est intact et que le geste attendu
-  est d'attendre, pas de demander un relèvement.
-  ⚠️ **Le compteur retient les TENTATIVES, refus de plafond compris** : sans cela, une boucle
-  déjà refusée pour crédit épuisé ne serait jamais coupée — c'est-à-dire précisément dans le cas
-  où le garde-fou sert. C'est aussi ce qui permet de le vérifier **sans dépenser un jeton**.
-  ⚠️ La porte de cadence passe **avant** celle du plafond : elle doit couvrir les collectivités
-  **sans plafond**, qui sortent par un `return` anticipé.
-  ⚠️ Le seuil **n'est pas réglable** (décision PO) : un garde-fou de sécurité n'est pas un
-  paramètre commercial, et le rendre négociable, c'est le voir négocié le jour où il gêne — or
-  il ne gêne que les boucles.
-
-## Feature : tableau de bord et fréquentation du site (`audience-api`, `portal_audience_*`)
-
-L'accueil de l'app par organisation (`/`, `src/features/dashboard/DashboardPage.tsx`). Deux blocs,
-et **l'ordre n'est pas indifférent** : d'abord ce que la collectivité a **paramétré** (démarches,
-usagers, activations par organisme) — le Socle est un référentiel —, ensuite ce que son site
-**produit** (fréquentation), qui vient d'ailleurs et n'existe qu'une fois Nora déployé.
-
-### La mesure : des compteurs, et rien d'autre
-
-Nora tourne dans le navigateur de l'usager et **n'a pas de base de données**. Le Socle détient déjà
-le domaine, le catalogue et la page publiée : c'est ici que la fréquentation se compte.
-
-- ⚠️ **AUCUNE DONNÉE PERSONNELLE, ET C'EST CE QUI DISPENSE D'UN BANDEAU DE CONSENTEMENT**
-  (article 82 de la loi Informatique et Libertés). Rien n'est écrit sur le poste du visiteur — ni
-  cookie, ni `localStorage`. Les trois données qui pourraient désigner quelqu'un ne franchissent
-  jamais `portal-api` : l'**adresse IP** n'y vit que hachée en mémoire, pour le frein anti-abus ;
-  le **User-Agent** y est lu pour en tirer un mot parmi trois, puis jeté ; le **référent** n'est lu
-  que par le navigateur, qui en tire un oui/non.
-  ⚠️ La promesse est **vérifiable, pas déclarative**, par quatre mécanismes du plus fort au plus
-  faible (motif du passe-plat de l'`ai-api`) : (1) `supabase/tests/audience.test.sql` fige la
-  **liste exacte des colonnes** des deux tables — ajouter `visitor_id` fait tomber le test ; (2)
-  les signatures de RPC ne portent que des uuid, trois énumérés et un booléen ; (3) la whitelist du
-  corps refuse toute clé inconnue par un **400** ; (4) `audience-api/_shared/privacy.test.ts` lit le
-  source et interdit qu'on lise jamais `user-agent`, `referer` ou une IP.
-- ⚠️ **UNE VISITE = UNE ARRIVÉE SUR LE SITE** (décision PO) : la première page d'une navigation,
-  quand le référent n'est pas le site lui-même et que ce n'est pas un rechargement. Pas de
-  « visiteurs uniques » — sans identifiant, la notion n'a pas de sens. Quelqu'un qui revient trois
-  fois compte trois visites. C'est **le navigateur** qui tranche ; le serveur incrémente ce qu'on
-  lui dit.
-- ⚠️ **Le jour vient TOUJOURS du serveur**, en heure de Paris : une horloge de navigateur décalée
-  ferait atterrir des vues dans un futur qu'aucune période n'affiche. Aucune date ne traverse le
-  corps, et tout le front se cale sur le même fuseau (`parisDay`, `periodRange`) — borner la
-  période dans le fuseau du navigateur ferait manquer le dernier jour à un agent aux Antilles.
-- **Tables** : `portal_audience_pages` (organisme du domaine, jour, page `accueil`/`demarche`/
-  `formulaire`, démarche, `views`/`visits`/`deposits`) et `portal_audience_breakdown` (dimension
-  `langue`/`appareil`). ⚠️ `procedure_id` est **sans clé étrangère** : une démarche supprimée garde
-  son historique, et l'écran la libelle « Démarche supprimée » plutôt que d'afficher un uuid nu
-  (motif `resolveDocuments`). ⚠️ `unique nulls not distinct` sur la clé des pages : sans lui, chaque
-  vue de l'accueil créerait une ligne, deux NULL ne se rapprochant jamais.
-  ⚠️ **RLS activé SANS AUCUNE POLICY** : seules les RPC entrent. Une policy de lecture, même large,
-  ferait du découpage de ces tables un contrat public, alors qu'il doit rester libre.
-- **Écriture** : `record_portal_page_view` / `record_portal_deposit`, EXECUTE réservé au
-  **service role** (motif `org_subtree_ids`) — appelables par `authenticated`, n'importe quel
-  compte fabriquerait des chiffres. Elles **renvoient `false` sans lever** quand la démarche
-  n'appartient pas au tenant : un compteur ne fait jamais échouer une page.
-- **Lecture** : `organization_dashboard(racine)` et `portal_audience(racine, du, au)`, **`jsonb` et
-  non `returns table`** (motif `root_onboarding_status` : une clé s'ajoute sans `drop function`).
-  ⚠️ `SECURITY DEFINER` gardées par `has_org_access(racine)`, et c'est délibéré : sous RLS, un
-  membre ordinaire ne voit pas les sous-organisations et lirait des totaux **partiels** — un
-  tableau de bord qui ment est pire qu'un tableau de bord absent. Choix assumé : les noms des
-  sous-organisations et leur nombre d'activations deviennent visibles de tout membre direct de la
-  racine (ils sont déjà publics sur le portail). Période bornée à **400 jours**.
-
-### `audience-api` — la quatrième edge function
-
-`{SUPABASE_URL}/functions/v1/audience-api/…`, `verify_jwt = false`, scope **`audience`** (le
-cinquième). `POST /v1/page-views` et `POST /v1/deposits`, **202**. Contrat 1.0.0.
-
-- ⚠️ **ÉCRITURE SEULE, ET CE N'EST PAS UN OUBLI** : pas un seul `GET` dans l'OpenAPI (le test
-  l'épingle). La clé de Nora vit dans une edge function qui sert des pages publiques ; lui donner
-  de quoi LIRE ferait d'une clé volée un moyen de connaître le trafic de toutes ses collectivités.
-- ⚠️ **AUCUN FREIN DE CADENCE dans le Socle**, contrairement à `ai-api` : le freiner utilement
-  demanderait l'adresse IP du visiteur, précisément ce que le Socle ne doit jamais voir. Le frein
-  vit chez `portal-api` (120/min par IP hachée), au plus près de l'adresse. D'où l'absence de `429`.
-- ⚠️ Le `tenant_id` vient du **CORPS** (l'appelant est un relais multi-collectivités, le tenant est
-  une propriété de l'ÉVÉNEMENT), là où `ai-api` le lit dans `X-Organization-Id`. C'est pour cela
-  qu'il est recoupé avec le périmètre de la clé sans exception ; hors périmètre ⇒ **404**.
-- ⚠️ **Pas de `resolveRootOrgId` ici**, contrairement à `contacts-api`/`ai-api` : la fréquentation
-  se compte sur l'organisme **du domaine** — une sous-organisation qui tient son guichet a son
-  propre trafic. Remonter à la racine confondrait les guichets.
-
-### Côté Nora (dépôt `Notch-pm/Nora`)
-
-Beacon `POST /v1/audience` de `portal-api` en **`text/plain`** — une requête « simple » au sens du
-CORS, donc **un seul appel réseau par page vue**, sans `OPTIONS` préalable. ⚠️ Réponse **toujours
-204**, y compris domaine inconnu : le navigateur ne doit rien pouvoir déduire. ⚠️ Sans
-`SOCLE_AUDIENCE_API_URL`, le portail **ne compte rien** — la mesure est un choix explicite, et un
-environnement de développement ne pollue pas les chiffres d'une production. ⚠️ Rien n'est mesuré en
-dev ni sous `navigator.webdriver`. Le dépôt est signalé **après** l'acceptation par Iris. Détail et
-pièges : README de Nora, « Mesure d'audience sans cookie ».
-
-### L'écran
-
-- Cinq tuiles (démarches, usagers, personnes, entreprises, associations), barres « Démarches
-  activées par organisme », puis la fréquentation : trois tuiles, aire « Visites et pages vues »,
-  « Pages les plus vues », camemberts « Langues » et « Appareils ».
-  ⚠️ Le camembert des **langues** ne s'affiche que si la collectivité en a plusieurs — même règle
-  que le filtre par organisme du portail : un découpage à une seule part n'en est pas un.
-  ⚠️ `activationRows` **écarte les organismes sans activation** (une barre à zéro n'apprend rien),
-  mais **garde les services internes sous leur propre nom** : c'est un écran d'agent, pas le
-  portail — ce qui s'efface derrière son porteur, ce sont les démarches vues par un usager.
-- ⚠️ **`depositRate` rend « — », jamais « 0 % », quand aucun formulaire n'a été ouvert** : un taux
-  sans dénominateur n'est pas nul, il n'existe pas. Il n'est pas non plus **borné à 100 %** — un
-  usager qui ouvre le formulaire un jour et dépose le lendemain met sa vue d'un côté de la période
-  et son dépôt de l'autre ; borner masquerait le décalage.
-- ⚠️ **Les jours sans données sont complétés par des zéros** (`seriesFor`) : la RPC ne les renvoie
-  pas, et un graphique qui les saute relierait le 3 au 9 comme s'ils se suivaient. Sur un an, on
-  regroupe **par mois** — 365 points ne se lisent pas.
-- ⚠️ **La fréquentation vide est l'ÉTAT NORMAL** tant que Nora ne mesure pas : l'écran le dit,
-  il ne masque pas la section — masquer ferait chercher un réglage qui n'existe pas.
-- ⚠️ Un membre rattaché **seulement à des sous-organisations** n'a aucune racine visible : l'écran
-  l'explique au lieu d'afficher des zéros, qui passeraient pour la réalité.
-- **Graphiques ApexCharts**, `apexcharts@3.54.1` + `react-apexcharts@1.5.0` **épinglés** (le
-  wrapper 1.5.0 est le dernier compatible ApexCharts 3 ; ne pas monter en v4 sans le changer).
-  `charts/{ReactApexChart,chartConfig,ChartCard}` sont des **copies d'Iris**, maintenues à
-  l'identique dans chaque dépôt (motif `suiteApps.ts`) — seule divergence assumée : `FONT_FAMILY`
-  passe à Inter, la police du Socle. `DashboardCharts` est chargé en `React.lazy` : ApexCharts pèse
-  ~130 Ko, et les tuiles de chiffres ne doivent pas l'attendre.
-- Code : `src/features/dashboard/` — `dashboardStats.ts`, `audience.ts` (purs, **testés** :
-  lecteurs tolérants, remplissage des jours, taux de dépôt), `useDashboard.ts`, `KpiCard.tsx`,
-  `DashboardCharts.tsx`, `DashboardPage.tsx` (**testé**, graphiques doublés — jsdom ne dessine
-  rien). Migration `portal_audience` ; changelog du 2026-09-12.
-
-## Feature : quartiers (découpage du territoire)
-
-Portage de la fonctionnalité quartiers de Clara (instantané dans `references/clara-quartiers/`),
-décidé quand Clara a délégué ses usagers au Socle. **Multi-tenant strict** : un quartier est
-rattaché à une **organisation principale (racine)** — trigger `enforce_quartier_root_org` (motif
-habituel). Livré : modèle DB + UI Socle + **exposition API** (catalogue dans `public-api`,
-géocodage/rattachement dans `contacts-api` — voir les deux features API). Clara **affiche** le
-quartier depuis le 2026-07-18 (objet `quartier` résolu dans la fiche contact). Reste : le
-**filtre** par quartier côté Clara, et les **stats par quartier**, pas encore exposées par
-l'API (RPC `stats_contacts_by_quartier` disponible).
-
-- **`quartiers`** : `name` (unique par org, insensible à la casse — index
-  `quartiers_org_name_unique`), `color`, `geom geometry(MultiPolygon, 4326)` (**PostGIS**,
-  extension installée dans le schéma `extensions` ; index GIST). Pas de dessin dans l'app :
-  **import GeoJSON uniquement** (`ST_MakeValid` répare les polygones auto-intersectants).
-  RLS : SELECT `has_org_access` · écriture (ALL) `is_org_admin` — table modifiable côté
-  client, comme `contact_roles`.
-- ⚠️ **L'import GeoJSON remplace le découpage** (depuis le 2026-07-18) : le fichier fait foi,
-  les quartiers de l'organisation sont **supprimés puis recréés dans la même transaction**
-  (paramètre `p_replace` de `create_quartiers_batch`) — un import qui échoue ne laisse donc
-  jamais l'organisation sans découpage, et les noms ne se retrouvent plus suffixés « (2) » par
-  collision avec l'ancien jeu (seuls les doublons **internes au fichier** le sont). Remplacer
-  par un lot **vide** est refusé (ce serait une suppression, qui a son propre bouton). L'UI
-  avertit et fait confirmer par `AlertDialog` quand des quartiers existent.
-- **`contacts`** : + `address_lat`/`address_lon` (géocodage BAN prévu en phase API),
-  `quartier_id` (FK `ON DELETE SET NULL`), `quartier_auto` (passe à false quand une valeur est
-  forcée manuellement, pour la protéger du recalcul de masse). **Rattachement automatique par
-  trigger** `assign_contact_quartier` (BEFORE INSERT/UPDATE) : en mode auto, recalcule
-  `quartier_id` quand les coordonnées changent, quand `quartier_auto` repasse à true, ou quand
-  `quartier_id` arrive à NULL avec des coordonnées présentes (un PATCH `quartier_id: null`
-  réassigne immédiatement — migration `assign_contact_quartier_recompute_on_null`) ; purge si
-  coordonnées nulles ; en mode manuel, vérifie que le quartier appartient à la même racine que
-  le contact.
-- **RPC** (`SECURITY INVOKER` sauf mention ; `EXECUTE` accordé à authenticated + service_role,
-  révoqué d'anon) : `quartier_for_point` (point-dans-polygone), `create_quartier_from_geojson` et
-  `create_quartiers_batch` (import **atomique** en un appel, noms dédoublonnés « (n) » côté
-  serveur), `list_quartiers_geojson` (cast `ST_AsGeoJSON` serveur — PostGIS stocke en binaire,
-  illisible par Leaflet sinon), `stats_contacts_by_quartier` (+ ligne « Sans quartier »),
-  `contacts_outside_quartiers` (géolocalisés hors de tout polygone),
-  `recalculate_contact_quartiers` (**SECURITY DEFINER** — les contacts n'ont aucune policy
-  d'écriture client ; garde interne `is_org_admin(p_org_id)` ou service_role),
-  `reset_orphan_manual_quartiers` (même motif SECURITY DEFINER + garde) : après un import en
-  remplacement, un usager rattaché **manuellement** à un quartier disparu (`quartier_id` mis à
-  NULL par la FK, `quartier_auto = false`) serait **ignoré à jamais** par le recalcul — on le
-  repasse donc en automatique. Appelée depuis `create_quartiers_batch` en mode remplacement.
-- **UI** : carte **Leaflet** (deps `leaflet` + `react-leaflet@4` — la v5 exige React 19) via le
-  composant partagé `QuartiersManager` : carte cadrée sur l'emprise, liste avec nombre d'usagers
-  par quartier, import GeoJSON (noms devinés depuis les propriétés, couleurs cyclées), édition
-  nom/couleur, suppression, recalcul des assignations. Deux points d'entrée (motif
-  `document_types`) : page admin **`/quartiers`** (sélecteur de racine si plusieurs) et section
-  « Quartiers » de `OrgSettingsPage` (racine uniquement). Les droits d'écriture sont portés par
-  le RLS (l'UI ne masque pas les actions).
-- Code : `src/features/quartiers/` — `useQuartiers.ts` (hooks + mutations ; l'import enchaîne
-  le recalcul), `quartiersGeojson.ts` (logique pure **testée** : extraction des polygones d'un
-  GeoJSON quelconque, noms devinés/dédoublonnés, palette, `readableTextColor`), `QuartiersMap`,
-  `ImportQuartiersDialog`, `QuartierEditDialog`, `QuartiersManager`, `QuartiersPage`.
-- Migrations : `quartiers_referentiel`, `assign_contact_quartier_recompute_on_null`,
-  `quartiers_import_remplacement`. Vérifié de
-  bout en bout (2026-07-17) : test SQL transactionnel annulé (assignation auto, dédoublonnage,
-  invariants tenant/racine), parcours navigateur complet (import → stats → recalcul → renommage →
-  suppression), et parcours API réel (géocodage BAN d'une adresse → quartier assigné, filtre,
-  re-géocodage au changement d'adresse, manuel/auto, 400 sur paire de coordonnées incomplète et
-  quartier inconnu).
+### [Shell de l'app et bascule entre applications](docs/features/shell-et-lanceur.md)
+- Rail aux **mesures de la gamme** (`w-[52px]`, tuiles 36 px, `RAIL_WIDTH_CLASS`), couleur propre
+  à Socle (jeton `--rail`) : changer de couleur = changer le jeton **et** son jeton de contraste,
+  jamais de `white/…` en dur. En-tête : la collectivité à gauche, le produit à droite.
+- Lanceur `AppLauncher` (catalogue figé `suiteApps.ts`, la `key` est le sous-domaine) — ⚠️ à ne
+  pas confondre avec la table `applications`. Le damier est réservé au lanceur.
 
 ## Design system
 
@@ -1721,96 +345,6 @@ Clara). Les tokens sont déjà repris dans `src/index.css` + `tailwind.config.ts
 avec les primitives `src/components/ui/*` (Button, Input, Field, Card, Badge, Dialog, AlertDialog)
 et les classes de tokens — ce sont les « briques » du DS. Divergence connue : police Socle = Inter,
 DS = Nunito Sans (non alignée volontairement pour l'instant).
-
-### Shell de l'app par organisation (le même que dans la gamme, couleur du rail exceptée)
-
-- **Rail latéral beurre** (`Sidebar.tsx`) : jeton dédié `--rail` / `--rail-foreground`
-  (`index.css`, pas de couleur en dur) — fond `--rail: var(--secondary)` (`#FFCC57`, la secondaire
-  du DS, référencée et non recopiée), icônes **bleu nuit `#0B132B`** à **pleine opacité dans tous
-  les états** ; c'est la tuile qui marque le survol et l'actif (`rail-foreground/10|20`).
-  ⚠️ **Pas le brun `secondary-foreground`** pour les icônes, même s'il est le contraste « officiel »
-  de la secondaire : essayé à 80 % le 2026-09-11, il ressortait mal sur le jaune.
-  ⚠️ **LA COULEUR DU RAIL N'EST PAS UN INVARIANT DE LA GAMME** — ses mesures et sa disposition,
-  si (ci-dessous). Chaque application peint le sien — au 2026-09-11 : **Socle** en beurre
-  `#FFCC57` à icônes bleu nuit, **Clara** en bleu nuit `#0B132B` à icônes blanches (son propre
-  jeton `--rail`, rail et barre de navigation mobile), **Iris** et **Ariane** en primaire verte. Une couleur qui diffère d'un produit à l'autre n'est pas un écart à réaligner. Changer
-  de couleur, c'est changer **le jeton et son jeton de contraste** ensemble (`bg-X` /
-  `text-X-foreground`, états en `X-foreground/10|20`) — jamais un `white/…` ou `black/…` en dur,
-  qui ne suit plus le fond.
-  ⚠️ **Pas** les jetons `--sidebar-*` (charbon-forêt) : ils existent dans `index.css` à
-  l'identique d'Iris et de Clara, qui ne s'en servent pas non plus pour le rail.
-  ⚠️ **LES MESURES DU RAIL SONT CELLES DE LA GAMME, PAS CELLES DE SOCLE** : `w-[52px]`, `py-3`,
-  tuiles de **36 px** (`h-9 w-9`) à icône de 20 px — identiques dans `AppSidebar` d'Iris, de
-  Clara et d'Ariane. Socle a vécu jusqu'au 2026-09-10 sur 68 px à tuiles de 44 px : c'était le
-  seul écart, et une largeur qui diverge est précisément ce qu'un agent remarque en changeant
-  d'outil. La largeur est exportée en `RAIL_WIDTH_CLASS` — l'en-tête s'en sert pour aligner le
-  lanceur sur l'axe des icônes.
-  ⚠️ **Disposition de la gamme** : tableau de bord **épinglé tout en haut**, le reste **centré
-  dans la hauteur du rail** — centré sur le rail ENTIER (`absolute inset-0`), pas sur la place
-  qui reste sous le tableau de bord, sans quoi le groupe tomberait plus bas qu'ailleurs. Ni
-  pastille de produit au-dessus (l'application se nomme dans l'en-tête), ni trait de séparation.
-- **En-tête** (`Header.tsx`) : **lanceur d'applications** (dans une colonne de la largeur du rail,
-  voir ci-dessous) · wordmark Edilumen · séparateur · **logo + nom de l'organisation principale**
-  — à droite : **pastille + nom du produit** (« Socle », en primaire) · séparateur · menu
-  utilisateur. Motif repris du shell d'Iris/Clara.
-  ⚠️ **QUI L'ON SERT À GAUCHE, AVEC QUOI À DROITE** : la collectivité est le **contexte** de tout
-  ce que l'agent voit, elle suit donc immédiatement Edilumen ; le produit est un **repère de
-  navigation** entre applications, il se pose à l'autre bout, contre le menu utilisateur.
-  ⚠️ Le logo de la collectivité se lit **à nu**, sans pastille ni cadre : un logo est déjà une
-  identité graphique, l'enfermer dans une capsule de couleur le met en concurrence avec elle. Il
-  est traité comme un wordmark (hauteur fixe, largeur libre bornée — les logos de collectivité
-  sont souvent des bandeaux). Sans `logo_url`, **le nom seul** : une initiale dans un carré ne
-  serait qu'un ersatz de la capsule qu'on vient d'enlever.
-  L'organisation affichée vient de `visibleRootOrganizations` (pur, testé) : le sommet de la
-  forêt **visible**, pas la racine stricte — un membre d'une sous-organisation ne voit pas sa
-  racine (`has_org_access` exige l'appartenance directe) et resterait sans repère.
-  ⚠️ L'en-tête lit `logo_url` **brut**, sans résoudre l'héritage de charte : un membre dont le
-  sommet visible est une sous-organisation qui **hérite** n'y voit aucun logo, alors que sa charte
-  en résout un. Écart connu, hérité d'avant la charte (il fallait un `logo_url` propre pour voir
-  quoi que ce soit) ; le combler demande un `resolve_branding` par sommet visible. Le Socle
-  n'ayant **pas** de bascule de tenant (chaque écran a son sélecteur), plusieurs sommets
-  s'affichent « premier nom + `+N` » avec la liste en `title`.
-
-### Bascule entre applications de la gamme (`AppLauncher`, `suiteApps.ts`)
-
-Le motif **« quatre carrés »** dans le coin gauche de l'en-tête ouvre la grille des quatre
-produits — Socle, Iris, Clara, Ariane. Un agent voit où il est, et s'en va chez le voisin sans
-changer de collectivité.
-
-⚠️ **Le lanceur est la tête de la colonne de navigation**, pas un bouton d'en-tête posé là par
-hasard : il occupe une colonne de `RAIL_WIDTH_CLASS` (exportée par `Sidebar.tsx`) et porte le
-gabarit d'une tuile du rail — 36 px, `rounded-lg`, sans bordure —, si bien qu'il tombe
-exactement sur l'axe vertical des icônes juste en dessous. Changer la taille des tuiles du rail
-demande de changer celle du lanceur.
-
-⚠️ **Iris, Clara et Ariane ont chacun le leur** (`AppSwitcher` + `apps.ts` / `lib/apps.ts`) : la
-maquette est commune, les quatre implémentations sont **jumelles et indépendantes** — rien ne
-transite d'un produit à l'autre, chacun tient sa propre session. Une divergence connue au
-2026-09-10 : le **descriptif d'Iris** s'écrit « Demandes des usagers » chez Iris, « Portail des
-démarches » chez Clara, « Gestion des demandes » ici. À trancher une fois pour les quatre.
-
-- **Catalogue figé dans le code** (`src/components/layout/suiteApps.ts`, pur et testé), motif
-  `languages.ts` / `documentVariables.ts` : c'est un **contrat de nommage**, pas une donnée de
-  client. La `key` **EST** le sous-domaine — `iris` ⇒ `https://iris.edilumen.fr` —, et c'est cette
-  régularité des quatre déploiements qui permet de ne rien paramétrer par collectivité.
-  L'initiale de la pastille est **dérivée** du nom : saisie à part, elle finirait par le démentir.
-- ⚠️ **NE PAS CONFONDRE avec la table `applications`** (registre des consommateurs d'API :
-  `nora`, `iris`, `clara`, `socle` — feature « Applications et abonnements »). Celle-là dit qui a
-  le droit d'**appeler** le Socle, celle-ci où un **agent** peut se **rendre**. Les deux listes se
-  recoupent sans se confondre : **Nora** est le portail des **usagers**, elle n'a rien à faire
-  dans un lanceur d'agent ; **Ariane** n'appelle pas encore l'API mais s'ouvre bel et bien d'ici.
-- ⚠️ **Le damier de quatre carrés est RÉSERVÉ au lanceur** : c'est pour cela que le tableau de
-  bord du rail porte désormais une **maison** (`House`) et non plus `LayoutDashboard`. Les deux
-  tombant sur le même axe vertical, à 56 px l'un de l'autre, deux damiers l'un sous l'autre se
-  liraient l'un pour l'autre. Le rail du **superadmin** (`SuperAdminSidebar`, large et légendé)
-  garde son `LayoutDashboard` : le lanceur n'y est pas, et un super_admin ne voit jamais
-  l'autre zone.
-- ⚠️ **On change d'application, pas de collectivité** — le pied du panneau le dit (« Vous restez
-  sur l'organisation X »), parce que rien d'autre à l'écran ne le dirait. Et l'application
-  **courante** se coche au lieu d'être un lien : s'y « rendre » rechargerait la page pour aboutir
-  là où l'on est déjà.
-- Code : `src/components/layout/` — `suiteApps.ts` + `AppLauncher.tsx` (testés), consommés par
-  `Header.tsx` et `Sidebar.tsx` (tous deux testés).
 
 ## Conventions
 
@@ -1823,4 +357,3 @@ démarches » chez Clara, « Gestion des demandes » ici. À trancher une fois p
 - **Composition** : formulaires en `Dialog`, confirmations destructives en `AlertDialog`,
   états via `EmptyState` / squelettes `animate-pulse`. Classes fusionnées avec `cn()`.
 - Textes et libellés **en français**.
-```

@@ -14,7 +14,7 @@ export interface StepDef {
  * « Communication usager » (colonne `user_communication` — ce que l'usager lit).
  * Renommer la clé aurait fait perdre le fil vers la colonne ; garder l'ancien
  * libellé aurait donné deux entrées « Communication » côte à côte dans le
- * stepper. La correspondance complète est dans CLAUDE.md.
+ * stepper. La correspondance complète est dans docs/features/demarches.md.
  */
 export const PROCEDURE_STEPS: readonly StepDef[] = [
   { key: "descriptif", label: "Descriptif" },

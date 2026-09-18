@@ -61,7 +61,8 @@ Documentation interactive (Redoc), consultable sans compte : **`/api-doc`** et
 
 | Document | Pour qui | Contenu |
 |---|---|---|
-| [CLAUDE.md](CLAUDE.md) | Devs & agents IA | Règles de dev, invariants de sécurité, pièges, pointeurs de code — la référence la plus à jour |
+| [CLAUDE.md](CLAUDE.md) | Devs & agents IA | Règles de dev transverses, invariants de sécurité, index des features — la référence la plus à jour |
+| [docs/features/](docs/features/) | Devs & agents IA | Une fiche par feature : invariants, pièges, pointeurs de code — à lire avant d'y toucher |
 | [docs/architecture.md](docs/architecture.md) | Devs | Zones applicatives, frontières système, modèle de sécurité, décisions et dette |
 | [docs/data-model.md](docs/data-model.md) | Devs & ops | Tables, contraintes, triggers, RLS, RPC, extensions, storage |
 | [docs/integration.md](docs/integration.md) | Équipes consommatrices (Ariane, Clara, Iris) | Obtention de clé, scopes, garanties d'isolation, politique de compatibilité |

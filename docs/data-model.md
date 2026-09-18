@@ -322,7 +322,7 @@ aucun endpoint, il décrit ce qui existe **en base**.
   active les démarches sur tout son sous-arbre, pas seulement son organisation directe.
 - Sémantique : activation **opt-in** — une démarche est active pour une organisation si et
   seulement si une ligne existe avec `is_enabled = true`. Détail applicatif dans
-  [../CLAUDE.md](../CLAUDE.md) (feature « Édition d'organisation »).
+  [./features/organisations.md](./features/organisations.md) (« Édition d'organisation »).
 - **Un seul instructeur par porteur** (2026-09-08) : une même démarche ne peut être activée que
   par **une** organisation d'un même groupe — le porteur et ses services internes (voir
   `organizations.is_internal_service`). Sinon, une demande déposée au nom du porteur n'aurait pas
@@ -626,7 +626,7 @@ implémentation, trois lecteurs (le service, l'éditeur, le client).
 ## Fréquentation du site de démarches
 
 Deux tables de **compteurs**, et rien d'autre. Écrites par `audience-api` (scope `audience`) via
-deux RPC, lues par une troisième. Voir CLAUDE.md, « Tableau de bord et fréquentation du site ».
+deux RPC, lues par une troisième. Voir [./features/tableau-de-bord.md](./features/tableau-de-bord.md).
 
 ⚠️ **AUCUN IDENTIFIANT NE PEUT Y ENTRER**, et c'est ce qui dispense d'un bandeau de consentement
 sur les portails (article 82 de la loi Informatique et Libertés) : pas de visiteur, pas de session,
@@ -813,7 +813,7 @@ redire après l'ajout du favicon.
 p_siret, p_birth_date, p_email, p_phones[], p_status, p_exclude_ids[], p_limit) → TABLE(contact_id,
 score int, reasons text[])`. `SECURITY INVOKER`, `search_path=""`, **EXECUTE réservé à
 `service_role`**. Sert `POST /v1/contacts/match` de `contacts-api` — détail du scoring et des
-critères dans [../CLAUDE.md](../CLAUDE.md) et l'OpenAPI de `contacts-api`.
+critères dans [./features/contacts-api.md](./features/contacts-api.md) et l'OpenAPI de `contacts-api`.
 
 ### Fonctions de normalisation
 
@@ -1190,7 +1190,7 @@ redire après l'ajout du favicon.
 p_siret, p_birth_date, p_email, p_phones[], p_status, p_exclude_ids[], p_limit) → TABLE(contact_id,
 score int, reasons text[])`. `SECURITY INVOKER`, `search_path=""`, **EXECUTE réservé à
 `service_role`**. Sert `POST /v1/contacts/match` de `contacts-api` — détail du scoring et des
-critères dans [../CLAUDE.md](../CLAUDE.md) et l'OpenAPI de `contacts-api`.
+critères dans [./features/contacts-api.md](./features/contacts-api.md) et l'OpenAPI de `contacts-api`.
 
 ### Fonctions de normalisation
 
