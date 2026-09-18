@@ -22,6 +22,13 @@ export const HEX_COLOR = /^#[0-9a-f]{6}$/;
 /** Le blanc, écrit une fois : c'est le fond de la page et l'encre des bandeaux. */
 export const WHITE = "#ffffff";
 
+/**
+ * L'encre ordinaire du portail — celle que le blanc doit battre pour être
+ * choisi sur un fond (`isDarkColor`). `themeStyle.ts` la reprend dans ses
+ * neutres : une seule valeur, pas deux qui finiraient par diverger.
+ */
+export const PORTAL_INK = "#1c2220";
+
 function channels(hex: string): [number, number, number] | null {
   if (!HEX_COLOR.test(hex)) return null;
   return [
@@ -43,13 +50,12 @@ export function relativeLuminance(hex: string): number | null {
 }
 
 /**
- * Le texte se lit-il en clair sur ce fond ? Sous 0,4 de luminance le fond est
- * sombre et appelle du texte clair. Une couleur illisible est traitée comme
- * sombre — le défaut du pied de page l'est.
+ * Le texte se lit-il en clair sur ce fond ? Oui quand le blanc y contraste
+ * mieux que l'encre ordinaire du portail — voir `readableInk`. Une couleur
+ * illisible est traitée comme sombre : le défaut du pied de page l'est.
  */
 export function isDarkColor(hex: string): boolean {
-  const luminance = relativeLuminance(hex);
-  return luminance === null || luminance < 0.4;
+  return readableInk(hex, PORTAL_INK) === WHITE;
 }
 
 /**
@@ -65,9 +71,28 @@ export function contrastRatio(a: string, b: string): number | null {
   return (hi + 0.05) / (lo + 0.05);
 }
 
-/** L'encre qui se lit sur ce fond : le blanc, ou l'encre sombre proposée. */
+/**
+ * L'encre qui se lit sur ce fond : le blanc, ou l'encre sombre proposée —
+ * **celle des deux qui contraste le plus**. À égalité, le blanc.
+ *
+ * ⚠️ LE CHOIX SE FAISAIT SUR UN SEUIL DE LUMINANCE FIXE, 0,4, ET IL ÉTAIT FAUX
+ * (relevé RGAA du 2026-09-15). Le vrai point de bascule entre le blanc et
+ * l'encre du portail est vers 0,21 : entre les deux, le blanc perdait. Un
+ * orange `#e07b39` recevait du blanc à 2,97 : 1 là où l'encre sombre passe à
+ * 5,44 ; un turquoise `#00a3a3`, 3,10 contre 5,21. Comparer les deux contrastes
+ * plutôt que viser un seuil vaut aussi pour l'encre du contraste renforcé, dont
+ * le point de bascule n'est pas le même.
+ *
+ * Une couleur illisible rend le blanc : elle est traitée comme sombre.
+ *
+ * ⚠️ Miroir de `Nora/src/features/portal/themeStyle.ts` (`readableInk`) : si
+ * les deux divergent, l'aperçu de l'éditeur ne montre plus l'encre du site.
+ */
 export function readableInk(background: string, darkInk: string): string {
-  return isDarkColor(background) ? WHITE : darkInk;
+  const onWhite = contrastRatio(background, WHITE);
+  const onInk = contrastRatio(background, darkInk);
+  if (onWhite === null || onInk === null) return WHITE;
+  return onWhite >= onInk ? WHITE : darkInk;
 }
 
 // ── Conversions ─────────────────────────────────────────────────────────────

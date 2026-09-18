@@ -132,9 +132,9 @@ describe("contrôle des contrastes", () => {
   });
 
   it("⚠️ « assombrir » n'est proposé que s'il corrige vraiment, et il corrige", () => {
-    // Le vert de la gamme lui-même ne passe pas en TEXTE sur blanc (3,6 : 1) —
+    // L'ancien vert de la gamme ne passait pas en TEXTE sur blanc (3,6 : 1) —
     // et un cran plus foncé suffit. C'est tout l'objet du correctif.
-    const vif: ThemeBranding = { primaryColor: DEFAULT_PRIMARY, secondaryColor: "#ffcd57" };
+    const vif: ThemeBranding = { primaryColor: "#089b59", secondaryColor: "#ffcd57" };
     const avant = contrastRows(defaultPortalTheme(), vif).find((r) => r.id === "primary-text")!;
     expect(avant.status).toBe("insufficient");
     expect(avant.fix).toBe("darkPrimary");
@@ -158,6 +158,40 @@ describe("contrôle des contrastes", () => {
     const row = contrastRows(defaultPortalTheme(), pale).find((r) => r.id === "primary-text")!;
     expect(row.status).toBe("insufficient");
     expect(row.fix).toBeUndefined();
+  });
+
+  it("⚠️ le seuil se compare au rapport BRUT : 4,498 ne passe pas pour 4,5", () => {
+    // L'ancien vert de la gamme sous l'encre sombre : arrondi, il passait « 4,5 ».
+    const ancien: ThemeBranding = { primaryColor: "#089b59", secondaryColor: null };
+    const row = contrastRows(defaultPortalTheme(), ancien).find((r) => r.id === "on-primary")!;
+    expect(row.status).toBe("insufficient");
+    expect(row.ratio).toBe(4.4);
+    // Un cran plus foncé, le blanc repasse devant, et passe.
+    expect(row.fix).toBe("darkPrimary");
+  });
+
+  it("le contour des champs tient 3 : 1 dans les deux jeux d'encres", () => {
+    for (const highContrast of [false, true]) {
+      const theme: PortalTheme = {
+        ...defaultPortalTheme(),
+        accessibility: { ...defaultPortalTheme().accessibility, highContrast },
+      };
+      const row = contrastRows(theme, CHARTE).find((r) => r.id === "field-border")!;
+      expect(row.min).toBe(3);
+      expect(row.status).toBe("ok");
+      const colors = resolveThemeColors(theme, CHARTE);
+      expect(contrastRatio(colors.fieldBorder, colors.surface)!).toBeGreaterThanOrEqual(3);
+    }
+  });
+
+  it("⚠️ une collectivité SANS CHARTE est servie conforme", () => {
+    // Le vert par défaut a été foncé pour ça (2026-09-18) : sans charte
+    // publiée, le portail peint ce vert-là, et c'est le cas le plus courant
+    // d'un domaine tout juste ouvert.
+    for (const row of contrastRows(defaultPortalTheme(), null)) {
+      if (row.id === "border") continue;
+      expect([row.id, row.status]).toEqual([row.id, "ok"]);
+    }
   });
 
   it("les bordures sont décoratives sous leur seuil, pas fautives", () => {

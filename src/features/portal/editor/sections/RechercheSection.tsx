@@ -72,7 +72,7 @@ export function RechercheSection({
       >
         {section.subtitle}
       </p>
-      <div className="flex h-12 w-full max-w-[520px] items-center gap-2.5 rounded-[var(--pt-radius-sm)] border border-[color:var(--pt-border)] bg-white px-3.5 shadow-[var(--pt-shadow)]">
+      <div className="flex h-12 w-full max-w-[520px] items-center gap-2.5 rounded-[var(--pt-radius-sm)] border border-[color:var(--pt-field-border)] bg-white px-3.5 shadow-[var(--pt-shadow)]">
         <Search className="size-[17px] shrink-0 text-[color:var(--pt-muted)]" />
         <span className="truncate text-[length:var(--pt-body)] text-[color:var(--pt-muted)]">
           {section.placeholder}

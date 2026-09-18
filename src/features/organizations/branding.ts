@@ -14,8 +14,13 @@
  *    rattrape de toute façon ; on ne lui envoie pas de bêtise pour autant.
  */
 
-/** Couleur proposée par le sélecteur quand rien n'est encore défini (vert du DS). */
-export const DEFAULT_COLOR_PICKER = "#089b59";
+/**
+ * Couleur proposée par le sélecteur quand rien n'est encore défini : le vert
+ * par défaut du portail (`DEFAULT_PRIMARY`, `features/portal/themeStyle.ts`).
+ * ⚠️ Pas l'ancien `#089b59` : proposé ici puis enregistré tel quel, il faisait
+ * d'une charte fraîche une charte hors conformité RGAA (3,59 : 1).
+ */
+export const DEFAULT_COLOR_PICKER = "#07854c";
 
 export interface BrandingValues {
   logoUrl: string;

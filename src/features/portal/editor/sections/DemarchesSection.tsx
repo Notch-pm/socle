@@ -36,7 +36,7 @@ function FilterPreview({
     <span
       aria-hidden="true"
       title={choices}
-      className="flex h-8 shrink-0 items-center gap-1.5 rounded-[var(--pt-radius-sm)] border border-[color:var(--pt-border)] bg-white px-2.5 text-[length:var(--pt-small)] text-[color:var(--pt-muted)]"
+      className="flex h-8 shrink-0 items-center gap-1.5 rounded-[var(--pt-radius-sm)] border border-[color:var(--pt-field-border)] bg-white px-2.5 text-[length:var(--pt-small)] text-[color:var(--pt-muted)]"
     >
       {icon}
       {label}

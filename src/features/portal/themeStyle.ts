@@ -25,6 +25,7 @@ import {
   contrastRatio,
   darkenColor,
   HEX_COLOR,
+  PORTAL_INK,
   readableInk,
   WHITE,
   withAlpha,
@@ -72,14 +73,41 @@ const SPACING = { gap: 22, pad: 20, cardPad: 14 } as const;
 // renforcé. Ce sont les seules couleurs FIGÉES du rendu — un gris de texte
 // n'appartient pas à la charte d'une collectivité, il appartient à la
 // lisibilité.
+//
+// ⚠️ DEUX BORDURES, ET LA DIFFÉRENCE EST RÉGLEMENTAIRE. `border` dessine les
+// cartes et les séparateurs : décoratifs, le RGAA ne leur demande rien.
+// `fieldBorder` est le contour d'un champ de saisie — c'est lui qui dit « ici,
+// on écrit » — et il doit tenir 3 : 1 (RGAA 3.3) : 3,56 sur blanc, 3,21 sur
+// l'aplat neutre ; 4,44 en contraste renforcé. Le relevé du 2026-09-15 a trouvé
+// les champs du portail dessinés avec `border`, à 1,24 : 1.
 
 const NEUTRALS = {
-  normal: { ink: "#1c2220", muted: "#5c6663", border: "#e4e7e6", surface: "#f1f4f3" },
-  contrast: { ink: "#0d1210", muted: "#3d4844", border: "#acb9b5", surface: "#e6ebe9" },
+  normal: {
+    ink: PORTAL_INK,
+    muted: "#5c6663",
+    border: "#e4e7e6",
+    fieldBorder: "#808a87",
+    surface: "#f1f4f3",
+  },
+  contrast: {
+    ink: "#0d1210",
+    muted: "#3d4844",
+    border: "#acb9b5",
+    fieldBorder: "#6f7a77",
+    surface: "#e6ebe9",
+  },
 } as const;
 
-/** Le vert de la gamme et son jaune, faute de charte — mêmes valeurs que Nora. */
-export const DEFAULT_PRIMARY = "#089b59";
+/**
+ * Le vert de la gamme et son jaune, faute de charte — mêmes valeurs que Nora.
+ *
+ * ⚠️ LE VERT A ÉTÉ FONCÉ LE 2026-09-18 (`#089b59` → `#07854c`), sur décision
+ * produit. L'ancien donnait 3,59 : 1 en texte sur blanc et 4,498 au mieux sur
+ * un bouton : une collectivité sans charte publiée était servie hors
+ * conformité RGAA par défaut. Le nouveau tient 4,70 : 1 dans les deux cas —
+ * le plus petit pas qui passe.
+ */
+export const DEFAULT_PRIMARY = "#07854c";
 export const DEFAULT_SECONDARY = "#ffcd57";
 
 export interface ThemeBranding {
@@ -109,6 +137,8 @@ export interface ThemeColors {
   ink: string;
   muted: string;
   border: string;
+  /** Le contour d'un champ de saisie — 3 : 1 au moins, contrairement à `border`. */
+  fieldBorder: string;
   /** Aplat neutre très clair : puces, vignettes, fonds de repos. */
   surface: string;
   primary: string;
@@ -144,7 +174,7 @@ export function resolveThemeColors(
   const brand = brandColors(branding);
   const strong = theme.accessibility.highContrast;
   const neutrals = strong ? NEUTRALS.contrast : NEUTRALS.normal;
-  const { ink, muted, border, surface } = neutrals;
+  const { ink, muted, border, fieldBorder, surface } = neutrals;
 
   // `highContrast` fonce la couleur principale comme le fait `darkPrimary` :
   // c'est le même geste, demandé pour la même raison.
@@ -161,6 +191,7 @@ export function resolveThemeColors(
     ink,
     muted,
     border,
+    fieldBorder,
     surface,
     primary,
     primarySoft: withAlpha(primary, strong ? 0.14 : 0.08),
@@ -253,6 +284,7 @@ export function themeCssVariables(
     "--pt-ink": colors.ink,
     "--pt-muted": colors.muted,
     "--pt-border": colors.border,
+    "--pt-field-border": colors.fieldBorder,
     "--pt-surface": colors.surface,
     "--pt-primary": colors.primary,
     "--pt-primary-soft": colors.primarySoft,
@@ -299,7 +331,7 @@ export type ContrastStatus = "ok" | "insufficient" | "decorative";
 export interface ContrastRow {
   id: string;
   label: string;
-  /** Rapport WCAG, arrondi au dixième. */
+  /** Rapport WCAG, tronqué au dixième — voir `measure`. */
   ratio: number;
   /** Seuil applicable : 4,5 pour du texte, 3 pour un élément d'interface. */
   min: number;
@@ -377,6 +409,14 @@ function rowSpecs(theme: PortalTheme, branding: ThemeBranding | null): RowSpec[]
   }
 
   specs.push({
+    id: "field-border",
+    label: "Contour des champs de saisie",
+    foreground: c.fieldBorder,
+    background: WHITE,
+    min: 3,
+  });
+
+  specs.push({
     id: "border",
     label: "Bordures et séparateurs",
     foreground: c.border,
@@ -393,8 +433,13 @@ function measure(spec: RowSpec): { ratio: number; status: ContrastStatus } {
   // est déjà normalisée, mais on ne prétend pas mesurer ce qu'on n'a pas lu.
   const raw = contrastRatio(spec.foreground, spec.background);
   if (raw === null) return { ratio: 0, status: "insufficient" };
-  const ratio = Math.round(raw * 10) / 10;
-  if (ratio >= spec.min) return { ratio, status: "ok" };
+  // ⚠️ LE SEUIL SE COMPARE AU RAPPORT BRUT, JAMAIS À L'ARRONDI : le WCAG
+  // n'arrondit pas. Le vert de la gamme sous l'encre sombre fait 4,498 : 1 —
+  // arrondi, il passait « 4,5 », et le contrôle le déclarait conforme. Le
+  // chiffre affiché est tronqué pour la même raison : « 4,4 » ne contredit
+  // pas un échec, « 4,5 » si.
+  const ratio = Math.floor(raw * 10) / 10;
+  if (raw >= spec.min) return { ratio, status: "ok" };
   return { ratio, status: spec.decorative ? "decorative" : "insufficient" };
 }
 

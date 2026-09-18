@@ -303,9 +303,130 @@ suppose la précédente.
    ou par l'éditeur, périmètre des données restituées, cohabitation avec les comptes locaux.
    À instruire avant de coder.
 
-Transverse, à ne pas perdre en route : **accessibilité RGAA** et mentions obligatoires d'un site
-public, **domaines réels** (retirer `PORTAL_DEV_DOMAIN_SUFFIX` de la fonction déployée dès le
-premier), **lien « Prévisualiser » vers le vrai portail** depuis l'éditeur (aujourd'hui l'aperçu
+### Accessibilité RGAA — le relevé du 2026-09-15
+
+Estimation : **partiellement conforme**, ~70 % en générique et ~75 % mesuré sur
+`sna27.edilumen.fr` en production. Au seuil de l'arrêté (100 % = totalement conforme, ≥ 50 % =
+partiellement), le portail est donc **partiellement conforme** — mais aucune collectivité ne peut
+le déclarer tant que la déclaration elle-même n'existe pas (voir « Côté Socle » plus bas).
+
+⚠️ **Ce n'est pas un audit** : relevé par lecture du code et mesure dans le DOM des trois écrans
+(accueil, présentation d'une démarche, formulaire, en français et en anglais). Pas d'échantillon
+de pages arrêté, pas de test au lecteur d'écran, pas de vérification à 320 px. Un audit
+d'accréditation reste à commander — ce relevé sert à ne pas le découvrir le jour où il arrive.
+
+**Ce qui tient déjà** (à ne pas défaire) : étiquettes, aide et erreur reliées par
+`aria-describedby`, `aria-invalid`, obligation dite en toutes lettres, groupes `radiogroup` /
+`group` étiquetés, `lang` et `dir` posés dynamiquement, images décoratives en `alt=""`, SVG en
+`aria-hidden`, panneau « Ma ville » refermé par Échap avec retour du focus, `prefers-reduced-motion`.
+
+#### Côté Nora — un lot « à faire une fois »
+
+✅ **Points 1 à 10 livrés le 2026-09-18**, vérifiés sur un build de production (`laurentville`,
+accueil, présentation, formulaire envoyé à vide). Ce qui a changé, pour ne pas le défaire :
+
+- chaque écran a la même structure : racine `<div>` (elle porte le style du thème), lien
+  d'évitement (`SkipLink`), `<header>`, `<main id="contenu" tabIndex={-1}>`, puis un `<footer>`
+  de premier niveau **seulement s'il a quelque chose à porter** ;
+- sur l'accueil composé, le `h1` est le **nom de la collectivité**, dans l'en-tête, à rendu
+  identique (décision de Laurent : jamais un bloc personnalisable). Les pages d'organisme et le
+  catalogue de repli ont reçu un `h2` invisible au-dessus des cartes (`h3`), qui sautaient un
+  niveau ;
+- un titre d'onglet par écran, traduit (`i18n/pageTitle.ts`), préfixé du nombre d'erreurs
+  après un envoi refusé ;
+- l'erreur est reliée à son contrôle sur les groupes **et sur le dépôt de fichier** : même
+  défaut, trouvé au contrôle dans Chrome ;
+- le contour des champs a sa propre variable, `--pt-field-border` : 3,56:1, et 4,44:1 en
+  contraste renforcé. `--pt-border` reste aux cartes et aux séparateurs, qui sont décoratifs.
+
+Restent ouverts : 11 à 14. Les deux chaînes françaises en dur du formulaire (« Choisissez… »)
+ont été corrigées au passage : c'était un défaut 8.7 sur une page servie en anglais.
+
+Dans l'ordre du rapport qualité/prix, tout se tient en une passe :
+
+1. **Le lien d'évitement** (12.7) — absent de toutes les pages ; le premier tabulable est le logo.
+2. **Un `h1` sur l'accueil composé** (9.1) — 29 titres sur `sna27`, aucun `h1` : la page commence
+   en `h2`. ⚠️ C'est une décision de composition avant d'être du code : le `h1` est-il le titre du
+   bloc « recherche », ou le nom de la collectivité ? Les pages de démarche, elles, ont le leur.
+3. **Sortir `header` et `footer` de `main`** (9.2, 12.6) — mesuré : `header DANS MAIN`,
+   `nav DANS HEADER>MAIN`, `footer DANS MAIN`. Les repères `banner` et `contentinfo` n'existent
+   donc pas. `HomeComposition.tsx` et `DemarcheShell.tsx`.
+4. **Un titre de page par écran** (8.6) — `document.title` vaut « Démarches en ligne » sur les
+   trois écrans, et **reste en français sur une page servie en `lang="en"`**.
+5. **La prise de focus du champ de recherche** (10.7) — mesuré : `outline: rgba(0,0,0,0) 2px` et
+   `box-shadow` à zéro. Les classes `focus:outline-none focus:ring-0` sur l'input, la bordure
+   visible étant portée par le conteneur (`RechercheSection.tsx`, `OrganismePage.tsx`). Même
+   angle mort sur les contrôles en `sr-only` (pilules « Je suis… », dépôt de fichier).
+6. **L'erreur d'un groupe n'est reliée à rien** (11.10) — le défaut le plus dur, vérifié en
+   production : envoi à vide → « 5 informations doivent être corrigées » ; quatre champs portent
+   `aria-invalid` + `aria-describedby`, le cinquième (une case à cocher, rendue en `role="group"`)
+   affiche son message `champ-…-erreur` sans qu'aucun attribut n'y renvoie. Un lecteur d'écran
+   annonce cinq erreurs et n'en laisse trouver que quatre. `FormFields.tsx` : les groupes
+   reçoivent `aria-labelledby` mais pas le reste de `shared`.
+7. **`fieldset` / `legend` sur « Vos informations »** (11.6) — zéro `fieldset` dans tout le portail.
+8. **`autocomplete` sur les champs d'identité** (11.13) — seul `courriel` en porte un ; nom de
+   naissance, nom usuel, prénoms, adresse, portable, fixe, civilité n'ont rien.
+9. **Le focus au résumé d'erreurs** — `ErrorSummary` porte déjà `tabIndex={-1}`, personne ne l'y
+   met : après un envoi refusé, le focus reste sur le bouton.
+10. **Le contraste des bordures de champ** (3.3) — `--pt-border: #e4e7e6` sur blanc = **1,24:1**,
+    il en faut 3. Figé dans `index.css`, donc indépendant de la charte : il vaut pour tout le monde.
+11. **Deux systèmes de navigation par page** (12.1) — la nav de l'en-tête est décorative et la
+    recherche n'existe que sur l'accueil : une page de démarche n'en offre aucun. Se règle avec les
+    autres templates (2) plutôt qu'à part.
+12. **Les messages de statut** (7.5) — recherche et filtres refont la grille sans région live ; le
+    « rien trouvé » apparaît en silence.
+13. **Le sélecteur de langue navigue au `onChange`** (7.4) — changement de contexte à la saisie.
+14. **Le miroir RTL de la mise en page** — connu, noté dans le README de Nora : `dir="rtl"` corrige
+    le texte et la saisie, pas le placement (utilitaires Tailwind physiques).
+
+✅ *Corrigé le 2026-09-18, des deux côtés à la fois.* `readableInk` ne vise plus de seuil : il
+prend **celle des deux encres qui contraste le plus** (le blanc à égalité), ce qui vaut aussi pour
+l'encre du contraste renforcé. Le point de bascule effectif avec l'encre ordinaire est ≈ 0,21, et
+non 0,183 : entre les deux, le blanc reste le meilleur choix, même sous 4,5. Le doublon de
+`composition.ts` (Nora) n'existe plus. Le constat d'origine :
+
+⚠️ **LE SEUIL DE LUMINANCE EST FAUX, ET IL DÉCIDE DE LA LISIBILITÉ D'UN EN-TÊTE COLORÉ.**
+`isDarkColor` bascule en texte blanc sous **0,4** — `Nora/src/features/portal/themeStyle.ts`,
+dupliqué dans `composition.ts` pour le pied de page. Le vrai point de bascule pour 4,5:1 est
+**0,183**. Un orange `#e07b39` ou un turquoise `#00a3a3` reçoit donc du blanc (2,97 et 3,10) là où
+l'encre sombre passerait (5,44 et 5,21). À corriger des deux côtés à la fois : `themeStyle.ts` est
+un miroir volontaire de son homologue du Socle, et l'aperçu de l'éditeur ment sinon.
+
+✅ *Le vert par défaut a été foncé le 2026-09-18* (décision de Laurent) : `#089b59` → **`#07854c`**,
+soit 4,70:1 en texte comme en bouton, le plus petit pas qui passe. L'ancien ne passait avec
+aucune encre (3,59 en blanc, 4,498 en encre sombre). Le sélecteur de couleur de la charte proposait
+lui aussi l'ancien vert (`DEFAULT_COLOR_PICKER`) : il propose maintenant le nouveau. Le constat
+d'origine :
+
+⚠️ **LA CONFORMITÉ D'UNE COLLECTIVITÉ DÉPEND DE LA COULEUR QU'ELLE A SAISIE.** SNA27 passe les
+contrastes de texte par sa charte (`#3b7788` : blanc dessus à 5,02 ; 117 éléments de texte mesurés
+sur l'accueil, **aucun échec**). Le vert par défaut de la gamme (`#089b59`) donne, lui, **3,59** en
+texte comme en fond de bouton : une collectivité **sans charte publiée est servie hors conformité
+par défaut**. C'est le point qui empêche d'annoncer un niveau au catalogue.
+
+#### Côté Socle
+
+- **Les pages obligatoires** — « Accessibilité », « Mentions légales », « Contact » : déjà dans
+  « Les autres templates » (2). Tant qu'elles n'existent pas, la déclaration n'est qu'une phrase au
+  pied de page, alors que l'article 47 demande **une page**, une **mention d'état** et un **schéma
+  pluriannuel**.
+- **Rien n'oblige la collectivité à remplir sa déclaration.** `accessibility.declaration` vide =
+  rien d'affiché, par décision (le portail n'invente pas une déclaration que personne n'a faite).
+  Conséquence observée : **`sna27.edilumen.fr` est en ligne sans aucune mention d'accessibilité**,
+  ni mentions légales, ni politique de confidentialité, ni page contact. À traiter comme un
+  prérequis de mise en ligne d'un domaine, pas comme un réglage facultatif.
+- ✅ *2026-09-18* : le contrôle des contrastes **compare le rapport brut** au seuil. Il arrondissait
+  avant de comparer, et affichait 4,498 comme « 4,5 : 1, conforme ». Il tronque désormais le
+  chiffre affiché. Il gagne aussi une ligne « Contour des champs de saisie » (3:1, non
+  décorative).
+- **Le contrôle des contrastes de l'éditeur** (2026-09-08) mesure la charte réelle et propose son
+  correctif. Il pourrait **avertir** quand la charte met la collectivité hors conformité — et
+  couvrir aussi le choix encre claire / encre sombre, qui lui échappe aujourd'hui.
+
+Transverse, à ne pas perdre en route : **accessibilité RGAA** (relevé ci-dessus) et mentions
+obligatoires d'un site public, **domaines réels** (retirer `PORTAL_DEV_DOMAIN_SUFFIX` de la
+fonction déployée dès le premier), **lien « Prévisualiser » vers le vrai portail** depuis
+l'éditeur (aujourd'hui l'aperçu
 est le canevas sans son chrome), sortie de l'éditeur du shell de l'app, et les points d'ergonomie
 notés dans `architecture.md` § 7.
 

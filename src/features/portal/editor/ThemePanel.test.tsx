@@ -2,7 +2,7 @@
 import { describe, expect, it, vi } from "vitest";
 import { fireEvent, render, screen } from "@testing-library/react";
 import { applyPreset, defaultPortalTheme, type PortalTheme } from "@/features/portal/portalTheme";
-import { DEFAULT_PRIMARY, type ThemeBranding } from "@/features/portal/themeStyle";
+import type { ThemeBranding } from "@/features/portal/themeStyle";
 import { ThemePanel } from "./ThemePanel";
 
 // Radix Switch : polyfills absents de jsdom.
@@ -12,7 +12,9 @@ if (!Element.prototype.hasPointerCapture) {
   Element.prototype.releasePointerCapture = () => {};
 }
 
-const CHARTE: ThemeBranding = { primaryColor: DEFAULT_PRIMARY, secondaryColor: "#ffcd57" };
+// L'ancien vert de la gamme (`#089b59`, foncé le 2026-09-18) : la charte type
+// qui ne passe pas en texte sur blanc, et qu'un cran plus foncé sauve.
+const CHARTE: ThemeBranding = { primaryColor: "#089b59", secondaryColor: "#ffcd57" };
 
 function renderPanel(theme: PortalTheme = defaultPortalTheme(), branding = CHARTE) {
   const onChange = vi.fn();
@@ -98,8 +100,8 @@ describe("ThemePanel — accessibilité", () => {
 
 describe("ThemePanel — contrôle des contrastes", () => {
   it("mesure la charte réelle et propose le correctif qui marche", () => {
-    // Le vert de la gamme ne passe pas en texte sur blanc ; un cran plus
-    // foncé suffit.
+    // L'ancien vert de la gamme ne passe pas en texte sur blanc ; un cran
+    // plus foncé suffit.
     const { onChange } = renderPanel();
     expect(screen.getAllByText("Insuffisant").length).toBeGreaterThan(0);
 
