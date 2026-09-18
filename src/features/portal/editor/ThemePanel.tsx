@@ -1,13 +1,11 @@
 import * as React from "react";
 import { Check } from "lucide-react";
 import { cn } from "@/lib/utils";
-import { Input } from "@/components/ui/input";
 import { SegmentedControl } from "@/components/ui/segmented-control";
 import { Switch } from "@/components/ui/switch";
 import { fontById, PORTAL_FONTS, type FontId } from "@/features/portal/portalFonts";
 import {
   applyPreset,
-  MAX_DECLARATION_LENGTH,
   presetName,
   PRESETS,
   type PortalTheme,
@@ -420,19 +418,13 @@ export function ThemePanel({
             checked={theme.accessibility.darkPrimary}
             onCheckedChange={(darkPrimary) => setAccessibility({ darkPrimary })}
           />
-          <Row
-            label="Déclaration d'accessibilité"
-            htmlFor="theme-declaration"
-            hint="Obligatoire (RGAA) : affichée dans le pied de page du site."
-          >
-            <Input
-              id="theme-declaration"
-              value={theme.accessibility.declaration}
-              maxLength={MAX_DECLARATION_LENGTH}
-              placeholder="Ex. Conformité RGAA partielle — audit du 12 juin 2026"
-              onChange={(event) => setAccessibility({ declaration: event.target.value })}
-            />
-          </Row>
+          {/* La mention RGAA a quitté ce panneau le 2026-09-18 : c'est un
+              contenu, pas une apparence. On dit où elle est partie — c'est ici
+              qu'un agent habitué la cherchera d'abord. */}
+          <p className="text-[11px] leading-snug text-muted-foreground">
+            La mention d'accessibilité se règle dans « Composition », au pied de la page ; la
+            déclaration elle-même se rédige dans « Contenus ».
+          </p>
         </Group>
 
         <Group title="Contrôle des contrastes">

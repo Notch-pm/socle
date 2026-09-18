@@ -10,6 +10,7 @@ import type { PortalCatalogueEntry } from "@/features/portal/catalogue";
 import type { PortalTheme } from "@/features/portal/portalTheme";
 import { themeCssVariables, type ThemeBranding } from "@/features/portal/themeStyle";
 import { DEVICE_PAGE_WIDTH, type Device } from "./device";
+import { AccessibilityMentionBlock } from "./AccessibilityMention";
 import { SectionBlock } from "./SectionBlock";
 
 /** Id de la zone de dépôt racine : toute la liste des sections. */
@@ -73,6 +74,14 @@ export interface PortalCanvasProps {
   onShift: (id: string, direction: -1 | 1) => void;
   onRemove: (id: string) => void;
   onOpenPalette: () => void;
+  /**
+   * La déclaration d'accessibilité (onglet « Contenus ») a-t-elle un texte ?
+   * Le lien de la mention n'apparaît qu'à cette condition — comme sur le site.
+   */
+  statementWritten: boolean;
+  /** La mention du pied de site est-elle sélectionnée (son inspecteur ouvert) ? */
+  mentionSelected: boolean;
+  onSelectMention: () => void;
 }
 
 /**
@@ -149,6 +158,9 @@ export function PortalCanvas({
   onShift,
   onRemove,
   onOpenPalette,
+  statementWritten,
+  mentionSelected,
+  onSelectMention,
 }: PortalCanvasProps) {
   const containerRef = React.useRef<HTMLDivElement>(null);
   const [containerWidth, setContainerWidth] = React.useState(1128);
@@ -191,7 +203,7 @@ export function PortalCanvas({
     return () => observer.disconnect();
   }, []);
 
-  const hasInspector = !previewing && selectedId != null;
+  const hasInspector = !previewing && (selectedId != null || mentionSelected);
   const padLeft = previewing ? 32 : paletteOpen ? 254 : 72;
   const padRight = previewing ? 32 : hasInspector ? 338 : 32;
   const pageWidth = DEVICE_PAGE_WIDTH[device];
@@ -406,6 +418,18 @@ export function PortalCanvas({
                 {endsWithFooter ? null : addButton}
               </div>
             </SortableContext>
+
+            {/* La mention d'accessibilité : SOUS la dernière section, pied de
+                page composé compris — exactement où Nora la pose. Hors de la
+                liste triable : elle ne se déplace ni ne se supprime, et vaut
+                pour toutes les pages du site, pas pour cette composition. */}
+            <AccessibilityMentionBlock
+              theme={theme}
+              statementWritten={statementWritten}
+              selected={!previewing && mentionSelected}
+              previewing={previewing}
+              onSelect={onSelectMention}
+            />
           </div>
         </div>
       </div>

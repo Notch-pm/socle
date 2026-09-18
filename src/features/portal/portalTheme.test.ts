@@ -10,12 +10,16 @@ import {
 } from "./portalTheme";
 
 describe("defaultPortalTheme", () => {
-  it("n'active aucun correctif d'accessibilité", () => {
+  it("n'active aucun correctif d'accessibilité, mais affiche la mention et son lien", () => {
     const theme = defaultPortalTheme();
     expect(theme.accessibility).toEqual({
       highContrast: false,
       darkPrimary: false,
+      // La mention est obligatoire pour un site public : ce n'est pas un
+      // correctif, c'est le cas normal.
+      declarationEnabled: true,
       declaration: "",
+      declarationLink: true,
     });
   });
 
@@ -77,6 +81,38 @@ describe("parsePortalTheme", () => {
     });
   });
 
+  it("⚠️ un thème d'avant les deux commutateurs garde sa mention affichée, et gagne le lien", () => {
+    // Deux collectivités avaient publié une mention le 2026-09-18, sans aucun de
+    // ces deux champs : les lire « masquée » l'aurait effacée de leur site.
+    const parsed = parsePortalTheme({
+      accessibility: { highContrast: false, darkPrimary: false, declaration: "Audit du 12 juin" },
+    });
+    expect(parsed.accessibility.declarationEnabled).toBe(true);
+    expect(parsed.accessibility.declaration).toBe("Audit du 12 juin");
+    expect(parsed.accessibility.declarationLink).toBe(true);
+  });
+
+  it("relit une mention masquée sans perdre son texte ni son lien", () => {
+    // Le commutateur gouverne l'usage, pas la donnée : le retour en arrière est
+    // gratuit.
+    const parsed = parsePortalTheme({
+      accessibility: { declarationEnabled: false, declaration: "Audit", declarationLink: false },
+    });
+    expect(parsed.accessibility).toMatchObject({
+      declarationEnabled: false,
+      declaration: "Audit",
+      declarationLink: false,
+    });
+  });
+
+  it("un commutateur illisible retombe sur son défaut — affiché", () => {
+    const parsed = parsePortalTheme({
+      accessibility: { declarationEnabled: "non", declarationLink: 0 },
+    });
+    expect(parsed.accessibility.declarationEnabled).toBe(true);
+    expect(parsed.accessibility.declarationLink).toBe(true);
+  });
+
   it("écarte une déclaration démesurée plutôt que de la tronquer à moitié", () => {
     const parsed = parsePortalTheme({
       accessibility: { declaration: "a".repeat(MAX_DECLARATION_LENGTH + 1) },
@@ -107,19 +143,23 @@ describe("préréglages", () => {
     expect(applyPreset(theme, "Bleu Klein")).toBe(theme);
   });
 
-  it("⚠️ la déclaration d'accessibilité et « assombrir » survivent au préréglage", () => {
+  it("⚠️ la mention d'accessibilité et « assombrir » survivent au préréglage", () => {
     const base: PortalTheme = {
       ...defaultPortalTheme(),
       accessibility: {
         highContrast: false,
         darkPrimary: true,
+        declarationEnabled: false,
         declaration: "Conformité RGAA partielle",
+        declarationLink: false,
       },
     };
     const applied = applyPreset(base, "Sobre institutionnel");
     // Le premier est un texte que la collectivité a écrit, le second corrige SA
     // couleur : ni l'un ni l'autre ne relève d'un choix d'apparence.
     expect(applied.accessibility.declaration).toBe("Conformité RGAA partielle");
+    expect(applied.accessibility.declarationEnabled).toBe(false);
+    expect(applied.accessibility.declarationLink).toBe(false);
     expect(applied.accessibility.darkPrimary).toBe(true);
     // Le contraste renforcé, lui, fait partie du préréglage.
     expect(applied.accessibility.highContrast).toBe(false);

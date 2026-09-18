@@ -42,6 +42,19 @@ import {
   useSaveThemeDraft,
   type PortalThemeRow,
 } from "@/features/portal/usePortalTheme";
+import {
+  ACCESSIBILITY_STATEMENT_SLUG,
+  parsePortalContent,
+  type PortalContent,
+} from "@/features/portal/portalContent";
+import {
+  useDiscardContentDraft,
+  useEnsurePortalContent,
+  usePortalContent,
+  usePublishPortalContent,
+  useSaveContentDraft,
+  type PortalContentRow,
+} from "@/features/portal/usePortalContent";
 
 /**
  * Délai entre la dernière modification et l'écriture du brouillon. Assez
@@ -87,6 +100,11 @@ export function PortalEditorPage({ variant }: { variant: "admin" | "superadmin" 
   const ensure = useEnsurePortalPage();
   const { data: themeRow, isLoading: loadingTheme } = usePortalTheme(orgId);
   const ensureTheme = useEnsurePortalTheme();
+  const { data: statementRow, isLoading: loadingStatement } = usePortalContent(
+    orgId,
+    ACCESSIBILITY_STATEMENT_SLUG,
+  );
+  const ensureStatement = useEnsurePortalContent();
 
   // Première ouverture : les lignes n'existent pas encore, on les crée avec
   // leurs valeurs par défaut. Les upserts sont idempotents — voir les hooks.
@@ -99,6 +117,13 @@ export function PortalEditorPage({ variant }: { variant: "admin" | "superadmin" 
   React.useEffect(() => {
     if (orgId && !loadingTheme && themeRow === null && ensureTheme.isIdle) ensureThemeMutate(orgId);
   }, [orgId, loadingTheme, themeRow, ensureTheme.isIdle, ensureThemeMutate]);
+
+  const ensureStatementMutate = ensureStatement.mutate;
+  React.useEffect(() => {
+    if (orgId && !loadingStatement && statementRow === null && ensureStatement.isIdle) {
+      ensureStatementMutate({ organizationId: orgId, slug: ACCESSIBILITY_STATEMENT_SLUG });
+    }
+  }, [orgId, loadingStatement, statementRow, ensureStatement.isIdle, ensureStatementMutate]);
 
   const closePath = isSuper ? `/superadmin/organisations/${orgId}` : "/";
 
@@ -149,8 +174,10 @@ export function PortalEditorPage({ variant }: { variant: "admin" | "superadmin" 
     loadingOrg ||
     loadingRow ||
     loadingTheme ||
+    loadingStatement ||
     (row === null && !ensure.isError) ||
-    (themeRow === null && !ensureTheme.isError)
+    (themeRow === null && !ensureTheme.isError) ||
+    (statementRow === null && !ensureStatement.isError)
   ) {
     return (
       <div className="p-6">
@@ -175,7 +202,7 @@ export function PortalEditorPage({ variant }: { variant: "admin" | "superadmin" 
     );
   }
 
-  if (!row || !themeRow) {
+  if (!row || !themeRow || !statementRow) {
     return (
       <div className="p-6">
         <EmptyState message="La page n'a pas pu être créée. Vérifiez vos droits sur cette organisation." />
@@ -190,6 +217,7 @@ export function PortalEditorPage({ variant }: { variant: "admin" | "superadmin" 
         key={row.id}
         row={row}
         themeRow={themeRow}
+        statementRow={statementRow}
         organization={organization}
         onClose={() => navigate(closePath)}
       />
@@ -205,11 +233,14 @@ export function PortalEditorPage({ variant }: { variant: "admin" | "superadmin" 
 function LoadedEditor({
   row,
   themeRow,
+  statementRow,
   organization,
   onClose,
 }: {
   row: PortalPageRow;
   themeRow: PortalThemeRow;
+  /** La déclaration d'accessibilité — le premier contenu du site. */
+  statementRow: PortalContentRow;
   organization: Organization;
   onClose: () => void;
 }) {
@@ -232,9 +263,15 @@ function LoadedEditor({
   const saveTheme = useSaveThemeDraft();
   const publishTheme = usePublishPortalTheme();
   const discardTheme = useDiscardThemeDraft();
+  const saveStatement = useSaveContentDraft();
+  const publishStatement = usePublishPortalContent();
+  const discardStatement = useDiscardContentDraft();
 
   const [page, setPage] = React.useState<PortalPage>(() => parsePortalPage(row.draft));
   const [theme, setTheme] = React.useState<PortalTheme>(() => parsePortalTheme(themeRow.draft));
+  const [statement, setStatement] = React.useState<PortalContent>(() =>
+    parsePortalContent(statementRow.draft),
+  );
   const [savedAt, setSavedAt] = React.useState<Date | null>(null);
   const [confirming, setConfirming] = React.useState<"publish" | "discard" | null>(null);
 
@@ -245,14 +282,17 @@ function LoadedEditor({
   const dirty = React.useRef(false);
   const latestTheme = React.useRef(theme);
   const themeDirty = React.useRef(false);
+  const latestStatement = React.useRef(statement);
+  const statementDirty = React.useRef(false);
   const timer = React.useRef<number>();
   const saveMutate = saveDraft.mutate;
   const saveThemeMutate = saveTheme.mutate;
+  const saveStatementMutate = saveStatement.mutate;
 
-  // UN SEUL minuteur pour les deux tables : ce que l'agent voit, c'est « son
-  // site », et deux cadences distinctes ne produiraient que deux moments où
+  // UN SEUL minuteur pour les trois tables : ce que l'agent voit, c'est « son
+  // site », et des cadences distinctes ne produiraient que plusieurs moments où
   // perdre quelque chose. `flush` n'écrit que ce qui a changé — régler le thème
-  // ne réécrit pas la composition, et réciproquement.
+  // ne réécrit ni la composition ni la déclaration, et réciproquement.
   const flush = React.useCallback(() => {
     window.clearTimeout(timer.current);
     const done = { onSuccess: () => setSavedAt(new Date()) };
@@ -264,7 +304,11 @@ function LoadedEditor({
       themeDirty.current = false;
       saveThemeMutate({ id: themeRow.id, draft: latestTheme.current }, done);
     }
-  }, [row.id, themeRow.id, saveMutate, saveThemeMutate]);
+    if (statementDirty.current) {
+      statementDirty.current = false;
+      saveStatementMutate({ id: statementRow.id, draft: latestStatement.current }, done);
+    }
+  }, [row.id, themeRow.id, statementRow.id, saveMutate, saveThemeMutate, saveStatementMutate]);
 
   function scheduleFlush() {
     window.clearTimeout(timer.current);
@@ -282,6 +326,13 @@ function LoadedEditor({
     setTheme(next);
     latestTheme.current = next;
     themeDirty.current = true;
+    scheduleFlush();
+  }
+
+  function handleStatementChange(next: PortalContent) {
+    setStatement(next);
+    latestStatement.current = next;
+    statementDirty.current = true;
     scheduleFlush();
   }
 
@@ -309,39 +360,43 @@ function LoadedEditor({
 
   // Ce que dit la barre : l'écriture en cours prime, puis l'échec, puis la
   // dernière sauvegarde, puis l'état de publication de la ligne.
-  // La date de publication est la plus RÉCENTE des deux : page et thème
-  // partent ensemble désormais, mais une page publiée avant que le thème
-  // n'existe garde la sienne, plus ancienne.
-  const publishedAt = [row.published_at, themeRow.published_at]
+  // La date de publication est la plus RÉCENTE des trois : page, thème et
+  // contenus partent ensemble désormais, mais une page publiée avant que le
+  // thème n'existe garde la sienne, plus ancienne.
+  const publishedAt = [row.published_at, themeRow.published_at, statementRow.published_at]
     .filter((value): value is string => value !== null)
     .sort()
     .pop();
 
   let statusLine: string;
   let statusIsError = false;
-  if (saveDraft.isPending || saveTheme.isPending) statusLine = "Enregistrement…";
-  else if (saveDraft.isError || saveTheme.isError) {
+  if (saveDraft.isPending || saveTheme.isPending || saveStatement.isPending) {
+    statusLine = "Enregistrement…";
+  } else if (saveDraft.isError || saveTheme.isError || saveStatement.isError) {
     statusLine = "Échec de l'enregistrement — vos dernières modifications ne sont pas sauvegardées";
     statusIsError = true;
   } else if (savedAt) statusLine = `Brouillon enregistré à ${timeLabel(savedAt)}`;
   else if (publishedAt) statusLine = `Dernière publication le ${dateLabel(publishedAt)}`;
   else statusLine = "Page d'accueil jamais publiée";
 
-  // ⚠️ PUBLIER, C'EST PUBLIER SON SITE : la composition ET le thème, d'un seul
-  // geste. Ce sont deux tables, donc deux écritures — l'ordre est sans piège
-  // (un thème neuf sur une composition ancienne, ou l'inverse, restent des
-  // pages valides), et un demi-échec laisse le bouton disponible avec son
-  // message à l'écran plutôt qu'une modale refermée sur une publication
-  // partielle.
+  // ⚠️ PUBLIER, C'EST PUBLIER SON SITE : la composition, le thème ET les
+  // contenus, d'un seul geste. Ce sont trois tables, donc trois écritures —
+  // l'ordre est sans piège (un thème neuf sur une composition ancienne, ou
+  // l'inverse, restent des pages valides ; une mention dont le lien attend la
+  // déclaration n'affiche simplement pas de lien), et un échec partiel laisse
+  // le bouton disponible avec son message à l'écran plutôt qu'une modale
+  // refermée sur une publication partielle.
   async function confirmPublish() {
     // Publier écrit aussi le brouillon : ce qui part est exactement ce qui est
     // affiché, sauvegarde en attente comprise. On coupe donc le minuteur.
     window.clearTimeout(timer.current);
     dirty.current = false;
     themeDirty.current = false;
+    statementDirty.current = false;
     try {
       await publish.mutateAsync({ id: row.id, draft: latest.current });
       await publishTheme.mutateAsync({ id: themeRow.id, draft: latestTheme.current });
+      await publishStatement.mutateAsync({ id: statementRow.id, draft: latestStatement.current });
     } catch {
       // L'état d'erreur de la mutation est déjà posé : la modale reste ouverte
       // et l'affiche. On ne ferme surtout pas sur une publication à moitié
@@ -356,6 +411,7 @@ function LoadedEditor({
     window.clearTimeout(timer.current);
     dirty.current = false;
     themeDirty.current = false;
+    statementDirty.current = false;
     try {
       const restored = await discard.mutateAsync({ id: row.id, published: row.published });
       setPage(restored);
@@ -366,6 +422,12 @@ function LoadedEditor({
       });
       setTheme(restoredTheme);
       latestTheme.current = restoredTheme;
+      const restoredStatement = await discardStatement.mutateAsync({
+        id: statementRow.id,
+        published: statementRow.published,
+      });
+      setStatement(restoredStatement);
+      latestStatement.current = restoredStatement;
     } catch {
       return;
     }
@@ -373,10 +435,10 @@ function LoadedEditor({
     setConfirming(null);
   }
 
-  const publishing = publish.isPending || publishTheme.isPending;
-  const discarding = discard.isPending || discardTheme.isPending;
-  const publishFailed = publish.isError || publishTheme.isError;
-  const discardFailed = discard.isError || discardTheme.isError;
+  const publishing = publish.isPending || publishTheme.isPending || publishStatement.isPending;
+  const discarding = discard.isPending || discardTheme.isPending || discardStatement.isPending;
+  const publishFailed = publish.isError || publishTheme.isError || publishStatement.isError;
+  const discardFailed = discard.isError || discardTheme.isError || discardStatement.isError;
   const busy = publishing || discarding;
 
   return (
@@ -395,6 +457,8 @@ function LoadedEditor({
         onChange={handleChange}
         theme={theme}
         onThemeChange={handleThemeChange}
+        statement={statement}
+        onStatementChange={handleStatementChange}
         catalogue={catalogue}
         contact={contact}
         statusLine={statusLine}
@@ -402,11 +466,13 @@ function LoadedEditor({
         onPublish={() => {
           publish.reset();
           publishTheme.reset();
+          publishStatement.reset();
           setConfirming("publish");
         }}
         onDiscard={() => {
           discard.reset();
           discardTheme.reset();
+          discardStatement.reset();
           setConfirming("discard");
         }}
         onClose={onClose}
@@ -420,9 +486,9 @@ function LoadedEditor({
           <AlertDialogHeader>
             <AlertDialogTitle>Publier le site de démarches ?</AlertDialogTitle>
             <AlertDialogDescription>
-              La composition de la page d'accueil <strong>et le thème du site</strong> remplaceront
-              ce que les usagers voient sur le portail. Vous pourrez continuer à modifier le
-              brouillon ensuite sans rien changer en ligne.
+              La composition de la page d'accueil, <strong>le thème du site et la déclaration
+              d'accessibilité</strong> remplaceront ce que les usagers voient sur le portail. Vous
+              pourrez continuer à modifier le brouillon ensuite sans rien changer en ligne.
             </AlertDialogDescription>
           </AlertDialogHeader>
           {publishFailed ? (
@@ -451,8 +517,8 @@ function LoadedEditor({
             <AlertDialogTitle>Annuler les modifications ?</AlertDialogTitle>
             <AlertDialogDescription>
               {row.published
-                ? "Le brouillon reviendra à la dernière version publiée — composition et thème. Ce qui est en ligne ne change pas."
-                : "Rien n'a encore été publié : le brouillon reviendra à la composition et au thème par défaut."}
+                ? "Le brouillon reviendra à la dernière version publiée — composition, thème et déclaration d'accessibilité. Ce qui est en ligne ne change pas."
+                : "Rien n'a encore été publié : le brouillon reviendra à la composition et au thème par défaut, et la déclaration d'accessibilité sera vidée."}
             </AlertDialogDescription>
           </AlertDialogHeader>
           {discardFailed ? (

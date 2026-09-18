@@ -30,7 +30,7 @@ export function buildOpenApiDocument(serverUrl: string): Record<string, unknown>
     openapi: "3.1.0",
     info: {
       title: "API Socle — Référentiel de la gamme",
-      version: "1.24.0",
+      version: "1.25.0",
       description: [
         "API **en lecture seule** exposant le référentiel central de la gamme : les",
         "**organisations** (et sous-organisations) avec l'intégralité de leur configuration,",
@@ -327,6 +327,50 @@ export function buildOpenApiDocument(serverUrl: string): Record<string, unknown>
               description: "Composition publiée de la page.",
               content: {
                 "application/json": { schema: { $ref: "#/components/schemas/PortalPage" } },
+              },
+            },
+            ...errorResponses("400", "401", "404", "500"),
+          },
+        },
+      },
+      "/v1/portal/content": {
+        get: {
+          tags: ["Portail"],
+          summary: "Récupérer un contenu publié du site (déclaration d'accessibilité)",
+          description:
+            "Renvoie une page de **texte** que la collectivité a rédigée et **publiée** depuis " +
+            "l'onglet « Contenus » de l'éditeur du Socle — à ce jour, un seul contenu : la " +
+            "**déclaration d'accessibilité** (`slug=accessibilite`), vers laquelle mène la mention du " +
+            "pied de page (`Tenant.theme.accessibility.declaration_link`). Le brouillon n'est jamais " +
+            "servi.\n\n" +
+            "`body` est du **Markdown**, rédigé en français. Rendez-le en échappant le HTML, et " +
+            "**descendez ses titres d'un niveau** : votre page porte déjà son titre de premier niveau.\n\n" +
+            "**`404` n'est pas une panne** : rien n'est publié, ou le texte publié est vide (publier le " +
+            "site publie aussi une déclaration que personne n'a encore écrite). Dans ce cas, " +
+            "`declaration_link` vaut `false` : un portail qui suit ce drapeau n'arrive jamais ici par " +
+            "un lien. Une collectivité hors périmètre de la clé reçoit le même `404`.",
+          parameters: [
+            {
+              name: "tenant_id",
+              in: "query",
+              required: true,
+              description:
+                "Identifiant de la collectivité, tel que rendu par `GET /v1/portal/tenant`.",
+              schema: { type: "string", format: "uuid" },
+            },
+            {
+              name: "slug",
+              in: "query",
+              required: true,
+              description: "Quel contenu. Seul `accessibilite` existe à ce jour.",
+              schema: { type: "string", pattern: "^[a-z0-9]+(-[a-z0-9]+)*$", examples: ["accessibilite"] },
+            },
+          ],
+          responses: {
+            "200": {
+              description: "Contenu publié.",
+              content: {
+                "application/json": { schema: { $ref: "#/components/schemas/PortalContent" } },
               },
             },
             ...errorResponses("400", "401", "404", "500"),
@@ -944,7 +988,7 @@ export function buildOpenApiDocument(serverUrl: string): Record<string, unknown>
             },
             accessibility: {
               type: "object",
-              required: ["high_contrast", "dark_primary", "declaration"],
+              required: ["high_contrast", "dark_primary", "declaration", "declaration_link"],
               properties: {
                 high_contrast: {
                   type: "boolean",
@@ -963,10 +1007,20 @@ export function buildOpenApiDocument(serverUrl: string): Record<string, unknown>
                 declaration: {
                   type: "string",
                   description:
-                    "Mention d'accessibilité **obligatoire (RGAA)** d'un site public, à " +
-                    "afficher au pied des pages. Chaîne vide = la collectivité ne l'a pas " +
-                    "encore écrite ; n'inventez rien à sa place.",
-                  examples: ["Conformité RGAA partielle — audit du 12 juin 2026"],
+                    "Texte de la mention d'accessibilité **obligatoire (RGAA)** d'un site public, " +
+                    "à afficher au pied des pages. Chaîne vide = la collectivité ne l'a pas " +
+                    "encore écrite, **ou l'a masquée** (son commutateur est appliqué par le " +
+                    "Socle) ; n'inventez rien à sa place.",
+                  examples: ["Accessibilité : partiellement conforme"],
+                },
+                declaration_link: {
+                  type: "boolean",
+                  description:
+                    "Ajouter à la mention un lien « Déclaration d'accessibilité » vers la page qui " +
+                    "rend `GET /v1/portal/content?slug=accessibilite`. **Résolu par le Socle** : vrai " +
+                    "seulement si la collectivité l'a demandé **et** qu'une déclaration non vide est " +
+                    "publiée — le lien ne mène jamais à une page vide. Il peut être vrai avec une " +
+                    "`declaration` vide : le lien s'affiche alors seul. Contrat 1.25.0.",
                 },
               },
             },
@@ -1135,6 +1189,35 @@ export function buildOpenApiDocument(serverUrl: string): Record<string, unknown>
             id: { type: "string", format: "uuid" },
             name: { type: "string", description: "Libellé en français, la langue pivot." },
             translations: { $ref: "#/components/schemas/Translations" },
+          },
+        },
+        PortalContent: {
+          type: "object",
+          description:
+            "Contenu publié du site : une page de texte en Markdown. À ce jour, la déclaration " +
+            "d'accessibilité (`accessibilite`).",
+          required: ["slug", "published_at", "format", "body"],
+          properties: {
+            slug: { type: "string", examples: ["accessibilite"] },
+            published_at: {
+              type: "string",
+              format: "date-time",
+              description:
+                "Date de la publication servie. ⚠️ C'est celle du **site** (publier publie tout " +
+                "d'un geste), pas celle de la déclaration : sa date d'établissement est dans le " +
+                "texte.",
+            },
+            format: {
+              type: "string",
+              enum: ["markdown"],
+              description: "Toujours `markdown` : le champ existe pour qu'un autre format s'annonce.",
+            },
+            body: {
+              type: "string",
+              description:
+                "Le texte, en Markdown (titres `#`, listes, `**gras**`, `*italique*`, liens " +
+                "`[texte](url)`). Jamais vide : un contenu vide rend `404`.",
+            },
           },
         },
         PortalPage: {

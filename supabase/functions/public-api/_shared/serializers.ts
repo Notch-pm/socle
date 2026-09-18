@@ -360,6 +360,11 @@ export function serializeTenant(
   hostname: string,
   languages: unknown,
   theme: unknown,
+  /**
+   * Une déclaration d'accessibilité non vide est-elle publiée ? C'est ce qui
+   * autorise le lien de la mention — voir `serializePortalTheme`.
+   */
+  accessibilityStatement = false,
 ): TenantDto {
   return {
     id: str(row.id),
@@ -369,7 +374,7 @@ export function serializeTenant(
     languages: readLanguages(languages),
     // Rien de publié ⇒ les défauts du Socle, jamais `null` : voir
     // `serializePortalTheme`.
-    theme: serializePortalTheme(theme),
+    theme: serializePortalTheme(theme, { accessibilityStatement }),
   };
 }
 

@@ -352,7 +352,9 @@ export interface TenantDto {
  * ⚠️ `sticky` et `declaration` ne changent aucune couleur : le premier dit si
  * le bandeau suit le défilement, le second est la **mention RGAA obligatoire**
  * d'un site public, à afficher au pied des pages. Vide = la collectivité ne
- * l'a pas encore écrite ; n'inventez rien à sa place.
+ * l'a pas encore écrite, ou l'a masquée ; n'inventez rien à sa place.
+ * `declaration_link` dit si cette mention porte un lien vers la déclaration
+ * complète — il peut être vrai avec un texte vide : le lien seul s'affiche.
  */
 export interface PortalThemeDto {
   typography: {
@@ -386,8 +388,18 @@ export interface PortalThemeDto {
      * pas modifiée.
      */
     dark_primary: boolean;
-    /** Mention RGAA affichée au pied du site. Vide si non renseignée. */
+    /**
+     * Texte de la mention RGAA affichée au pied du site. Vide si non renseignée
+     * **ou masquée** : le commutateur de la collectivité est appliqué ici.
+     */
     declaration: string;
+    /**
+     * Afficher, dans la mention, un lien vers la déclaration d'accessibilité
+     * (`GET /v1/portal/content?slug=accessibilite`). **Résolu** par le Socle :
+     * vrai seulement si la collectivité l'a demandé ET qu'une déclaration non
+     * vide est publiée — le lien ne mène jamais à une page vide.
+     */
+    declaration_link: boolean;
   };
 }
 
@@ -750,6 +762,25 @@ export interface PortalPageDto {
   published_at: string;
   version: 1;
   sections: PortalSectionDto[];
+}
+
+/**
+ * Contenu PUBLIÉ du site de démarches — réponse de `GET /v1/portal/content`.
+ * Premier (et seul) contenu : la déclaration d'accessibilité (`accessibilite`),
+ * vers laquelle mène la mention du pied de page.
+ *
+ * ⚠️ `body` est du **Markdown** (titres `#`, listes, `**gras**`, `*italique*`,
+ * liens). Rendez-le en échappant le HTML, et **descendez les titres d'un
+ * niveau** : la page porte déjà son titre de premier niveau. Il est rédigé en
+ * français — pas de traduction pour l'instant.
+ */
+export interface PortalContentDto {
+  slug: string;
+  /** Date de la publication servie (ISO 8601). */
+  published_at: string;
+  /** Toujours `markdown` : le champ existe pour qu'un autre format s'annonce. */
+  format: "markdown";
+  body: string;
 }
 
 /**

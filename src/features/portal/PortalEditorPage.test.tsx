@@ -4,6 +4,7 @@ import { act, fireEvent, render, screen } from "@testing-library/react";
 import { AUTOSAVE_DELAY_MS, PortalEditorPage } from "./PortalEditorPage";
 import { defaultPortalPage, type PortalPage } from "./portalPage";
 import { defaultPortalTheme, type PortalTheme } from "./portalTheme";
+import { defaultPortalContent, type PortalContent } from "./portalContent";
 import type { PortalEditorProps } from "./PortalEditor";
 
 /**
@@ -16,14 +17,19 @@ import type { PortalEditorProps } from "./PortalEditor";
 const h = vi.hoisted(() => ({
   row: null as Record<string, unknown> | null,
   themeRow: null as Record<string, unknown> | null,
+  statementRow: null as Record<string, unknown> | null,
   ensure: vi.fn(),
   ensureTheme: vi.fn(),
+  ensureStatement: vi.fn(),
   save: vi.fn(),
   saveTheme: vi.fn(),
+  saveStatement: vi.fn(),
   publish: vi.fn(),
   publishTheme: vi.fn(),
+  publishStatement: vi.fn(),
   discard: vi.fn(),
   discardTheme: vi.fn(),
+  discardStatement: vi.fn(),
   navigate: vi.fn(),
   edits: 0,
   themeEdits: 0,
@@ -106,6 +112,27 @@ vi.mock("@/features/portal/usePortalTheme", () => ({
   }),
 }));
 
+// Les contenus (la déclaration d'accessibilité) : même motif, troisième table.
+vi.mock("@/features/portal/usePortalContent", () => ({
+  usePortalContent: () => ({ data: h.statementRow, isLoading: false }),
+  useEnsurePortalContent: () => ({ mutate: h.ensureStatement, isIdle: true, isError: false }),
+  useSaveContentDraft: () => ({ mutate: h.saveStatement, isPending: false, isError: false }),
+  usePublishPortalContent: () => ({
+    mutate: h.publishStatement,
+    mutateAsync: h.publishStatement,
+    isPending: false,
+    isError: false,
+    reset: () => {},
+  }),
+  useDiscardContentDraft: () => ({
+    mutate: h.discardStatement,
+    mutateAsync: h.discardStatement,
+    isPending: false,
+    isError: false,
+    reset: () => {},
+  }),
+}));
+
 // Le pantin : chaque clic « modifier » remonte une page avec un titre différent.
 // Le compteur vit hors du rendu — une fermeture serait remise à zéro à chaque
 // re-rendu provoqué par `onChange`, et enverrait trois fois « Titre 1 ».
@@ -131,6 +158,12 @@ vi.mock("@/features/portal/PortalEditor", () => ({
         <span data-testid="status">{props.statusLine}</span>
         <button type="button" onClick={edit}>modifier</button>
         <button type="button" onClick={editTheme}>régler le thème</button>
+        <button
+          type="button"
+          onClick={() => props.onStatementChange({ body: props.statement.body + "x" })}
+        >
+          écrire la déclaration
+        </button>
         <button type="button" onClick={props.onPublish}>publier</button>
         <button type="button" onClick={props.onDiscard}>annuler</button>
       </div>
@@ -143,6 +176,19 @@ function rowFor(draft: PortalPage, published: PortalPage | null = null) {
     id: "page-1",
     organization_id: "org-1",
     slug: "accueil",
+    draft,
+    published,
+    published_at: published ? "2026-09-01T10:00:00Z" : null,
+    created_at: "2026-09-01T10:00:00Z",
+    updated_at: "2026-09-01T10:00:00Z",
+  };
+}
+
+function statementRowFor(draft: PortalContent, published: PortalContent | null = null) {
+  return {
+    id: "content-1",
+    organization_id: "org-1",
+    slug: "accessibilite",
     draft,
     published,
     published_at: published ? "2026-09-01T10:00:00Z" : null,
@@ -167,16 +213,21 @@ beforeEach(() => {
   vi.useFakeTimers();
   h.row = rowFor(defaultPortalPage());
   h.themeRow = themeRowFor(defaultPortalTheme());
+  h.statementRow = statementRowFor(defaultPortalContent());
   h.edits = 0;
   h.themeEdits = 0;
   h.ensure.mockReset();
   h.ensureTheme.mockReset();
+  h.ensureStatement.mockReset();
   h.save.mockReset();
   h.saveTheme.mockReset();
+  h.saveStatement.mockReset();
   h.publish.mockReset().mockResolvedValue(undefined);
   h.publishTheme.mockReset().mockResolvedValue(undefined);
+  h.publishStatement.mockReset().mockResolvedValue(undefined);
   h.discard.mockReset().mockResolvedValue(defaultPortalPage());
   h.discardTheme.mockReset().mockResolvedValue(defaultPortalTheme());
+  h.discardStatement.mockReset().mockResolvedValue(defaultPortalContent());
 });
 
 afterEach(() => {
@@ -194,6 +245,15 @@ describe("PortalEditorPage — première ouverture", () => {
     h.themeRow = null;
     render(<PortalEditorPage variant="superadmin" />);
     expect(h.ensureTheme).toHaveBeenCalledWith("org-1");
+  });
+
+  it("crée aussi la déclaration d'accessibilité si elle n'existe pas encore", () => {
+    h.statementRow = null;
+    render(<PortalEditorPage variant="superadmin" />);
+    expect(h.ensureStatement).toHaveBeenCalledWith({
+      organizationId: "org-1",
+      slug: "accessibilite",
+    });
   });
 
   it("dit que la page n'a jamais été publiée", () => {
@@ -249,6 +309,19 @@ describe("PortalEditorPage — sauvegarde automatique", () => {
     expect(h.saveTheme).toHaveBeenCalledTimes(1);
   });
 
+  it("la déclaration a sa propre écriture, dans le même minuteur", () => {
+    render(<PortalEditorPage variant="superadmin" />);
+    fireEvent.click(screen.getByRole("button", { name: "écrire la déclaration" }));
+    fireEvent.click(screen.getByRole("button", { name: "écrire la déclaration" }));
+    act(() => {
+      vi.advanceTimersByTime(AUTOSAVE_DELAY_MS);
+    });
+    expect(h.saveStatement).toHaveBeenCalledTimes(1);
+    expect(h.saveStatement.mock.calls[0][0]).toEqual({ id: "content-1", draft: { body: "xx" } });
+    expect(h.save).not.toHaveBeenCalled();
+    expect(h.saveTheme).not.toHaveBeenCalled();
+  });
+
   it("écrit ce qui reste en attente quand on quitte l'éditeur", () => {
     const { unmount } = render(<PortalEditorPage variant="superadmin" />);
     fireEvent.click(screen.getByRole("button", { name: "modifier" }));
@@ -276,9 +349,10 @@ describe("PortalEditorPage — publication", () => {
     expect(h.save).not.toHaveBeenCalled();
   });
 
-  it("publier, c'est publier SON SITE : la composition ET le thème", async () => {
+  it("publier, c'est publier SON SITE : la composition, le thème ET la déclaration", async () => {
     render(<PortalEditorPage variant="superadmin" />);
     fireEvent.click(screen.getByRole("button", { name: "régler le thème" }));
+    fireEvent.click(screen.getByRole("button", { name: "écrire la déclaration" }));
     fireEvent.click(screen.getByRole("button", { name: "publier" }));
     await act(async () => {
       fireEvent.click(screen.getByRole("button", { name: "Publier" }));
@@ -288,6 +362,13 @@ describe("PortalEditorPage — publication", () => {
     expect(h.publishTheme).toHaveBeenCalledTimes(1);
     expect(h.publishTheme.mock.calls[0][0]).toMatchObject({ id: "theme-1" });
     expect(h.publishTheme.mock.calls[0][0].draft.shapes.radius).toBe("square");
+    expect(h.publishStatement).toHaveBeenCalledTimes(1);
+    expect(h.publishStatement.mock.calls[0][0]).toEqual({ id: "content-1", draft: { body: "x" } });
+    // Le minuteur est coupé : la déclaration en attente est partie avec la publication.
+    act(() => {
+      vi.advanceTimersByTime(AUTOSAVE_DELAY_MS);
+    });
+    expect(h.saveStatement).not.toHaveBeenCalled();
   });
 
   it("une publication à moitié faite laisse la modale ouverte", async () => {
@@ -320,6 +401,9 @@ describe("PortalEditorPage — annulation", () => {
     // Le thème revient avec elle : annuler, c'est annuler ce qu'on voit.
     expect(h.discardTheme).toHaveBeenCalledTimes(1);
     expect(h.discardTheme.mock.calls[0][0]).toMatchObject({ id: "theme-1" });
+    // Et la déclaration aussi.
+    expect(h.discardStatement).toHaveBeenCalledTimes(1);
+    expect(h.discardStatement.mock.calls[0][0]).toMatchObject({ id: "content-1" });
   });
 
   it("prévient que sans publication, le brouillon reviendra au défaut", () => {

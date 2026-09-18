@@ -14,11 +14,13 @@ describe("serializePortalTheme — ce qui n'est pas un thème", () => {
     }
   });
 
-  it("les défauts n'activent aucun correctif d'accessibilité", () => {
+  it("les défauts n'activent aucun correctif d'accessibilité, ni de lien", () => {
     expect(defaultPortalThemeDto().accessibility).toEqual({
       high_contrast: false,
       dark_primary: false,
       declaration: "",
+      // Rien de publié : pas de déclaration, donc rien vers quoi pointer.
+      declaration_link: false,
     });
   });
 
@@ -74,6 +76,61 @@ describe("serializePortalTheme — tolérance champ par champ", () => {
   });
 });
 
+describe("serializePortalTheme — la mention d'accessibilité sort RÉSOLUE", () => {
+  const statement = { accessibilityStatement: true };
+
+  it("⚠️ un thème d'avant les commutateurs garde sa mention, et gagne le lien si une déclaration est publiée", () => {
+    // Deux collectivités avaient publié une mention le 2026-09-18, sans ces
+    // champs : la lire « masquée » l'aurait effacée de leur site.
+    const dto = serializePortalTheme({ accessibility: { declaration: "Audit du 12 juin" } }, statement);
+    expect(dto.accessibility.declaration).toBe("Audit du 12 juin");
+    expect(dto.accessibility.declaration_link).toBe(true);
+  });
+
+  it("⚠️ masquée, elle sort VIDE et sans lien — le texte reste en base, pas dans la réponse", () => {
+    const dto = serializePortalTheme(
+      { accessibility: { declarationEnabled: false, declaration: "Audit", declarationLink: true } },
+      statement,
+    );
+    expect(dto.accessibility.declaration).toBe("");
+    expect(dto.accessibility.declaration_link).toBe(false);
+  });
+
+  it("⚠️ le lien ne sort jamais vers une déclaration non publiée", () => {
+    const raw = { accessibility: { declaration: "Audit", declarationLink: true } };
+    expect(serializePortalTheme(raw).accessibility.declaration_link).toBe(false);
+    expect(serializePortalTheme(raw, { accessibilityStatement: false }).accessibility.declaration_link).toBe(false);
+    expect(serializePortalTheme(raw, statement).accessibility.declaration_link).toBe(true);
+  });
+
+  it("le lien refusé par la collectivité ne sort pas, même avec une déclaration publiée", () => {
+    const dto = serializePortalTheme(
+      { accessibility: { declaration: "Audit", declarationLink: false } },
+      statement,
+    );
+    expect(dto.accessibility.declaration).toBe("Audit");
+    expect(dto.accessibility.declaration_link).toBe(false);
+  });
+
+  it("le lien peut sortir sans texte : il s'affiche seul", () => {
+    const dto = serializePortalTheme({ accessibility: { declaration: "" } }, statement);
+    expect(dto.accessibility).toMatchObject({ declaration: "", declaration_link: true });
+  });
+
+  it("aucun commutateur ne franchit : le consommateur reçoit le résultat, pas la règle", () => {
+    const dto = serializePortalTheme(
+      { accessibility: { declarationEnabled: true, declarationLink: true } },
+      statement,
+    );
+    expect(Object.keys(dto.accessibility).sort()).toEqual([
+      "dark_primary",
+      "declaration",
+      "declaration_link",
+      "high_contrast",
+    ]);
+  });
+});
+
 describe("serializePortalTheme — la traduction camelCase → snake_case", () => {
   it("renomme les clés du schéma possédé vers celles du contrat", () => {
     const dto = serializePortalTheme({
@@ -115,6 +172,8 @@ describe("serializePortalTheme — la traduction camelCase → snake_case", () =
     expect(Object.keys(dto.accessibility).sort()).toEqual([
       "dark_primary",
       "declaration",
+      // Contrat 1.25.0 : le lien vers la déclaration, résolu par le Socle.
+      "declaration_link",
       "high_contrast",
     ]);
   });

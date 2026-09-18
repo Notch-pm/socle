@@ -283,10 +283,11 @@ suppose la précédente.
    poitevin-saintongeais, francique lorrain) attendent une convention de nommage — voir l'en-tête
    de `src/features/languages/languages.ts`.
 2. **Les autres templates.** Gabarits de page et variantes de mise en page au-delà de la
-   composition libre ; d'autres pages que l'accueil (`portal_pages.slug` est prêt : « Contact »,
-   « Mentions légales », « Accessibilité » — obligatoires pour un site public) ; le bloc
-   « Actualités » (grisé) quand une source d'actualités existera au Socle ; la vue « Contenus »
-   (grisée) qui va avec.
+   composition libre ; d'autres pages que l'accueil (« Contact », « Mentions légales » —
+   obligatoires pour un site public ; « Accessibilité » est livrée le 2026-09-18 comme **contenu**,
+   table `portal_contents`, qui accueillera les deux autres de la même façon) ; le bloc
+   « Actualités » (grisé) quand une source d'actualités existera au Socle, et son entrée dans la
+   vue « Contenus », ouverte depuis le 2026-09-18.
 3. **Démarches hors compte.** La demande part déjà (2026-09-06) ; il lui manque son après :
    confirmation par courriel et **lien de suivi signé** à durée limitée, sans mot de passe. Il
    faut pour cela que le **statut d'une demande soit consultable** depuis le portail — Iris le
@@ -439,6 +440,9 @@ par défaut**. C'est le point qui empêche d'annoncer un niveau au catalogue.
   « Les autres templates » (2). Tant qu'elles n'existent pas, la déclaration n'est qu'une phrase au
   pied de page, alors que l'article 47 demande **une page**, une **mention d'état** et un **schéma
   pluriannuel**.
+  ✅ *2026-09-18* : **la page « Accessibilité » existe** — rédigée dans l'onglet « Contenus »
+  (modèle DINUM fourni, schéma pluriannuel compris), servie par Nora à `/accessibilite`, reliée
+  par la mention du pied de page. Restent « Mentions légales » et « Contact ».
 - **Rien n'oblige la collectivité à remplir sa déclaration.** `accessibility.declaration` vide =
   rien d'affiché, par décision (le portail n'invente pas une déclaration que personne n'a faite).
   Conséquence observée : **`sna27.edilumen.fr` est en ligne sans aucune mention d'accessibilité**,

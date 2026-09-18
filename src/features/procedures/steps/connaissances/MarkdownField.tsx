@@ -46,6 +46,7 @@ export function MarkdownField({
   onChange,
   rows = 8,
   placeholder,
+  maxLength,
 }: {
   id: string;
   label: string;
@@ -54,6 +55,8 @@ export function MarkdownField({
   onChange: (value: string) => void;
   rows?: number;
   placeholder?: string;
+  /** Borne de saisie, quand le schéma possédé en porte une. */
+  maxLength?: number;
 }) {
   const [mode, setMode] = React.useState<"write" | "preview">("write");
   const html = React.useMemo(() => renderMarkdown(value), [value]);
@@ -86,6 +89,7 @@ export function MarkdownField({
               onChange={(e) => onChange(e.target.value)}
               rows={rows}
               placeholder={placeholder}
+              maxLength={maxLength}
               className="w-full rounded-lg border border-input bg-background px-3 py-2 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
             />
             <p className="text-xs text-muted-foreground">

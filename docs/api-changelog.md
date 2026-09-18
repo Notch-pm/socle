@@ -13,6 +13,53 @@ Format d'une entrée : `## AAAA-MM-JJ — <api> — ajout|correctif|rupture`
 
 ---
 
+## 2026-09-18 — public-api — ajout (déclaration d'accessibilité)
+
+**La mention d'accessibilité du pied de page peut mener à la déclaration complète.** La
+collectivité rédige sa déclaration d'accessibilité (RGAA, article 47 de la loi du 11 février 2005)
+dans l'onglet « Contenus » de l'éditeur, et règle la mention du pied de page dans « Composition » :
+l'afficher ou non, sa phrase, et son lien. Version du contrat : **1.25.0**. Ajout **additif** : un
+consommateur qui l'ignore se comporte exactement comme aujourd'hui.
+
+**Une route** — `GET /v1/portal/content?tenant_id=&slug=accessibilite` (tag « Portail », scope
+`read`) → `PortalContent` :
+
+| Champ | Valeur | Ce qu'il dit |
+|---|---|---|
+| `slug` | `accessibilite` | Quel contenu — le seul à ce jour |
+| `published_at` | ISO 8601 | Date de la publication du **site** (voir ci-dessous) |
+| `format` | `markdown` | Toujours `markdown` : le champ existe pour qu'un autre format s'annonce |
+| `body` | texte | La déclaration, en Markdown, **jamais vide** |
+
+**Un champ sur `Tenant.theme.accessibility`** (`GET /v1/portal/tenant`) :
+
+| Champ | Valeur | Ce qu'il dit |
+|---|---|---|
+| `declaration_link` | booléen | Ajouter à la mention un lien « Déclaration d'accessibilité » vers la page qui rend la route ci-dessus |
+
+- ⚠️ **`declaration_link` est RÉSOLU par le Socle** : vrai seulement si la collectivité a demandé le
+  lien **et** qu'une déclaration non vide est publiée. Un portail qui suit ce drapeau ne sert jamais
+  un lien vers une page vide, et n'a aucune autre condition à vérifier.
+- ⚠️ **Il peut être vrai avec une `declaration` vide** : la collectivité n'a pas écrit de phrase,
+  le lien s'affiche alors seul — c'est encore une mention.
+- ⚠️ **`declaration` sort désormais VIDE quand la collectivité masque la mention.** Le commutateur
+  est appliqué par le Socle, le texte reste en base : un portail d'avant ce contrat, qui n'affiche
+  que `declaration`, fait déjà ce qu'il faut. Changement de comportement sans changement de forme,
+  aucune valeur existante ne change (les mentions publiées restent affichées : le commutateur vaut
+  « affichée » par défaut).
+- ⚠️ **Un texte publié vide est un 404**, comme rien de publié : publier le site publie aussi une
+  déclaration que personne n'a encore écrite, et la servir rendrait une page blanche sous un titre
+  engageant.
+- ⚠️ **`body` est en Markdown et en français.** Rendez-le en échappant le HTML (ou mieux, sans
+  jamais injecter de HTML), **descendez ses titres d'un niveau** — votre page porte déjà son `h1` —
+  et marquez-le `lang="fr"` quand la page est servie dans une autre langue : il n'est pas traduit.
+- `published_at` est la date de la **publication du site** (« Publier » publie tout d'un geste),
+  pas celle de la déclaration : sa date d'établissement est dans le texte.
+- **Consommé par Nora le jour même** : page `/accessibilite`, lien dans la mention de toutes les
+  pages.
+
+---
+
 ## 2026-09-18 — public-api — ajout
 
 **Une démarche porte désormais ce que la collectivité écrit POUR SES USAGERS.** Durée habituelle

@@ -580,6 +580,14 @@ describe("serializeTenant — la whitelist la plus étroite (page publique)", ()
     expect(dto.theme.accessibility.dark_primary).toBe(false);
   });
 
+  it("⚠️ le lien de la mention n'est servi que si une déclaration est publiée", () => {
+    const theme = { accessibility: { declaration: "Accessibilité : partiellement conforme" } };
+    expect(serializeTenant(row, "n.fr", null, theme).theme.accessibility.declaration_link).toBe(false);
+    expect(serializeTenant(row, "n.fr", null, theme, true).theme.accessibility.declaration_link).toBe(
+      true,
+    );
+  });
+
   it("rend le domaine tel que résolu, pas celui demandé", () => {
     // Le portail normalise son entrée, la base stocke la forme canonique : la
     // réponse porte celle de la BASE, pour que le portail sache sur quelle clé

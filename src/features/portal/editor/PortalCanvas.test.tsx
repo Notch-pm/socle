@@ -44,6 +44,9 @@ function renderCanvas(over: Partial<PortalCanvasProps> = {}) {
     onShift: vi.fn(),
     onRemove: vi.fn(),
     onOpenPalette: vi.fn(),
+    statementWritten: false,
+    mentionSelected: false,
+    onSelectMention: vi.fn(),
     ...over,
   };
   return render(
@@ -235,5 +238,47 @@ describe("PortalCanvas — bloc texte et image", () => {
     // Un bloc à moitié vide se lirait comme un bloc cassé.
     renderCanvas({ sections: [{ ...createSection("texte-image"), id: "ti" }] });
     expect(screen.getByText(/Adresse de l'image à renseigner/)).toBeTruthy();
+  });
+});
+
+describe("PortalCanvas — la mention d'accessibilité", () => {
+  const withMention = (patch: Partial<ReturnType<typeof defaultPortalTheme>["accessibility"]>) => {
+    const theme = defaultPortalTheme();
+    return { ...theme, accessibility: { ...theme.accessibility, ...patch } };
+  };
+
+  it("se pose sous la dernière section, pied de page composé compris", () => {
+    const footer = { ...createSection("footer"), id: "f", title: "Pied composé" };
+    renderCanvas({
+      sections: [...sections, footer],
+      theme: withMention({ declaration: "Accessibilité : partiellement conforme" }),
+      previewing: true,
+    });
+    expect(visualOrder("Accessibilité : partiellement conforme", "Pied composé")).toEqual([
+      "Pied composé",
+      "Accessibilité : partiellement conforme",
+    ]);
+  });
+
+  it("⚠️ le lien n'apparaît que si la déclaration est rédigée — comme sur le site", () => {
+    const theme = withMention({ declaration: "Partiellement conforme" });
+    const { unmount } = renderCanvas({ theme, previewing: true, statementWritten: false });
+    expect(screen.queryByText("Déclaration d'accessibilité")).toBeNull();
+    unmount();
+
+    renderCanvas({ theme, previewing: true, statementWritten: true });
+    expect(screen.getByText("Déclaration d'accessibilité")).toBeTruthy();
+  });
+
+  it("masquée, elle disparaît de l'aperçu mais reste cliquable en édition", () => {
+    const theme = withMention({ declarationEnabled: false, declaration: "Partiellement conforme" });
+    const { unmount } = renderCanvas({ theme, previewing: true, statementWritten: true });
+    expect(screen.queryByText(/Partiellement conforme/)).toBeNull();
+    unmount();
+
+    const onSelectMention = vi.fn();
+    renderCanvas({ theme, onSelectMention });
+    fireEvent.click(screen.getByRole("button", { name: /Mention d'accessibilité masquée/ }));
+    expect(onSelectMention).toHaveBeenCalledTimes(1);
   });
 });

@@ -214,6 +214,39 @@ aucun endpoint, il décrit ce qui existe **en base**.
   — calqué sur `portal_pages`.
 - Consommé par le portail dans `GET /v1/portal/tenant?hostname=` (contrat 1.17.0), champ `theme` :
   ⚠️ rien de publié ⇒ **les défauts du Socle**, jamais `null`.
+- Le bloc `accessibility` porte la **mention d'accessibilité** du pied de page (2026-09-18) :
+  `declarationEnabled` (commutateur, défaut **vrai**), `declaration` (la phrase, 300 caractères),
+  `declarationLink` (lien vers la déclaration, défaut **vrai**). ⚠️ Défauts vrais, contrairement aux
+  correctifs : la mention est obligatoire, et les thèmes d'avant ces champs affichaient déjà leur
+  texte. Le commutateur gouverne l'usage, pas la donnée — c'est l'API qui l'applique (mention vide,
+  `declaration_link` résolu, contrat 1.25.0).
+
+---
+
+### `portal_contents` — contenus textuels du site de démarches (2026-09-18)
+
+- `organization_id` NOT NULL, FK **CASCADE** ; `slug` text NOT NULL (CHECK de **forme**
+  `^[a-z0-9]+(-[a-z0-9]+)*$`, 64 caractères au plus) ; `draft` jsonb NOT NULL ; `published` jsonb ;
+  `published_at` ; `created_at` / `updated_at` (trigger `set_updated_at`). **UNIQUE
+  (organization_id, slug)**. CHECK objet JSON sur les deux colonnes, garde-fou de taille (200 000
+  caractères), et `(published is null) = (published_at is null)`.
+- Les **pages de texte** du site, rédigées dans l'onglet « Contenus » de l'éditeur. Une seule
+  aujourd'hui : `accessibilite`, la **déclaration d'accessibilité** vers laquelle mène la mention du
+  pied de page. ⚠️ La base valide la **forme** du slug, pas la **liste** (motif
+  `enabled_languages`) : le catalogue vit dans `src/features/portal/portalContent.ts`.
+- ⚠️ **Ce n'est pas une `portal_pages`** : une page est une COMPOSITION de blocs, versionnée ; un
+  contenu est UN TEXTE, `{ body }` en **Markdown**, sans version. Deux formes de JSON sous une même
+  colonne feraient qu'un parseur qui lit la mauvaise retombe sur ses défauts. Ni une clé du
+  **thème**, qui garde la *mention* (une phrase, un lien) mais pas la *déclaration* (plusieurs
+  écrans).
+- **Même discipline que les deux autres tables du portail** : `draft` autosauvegardé, `published`
+  par le geste « Publier », qui publie **le site entier** — composition, thème et contenus.
+- **Racine uniquement** (trigger `enforce_portal_content_root_org`, EXECUTE révoqué des trois
+  rôles) · **RLS** : lecture `has_org_access` · écriture `is_org_admin` — calqué sur
+  `portal_themes`.
+- Consommé par `GET /v1/portal/content?tenant_id=&slug=` (contrat 1.25.0) : ⚠️ un texte publié
+  **vide** vaut 404, et c'est aussi ce qui décide `declaration_link` dans
+  `GET /v1/portal/tenant` — le lien ne mène jamais à une page blanche.
 
 ---
 

@@ -35,6 +35,11 @@ import { buildOpenApiDocument } from "./_shared/openapi.ts";
 import { isoDay } from "./_shared/publication.ts";
 import { serializePortalPage } from "./_shared/portalPage.ts";
 import {
+  ACCESSIBILITY_STATEMENT_SLUG,
+  hasPublishedContent,
+  serializePortalContent,
+} from "./_shared/portalContent.ts";
+import {
   publishedCatalogue,
   type ProcedureBinding,
   type PublishedProcedure,
@@ -388,9 +393,27 @@ Deno.serve(async (req: Request) => {
         .eq("organization_id", org.id)
         .maybeSingle();
 
+      // La déclaration d'accessibilité PUBLIÉE — lue ici pour une seule raison :
+      // décider si la mention du pied de page porte son lien. Le lien ne sort
+      // que vers une déclaration non vide, jamais vers une page blanche. Même
+      // organisation que le thème, et même tolérance : un échec de lecture ôte
+      // le lien, il ne ferme pas le portail.
+      const { data: statement } = await admin
+        .from("portal_contents")
+        .select("published")
+        .eq("organization_id", org.id)
+        .eq("slug", ACCESSIBILITY_STATEMENT_SLUG)
+        .maybeSingle();
+
       return jsonResponse(
         200,
-        serializeTenant(org, String(domain.hostname), languages, theme?.published ?? null),
+        serializeTenant(
+          org,
+          String(domain.hostname),
+          languages,
+          theme?.published ?? null,
+          hasPublishedContent(statement?.published ?? null),
+        ),
         corsHeaders,
       );
     }
@@ -550,6 +573,50 @@ Deno.serve(async (req: Request) => {
         ),
         corsHeaders,
       );
+    }
+
+    // --- /v1/portal/content ---
+    // Un contenu PUBLIÉ du site — une page de texte rédigée dans l'onglet
+    // « Contenus » de l'éditeur. Aujourd'hui la seule : la déclaration
+    // d'accessibilité, vers laquelle mène la mention du pied de page.
+    //
+    // 404 quand rien n'est publié, quand le texte publié est vide, ou pour une
+    // collectivité hors périmètre — même réponse, la route ne révèle pas ce qui
+    // existe. Le texte vide compte comme « rien » : publier le site publie aussi
+    // une déclaration que personne n'a encore écrite, et la servir rendrait une
+    // page blanche sous un titre engageant.
+    if (segments[0] === "v1" && segments[1] === "portal" && segments[2] === "content") {
+      if (segments.length !== 3) {
+        return errorResponse("not_found", "Endpoint inconnu.", corsHeaders);
+      }
+      const tenantId = url.searchParams.get("tenant_id") ?? "";
+      if (!isUuid(tenantId)) {
+        return errorResponse("bad_request", "Paramètre tenant_id invalide.", corsHeaders);
+      }
+      const slug = url.searchParams.get("slug") ?? "";
+      if (!/^[a-z0-9]+(-[a-z0-9]+)*$/.test(slug) || slug.length > 64) {
+        return errorResponse("bad_request", "Paramètre slug invalide.", corsHeaders);
+      }
+      if (!inScope(tenantId)) {
+        return errorResponse("not_found", "Aucun contenu publié.", corsHeaders);
+      }
+      const { data: content, error: contentError } = await admin
+        .from("portal_contents")
+        .select("published, published_at")
+        .eq("organization_id", tenantId)
+        .eq("slug", slug)
+        .maybeSingle();
+      if (contentError) throw contentError;
+      const dto = content && content.published_at !== null
+        ? serializePortalContent(content.published, {
+          slug,
+          published_at: String(content.published_at),
+        })
+        : null;
+      if (dto === null) {
+        return errorResponse("not_found", "Aucun contenu publié.", corsHeaders);
+      }
+      return jsonResponse(200, dto, corsHeaders);
     }
 
     // --- /v1/organizations ---

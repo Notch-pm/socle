@@ -17,6 +17,15 @@
  * ⚠️ **Le thème ne porte AUCUNE couleur** : elles viennent de la charte
  * graphique (`GET /v1/organizations/{id}/branding`, héritage déjà résolu). Le
  * thème dit comment peindre, la charte dit avec quoi.
+ *
+ * ⚠️ **LA MENTION D'ACCESSIBILITÉ SORT RÉSOLUE** (contrat 1.25.0). Le schéma
+ * possédé garde trois réglages — `declarationEnabled`, `declaration`,
+ * `declarationLink` — et le commutateur gouverne l'usage, pas la donnée : une
+ * mention masquée garde son texte en base. C'est ICI, à la frontière, qu'il
+ * s'applique (motif `show_shortcuts`) : masquée, la mention sort vide ; et le
+ * lien ne sort que si une déclaration est publiée. Un consommateur n'a donc
+ * aucun commutateur à connaître — un portail d'avant ce contrat, qui n'affiche
+ * que `declaration`, fait déjà ce qu'il faut.
  */
 import type { PortalThemeDto } from "./dto.ts";
 
@@ -69,7 +78,12 @@ export function defaultPortalThemeDto(): PortalThemeDto {
       sticky: true,
       account: "prominent",
     },
-    accessibility: { high_contrast: false, dark_primary: false, declaration: "" },
+    accessibility: {
+      high_contrast: false,
+      dark_primary: false,
+      declaration: "",
+      declaration_link: false,
+    },
   };
 }
 
@@ -78,7 +92,13 @@ export function defaultPortalThemeDto(): PortalThemeDto {
  * est en camelCase). Chaque champ retombe sur SON défaut : un thème à demi
  * lisible reste le thème que la collectivité a réglé, moins le réglage abîmé.
  */
-export function serializePortalTheme(published: unknown): PortalThemeDto {
+export function serializePortalTheme(
+  published: unknown,
+  options: {
+    /** Une déclaration d'accessibilité non vide est-elle publiée ? */
+    accessibilityStatement?: boolean;
+  } = {},
+): PortalThemeDto {
   const fallback = defaultPortalThemeDto();
   if (!published || typeof published !== "object" || Array.isArray(published)) return fallback;
 
@@ -89,6 +109,10 @@ export function serializePortalTheme(published: unknown): PortalThemeDto {
   const accessibility = block(root.accessibility);
 
   const declaration = accessibility.declaration;
+  // ⚠️ Absent = AFFICHÉ, et le lien DEMANDÉ : c'est le défaut du schéma
+  // possédé, et celui qui ne fait disparaître aucune mention déjà publiée.
+  const enabled = bool(accessibility.declarationEnabled, true);
+  const linkWanted = bool(accessibility.declarationLink, true);
   return {
     typography: {
       font: oneOf(typography.font, FONTS, fallback.typography.font),
@@ -114,9 +138,10 @@ export function serializePortalTheme(published: unknown): PortalThemeDto {
       high_contrast: bool(accessibility.highContrast, fallback.accessibility.high_contrast),
       dark_primary: bool(accessibility.darkPrimary, fallback.accessibility.dark_primary),
       declaration:
-        typeof declaration === "string" && declaration.length <= MAX_DECLARATION_LENGTH
+        enabled && typeof declaration === "string" && declaration.length <= MAX_DECLARATION_LENGTH
           ? declaration
           : "",
+      declaration_link: enabled && linkWanted && options.accessibilityStatement === true,
     },
   };
 }
