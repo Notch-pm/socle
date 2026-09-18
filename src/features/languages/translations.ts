@@ -6,9 +6,9 @@
  *
  * Forme : `{ "<code de langue>": { "name": "…", "short_description": "…" } }`.
  * Un objet par langue plutôt qu'une chaîne, et c'est précisément ce qui a permis
- * au descriptif court de rejoindre le libellé le 2026-09-07 sans déplacer une
- * seule entrée existante. Les champs à venir (descriptif usager…) s'ajouteront
- * de la même façon.
+ * au descriptif court de rejoindre le libellé le 2026-09-07, puis au descriptif
+ * usager (`user_description`) de les rejoindre le 2026-09-18, sans déplacer une
+ * seule entrée existante.
  *
  * ⚠️ CHAQUE CHAMP EST INDÉPENDANT. Une langue peut porter le libellé sans le
  * descriptif : c'est le cas normal, pas une anomalie. Le repli se fait
@@ -34,8 +34,14 @@ import { PIVOT_LANGUAGE, sortLanguageCodes } from "@/features/languages/language
  * française du même nom. En ajouter un ici ne suffit pas : il faut aussi que
  * l'écran le propose (`TranslationFields`) et que la fonction de traduction
  * automatique sache dans quel registre l'écrire (`translate-labels`).
+ *
+ * ⚠️ DEUX ÉCRANS ÉCRIVENT CETTE COLONNE : l'étape « Descriptif » (libellé,
+ * descriptif court) et l'étape « Communication usager » (`user_description`,
+ * en Markdown). Chacun ne gouverne que ses champs — c'est le dernier argument
+ * de `translationsForWrite`, et c'est lui qui empêche l'un d'effacer le travail
+ * fait dans l'autre.
  */
-export const TRANSLATABLE_FIELDS = ["name", "short_description"] as const;
+export const TRANSLATABLE_FIELDS = ["name", "short_description", "user_description"] as const;
 
 export type TranslatableField = (typeof TRANSLATABLE_FIELDS)[number];
 
@@ -57,11 +63,33 @@ export const PORTAL_SECTION_FIELDS = ["title", "subtitle", "placeholder", "body"
 export type PortalSectionField = (typeof PORTAL_SECTION_FIELDS)[number];
 
 /**
+ * Les textes d'une entrée de `procedures.user_communication` — le troisième jeu,
+ * possédé par `src/features/procedures/userCommunication.ts` : la note sur le
+ * public (`note`), une pièce annoncée (`label`, `description`), une question
+ * de la FAQ usager (`question`, `answer`).
+ *
+ * ⚠️ Ces textes vivent dans un JSONB, pas dans des colonnes : ils ne peuvent
+ * pas rejoindre `procedures.translations`. Leur traduction vit donc SUR
+ * L'ENTRÉE, comme celle d'une section de page — elle voyage avec sa question
+ * quand on la déplace ou la supprime, et une liste n'a rien à resynchroniser.
+ * Les clés restent celles des champs français, comme partout.
+ */
+export const USER_COMMUNICATION_FIELDS = [
+  "note",
+  "label",
+  "description",
+  "question",
+  "answer",
+] as const;
+
+export type UserCommunicationField = (typeof USER_COMMUNICATION_FIELDS)[number];
+
+/**
  * N'importe quel champ traduisible, tous jeux confondus. C'est ce que
  * manipulent les pièces PARTAGÉES — le composant de saisie, l'appel au guichet
  * de traduction — qui n'ont pas à savoir de quelle table vient la ligne.
  */
-export type AnyTranslatableField = TranslatableField | PortalSectionField;
+export type AnyTranslatableField = TranslatableField | PortalSectionField | UserCommunicationField;
 
 /**
  * Ce qui est traduit pour une langue. Tout y est facultatif — voir l'en-tête.
@@ -217,6 +245,64 @@ export function translationsForWrite(
   return out;
 }
 
+/**
+ * Pose (ou efface) la traduction d'un texte **frappe par frappe**, quand l'état
+ * de l'écran EST le JSON (section de page, entrée de `user_communication`).
+ *
+ * ⚠️ NE PASSE PAS PAR `translationsForWrite`, et c'est tout l'objet de cette
+ * fonction : celui-là ÉLAGUE la valeur (`.trim()`), ce qui est juste au moment
+ * d'enregistrer un formulaire — et faux à chaque frappe. Élaguer en cours de
+ * saisie supprime l'espace au moment même où on le tape, et rend les espaces
+ * impossibles (vu en vrai le 2026-09-07). La valeur est donc stockée telle
+ * qu'elle est saisie ; `parseTranslations` élaguera à la lecture, comme partout.
+ *
+ * Les trois règles restent celles de la maison : jamais de clé `fr`, un texte
+ * VIDE est une absence, et une langue sans aucun texte disparaît.
+ */
+export function setTranslation<F extends string>(
+  translations: TranslationMap<F>,
+  code: string,
+  field: F,
+  value: string,
+): TranslationMap<F> {
+  if (code === PIVOT_LANGUAGE) return translations;
+  const out: TranslationMap<F> = { ...translations };
+  const entry: TranslatedEntry<F> = { ...out[code] };
+  if (value.trim() === "") delete entry[field];
+  else entry[field] = value;
+  if (Object.keys(entry).length === 0) delete out[code];
+  else out[code] = entry;
+  return out;
+}
+
+/**
+ * Applique une réponse de traduction ENTIÈRE, en une fois — voir `onApply` de
+ * `TranslationFields`.
+ *
+ * ⚠️ EN UNE FOIS, ET PAS CHAMP PAR CHAMP. Un parent qui possède un objet plus
+ * gros repart de l'état de son rendu à chaque appel : trois écritures dans le
+ * même tick n'en laisseraient qu'une — c'est ainsi que le titre et le
+ * sous-titre d'une section se perdaient (vu en vrai le 2026-09-07).
+ *
+ * `known` écarte ce que l'entrée ne porte pas : une réponse ne pose jamais un
+ * champ que l'écran n'affiche pas.
+ */
+export function applyTranslations<F extends string>(
+  translations: TranslationMap<F>,
+  patch: Record<string, Partial<Record<string, string>>>,
+  known: readonly F[],
+): TranslationMap<F> {
+  let out = translations;
+  for (const [code, entry] of Object.entries(patch)) {
+    for (const [field, value] of Object.entries(entry)) {
+      if (typeof value !== "string") continue;
+      if (!(known as readonly string[]).includes(field)) continue;
+      out = setTranslation(out, code, field as F, value);
+    }
+  }
+  return out;
+}
+
 /** Codes portant au moins une traduction, dans l'ordre du catalogue. */
 export function translatedLanguageCodes(
   translations: unknown,
@@ -234,7 +320,7 @@ export function localizedField(
   source: string | null,
   translations: unknown,
   code: string,
-  field: TranslatableField | PortalSectionField,
+  field: AnyTranslatableField,
 ): string {
   const fallback = source ?? "";
   if (code === PIVOT_LANGUAGE) return fallback;

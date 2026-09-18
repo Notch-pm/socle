@@ -214,6 +214,39 @@ aucun endpoint, il décrit ce qui existe **en base**.
   — calqué sur `portal_pages`.
 - Consommé par le portail dans `GET /v1/portal/tenant?hostname=` (contrat 1.17.0), champ `theme` :
   ⚠️ rien de publié ⇒ **les défauts du Socle**, jamais `null`.
+- Le bloc `accessibility` porte la **mention d'accessibilité** du pied de page (2026-09-18) :
+  `declarationEnabled` (commutateur, défaut **vrai**), `declaration` (la phrase, 300 caractères),
+  `declarationLink` (lien vers la déclaration, défaut **vrai**). ⚠️ Défauts vrais, contrairement aux
+  correctifs : la mention est obligatoire, et les thèmes d'avant ces champs affichaient déjà leur
+  texte. Le commutateur gouverne l'usage, pas la donnée — c'est l'API qui l'applique (mention vide,
+  `declaration_link` résolu, contrat 1.25.0).
+
+---
+
+### `portal_contents` — contenus textuels du site de démarches (2026-09-18)
+
+- `organization_id` NOT NULL, FK **CASCADE** ; `slug` text NOT NULL (CHECK de **forme**
+  `^[a-z0-9]+(-[a-z0-9]+)*$`, 64 caractères au plus) ; `draft` jsonb NOT NULL ; `published` jsonb ;
+  `published_at` ; `created_at` / `updated_at` (trigger `set_updated_at`). **UNIQUE
+  (organization_id, slug)**. CHECK objet JSON sur les deux colonnes, garde-fou de taille (200 000
+  caractères), et `(published is null) = (published_at is null)`.
+- Les **pages de texte** du site, rédigées dans l'onglet « Contenus » de l'éditeur. Une seule
+  aujourd'hui : `accessibilite`, la **déclaration d'accessibilité** vers laquelle mène la mention du
+  pied de page. ⚠️ La base valide la **forme** du slug, pas la **liste** (motif
+  `enabled_languages`) : le catalogue vit dans `src/features/portal/portalContent.ts`.
+- ⚠️ **Ce n'est pas une `portal_pages`** : une page est une COMPOSITION de blocs, versionnée ; un
+  contenu est UN TEXTE, `{ body }` en **Markdown**, sans version. Deux formes de JSON sous une même
+  colonne feraient qu'un parseur qui lit la mauvaise retombe sur ses défauts. Ni une clé du
+  **thème**, qui garde la *mention* (une phrase, un lien) mais pas la *déclaration* (plusieurs
+  écrans).
+- **Même discipline que les deux autres tables du portail** : `draft` autosauvegardé, `published`
+  par le geste « Publier », qui publie **le site entier** — composition, thème et contenus.
+- **Racine uniquement** (trigger `enforce_portal_content_root_org`, EXECUTE révoqué des trois
+  rôles) · **RLS** : lecture `has_org_access` · écriture `is_org_admin` — calqué sur
+  `portal_themes`.
+- Consommé par `GET /v1/portal/content?tenant_id=&slug=` (contrat 1.25.0) : ⚠️ un texte publié
+  **vide** vaut 404, et c'est aussi ce qui décide `declaration_link` dans
+  `GET /v1/portal/tenant` — le lien ne mène jamais à une page blanche.
 
 ---
 
@@ -289,7 +322,7 @@ aucun endpoint, il décrit ce qui existe **en base**.
   active les démarches sur tout son sous-arbre, pas seulement son organisation directe.
 - Sémantique : activation **opt-in** — une démarche est active pour une organisation si et
   seulement si une ligne existe avec `is_enabled = true`. Détail applicatif dans
-  [../CLAUDE.md](../CLAUDE.md) (feature « Édition d'organisation »).
+  [./features/organisations.md](./features/organisations.md) (« Édition d'organisation »).
 - **Un seul instructeur par porteur** (2026-09-08) : une même démarche ne peut être activée que
   par **une** organisation d'un même groupe — le porteur et ses services internes (voir
   `organizations.is_internal_service`). Sinon, une demande déposée au nom du porteur n'aurait pas
@@ -356,7 +389,10 @@ Modèles de documents et de courriers (`.doc`/`.docx`/`.odt`) porteurs de variab
 
 **Autres colonnes notables** : adresse à plat (`address_line1/2`, `postal_code`, `city`, `country`
 défaut `France`), `address_lat`/`address_lon` (float8, géocodage), `quartier_id` FK **ON DELETE
-SET NULL**, `quartier_auto` bool défaut true, `consent_email`/`consent_sms`, `internal_notes`
+SET NULL**, `quartier_auto` bool défaut true, **consentements RGPD** (`consent_traitement`,
+`consent_traitement_at`, `consent_partage`, `consent_partage_at` — **dérivés par trigger** de
+`contact_consents`, jamais écrits directement) et les OBSOLÈTES `consent_email`/`consent_sms`
+(remplacés le 2026-09-13 ; conservés tant que Clara les écrit), `internal_notes`
 (commentée en base « ne jamais exposer au portail citoyen » — voir Points de vigilance),
 `created_at`/`updated_at` timestamptz.
 
@@ -402,6 +438,39 @@ d'écriture** : INSERT/UPDATE/DELETE impossibles côté client, réservés au se
   `(organization_id, source, external_id)`.
 - **Trigger** `set_updated_at`.
 - **RLS** : lecture `has_org_access` seulement — aucune écriture côté client.
+
+### `contact_consents` — consentements RGPD (2026-09-13)
+
+La **preuve** du consentement, et pas seulement son état. Une ligne par recueil.
+
+- `contact_id` CASCADE ; `organization_id` **dénormalisée par trigger**
+  `sync_contact_consent_org` (motif `contact_external_references`) ; `kind` CHECK
+  ∈ (`traitement`|`partage`) ; `granted` bool ; `statement` (CHECK non vide) ; `source_app`
+  (CHECK non vide) ; `source_reference` (nullable, **sans FK** — référence inter-projets) ;
+  `collected_at`, `created_at`, `updated_at`.
+- **`statement` = la phrase exacte soumise à l'usager**, nom d'organisme déjà interpolé, **jamais
+  réécrite**. C'est elle qui fait la preuve (art. 7.1 RGPD), pas le booléen : la collectivité peut
+  être renommée et le libellé reformulé, ce qui a été accepté ne change pas. Le référentiel ne la
+  compose pas — seule l'application qui a affiché la case sait ce qui a été lu.
+- **Index** : `(contact_id, kind, collected_at desc)` · `organization_id` · **unique**
+  `(contact_id, kind, source_app, source_reference)` — l'idempotence : rejouer un dépôt met à
+  jour, il ne duplique pas.
+  ⚠️ **Cet index ne doit PAS être partiel** (correctif `20260913100100`). Il l'était d'abord
+  (`WHERE source_reference IS NOT NULL`), et `ON CONFLICT` ne sait pas inférer un index partiel
+  sans que la requête répète son prédicat — ce qu'un client PostgREST ne peut pas exprimer :
+  `42P10`, donc 500 à chaque consignation. La version ordinaire a la **même** sémantique, les
+  NULL étant distincts dans un index unique : un recueil sans `source_reference` se répète
+  librement. **Règle générale : un index qui porte une idempotence d'API n'est jamais partiel.**
+- **Trigger `sync_contact_consent_state`** (AFTER INSERT/UPDATE, `SECURITY DEFINER`) : recopie
+  l'état sur la fiche **seulement si `collected_at` est au moins aussi récent** que la date déjà
+  posée. Consigner après coup un dépôt papier de l'an dernier n'efface donc pas un consentement
+  retiré la semaine dernière. C'est ce trigger qui fait de l'historique la **seule** source de
+  l'état — deux sources pour un même fait finiraient par diverger.
+- **RLS** : lecture `has_org_access(organization_id)` seulement — aucune écriture côté client
+  (passe par `contacts-api`, `POST /v1/contacts/{id}/consents`).
+- ⚠️ **Le référentiel n'exige aucun consentement** : il accepte `granted: false` même sur
+  `traitement`. L'obligation appartient au **dépôt** (Iris la tient), et un **retrait** doit
+  pouvoir être consigné ici.
 
 ### `contact_relations` — relations dirigées entre contacts
 
@@ -557,7 +626,7 @@ implémentation, trois lecteurs (le service, l'éditeur, le client).
 ## Fréquentation du site de démarches
 
 Deux tables de **compteurs**, et rien d'autre. Écrites par `audience-api` (scope `audience`) via
-deux RPC, lues par une troisième. Voir CLAUDE.md, « Tableau de bord et fréquentation du site ».
+deux RPC, lues par une troisième. Voir [./features/tableau-de-bord.md](./features/tableau-de-bord.md).
 
 ⚠️ **AUCUN IDENTIFIANT NE PEUT Y ENTRER**, et c'est ce qui dispense d'un bandeau de consentement
 sur les portails (article 82 de la loi Informatique et Libertés) : pas de visiteur, pas de session,
@@ -744,7 +813,7 @@ redire après l'ajout du favicon.
 p_siret, p_birth_date, p_email, p_phones[], p_status, p_exclude_ids[], p_limit) → TABLE(contact_id,
 score int, reasons text[])`. `SECURITY INVOKER`, `search_path=""`, **EXECUTE réservé à
 `service_role`**. Sert `POST /v1/contacts/match` de `contacts-api` — détail du scoring et des
-critères dans [../CLAUDE.md](../CLAUDE.md) et l'OpenAPI de `contacts-api`.
+critères dans [./features/contacts-api.md](./features/contacts-api.md) et l'OpenAPI de `contacts-api`.
 
 ### Fonctions de normalisation
 
@@ -861,7 +930,10 @@ Leur structure n'est **pas** décrite ici (propriété du code applicatif et de 
   nombre). ⚠️ **`attachments.items` n'est pas la liste des pièces à téléverser** (ce sont les
   champs `attachment` de `form_schema`) : c'est un texte d'annonce, qui peut les recouper.
   ⚠️ **Deux FAQ coexistent sur la même ligne** : `user_communication.faq` est publiée,
-  `knowledge_base.faq` ne l'a jamais été.
+  `knowledge_base.faq` ne l'a jamais été. **Traductions** (2026-09-18) : la note, chaque pièce et
+  chaque question portent leur propre `translations` (mêmes trois règles que la colonne
+  `translations`, clés = leurs champs français) — elles vivent **sur l'entrée** parce que ces
+  textes ne sont pas des colonnes, et suivent ainsi leur question quand la FAQ est réordonnée.
 - ⚠️ `communication_config` **NULL** n'est pas « non publiée » : c'est une démarche jamais passée
   par l'étape, à lire comme les valeurs par défaut (visible, non bornée). Le parseur applicatif
   le fait ; un consommateur SQL direct doit le faire aussi. ⚠️ Le bloc `documents` du même JSON
@@ -873,8 +945,10 @@ Leur structure n'est **pas** décrite ici (propriété du code applicatif et de 
 - ⚠️ `translations` (sur `procedures` **et** `categories`) a une forme depuis le 2026-09-06 :
   `{ "<code de langue>": { "name": "…", "short_description": "…" } }`, code faisant foi
   `src/features/languages/translations.ts` (testé). Les clés sous une langue sont celles des
-  **colonnes françaises** correspondantes ; `short_description` n'existe que sur `procedures`
-  (ajouté le 2026-09-07 — une catégorie n'a pas de descriptif). Trois règles portent tout le
+  **colonnes françaises** correspondantes ; `short_description` (ajouté le 2026-09-07) et
+  `user_description` (Markdown, ajouté le 2026-09-18) n'existent que sur `procedures` — une
+  catégorie n'a pas de descriptif. ⚠️ Deux étapes écrivent la colonne (« Descriptif » et
+  « Communication usager ») : chacune ne réécrit que ses champs. Trois règles portent tout le
   reste : **jamais de clé `fr`** (le texte français est la colonne — l'y écrire créerait une
   seconde source de vérité) ; un **champ absent = repli sur la colonne française**, pas un texte
   vide ; et ce repli se fait **champ par champ**, une langue pouvant légitimement porter le
@@ -1121,7 +1195,7 @@ redire après l'ajout du favicon.
 p_siret, p_birth_date, p_email, p_phones[], p_status, p_exclude_ids[], p_limit) → TABLE(contact_id,
 score int, reasons text[])`. `SECURITY INVOKER`, `search_path=""`, **EXECUTE réservé à
 `service_role`**. Sert `POST /v1/contacts/match` de `contacts-api` — détail du scoring et des
-critères dans [../CLAUDE.md](../CLAUDE.md) et l'OpenAPI de `contacts-api`.
+critères dans [./features/contacts-api.md](./features/contacts-api.md) et l'OpenAPI de `contacts-api`.
 
 ### Fonctions de normalisation
 

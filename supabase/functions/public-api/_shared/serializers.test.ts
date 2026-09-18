@@ -580,6 +580,14 @@ describe("serializeTenant — la whitelist la plus étroite (page publique)", ()
     expect(dto.theme.accessibility.dark_primary).toBe(false);
   });
 
+  it("⚠️ le lien de la mention n'est servi que si une déclaration est publiée", () => {
+    const theme = { accessibility: { declaration: "Accessibilité : partiellement conforme" } };
+    expect(serializeTenant(row, "n.fr", null, theme).theme.accessibility.declaration_link).toBe(false);
+    expect(serializeTenant(row, "n.fr", null, theme, true).theme.accessibility.declaration_link).toBe(
+      true,
+    );
+  });
+
   it("rend le domaine tel que résolu, pas celui demandé", () => {
     // Le portail normalise son entrée, la base stocke la forme canonique : la
     // réponse porte celle de la BASE, pour que le portail sache sur quelle clé
@@ -830,6 +838,27 @@ describe("serializePortalProcedureDetail — le formulaire sort, l'instruction n
   it("transmet le bloc TEL QUEL, sans le réinterpréter", () => {
     const dto = serializePortalProcedureDetail(row, [], detail, null);
     expect(dto.user_communication).toBe(detail.user_communication);
+  });
+
+  it("les traductions traversent avec leurs entrées, le descriptif traduit avec la ligne (1.26.0)", () => {
+    // Rien à résoudre ici : la traduction d'une question vit SUR la question,
+    // celle du descriptif dans la colonne `translations`. Le portail replie.
+    const translated = {
+      ...detail,
+      user_communication: {
+        faq: {
+          items: [{ question: "Q", answer: "R", translations: { en: { question: "Q en" } } }],
+        },
+      },
+    };
+    const dto = serializePortalProcedureDetail(
+      { ...row, translations: { en: { user_description: "In English." } } },
+      [],
+      translated,
+      null,
+    );
+    expect(dto.user_communication).toEqual(translated.user_communication);
+    expect(dto.translations).toEqual({ en: { user_description: "In English." } });
   });
 
   it("⚠️ la LISTE ne le porte pas : ce contenu appartient à la page d'une démarche", () => {

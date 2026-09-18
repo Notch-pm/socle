@@ -13,6 +13,97 @@ Format d'une entrée : `## AAAA-MM-JJ — <api> — ajout|correctif|rupture`
 
 ---
 
+## 2026-09-18 — public-api — ajout (traduction de la communication usager)
+
+**Ce que la collectivité écrit pour ses usagers se traduit dans ses langues.** L'étape
+« Communication usager » propose, sous chaque texte, ses traductions dans les langues activées par
+la collectivité, avec la traduction automatique habituelle. Version du contrat : **1.26.0**. Ajout
+**additif** : un consommateur qui l'ignore affiche le français, exactement comme aujourd'hui.
+
+**Le descriptif usager rejoint `translations`** (`Procedure`, `PortalProcedure`,
+`PortalProcedureDetail`) — c'est une colonne, il prend sa place à côté du libellé :
+
+| Champ | Valeur | Ce qu'il dit |
+|---|---|---|
+| `translations.<code>.user_description` | texte **Markdown** | Le descriptif usager dans cette langue |
+
+**Les textes de `user_communication` portent leur traduction SUR L'ENTRÉE** (`Procedure`,
+`PortalProcedureDetail`) — ils vivent dans un objet, pas dans des colonnes :
+
+| Champ | Clés d'une langue | Ce qu'il traduit |
+|---|---|---|
+| `…audience.translations` | `note` | La précision sur le public concerné |
+| `…attachments.items[].translations` | `label`, `description` | Une pièce annoncée |
+| `…faq.items[].translations` | `question`, `answer` | Une question de la FAQ usager |
+
+- ⚠️ **Les trois règles de `Translations` valent ici aussi** : jamais de clé `fr` (le français est
+  le champ de même nom) ; un texte absent est un **repli sur le français**, pas un texte vide ; et le
+  repli se fait **champ par champ** — une question traduite sans sa réponse est le cas normal.
+  Pour l'attribut `lang` de l'écran (RGAA 8.7), c'est donc **texte par texte** qu'il faut savoir ce
+  qui est traduit : une réponse repliée sur le français se marque `lang="fr"` dans une page servie
+  en anglais.
+- ⚠️ **La traduction voyage avec son entrée** : réordonner la FAQ ne demande rien au consommateur.
+  Ne l'associez jamais à une question par son **index**.
+- ⚠️ **Absent sur les entrées enregistrées avant ce contrat** : lisez une absence comme `{}` (le
+  Socle écrit `{}` à chaque nouvel enregistrement de l'étape).
+- **Rien ne se traduit dans `delays`** : la durée est structurée (valeur + unité), le portail la
+  rend dans sa propre langue.
+- **Un correctif de documentation au passage** : `PortalProcedure.user_description` dit désormais,
+  comme `Procedure`, qu'il est en **Markdown** (depuis 1.24.0). Et `user_communication` est affiché
+  par Nora depuis le 2026-09-18 — l'entrée 1.24.0 disait « l'affichera ».
+- **Consommateur** : Nora sert déjà `translations.user_description` sur la page d'une démarche ; la
+  traduction des entrées de `user_communication` reste à brancher de son côté (repli champ par
+  champ, `lang="fr"` texte par texte). Rien à faire pour les autres.
+
+---
+
+## 2026-09-18 — public-api — ajout (déclaration d'accessibilité)
+
+**La mention d'accessibilité du pied de page peut mener à la déclaration complète.** La
+collectivité rédige sa déclaration d'accessibilité (RGAA, article 47 de la loi du 11 février 2005)
+dans l'onglet « Contenus » de l'éditeur, et règle la mention du pied de page dans « Composition » :
+l'afficher ou non, sa phrase, et son lien. Version du contrat : **1.25.0**. Ajout **additif** : un
+consommateur qui l'ignore se comporte exactement comme aujourd'hui.
+
+**Une route** — `GET /v1/portal/content?tenant_id=&slug=accessibilite` (tag « Portail », scope
+`read`) → `PortalContent` :
+
+| Champ | Valeur | Ce qu'il dit |
+|---|---|---|
+| `slug` | `accessibilite` | Quel contenu — le seul à ce jour |
+| `published_at` | ISO 8601 | Date de la publication du **site** (voir ci-dessous) |
+| `format` | `markdown` | Toujours `markdown` : le champ existe pour qu'un autre format s'annonce |
+| `body` | texte | La déclaration, en Markdown, **jamais vide** |
+
+**Un champ sur `Tenant.theme.accessibility`** (`GET /v1/portal/tenant`) :
+
+| Champ | Valeur | Ce qu'il dit |
+|---|---|---|
+| `declaration_link` | booléen | Ajouter à la mention un lien « Déclaration d'accessibilité » vers la page qui rend la route ci-dessus |
+
+- ⚠️ **`declaration_link` est RÉSOLU par le Socle** : vrai seulement si la collectivité a demandé le
+  lien **et** qu'une déclaration non vide est publiée. Un portail qui suit ce drapeau ne sert jamais
+  un lien vers une page vide, et n'a aucune autre condition à vérifier.
+- ⚠️ **Il peut être vrai avec une `declaration` vide** : la collectivité n'a pas écrit de phrase,
+  le lien s'affiche alors seul — c'est encore une mention.
+- ⚠️ **`declaration` sort désormais VIDE quand la collectivité masque la mention.** Le commutateur
+  est appliqué par le Socle, le texte reste en base : un portail d'avant ce contrat, qui n'affiche
+  que `declaration`, fait déjà ce qu'il faut. Changement de comportement sans changement de forme,
+  aucune valeur existante ne change (les mentions publiées restent affichées : le commutateur vaut
+  « affichée » par défaut).
+- ⚠️ **Un texte publié vide est un 404**, comme rien de publié : publier le site publie aussi une
+  déclaration que personne n'a encore écrite, et la servir rendrait une page blanche sous un titre
+  engageant.
+- ⚠️ **`body` est en Markdown et en français.** Rendez-le en échappant le HTML (ou mieux, sans
+  jamais injecter de HTML), **descendez ses titres d'un niveau** — votre page porte déjà son `h1` —
+  et marquez-le `lang="fr"` quand la page est servie dans une autre langue : il n'est pas traduit.
+- `published_at` est la date de la **publication du site** (« Publier » publie tout d'un geste),
+  pas celle de la déclaration : sa date d'établissement est dans le texte.
+- **Consommé par Nora le jour même** : page `/accessibilite`, lien dans la mention de toutes les
+  pages.
+
+---
+
 ## 2026-09-18 — public-api — ajout
 
 **Une démarche porte désormais ce que la collectivité écrit POUR SES USAGERS.** Durée habituelle
@@ -66,6 +157,60 @@ exactement comme aujourd'hui.
   contenu appartient à la page d'une démarche, pas à un catalogue — un test l'épingle des deux
   côtés.
 - **Consommateur** : Nora l'affichera sur la page d'une démarche. Rien à faire pour les autres.
+
+---
+
+## 2026-09-13 — contacts-api — ajout
+
+**Le référentiel enregistre les consentements RGPD d'un usager, et leur preuve.** Deux questions
+posées systématiquement au dépôt d'une demande, quelle que soit la démarche — elles **remplacent**,
+dans ce qu'on demande à l'usager, « accepte les mails / accepte les SMS » :
+
+| `kind` | Question | Régime |
+|---|---|---|
+| `traitement` | Utilisation des informations pour instruire la demande | **Obligatoire** au dépôt |
+| `partage` | Partage aux services de la collectivité, pour ce dossier et les suivants | Facultatif, proposé coché |
+
+Version du contrat : **1.2.0**. Ajout **additif** : un consommateur qui l'ignore se comporte
+exactement comme aujourd'hui.
+
+**Un endpoint** — `POST /v1/contacts/{id}/consents` (corps `ContactConsentsCreate`) :
+
+| Champ | Valeur | Ce qu'il dit |
+|---|---|---|
+| `source_app` | `iris`, `nora`, un code de partenaire… | Qui a **affiché la case** et recueilli la réponse |
+| `source_reference` | libre, ou absent | Le dépôt d'origine — porte l'**idempotence** |
+| `collected_at` | ISO 8601, défaut « maintenant » | La date qui fait foi |
+| `consents[].kind` | `traitement` \| `partage` | — |
+| `consents[].granted` | booléen | — |
+| `consents[].statement` | **requis** | La phrase exacte que l'usager a lue |
+
+**Quatre champs d'état et un historique sur `Contact`** : `consent_traitement`,
+`consent_traitement_at`, `consent_partage`, `consent_partage_at`, et `consents[]`
+(`ContactConsent` : `kind`, `granted`, `statement`, `source_app`, `source_reference`,
+`collected_at`).
+
+- ⚠️ **`statement` vient de VOUS, et c'est requis.** Le référentiel enregistre un fait, il n'écrit
+  pas la phrase : seule l'application qui a affiché la case sait sa langue, sa formulation et le
+  nom d'organisme qu'elle y a interpolé. La composer ici la ferait diverger de ce que l'usager a
+  lu — et la preuve ne prouverait plus rien (art. 7.1 RGPD : le responsable doit pouvoir
+  **démontrer** le consentement, pas seulement l'affirmer).
+- ⚠️ **L'état ne s'écrit pas.** `consent_traitement` et `consent_partage` sont **dérivés** de
+  l'historique par trigger, depuis le recueil le plus **récent** — un recueil antérieur consigné
+  après coup (dépôt papier repris) n'écrase donc pas un consentement retiré depuis. Un `PATCH`
+  qui tenterait de les poser directement ne les atteint pas.
+- ⚠️ **`consents[]` est vide dans les réponses de LISTE et de rapprochement**, comme `quartier` est
+  `null` quand la jointure n'a pas été demandée : la preuve ne se lit que sur la fiche
+  (`GET /v1/contacts/{id}`). L'état, lui, voyage partout.
+- **Idempotent** par (`contact_id`, `kind`, `source_app`, `source_reference`) : rejouer le même
+  dépôt met la ligne à jour au lieu d'en créer une seconde. Sans `source_reference`, chaque appel
+  est un fait nouveau.
+- **Le référentiel n'exige RIEN** : il accepte `granted: false` sur le consentement obligatoire.
+  Cette exigence-là appartient au dépôt (Iris la tient), et un **retrait** de consentement doit
+  pouvoir se consigner.
+- **`consent_email` et `consent_sms` sont marqués OBSOLÈTES** — conservés tant que Clara les écrit,
+  aucun nouveau consommateur ne doit s'y fier. Leur retrait fera l'objet d'une entrée « rupture »
+  quand Clara aura basculé.
 
 ---
 

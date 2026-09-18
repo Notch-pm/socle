@@ -220,6 +220,11 @@ collectivité peut activer d'autres langues ; les libellés traduits des **déma
   vide d'une traduction manquante donne une carte de démarche sans titre.
 - Une traduction peut exister dans une langue que la collectivité **n'affiche plus** (le réglage
   gouverne l'usage, pas la donnée) : n'affichez que les langues de `languages`.
+- **Ce que la collectivité écrit pour ses usagers** (contrat 1.26.0) : le descriptif traduit est
+  dans `translations.<code>.user_description` (Markdown, comme le français) ; les textes de
+  `user_communication` portent leur traduction **sur l'entrée** — `audience.translations`,
+  `attachments.items[].translations`, `faq.items[].translations`. Même repli **champ par
+  champ** ; une entrée enregistrée avant 1.26.0 n'a pas de `translations` (lisez `{}`).
 
 ## Particularités utiles
 

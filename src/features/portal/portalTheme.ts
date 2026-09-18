@@ -58,7 +58,11 @@ export type MenuStyle = (typeof MENU_STYLES)[number];
 export const ACCOUNT_STYLES = ["prominent", "discreet"] as const;
 export type AccountStyle = (typeof ACCOUNT_STYLES)[number];
 
-/** Une déclaration d'accessibilité tient en une phrase ; on borne la saisie. */
+/**
+ * La MENTION d'accessibilité tient en une phrase ; on borne la saisie. La
+ * déclaration elle-même, qui peut faire trois écrans, est un contenu du site
+ * (`portalContent.ts`), pas une valeur du thème.
+ */
 export const MAX_DECLARATION_LENGTH = 300;
 
 export interface PortalTheme {
@@ -79,8 +83,31 @@ export interface PortalTheme {
     highContrast: boolean;
     /** Assombrit la couleur principale, quand le contraste ne passe pas. */
     darkPrimary: boolean;
-    /** Mention RGAA obligatoire, affichée au pied du site. */
+    /**
+     * La mention d'accessibilité est-elle affichée au pied du site ?
+     *
+     * ⚠️ Le commutateur gouverne l'USAGE, pas la donnée (motif
+     * `email_sender_name`) : le masquer conserve le texte et le lien, et le
+     * réafficher rend la mention telle qu'elle était. C'est l'API publique qui
+     * l'applique, à la frontière — le portail reçoit une mention vide.
+     */
+    declarationEnabled: boolean;
+    /**
+     * Texte de la mention RGAA obligatoire, au pied du site (« Accessibilité :
+     * partiellement conforme »). Le nom de la clé est celui du contrat 1.17.0 :
+     * il désignait alors toute la déclaration, qui tenait en une phrase.
+     */
     declaration: string;
+    /**
+     * La mention porte-t-elle un lien vers la DÉCLARATION D'ACCESSIBILITÉ,
+     * rédigée dans l'onglet « Contenus » (`portal_contents`, slug
+     * `accessibilite`) ?
+     *
+     * ⚠️ C'est un souhait, pas une promesse : l'API ne sert le lien que si une
+     * déclaration est PUBLIÉE et non vide — un lien vers une page vide serait
+     * pire que pas de lien.
+     */
+    declarationLink: boolean;
   };
 }
 
@@ -105,7 +132,17 @@ export function defaultPortalTheme(): PortalTheme {
       account: "prominent",
       sticky: true,
     },
-    accessibility: { highContrast: false, darkPrimary: false, declaration: "" },
+    // ⚠️ La mention et son lien sont ACTIVÉS par défaut, contrairement aux
+    // correctifs ci-dessus : la mention est obligatoire pour un site public, et
+    // les thèmes d'avant ces deux commutateurs affichaient déjà leur texte — les
+    // lire « masqués » ferait disparaître d'un coup des mentions publiées.
+    accessibility: {
+      highContrast: false,
+      darkPrimary: false,
+      declarationEnabled: true,
+      declaration: "",
+      declarationLink: true,
+    },
   };
 }
 
@@ -155,7 +192,15 @@ const themeSchema = z.object({
     .object({
       highContrast: z.boolean().catch(D.accessibility.highContrast),
       darkPrimary: z.boolean().catch(D.accessibility.darkPrimary),
+      declarationEnabled: z
+        .boolean()
+        .catch(D.accessibility.declarationEnabled)
+        .default(D.accessibility.declarationEnabled),
       declaration: z.string().max(MAX_DECLARATION_LENGTH).catch("").default(""),
+      declarationLink: z
+        .boolean()
+        .catch(D.accessibility.declarationLink)
+        .default(D.accessibility.declarationLink),
     })
     .catch(D.accessibility)
     .default(D.accessibility),
@@ -170,9 +215,10 @@ export function parsePortalTheme(raw: unknown): PortalTheme {
 // ── Préréglages ─────────────────────────────────────────────────────────────
 //
 // Quatre points de départ, figés dans le code. Ils gouvernent l'APPARENCE, pas
-// le contenu : la déclaration d'accessibilité et `darkPrimary` leur survivent —
-// la première est un texte que la collectivité a écrit, le second corrige SA
-// couleur, laquelle ne change pas quand on change de préréglage.
+// le contenu : la mention d'accessibilité (texte, commutateur, lien) et
+// `darkPrimary` leur survivent — la première est un texte que la collectivité a
+// écrit, le second corrige SA couleur, laquelle ne change pas quand on change
+// de préréglage.
 
 interface PresetValues {
   typography: PortalTheme["typography"];

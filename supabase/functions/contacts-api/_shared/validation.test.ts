@@ -8,6 +8,7 @@ import {
   MATCH_DEFAULT_LIMIT,
   mergeContactShape,
   normalizePhoneNumber,
+  parseConsentsPayload,
   parseContactPayload,
   parseMatchPayload,
   parsePagination,
@@ -488,5 +489,74 @@ describe("resolveRootOrgId", () => {
       { id: "y", parent_id: "x" },
     ];
     expect(["x", "y"]).toContain(resolveRootOrgId(cyclic, "x"));
+  });
+});
+
+describe("parseConsentsPayload", () => {
+  const base = {
+    source_app: "iris",
+    source_reference: "8f14e45f-ceea-4a2f-9c1d-4ea0a3f0b111",
+    consents: [
+      { kind: "traitement", granted: true, statement: "J'accepte que les informations…" },
+      { kind: "partage", granted: false, statement: "J'accepte de partager…" },
+    ],
+  };
+
+  it("accepte un recueil complet et normalise la date", () => {
+    const res = parseConsentsPayload({ ...base, collected_at: "2026-09-13T08:00:00+02:00" });
+    expect(res.ok).toBe(true);
+    if (!res.ok) return;
+    expect(res.value).toHaveLength(2);
+    expect(res.value[0]).toMatchObject({
+      kind: "traitement", granted: true, source_app: "iris",
+      source_reference: "8f14e45f-ceea-4a2f-9c1d-4ea0a3f0b111",
+      collected_at: "2026-09-13T06:00:00.000Z",
+    });
+  });
+
+  it("date le recueil de maintenant quand collected_at est absent", () => {
+    const before = Date.now();
+    const res = parseConsentsPayload(base);
+    expect(res.ok).toBe(true);
+    if (!res.ok) return;
+    expect(Date.parse(res.value[0].collected_at)).toBeGreaterThanOrEqual(before - 1000);
+  });
+
+  it("exige la phrase soumise — c'est elle qui fait la preuve", () => {
+    const res = parseConsentsPayload({
+      ...base, consents: [{ kind: "traitement", granted: true, statement: "   " }],
+    });
+    expect(res.ok).toBe(false);
+    if (res.ok) return;
+    expect(res.message).toContain("preuve");
+  });
+
+  it("consigne un RETRAIT de consentement (le référentiel n'exige rien)", () => {
+    const res = parseConsentsPayload({
+      ...base, consents: [{ kind: "traitement", granted: false, statement: "Retrait." }],
+    });
+    expect(res.ok && res.value[0].granted).toBe(false);
+  });
+
+  it("refuse une source absente, un type hors catalogue, un doublon, une clé inconnue", () => {
+    expect(parseConsentsPayload({ ...base, source_app: "  " }).ok).toBe(false);
+    expect(parseConsentsPayload({ ...base, consents: [] }).ok).toBe(false);
+    expect(parseConsentsPayload({
+      ...base, consents: [{ kind: "newsletter", granted: true, statement: "x" }],
+    }).ok).toBe(false);
+    expect(parseConsentsPayload({
+      ...base,
+      consents: [
+        { kind: "partage", granted: true, statement: "a" },
+        { kind: "partage", granted: false, statement: "b" },
+      ],
+    }).ok).toBe(false);
+    expect(parseConsentsPayload({ ...base, contact_id: "x" }).ok).toBe(false);
+    expect(parseConsentsPayload({ ...base, collected_at: "hier" }).ok).toBe(false);
+  });
+
+  it("traite une référence de dépôt vide comme absente (pas d'idempotence)", () => {
+    const res = parseConsentsPayload({ ...base, source_reference: "   " });
+    expect(res.ok && res.value[0].source_reference).toBeNull();
   });
 });

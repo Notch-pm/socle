@@ -1,8 +1,10 @@
 import { describe, it, expect } from "vitest";
 import {
+  applyTranslations,
   localizedField,
   localizedName,
   parseTranslations,
+  setTranslation,
   translatedLanguageCodes,
   translationInput,
   translationsForWrite,
@@ -247,5 +249,69 @@ describe("deux jeux de champs, une seule implémentation", () => {
     const translations = { en: { title: "Our services" } };
     expect(localizedField("Nos démarches", translations, "en", "title")).toBe("Our services");
     expect(localizedField("Un paragraphe.", translations, "en", "body")).toBe("Un paragraphe.");
+  });
+});
+
+/**
+ * Le descriptif usager (`user_description`) rejoint la colonne le 2026-09-18 —
+ * écrit par un AUTRE écran que le libellé. C'est exactement le cas que le
+ * quatrième argument de `translationsForWrite` existe pour protéger.
+ */
+describe("descriptif usager : deux écrans, une colonne", () => {
+  const existing = {
+    en: { name: "Birth certificate", short_description: "Get a copy.", user_description: "Long." },
+  };
+
+  it("est lu comme les autres champs de la colonne", () => {
+    expect(parseTranslations(existing)).toEqual(existing);
+    expect(localizedField("Long texte.", existing, "en", "user_description")).toBe("Long.");
+  });
+
+  it("⚠️ l'étape « Descriptif » ne l'efface pas", () => {
+    expect(translationsForWrite(existing, { en: { name: "Birth" } }, ["fr", "en"], BOTH)).toEqual({
+      en: { name: "Birth", user_description: "Long." },
+    });
+  });
+
+  it("⚠️ l'étape « Communication usager » n'efface ni le libellé ni le descriptif court", () => {
+    expect(
+      translationsForWrite(existing, { en: { user_description: "  " } }, ["fr", "en"], [
+        "user_description",
+      ]),
+    ).toEqual({ en: { name: "Birth certificate", short_description: "Get a copy." } });
+  });
+});
+
+describe("setTranslation / applyTranslations — l'état EST le JSON", () => {
+  const FAQ = ["question", "answer"] as const;
+
+  it("garde la frappe telle quelle, espaces compris", () => {
+    // Élaguer à chaque frappe rendrait l'espace impossible à taper.
+    expect(setTranslation({}, "en", "question", "Where ")).toEqual({ en: { question: "Where " } });
+  });
+
+  it("un texte vide est une absence, et la langue vide disparaît", () => {
+    expect(setTranslation({ en: { question: "Q" } }, "en", "question", "  ")).toEqual({});
+    expect(
+      setTranslation<"question" | "answer">({ en: { question: "Q", answer: "A" } }, "en", "question", ""),
+    ).toEqual({ en: { answer: "A" } });
+  });
+
+  it("n'écrit jamais le français", () => {
+    expect(setTranslation({}, "fr", "question", "Q")).toEqual({});
+  });
+
+  it("applique une réponse entière d'un geste, sans poser ce que l'entrée ne porte pas", () => {
+    expect(
+      applyTranslations(
+        { br: { question: "Kept" } },
+        { en: { question: "Where?", answer: "Online.", note: "stray" }, es: { answer: "En línea." } },
+        FAQ,
+      ),
+    ).toEqual({
+      br: { question: "Kept" },
+      en: { question: "Where?", answer: "Online." },
+      es: { answer: "En línea." },
+    });
   });
 });

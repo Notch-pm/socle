@@ -54,6 +54,28 @@ export interface ContactRelationDto {
   contact: ContactRelationPeerDto;
 }
 
+/** Les deux consentements RGPD du catalogue. Aucun autre n'existe. */
+export type ContactConsentKind = "traitement" | "partage";
+
+/**
+ * Un recueil de consentement — la PREUVE, pas seulement l'état. La phrase
+ * exacte soumise à l'usager est conservée telle quelle : la collectivité peut
+ * être renommée ou le libellé reformulé, ce qui a été accepté ne change pas.
+ */
+export interface ContactConsentDto {
+  id: string;
+  kind: ContactConsentKind;
+  granted: boolean;
+  /** Libellé soumis à l'usager, nom de l'organisme déjà interpolé. */
+  statement: string;
+  /** Application qui a recueilli le consentement (iris, nora, clara…). */
+  source_app: string;
+  /** Dépôt d'origine tel que l'application le désigne (UUID nu, référence). */
+  source_reference: string | null;
+  collected_at: string | null;
+  created_at: string | null;
+}
+
 /** Usager — fiche complète (identité, coordonnées, préférences, rôles, refs). */
 export interface ContactDto {
   id: string;
@@ -85,8 +107,22 @@ export interface ContactDto {
   /** true = rattachement automatique d'après l'adresse ; false = forcé manuellement. */
   quartier_auto: boolean;
   preferred_channel: string | null;
+  /** @deprecated 2026-09-13 — remplacé par `consent_traitement` / `consent_partage`. */
   consent_email: boolean;
+  /** @deprecated 2026-09-13 — remplacé par `consent_traitement` / `consent_partage`. */
   consent_sms: boolean;
+  /**
+   * Consentement RGPD à l'utilisation des informations pour le traitement des
+   * demandes — OBLIGATOIRE au dépôt. **Dérivé de `consents`** : le recueil le
+   * plus récent fait l'état, jamais une écriture directe.
+   */
+  consent_traitement: boolean;
+  consent_traitement_at: string | null;
+  /** Consentement RGPD au partage aux services de la collectivité (facultatif). */
+  consent_partage: boolean;
+  consent_partage_at: string | null;
+  /** Historique des recueils, du plus récent au plus ancien. */
+  consents: ContactConsentDto[];
   internal_notes: string | null;
   status: string;
   roles: ContactRoleRefDto[];

@@ -2,12 +2,14 @@
  * Traduction automatique des textes d'une démarche ou d'une catégorie — la
  * logique pure.
  *
- * Ce qui est traduit ici, ce sont les champs que porte la colonne
- * `translations` : le **libellé** (`name`), et depuis le 2026-09-07 le
- * **descriptif court** (`short_description`) des démarches. Le jour où elle en
- * portera d'autres (descriptif usager…), c'est `FIELD_SPECS` qui s'élargira —
- * lui seul dit quelles clés existent, dans quel registre elles s'écrivent et où
- * elles sont bornées.
+ * Ce qui est traduit ici, ce sont les champs que porte une table
+ * `translations` : le **libellé** (`name`), depuis le 2026-09-07 le
+ * **descriptif court** (`short_description`) des démarches et les textes des
+ * blocs de page du portail, et depuis le 2026-09-18 ce que la collectivité
+ * écrit pour ses usagers — le **descriptif usager** (`user_description`, en
+ * Markdown) et les textes de `user_communication` (note sur le public, pièces
+ * annoncées, FAQ usager). C'est `FIELD_SPECS` qui dit quelles clés existent,
+ * dans quel registre elles s'écrivent et où elles sont bornées.
  *
  * ⚠️ UN SEUL APPEL POUR TOUS LES TEXTES D'UNE LIGNE, pas un par champ : c'est
  * un seul débit sur le crédit de la collectivité, un seul coup de cadence, et
@@ -43,16 +45,30 @@ export const MAX_TARGETS = 30;
 export const MAX_TARGET_LABEL_CHARS = 60;
 
 /**
+ * Caractères de texte SOURCE par jeton de SORTIE, pour estimer ce qu'une
+ * traduction coûtera. Délibérément bas : l'arabe, le russe ou le tamoul
+ * prennent bien plus de jetons que le français pour le même sens, et le JSON
+ * échappe les retours à la ligne. Sous-estimer, c'est une réponse tronquée —
+ * donc illisible, donc payée pour rien ; surestimer ne coûte qu'une réservation.
+ */
+export const SOURCE_CHARS_PER_OUTPUT_TOKEN = 2;
+
+/**
  * Ce qu'on sait traduire, et comment. Une entrée par clé de `translations` :
  *
  *  • `maxSource` / `maxTranslation` bornent l'entrée et la sortie — une
  *    traduction peut légitimement dépasser son français (l'allemand allonge),
- *    mais au-delà ce n'est plus une traduction, c'est un bavardage du modèle ;
+ *    mais au-delà ce n'est plus une traduction, c'est un bavardage du modèle.
+ *    Un texte trop long est TRONQUÉ, sauf quand `refuseLonger` le dit : un
+ *    intitulé de 250 caractères n'en est plus un, mais un descriptif de trois
+ *    pages est un vrai texte, et en traduire le début en silence publierait une
+ *    page amputée que personne n'aurait vue l'être ;
  *  • `multiline` dit si les retours à la ligne sont du texte ou du bruit : un
  *    intitulé collé depuis un traitement de texte n'en garde aucun, un résumé
  *    de trois phrases peut en avoir ;
- *  • `cost` estime la sortie par langue, pour ne pas demander au guichet un
- *    budget de jetons sans rapport avec ce qu'on attend ;
+ *  • `cost` est le PLANCHER de la sortie estimée par langue ; au-delà, c'est
+ *    la longueur réelle du texte qui compte (`SOURCE_CHARS_PER_OUTPUT_TOKEN`) —
+ *    un descriptif de trois lignes et un de trois pages ne se paient pas pareil ;
  *  • `rule` est la phrase du prompt qui dit dans quel REGISTRE écrire. C'est
  *    tout l'écart entre un titre et un résumé.
  */
@@ -122,7 +138,86 @@ export const FIELD_SPECS = {
       "et la structure ; NE TRADUIS PAS les adresses postales, les numéros de téléphone, " +
       "les adresses électroniques ni les noms d'organismes — recopie-les à l'identique ;",
   },
-} as const;
+  /**
+   * ⚠️ Le seul champ qui REFUSE au lieu de tronquer, et le seul en Markdown.
+   * La borne est celle d'UNE langue sous le plafond de sortie du guichet :
+   * 3 500 caractères font ~1 750 jetons à l'estimation prudente, un appel par
+   * langue. Au-delà, l'agent l'apprend et traduit à la main.
+   */
+  user_description: {
+    maxSource: 3500,
+    maxTranslation: 4500,
+    multiline: true,
+    refuseLonger: true,
+    cost: 300,
+    rule:
+      "« user_description » est le DESCRIPTIF complet de la démarche, rédigé en MARKDOWN : " +
+      "conserve EXACTEMENT la syntaxe (titres « # », listes « - » et « 1. », « **gras** », " +
+      "« *italique* », citations « > », liens « [texte](adresse) » dont tu traduis le texte " +
+      "mais JAMAIS l'adresse) et les retours à la ligne ; NE TRADUIS PAS les adresses " +
+      "postales, les numéros de téléphone, les adresses électroniques ni les noms " +
+      "d'organismes — recopie-les à l'identique ;",
+  },
+  note: {
+    maxSource: 600,
+    maxTranslation: 800,
+    multiline: true,
+    cost: 160,
+    rule:
+      "« note » est une PRÉCISION sur le public concerné, lue par l'usager : une ou deux " +
+      "phrases complètes, même ton que le français, sans rien ajouter ni retirer ;",
+  },
+  label: {
+    maxSource: 200,
+    maxTranslation: 300,
+    multiline: false,
+    cost: 60,
+    rule:
+      "« label » est l'INTITULÉ d'une pièce à fournir (« Justificatif de domicile ») : groupe " +
+      "nominal court, dans les termes de l'administration là où la langue est parlée, sans " +
+      "ponctuation finale ;",
+  },
+  description: {
+    maxSource: 300,
+    maxTranslation: 400,
+    multiline: false,
+    cost: 80,
+    rule:
+      "« description » est la PRÉCISION qui accompagne cette pièce (« De moins de trois " +
+      "mois ») : très courte, même registre, sans ponctuation finale si le français n'en a pas ;",
+  },
+  question: {
+    maxSource: 300,
+    maxTranslation: 400,
+    multiline: false,
+    cost: 80,
+    rule:
+      "« question » est une QUESTION que se pose un usager, formulée comme en français (même " +
+      "personne, même tutoiement ou vouvoiement), avec sa ponctuation interrogative ;",
+  },
+  answer: {
+    maxSource: 2000,
+    maxTranslation: 2600,
+    multiline: true,
+    cost: 300,
+    rule:
+      "« answer » est la RÉPONSE de la collectivité à cette question : phrases complètes, même " +
+      "longueur et même ton, retours à la ligne conservés ; NE TRADUIS PAS les adresses " +
+      "postales, les numéros de téléphone, les adresses électroniques ni les noms " +
+      "d'organismes — recopie-les à l'identique ;",
+  },
+} as const satisfies Record<string, FieldSpec>;
+
+/** La forme d'une entrée de `FIELD_SPECS` — voir son commentaire. */
+interface FieldSpec {
+  maxSource: number;
+  maxTranslation: number;
+  multiline: boolean;
+  /** Refuser un texte plus long que `maxSource` au lieu de le tronquer. */
+  refuseLonger?: boolean;
+  cost: number;
+  rule: string;
+}
 
 export type TranslatableField = keyof typeof FIELD_SPECS;
 
@@ -142,8 +237,12 @@ const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/
  */
 const LANGUAGE_CODE_RE = /^[a-z]{2,3}(-[a-z0-9]{2,8})*$/;
 
-/** Ce qu'on traduit : une démarche, une catégorie, ou un bloc de page d'accueil. */
-export type LabelKind = "procedure" | "category" | "portal_section";
+/**
+ * Ce qu'on traduit : une démarche, une catégorie, un bloc de page d'accueil, ou
+ * une entrée de ce que la collectivité écrit pour ses usagers (la note sur le
+ * public, une pièce annoncée, une question de la FAQ).
+ */
+export type LabelKind = "procedure" | "category" | "portal_section" | "user_communication";
 
 /**
  * Quelles clés chaque type de ligne peut porter.
@@ -154,9 +253,14 @@ export type LabelKind = "procedure" | "category" | "portal_section";
  * ici, pas dans l'écran appelant.
  */
 export const KIND_FIELDS: Record<LabelKind, readonly TranslatableField[]> = {
-  procedure: ["name", "short_description"],
+  // `user_description` avec les deux autres : c'est une colonne de la même
+  // démarche, dans la même `procedures.translations`.
+  procedure: ["name", "short_description", "user_description"],
   category: ["name"],
   portal_section: ["title", "subtitle", "placeholder", "body", "alt"],
+  // Les textes du JSON `user_communication` : chaque écran n'en envoie que ceux
+  // d'UNE entrée (la note, une pièce, une question), jamais tout le bloc.
+  user_communication: ["note", "label", "description", "question", "answer"],
 };
 
 export interface TranslationTarget {
@@ -232,6 +336,11 @@ function sanitizeField(key: TranslatableField, value: unknown, maxChars: number)
 
 const ALLOWED_KEYS = new Set(["organization_id", "kind", "fields", "targets"]);
 
+/** « 3 500 » — le séparateur de milliers de l'écran qui affichera le refus. */
+function formatCount(value: number): string {
+  return String(value).replace(/\B(?=(\d{3})+(?!\d))/g, "\u202f");
+}
+
 /** Corps de la requête (contenu inconnu) → demande exploitable, ou refus motivé. */
 export function parseTranslatePayload(raw: unknown): ParseResult {
   if (!isRecord(raw)) return fail("Corps JSON attendu.");
@@ -273,7 +382,18 @@ export function parseTranslatePayload(raw: unknown): ParseResult {
     // Un champ envoyé deux fois : le premier fait foi, aucun refus à la clé —
     // la demande reste exécutable, et la seconde valeur n'apporte rien.
     if (seenFields.has(field)) continue;
-    const value = sanitizeField(field, entry.value, FIELD_SPECS[field].maxSource);
+    const spec: FieldSpec = FIELD_SPECS[field];
+    if (spec.refuseLonger) {
+      // Mesuré APRÈS nettoyage : ce sont les caractères qui partiraient au modèle.
+      const length = sanitizeField(field, entry.value, Number.POSITIVE_INFINITY).length;
+      if (length > spec.maxSource) {
+        return fail(
+          `Texte trop long pour la traduction automatique (${formatCount(length)} caractères, ` +
+            `${formatCount(spec.maxSource)} au plus) : traduisez-le à la main, ou raccourcissez-le.`,
+        );
+      }
+    }
+    const value = sanitizeField(field, entry.value, spec.maxSource);
     if (value === "") continue;
     seenFields.add(field);
     fields.push({ key: field, value });
@@ -347,9 +467,20 @@ export const GUICHET_MAX_OUTPUT = 2000;
 /** Ce que coûte le prompt lui-même, hors traductions. */
 const PROMPT_OVERHEAD = 80;
 
-/** Ce qu'une langue coûte en sortie, pour les textes demandés. */
-function perLanguageCost(fields: readonly TranslateField[]): number {
-  return fields.reduce((sum, field) => sum + FIELD_SPECS[field.key].cost, 0);
+/**
+ * Ce qu'une langue coûte en sortie, pour les textes demandés : le plancher du
+ * champ, ou la longueur réelle du texte quand elle pèse davantage.
+ */
+export function perLanguageCost(fields: readonly TranslateField[]): number {
+  return fields.reduce(
+    (sum, field) =>
+      sum +
+      Math.max(
+        FIELD_SPECS[field.key].cost,
+        Math.ceil(field.value.length / SOURCE_CHARS_PER_OUTPUT_TOKEN),
+      ),
+    0,
+  );
 }
 
 /**
@@ -412,6 +543,9 @@ export function buildTranslationPrompt(request: TranslateRequest): TranslationPr
     ? "d'une catégorie de démarches administratives"
     : request.kind === "portal_section"
     ? "d'un bloc de la page d'accueil du site de démarches en ligne d'une collectivité"
+    : request.kind === "user_communication"
+    ? "que la collectivité publie sur la page d'une démarche administrative, pour " +
+      "l'usager qui s'apprête à la déposer"
     : "d'une démarche administrative";
 
   const shape = `{"${request.targets[0]?.code ?? "en"}": {` +

@@ -1072,6 +1072,47 @@ export type Database = {
           },
         ]
       }
+      portal_contents: {
+        Row: {
+          created_at: string
+          draft: Json
+          id: string
+          organization_id: string
+          published: Json | null
+          published_at: string | null
+          slug: string
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          draft: Json
+          id?: string
+          organization_id: string
+          published?: Json | null
+          published_at?: string | null
+          slug: string
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          draft?: Json
+          id?: string
+          organization_id?: string
+          published?: Json | null
+          published_at?: string | null
+          slug?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "portal_contents_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       portal_pages: {
         Row: {
           created_at: string

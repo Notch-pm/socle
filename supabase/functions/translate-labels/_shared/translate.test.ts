@@ -6,6 +6,8 @@ import {
   MAX_TARGETS,
   parseTranslatePayload,
   parseTranslationAnswer,
+  perLanguageCost,
+  SOURCE_CHARS_PER_OUTPUT_TOKEN,
   targetBatches,
   GUICHET_MAX_OUTPUT,
   sanitizeLine,
@@ -506,5 +508,131 @@ describe("targetBatches", () => {
   it("ne rend jamais un lot vide, même pour un texte hors normes", () => {
     expect(targetBatches(targets(1), [{ key: "body", value: "x" }])).toHaveLength(1);
     expect(targetBatches([], [{ key: "name", value: "x" }])).toEqual([]);
+  });
+});
+
+/**
+ * Ce que la collectivité écrit pour ses usagers (2026-09-18) : le descriptif
+ * complet (une colonne, donc `kind: "procedure"`) et les textes du JSON
+ * `user_communication`, envoyés UNE ENTRÉE À LA FOIS (`kind: "user_communication"`).
+ */
+describe("communication usager", () => {
+  const MARKDOWN = "## Pour qui ?\n\n- Les **résidents**\n- Voir [le site](https://exemple.fr)";
+
+  it("le descriptif usager se traduit avec les autres textes d'une démarche", () => {
+    const parsed = parseTranslatePayload(
+      payload({ fields: [{ key: "user_description", value: MARKDOWN }] }),
+    );
+    expect(parsed.ok).toBe(true);
+    if (!parsed.ok) return;
+    // Les retours à la ligne sont la structure du Markdown : ils survivent.
+    expect(parsed.value.fields).toEqual([{ key: "user_description", value: MARKDOWN }]);
+  });
+
+  it("⚠️ un descriptif trop long est REFUSÉ, jamais tronqué en silence", () => {
+    const max = FIELD_SPECS.user_description.maxSource;
+    const tooLong = parseTranslatePayload(
+      payload({ fields: [{ key: "user_description", value: "x".repeat(max + 1) }] }),
+    );
+    expect(tooLong.ok).toBe(false);
+    if (tooLong.ok) return;
+    // Le message est celui que l'agent lira : il dit la mesure et quoi faire.
+    expect(tooLong.message).toContain("trop long");
+    expect(tooLong.message).toContain("3 500");
+    expect(tooLong.message).toContain("à la main");
+
+    const atMax = parseTranslatePayload(
+      payload({ fields: [{ key: "user_description", value: "x".repeat(max) }] }),
+    );
+    expect(atMax.ok).toBe(true);
+  });
+
+  it("les autres champs gardent leur règle : un intitulé trop long est tronqué", () => {
+    const parsed = parseTranslatePayload(
+      payload({ fields: [{ key: "name", value: "x".repeat(FIELD_SPECS.name.maxSource + 50) }] }),
+    );
+    expect(parsed.ok).toBe(true);
+  });
+
+  it("accepte les textes d'une entrée, et le kind les borne", () => {
+    for (const fields of [
+      [{ key: "note", value: "Réservée aux résidents." }],
+      [{ key: "label", value: "Justificatif de domicile" }, { key: "description", value: "De moins de 3 mois" }],
+      [{ key: "question", value: "Où déposer ?" }, { key: "answer", value: "En ligne.\n\nOu en mairie." }],
+    ]) {
+      const parsed = parseTranslatePayload(payload({ kind: "user_communication", fields }));
+      expect(parsed.ok, JSON.stringify(fields)).toBe(true);
+    }
+    // Un libellé de démarche n'est pas un texte de cette page, et réciproquement.
+    expect(
+      parseTranslatePayload(payload({ kind: "user_communication", fields: [{ key: "name", value: LABEL }] })).ok,
+    ).toBe(false);
+    expect(
+      parseTranslatePayload(payload({ kind: "procedure", fields: [{ key: "question", value: "Q ?" }] })).ok,
+    ).toBe(false);
+  });
+
+  it("dit au modèle de garder le Markdown, et de ne jamais traduire une adresse de lien", () => {
+    const { system } = buildTranslationPrompt({
+      organizationId: ORG,
+      kind: "procedure",
+      fields: [{ key: "user_description", value: MARKDOWN }],
+      targets: [{ code: "en", label: "Anglais" }],
+    });
+    expect(system).toContain("MARKDOWN");
+    expect(system).toContain("JAMAIS l'adresse");
+  });
+
+  it("dit au modèle d'où viennent les textes d'une entrée", () => {
+    const { system } = buildTranslationPrompt({
+      organizationId: ORG,
+      kind: "user_communication",
+      fields: [{ key: "question", value: "Où déposer ?" }, { key: "answer", value: "En ligne." }],
+      targets: [{ code: "en", label: "Anglais" }],
+    });
+    expect(system).toContain("page d'une démarche");
+    expect(system).toContain("« question »");
+    expect(system).toContain("« answer »");
+    // Seuls les registres demandés : la note n'y est pas.
+    expect(system).not.toContain("« note »");
+  });
+});
+
+/**
+ * Le budget de sortie suit la LONGUEUR réelle des textes : un descriptif de
+ * trois pages ne tient pas dans le budget d'un intitulé.
+ */
+describe("perLanguageCost — le coût suit la longueur", () => {
+  const targets = (n: number) =>
+    Array.from({ length: n }, (_, i) => ({ code: `l${i}`.slice(0, 3), label: "L" }));
+
+  it("un texte court coûte son plancher", () => {
+    expect(perLanguageCost([{ key: "name", value: LABEL }])).toBe(FIELD_SPECS.name.cost);
+  });
+
+  it("un texte long coûte sa longueur", () => {
+    const value = "x".repeat(3000);
+    expect(perLanguageCost([{ key: "user_description", value }])).toBe(
+      3000 / SOURCE_CHARS_PER_OUTPUT_TOKEN,
+    );
+  });
+
+  it("⚠️ un descriptif au maximum tient sous le plafond du guichet, une langue par appel", () => {
+    const fields: TranslateField[] = [
+      { key: "user_description", value: "x".repeat(FIELD_SPECS.user_description.maxSource) },
+    ];
+    const batches = targetBatches(targets(4), fields);
+    expect(batches).toHaveLength(4);
+    for (const batch of batches) {
+      const prompt = buildTranslationPrompt({ organizationId: ORG, kind: "procedure", fields, targets: batch });
+      // Le budget réservé couvre bien l'estimation : rien n'est tronqué d'avance.
+      expect(prompt.maxOutput).toBeGreaterThanOrEqual(perLanguageCost(fields));
+      expect(prompt.maxOutput).toBeLessThanOrEqual(GUICHET_MAX_OUTPUT);
+    }
+  });
+
+  it("un descriptif court se traduit dans plusieurs langues d'un seul appel", () => {
+    const batches = targetBatches(targets(4), [{ key: "user_description", value: DESC }]);
+    expect(batches).toHaveLength(1);
   });
 });

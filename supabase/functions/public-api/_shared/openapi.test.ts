@@ -25,6 +25,7 @@ describe("buildOpenApiDocument", () => {
         "/v1/portal/procedures",
         "/v1/portal/procedures/{id}",
         "/v1/portal/page",
+        "/v1/portal/content",
         "/v1/organizations",
         "/v1/organizations/{id}",
         "/v1/organizations/{id}/smtp",
@@ -212,14 +213,46 @@ describe("contrat — ce que la collectivité écrit pour ses usagers", () => {
 
   it("le descriptif usager est annoncé comme du Markdown", () => {
     expect(schemas.Procedure.properties.user_description.description).toContain("Markdown");
+    // Sur le portail aussi : c'est là qu'on le rend.
+    expect(schemas.PortalProcedure.properties.user_description.description).toContain("Markdown");
+  });
+});
+
+describe("contrat — traduction de la communication usager (1.26.0)", () => {
+  const doc = buildOpenApiDocument("https://example.supabase.co/functions/v1/public-api") as any;
+  const schemas = doc.components.schemas;
+  const ref = { $ref: "#/components/schemas/UserCommunicationTranslations" };
+
+  it("le descriptif usager se traduit dans `translations`, comme le libellé", () => {
+    expect(schemas.Translations.additionalProperties.properties).toHaveProperty("user_description");
+  });
+
+  it("⚠️ la note, chaque pièce et chaque question portent LEURS traductions", () => {
+    expect(schemas.UserCommunication.properties.audience.properties.translations).toMatchObject(ref);
+    expect(schemas.UserCommunicationPiece.properties.translations).toMatchObject(ref);
+    expect(schemas.UserCommunicationFaqItem.properties.translations).toMatchObject(ref);
+  });
+
+  it("⚠️ le schéma dit les trois règles, et qu'une entrée ancienne n'en porte pas", () => {
+    const description = schemas.UserCommunicationTranslations.description;
+    expect(description).toContain("jamais");
+    expect(description).toContain("champ par champ");
+    expect(description).toContain("`{}`");
+    expect(Object.keys(schemas.UserCommunicationTranslations.additionalProperties.properties)).toEqual([
+      "note",
+      "label",
+      "description",
+      "question",
+      "answer",
+    ]);
   });
 });
 
 describe("contrat — documents et courriers", () => {
   const doc = buildOpenApiDocument("https://example.supabase.co/functions/v1/public-api") as any;
 
-  it("annonce la version 1.24.0 du contrat", () => {
-    expect(doc.info.version).toBe("1.24.0");
+  it("annonce la version 1.26.0 du contrat", () => {
+    expect(doc.info.version).toBe("1.26.0");
   });
 
   it("le thème voyage avec le TENANT : il vaut pour toutes les pages", () => {
@@ -280,7 +313,7 @@ describe("contrat — documents et courriers", () => {
       .toEqual(["title", "subtitle", "placeholder", "body", "alt"]);
     expect(section.description).toContain("champ par champ");
     expect(Object.keys(doc.components.schemas.Translations.additionalProperties.properties))
-      .toEqual(["name", "short_description"]);
+      .toEqual(["name", "short_description", "user_description"]);
 
     for (const kind of ["Recherche", "Demarches", "Actus", "Compte", "Texte", "TexteImage", "Footer"]) {
       const schema = doc.components.schemas[`Portal${kind}Section`];
@@ -291,12 +324,13 @@ describe("contrat — documents et courriers", () => {
     }
   });
 
-  it("décrit les DEUX textes traduisibles, et le repli champ par champ", () => {
+  it("décrit les TROIS textes traduisibles, et le repli champ par champ", () => {
     // Ajout du 2026-09-07 : `short_description` rejoint `name` sous chaque
-    // langue. Un consommateur qui replierait la langue entière au lieu du champ
-    // masquerait un libellé traduit sous prétexte que le descriptif manque.
+    // langue ; le 2026-09-18, `user_description` les rejoint (1.26.0). Un
+    // consommateur qui replierait la langue entière au lieu du champ masquerait
+    // un libellé traduit sous prétexte que le descriptif manque.
     const props = doc.components.schemas.Translations.additionalProperties.properties;
-    expect(Object.keys(props)).toEqual(["name", "short_description"]);
+    expect(Object.keys(props)).toEqual(["name", "short_description", "user_description"]);
     expect(doc.components.schemas.Translations.description).toContain("champ par champ");
   });
 
@@ -638,5 +672,33 @@ describe("contrat — accès libre ou usagers authentifiés", () => {
     // Un champ facultatif obligerait chaque portail à choisir un défaut, et
     // deux portails choisiraient deux défauts différents.
     expect(doc.components.schemas.PortalProcedure.required).toContain("access_mode");
+  });
+});
+
+describe("contrat — contenus du site et mention d'accessibilité (1.25.0)", () => {
+  const doc = buildOpenApiDocument("https://example.supabase.co/functions/v1/public-api") as any;
+
+  it("sert la déclaration d'accessibilité, bornée au tenant, en Markdown", () => {
+    const route = doc.paths["/v1/portal/content"].get;
+    const params = route.parameters.map((p: { name: string; required: boolean }) => [p.name, p.required]);
+    expect(params).toEqual([
+      ["tenant_id", true],
+      ["slug", true],
+    ]);
+    expect(route.responses["200"].content["application/json"].schema).toEqual({
+      $ref: "#/components/schemas/PortalContent",
+    });
+    // Un contenu vide n'est pas publié : le contrat le dit, pour qu'aucun
+    // consommateur ne rende une page blanche.
+    expect(route.description).toContain("le texte publié est vide");
+    expect(doc.components.schemas.PortalContent.properties.format.enum).toEqual(["markdown"]);
+  });
+
+  it("⚠️ le lien de la mention est RÉSOLU par le Socle, et obligatoire dans la réponse", () => {
+    const accessibility = doc.components.schemas.PortalTheme.properties.accessibility;
+    expect(accessibility.required).toContain("declaration_link");
+    expect(accessibility.properties.declaration_link.description).toContain("Résolu par le Socle");
+    // Masquer la mention la vide : le consommateur n'a aucun commutateur à lire.
+    expect(accessibility.properties.declaration.description).toContain("ou l'a masquée");
   });
 });

@@ -89,12 +89,13 @@ describe("ThemePanel — accessibilité", () => {
     expect(onChange).not.toHaveBeenCalled();
   });
 
-  it("la déclaration RGAA se saisit et remonte telle quelle", () => {
-    const { onChange } = renderPanel();
-    fireEvent.change(screen.getByLabelText(/Déclaration d'accessibilité/), {
-      target: { value: "Conformité partielle" },
-    });
-    expect(onChange.mock.calls[0][0].accessibility.declaration).toBe("Conformité partielle");
+  it("⚠️ la mention RGAA n'est plus ici, et le panneau dit où elle est partie", () => {
+    // Elle se règle dans « Composition » depuis le 2026-09-18 : c'est un
+    // contenu, pas une apparence. Un champ en double ferait deux endroits pour
+    // un seul texte.
+    renderPanel();
+    expect(screen.queryByRole("textbox")).toBeNull();
+    expect(screen.getByText(/se règle dans « Composition »/)).toBeTruthy();
   });
 });
 

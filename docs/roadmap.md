@@ -24,6 +24,27 @@ existe réellement aujourd'hui : [architecture.md](./architecture.md),
 
 ### Envisagé
 
+- **Retirer `consent_email` et `consent_sms`** — ⚠️ **rupture de contrat, bloquée par Clara.**
+  Les deux colonnes sont marquées OBSOLÈTES depuis le 2026-09-13 : ce qu'on demande à l'usager,
+  ce sont désormais les consentements RGPD (`consent_traitement`, `consent_partage`, historique
+  `contact_consents`). Elles n'ont pas été supprimées parce que **Clara les écrit et les affiche
+  encore** (`src/pages/Contacts.tsx` : formulaire, et « Accepte les mails : oui / non » sur la
+  fiche ; `src/services/socleContactService.ts` les type en entrée comme en sortie). Les retirer
+  aujourd'hui casserait sa fiche contact.
+  - **Ordre à tenir** : (1) Clara bascule son bloc « consentements » sur les nouveaux champs —
+    en lecture seule, comme Iris, le recueil se faisant au dépôt ; (2) une migration Socle
+    supprime les deux colonnes, le DTO et le schéma OpenAPI ; (3) une entrée **`rupture`** est
+    ajoutée à [api-changelog.md](./api-changelog.md) et la majeure du contrat `contacts-api`
+    passe à **2.0.0**.
+  - **À ne pas confondre avec une simple suppression de colonnes** : `consent_email` porte une
+    sémantique que rien ne reprend — « accepte de recevoir des courriels ». Le consentement
+    `partage` ne dit pas la même chose. Si des collectivités s'en servent réellement pour
+    filtrer des envois, il faut d'abord savoir quoi en faire (le migrer vers
+    `preferred_channel` ? vers un consentement `communication` du nouveau catalogue ?) —
+    sinon la « rupture » perdra une donnée métier au lieu de nettoyer un doublon.
+  - Consommateurs à prévenir : Clara, Iris (qui ne les lit pas — sa whitelist `socle-proxy` les
+    écarte explicitement), Nora.
+
 - **Pagination avec total** (`X-Total-Count` ou enveloppe `{items, total}`) et/ou curseur — un
   consommateur qui liste tous les contacts pagine aujourd'hui à l'aveugle (page pleine ⇒ page
   suivante).
@@ -250,22 +271,20 @@ suppose la précédente.
    l'ajout étant purement additif (écrire un `version: 2` que le parse actuel refuse ferait
    retomber la page entière sur `defaultPortalPage()`) —, les **~100 chaînes propres au portail**
    (dictionnaire statique à la manière d'Ariane, jeu de langues couvertes déclaré et repli
-   français **par clé**), et le **descriptif usager** (`user_description`) : il est **saisi
-   depuis le 2026-09-18** (étape « Communication usager », en Markdown), il reste à le traduire
-   — il rejoindra `translations` en clé voisine, sans reprise, et son `TranslationFields` vivra
-   dans cette étape avec `fields = ["user_description"]` seulement (un écran n'efface que les
-   champs qu'il affiche). ⚠️ Les autres textes de cette étape — note de public, pièces
-   annoncées, FAQ usager — vivent dans un **JSONB** (`user_communication`) et non dans des
-   colonnes : ils ne peuvent pas rejoindre `translations` tel quel, et demandent leur propre
-   décision (une clé `translations` par entrée, comme les sections du portail ?). Rien n'est
-   engagé. Enfin, les langues de France sans code ISO (gallo,
+   français **par clé**). **Fait le 2026-09-18** (contrat 1.26.0) : toute l'étape « Communication
+   usager » se traduit — le **descriptif usager** a rejoint `translations` en clé voisine, sans
+   reprise, et la note de public, les pièces annoncées et la FAQ usager portent leur traduction
+   **sur l'entrée**, comme les sections du portail. Reste à le **brancher dans Nora** : le
+   descriptif traduit y est déjà servi, pas les entrées (repli champ par champ, `lang="fr"`
+   texte par texte). Enfin, les langues de France sans code ISO (gallo,
    poitevin-saintongeais, francique lorrain) attendent une convention de nommage — voir l'en-tête
    de `src/features/languages/languages.ts`.
 2. **Les autres templates.** Gabarits de page et variantes de mise en page au-delà de la
-   composition libre ; d'autres pages que l'accueil (`portal_pages.slug` est prêt : « Contact »,
-   « Mentions légales », « Accessibilité » — obligatoires pour un site public) ; le bloc
-   « Actualités » (grisé) quand une source d'actualités existera au Socle ; la vue « Contenus »
-   (grisée) qui va avec.
+   composition libre ; d'autres pages que l'accueil (« Contact », « Mentions légales » —
+   obligatoires pour un site public ; « Accessibilité » est livrée le 2026-09-18 comme **contenu**,
+   table `portal_contents`, qui accueillera les deux autres de la même façon) ; le bloc
+   « Actualités » (grisé) quand une source d'actualités existera au Socle, et son entrée dans la
+   vue « Contenus », ouverte depuis le 2026-09-18.
 3. **Démarches hors compte.** La demande part déjà (2026-09-06) ; il lui manque son après :
    confirmation par courriel et **lien de suivi signé** à durée limitée, sans mot de passe. Il
    faut pour cela que le **statut d'une demande soit consultable** depuis le portail — Iris le
@@ -418,6 +437,9 @@ par défaut**. C'est le point qui empêche d'annoncer un niveau au catalogue.
   « Les autres templates » (2). Tant qu'elles n'existent pas, la déclaration n'est qu'une phrase au
   pied de page, alors que l'article 47 demande **une page**, une **mention d'état** et un **schéma
   pluriannuel**.
+  ✅ *2026-09-18* : **la page « Accessibilité » existe** — rédigée dans l'onglet « Contenus »
+  (modèle DINUM fourni, schéma pluriannuel compris), servie par Nora à `/accessibilite`, reliée
+  par la mention du pied de page. Restent « Mentions légales » et « Contact ».
 - **Rien n'oblige la collectivité à remplir sa déclaration.** `accessibility.declaration` vide =
   rien d'affiché, par décision (le portail n'invente pas une déclaration que personne n'a faite).
   Conséquence observée : **`sna27.edilumen.fr` est en ligne sans aucune mention d'accessibilité**,

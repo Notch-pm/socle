@@ -40,7 +40,10 @@ import { CANVAS_DROP_ID, PortalCanvas } from "@/features/portal/editor/PortalCan
 import { SectionInspector } from "@/features/portal/editor/SectionInspector";
 import { SectionPalette } from "@/features/portal/editor/SectionPalette";
 import { ThemePanel } from "@/features/portal/editor/ThemePanel";
+import { AccessibilityMentionInspector } from "@/features/portal/editor/AccessibilityMention";
+import { ContentsPanel } from "@/features/portal/editor/ContentsPanel";
 import type { PortalTheme } from "@/features/portal/portalTheme";
+import { hasContentBody, type PortalContent } from "@/features/portal/portalContent";
 import type { ThemeBranding } from "@/features/portal/themeStyle";
 
 export interface PortalEditorProps {
@@ -79,6 +82,12 @@ export interface PortalEditorProps {
   /** Le thème courant — possédé par le parent, comme la page. */
   theme: PortalTheme;
   onThemeChange: (theme: PortalTheme) => void;
+  /**
+   * La déclaration d'accessibilité — un contenu du site (onglet « Contenus »),
+   * possédé par le parent comme la page et le thème.
+   */
+  statement: PortalContent;
+  onStatementChange: (statement: PortalContent) => void;
   catalogue: PortalCatalogueEntry[];
   contact: ContactSource;
   statusLine: string;
@@ -114,10 +123,13 @@ const collisionDetection: CollisionDetection = (args) => {
 };
 
 /**
- * Shell plein écran de l'éditeur CMS du portail usagers — vue « Composition ».
- * Purement présentationnel : aucun accès réseau, l'état de composition
- * (`page`) est possédé par le parent, seule l'interface locale (sélection,
- * appareil, palette, aperçu, glisser en cours) vit ici.
+ * Shell plein écran de l'éditeur CMS du portail usagers — trois vues :
+ * « Composition » (la page d'accueil, et la mention d'accessibilité au pied de
+ * toutes les pages), « Contenus » (les pages de texte : la déclaration
+ * d'accessibilité) et « Thème ». Purement présentationnel : aucun accès
+ * réseau, page, thème et contenus sont possédés par le parent, seule
+ * l'interface locale (sélection, appareil, palette, aperçu, glisser en cours)
+ * vit ici.
  */
 export function PortalEditor({
   organizationName,
@@ -130,6 +142,8 @@ export function PortalEditor({
   onChange,
   theme,
   onThemeChange,
+  statement,
+  onStatementChange,
   catalogue,
   contact,
   statusLine,
@@ -145,6 +159,10 @@ export function PortalEditor({
   // ne part jamais en base (voir `themeStyle.ts`).
   const [largeText, setLargeText] = React.useState(false);
   const [selectedId, setSelectedId] = React.useState<string | null>(null);
+  // La mention d'accessibilité se sélectionne comme une section, mais n'en est
+  // pas une : un état à part, pour qu'aucun geste de section (Suppr, flèches,
+  // glisser) ne puisse jamais l'atteindre. Les deux sélections s'excluent.
+  const [mentionSelected, setMentionSelected] = React.useState(false);
   const [paletteOpen, setPaletteOpen] = React.useState(true);
   const [previewing, setPreviewing] = React.useState(false);
   const [drag, setDrag] = React.useState<DragState | null>(null);
@@ -153,8 +171,26 @@ export function PortalEditor({
   // sur un bloc (sélection) et sur un bouton de la palette (ajout).
   const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 5 } }));
   const themeView = view === "theme";
+  const contentsView = view === "contenus";
   const sections = page.sections;
   const selected = sections.find((s) => s.id === selectedId) ?? null;
+
+  function selectSection(id: string | null) {
+    setSelectedId(id);
+    setMentionSelected(false);
+  }
+
+  function selectMention() {
+    setSelectedId(null);
+    setMentionSelected(true);
+  }
+
+  /** Depuis « Contenus » : retour à la composition, mention sélectionnée. */
+  function editMention() {
+    setView("composition");
+    setPreviewing(false);
+    selectMention();
+  }
 
   function setSections(next: PortalSection[]) {
     onChange({ ...page, sections: next });
@@ -219,7 +255,7 @@ export function PortalEditor({
       const section = sectionFromPaletteKind(data.kind, contact);
       // Lâché hors de toute zone : en fin de page, comme un clic.
       setSections(insertSectionAt(sections, section, index ?? appendIndex(sections, section)));
-      setSelectedId(section.id);
+      selectSection(section.id);
       return;
     }
     if (index === null) return;
@@ -242,15 +278,17 @@ export function PortalEditor({
     sections,
     device,
     catalogue,
-    onSelect: setSelectedId,
+    onSelect: selectSection,
     onShift: (id: string, direction: -1 | 1) => setSections(shiftSection(sections, id, direction)),
     onRemove: handleRemove,
     onOpenPalette: () => setPaletteOpen(true),
+    statementWritten: hasContentBody(statement),
+    onSelectMention: selectMention,
   };
 
   function handleAddFromPalette(section: PortalSection) {
     setSections(insertSectionAt(sections, section, appendIndex(sections, section)));
-    setSelectedId(section.id);
+    selectSection(section.id);
   }
 
   return (
@@ -278,25 +316,29 @@ export function PortalEditor({
             onChange={setView}
             options={[
               { value: "composition", label: "Composition" },
-              { value: "contenus", label: "Contenus", disabled: true, title: "Bientôt disponible" },
+              { value: "contenus", label: "Contenus" },
               { value: "theme", label: "Thème" },
             ]}
           />
         </div>
 
         <div className="flex shrink-0 items-center gap-2">
-          <SegmentedControl<Device>
-            aria-label="Appareil"
-            size="sm"
-            value={device}
-            onChange={setDevice}
-            options={DEVICE_OPTIONS}
-          />
+          {/* Un texte long ne se prévisualise pas par appareil : la vue
+              « Contenus » a son propre aperçu, dans le champ. */}
+          {contentsView ? null : (
+            <SegmentedControl<Device>
+              aria-label="Appareil"
+              size="sm"
+              value={device}
+              onChange={setDevice}
+              options={DEVICE_OPTIONS}
+            />
+          )}
           <Button type="button" variant="outline" size="sm" onClick={onDiscard} disabled={busy}>
             <RotateCcw />
             Annuler
           </Button>
-          {themeView ? null : (
+          {themeView || contentsView ? null : (
             <Button
               type="button"
               variant={previewing ? "primary" : "outline"}
@@ -315,7 +357,15 @@ export function PortalEditor({
       </header>
 
       <div className="relative flex min-h-0 flex-1">
-        {themeView ? (
+        {contentsView ? (
+          <ContentsPanel
+            statement={statement}
+            onStatementChange={onStatementChange}
+            templateSource={{ name: organizationName, email: contact.email, address: contact.address }}
+            accessibility={theme.accessibility}
+            onEditMention={editMention}
+          />
+        ) : themeView ? (
           <>
             <ThemePanel
               theme={theme}
@@ -333,6 +383,7 @@ export function PortalEditor({
               {...canvasProps}
               previewing
               selectedId={null}
+              mentionSelected={false}
               paletteOpen={false}
               dropIndex={null}
               dropLabel={null}
@@ -350,6 +401,7 @@ export function PortalEditor({
           <PortalCanvas
             {...canvasProps}
             selectedId={selectedId}
+            mentionSelected={mentionSelected}
             paletteOpen={paletteOpen}
             previewing={previewing}
             dropIndex={drag?.dropIndex ?? null}
@@ -365,6 +417,16 @@ export function PortalEditor({
             />
           )}
 
+          {!previewing && mentionSelected ? (
+            <AccessibilityMentionInspector
+              accessibility={theme.accessibility}
+              statementWritten={hasContentBody(statement)}
+              onChange={(accessibility) => onThemeChange({ ...theme, accessibility })}
+              onEditStatement={() => setView("contenus")}
+              onClose={() => setMentionSelected(false)}
+            />
+          ) : null}
+
           {previewing || !selected ? null : (
             <SectionInspector
               section={selected}
@@ -376,7 +438,7 @@ export function PortalEditor({
               organizationId={organizationId}
               onChange={(next) => setSections(replaceSection(sections, next))}
               onRemove={() => handleRemove(selected.id)}
-              onClose={() => setSelectedId(null)}
+              onClose={() => selectSection(null)}
             />
           )}
 

@@ -1,8 +1,46 @@
 // @vitest-environment jsdom
-import { describe, it, expect, vi } from "vitest";
-import { render, screen, fireEvent, within } from "@testing-library/react";
+import { describe, it, expect, vi, beforeEach } from "vitest";
+import { render, screen, fireEvent, within, act } from "@testing-library/react";
 import { UserCommunicationStep } from "./UserCommunicationStep";
 import type { Procedure } from "@/features/procedures/useProcedures";
+import type {
+  TranslateLabelsInput,
+  TranslateLabelsResult,
+} from "@/features/languages/useTranslateLabels";
+
+// Hooks Supabase/TanStack Query court-circuités (même motif que les autres
+// tests d'étapes). Par défaut la collectivité est MONOLINGUE : les blocs de
+// traduction ne s'affichent pas, et l'étape se teste comme avant. Les tests de
+// traduction activent d'autres langues.
+const h = vi.hoisted(() => ({
+  languages: ["fr"] as string[],
+  // Les appels à la traduction automatique restent EN VOL jusqu'à ce que le
+  // test les résolve : c'est ce qui permet de retirer une ligne pendant l'appel.
+  calls: [] as {
+    input: TranslateLabelsInput;
+    opts?: { onSuccess?: (answer: TranslateLabelsResult) => void };
+  }[],
+}));
+
+vi.mock("@/features/languages/useOrganizationLanguages", () => ({
+  useOrganizationLanguages: () => ({ data: h.languages }),
+}));
+vi.mock("@/features/languages/useTranslateLabels", () => ({
+  useTranslateLabels: () => ({
+    mutate: (
+      input: TranslateLabelsInput,
+      opts?: { onSuccess?: (answer: TranslateLabelsResult) => void },
+    ) => h.calls.push({ input, opts }),
+    isPending: false,
+    isError: false,
+    error: null,
+  }),
+}));
+
+beforeEach(() => {
+  h.languages = ["fr"];
+  h.calls = [];
+});
 
 /** Démarche minimale mais complète pour piloter le composant. */
 function makeProcedure(over: Partial<Procedure> = {}): Procedure {
@@ -96,10 +134,11 @@ describe("UserCommunicationStep — enregistrement", () => {
       userDescription: "Présentation.",
       config: {
         delays: { processingTimeValue: 10, processingTimeUnit: "jour_ouvre" },
-        audience: { note: "Habitants uniquement." },
+        audience: { note: "Habitants uniquement.", translations: {} },
         attachments: { items: [] },
         faq: { items: [] },
       },
+      translations: {},
     });
   });
 
@@ -125,11 +164,12 @@ describe("UserCommunicationStep — enregistrement", () => {
     fireEvent.change(screen.getByLabelText("Réponse"), { target: { value: "Trois semaines." } });
     submit();
 
+    // La clé de ligne de l'écran ne part pas avec : seul le contrat s'enregistre.
     expect(onSubmit.mock.calls[0][0].config.attachments.items).toEqual([
-      { label: "Justificatif de domicile", description: "De moins de 3 mois" },
+      { label: "Justificatif de domicile", description: "De moins de 3 mois", translations: {} },
     ]);
     expect(onSubmit.mock.calls[0][0].config.faq.items).toEqual([
-      { question: "Combien de temps ?", answer: "Trois semaines." },
+      { question: "Combien de temps ?", answer: "Trois semaines.", translations: {} },
     ]);
 
     fireEvent.click(screen.getByRole("button", { name: "Retirer cette pièce" }));
@@ -236,5 +276,213 @@ describe("UserCommunicationStep — les deux rappels sont en LECTURE SEULE", () 
   it("formulaire sans pièce : l'écran le dit", () => {
     renderStep(makeProcedure());
     expect(screen.getByText(/Le formulaire ne demande aucune pièce/)).toBeTruthy();
+  });
+});
+
+/** Les cases françaises d'une question — les cases traduites portent un `lang`. */
+const questions = () =>
+  screen.getAllByLabelText("Question").filter((el) => !el.hasAttribute("lang")) as HTMLInputElement[];
+
+/** La ligne d'une question : ses cases françaises, et ses traductions dessous. */
+const faqRow = (index: number) => questions()[index].parentElement as HTMLElement;
+
+describe("UserCommunicationStep — traductions", () => {
+  it("collectivité monolingue : aucun bloc de traduction", () => {
+    renderStep(
+      makeProcedure({
+        user_communication: {
+          faq: { items: [{ question: "Q", answer: "R" }] },
+        } as Procedure["user_communication"],
+      }),
+    );
+    expect(screen.queryByText("Traductions")).toBeNull();
+  });
+
+  it("un bloc sous chaque texte : descriptif, note, chaque pièce, chaque question", () => {
+    h.languages = ["fr", "en"];
+    renderStep(
+      makeProcedure({
+        user_communication: {
+          attachments: { items: [{ label: "CNI", description: "" }] },
+          faq: {
+            items: [
+              { question: "Q1", answer: "R1" },
+              { question: "Q2", answer: "R2" },
+            ],
+          },
+        } as Procedure["user_communication"],
+      }),
+    );
+    // Rien sous les délais : la durée est structurée, le portail la rend dans sa langue.
+    expect(screen.getAllByText("Traductions", { selector: "summary" })).toHaveLength(5);
+  });
+
+  it("⚠️ le descriptif va dans `translations`, sans toucher au libellé ni aux langues désactivées", () => {
+    h.languages = ["fr", "en"];
+    const { onSubmit, submit } = renderStep(
+      makeProcedure({
+        user_description: "Pour obtenir une copie.",
+        // L'occitan n'est plus activé : sa traduction doit survivre.
+        translations: {
+          en: { name: "Birth certificate", short_description: "Get a copy." },
+          oc: { user_description: "Per obténer una còpia." },
+        } as Procedure["translations"],
+      }),
+    );
+
+    fireEvent.change(document.getElementById("usager-description-translation-en")!, {
+      target: { value: "To get a copy." },
+    });
+    submit();
+
+    expect(onSubmit.mock.calls[0][0].translations).toEqual({
+      en: {
+        name: "Birth certificate",
+        short_description: "Get a copy.",
+        user_description: "To get a copy.",
+      },
+      oc: { user_description: "Per obténer una còpia." },
+    });
+  });
+
+  it("relit et ouvre d'emblée une traduction déjà faite", () => {
+    h.languages = ["fr", "en"];
+    renderStep(
+      makeProcedure({
+        user_communication: {
+          audience: { note: "Résidents.", translations: { en: { note: "Residents." } } },
+        } as Procedure["user_communication"],
+      }),
+    );
+    const cell = document.getElementById("usager-note-translation-en") as HTMLTextAreaElement;
+    expect(cell.value).toBe("Residents.");
+    expect(cell.closest("details")!.open).toBe(true);
+    // Le français en filigrane : c'est ce que lira le visiteur si la case reste vide.
+    expect(cell.placeholder).toBe("Résidents.");
+  });
+
+  it("la traduction de la note, d'une pièce et d'une question voyage avec son entrée", () => {
+    h.languages = ["fr", "en"];
+    const { onSubmit, submit } = renderStep(
+      makeProcedure({
+        user_communication: {
+          audience: { note: "Résidents." },
+          attachments: { items: [{ label: "CNI", description: "En cours de validité" }] },
+          faq: { items: [{ question: "Où ?", answer: "En ligne." }] },
+        } as Procedure["user_communication"],
+      }),
+    );
+
+    fireEvent.change(document.getElementById("usager-note-translation-en")!, {
+      target: { value: "Residents." },
+    });
+    const groups = screen.getAllByRole("group", { name: "Anglais" });
+    // Deux groupes « Anglais » à deux champs : la pièce, puis la question.
+    fireEvent.change(within(groups[0]).getByLabelText("Intitulé"), {
+      target: { value: "ID card" },
+    });
+    fireEvent.change(within(groups[1]).getByLabelText("Réponse"), {
+      target: { value: "Online." },
+    });
+    submit();
+
+    const config = onSubmit.mock.calls[0][0].config;
+    expect(config.audience.translations).toEqual({ en: { note: "Residents." } });
+    expect(config.attachments.items[0].translations).toEqual({ en: { label: "ID card" } });
+    expect(config.faq.items[0].translations).toEqual({ en: { answer: "Online." } });
+    // Et rien n'est parti dans la colonne : ces textes vivent dans le JSON.
+    expect(onSubmit.mock.calls[0][0].translations).toEqual({});
+  });
+
+  it("⚠️ une réponse de traduction retrouve SA question, même si l'on en retire une pendant l'appel", () => {
+    h.languages = ["fr", "en"];
+    const { onSubmit, submit } = renderStep(
+      makeProcedure({
+        user_communication: {
+          faq: {
+            items: [
+              { question: "Q1", answer: "R1" },
+              { question: "Q2", answer: "R2" },
+              { question: "Q3", answer: "R3" },
+            ],
+          },
+        } as Procedure["user_communication"],
+      }),
+    );
+
+    // On traduit la DEUXIÈME question…
+    fireEvent.click(
+      within(faqRow(1)).getByRole("button", { name: "Traduire automatiquement", hidden: true }),
+    );
+    expect(h.calls).toHaveLength(1);
+    expect(h.calls[0].input.kind).toBe("user_communication");
+    expect(h.calls[0].input.fields).toEqual([
+      { key: "question", value: "Q2" },
+      { key: "answer", value: "R2" },
+    ]);
+
+    // … et l'on retire la première pendant que l'appel est en vol : la
+    // deuxième devient la première, la troisième prend son index.
+    fireEvent.click(screen.getAllByRole("button", { name: "Retirer cette question" })[0]);
+    act(() => {
+      h.calls[0].opts?.onSuccess?.({
+        translations: { en: { question: "Q2 en", answer: "R2 en" } },
+        missing: [],
+      });
+    });
+    submit();
+
+    expect(onSubmit.mock.calls[0][0].config.faq.items).toEqual([
+      { question: "Q2", answer: "R2", translations: { en: { question: "Q2 en", answer: "R2 en" } } },
+      // Repérée par son index, la réponse se serait posée ICI.
+      { question: "Q3", answer: "R3", translations: {} },
+    ]);
+  });
+
+  it("⚠️ une réponse dont la question a été retirée ne se pose nulle part", () => {
+    h.languages = ["fr", "en"];
+    const { onSubmit, submit } = renderStep(
+      makeProcedure({
+        user_communication: {
+          faq: {
+            items: [
+              { question: "Q1", answer: "R1" },
+              { question: "Q2", answer: "R2" },
+            ],
+          },
+        } as Procedure["user_communication"],
+      }),
+    );
+
+    fireEvent.click(
+      within(faqRow(0)).getByRole("button", { name: "Traduire automatiquement", hidden: true }),
+    );
+    fireEvent.click(screen.getAllByRole("button", { name: "Retirer cette question" })[0]);
+    act(() => {
+      h.calls[0].opts?.onSuccess?.({
+        translations: { en: { question: "Q1 en", answer: "R1 en" } },
+        missing: [],
+      });
+    });
+    submit();
+
+    expect(onSubmit.mock.calls[0][0].config.faq.items).toEqual([
+      { question: "Q2", answer: "R2", translations: {} },
+    ]);
+  });
+
+  it("le descriptif se traduit avec le registre d'une démarche, en Markdown conservé", () => {
+    h.languages = ["fr", "en"];
+    renderStep(makeProcedure({ user_description: "## Pour qui ?\n\n- Les **résidents**" }));
+
+    const section = screen.getByRole("heading", { name: "Descriptif de la démarche" })
+      .parentElement!.parentElement!;
+    fireEvent.click(
+      within(section).getByRole("button", { name: "Traduire automatiquement", hidden: true }),
+    );
+    expect(h.calls[0].input.kind).toBe("procedure");
+    expect(h.calls[0].input.fields).toEqual([
+      { key: "user_description", value: "## Pour qui ?\n\n- Les **résidents**" },
+    ]);
   });
 });

@@ -30,7 +30,7 @@ export function buildOpenApiDocument(serverUrl: string): Record<string, unknown>
     openapi: "3.1.0",
     info: {
       title: "API Socle — Référentiel de la gamme",
-      version: "1.24.0",
+      version: "1.26.0",
       description: [
         "API **en lecture seule** exposant le référentiel central de la gamme : les",
         "**organisations** (et sous-organisations) avec l'intégralité de leur configuration,",
@@ -327,6 +327,50 @@ export function buildOpenApiDocument(serverUrl: string): Record<string, unknown>
               description: "Composition publiée de la page.",
               content: {
                 "application/json": { schema: { $ref: "#/components/schemas/PortalPage" } },
+              },
+            },
+            ...errorResponses("400", "401", "404", "500"),
+          },
+        },
+      },
+      "/v1/portal/content": {
+        get: {
+          tags: ["Portail"],
+          summary: "Récupérer un contenu publié du site (déclaration d'accessibilité)",
+          description:
+            "Renvoie une page de **texte** que la collectivité a rédigée et **publiée** depuis " +
+            "l'onglet « Contenus » de l'éditeur du Socle — à ce jour, un seul contenu : la " +
+            "**déclaration d'accessibilité** (`slug=accessibilite`), vers laquelle mène la mention du " +
+            "pied de page (`Tenant.theme.accessibility.declaration_link`). Le brouillon n'est jamais " +
+            "servi.\n\n" +
+            "`body` est du **Markdown**, rédigé en français. Rendez-le en échappant le HTML, et " +
+            "**descendez ses titres d'un niveau** : votre page porte déjà son titre de premier niveau.\n\n" +
+            "**`404` n'est pas une panne** : rien n'est publié, ou le texte publié est vide (publier le " +
+            "site publie aussi une déclaration que personne n'a encore écrite). Dans ce cas, " +
+            "`declaration_link` vaut `false` : un portail qui suit ce drapeau n'arrive jamais ici par " +
+            "un lien. Une collectivité hors périmètre de la clé reçoit le même `404`.",
+          parameters: [
+            {
+              name: "tenant_id",
+              in: "query",
+              required: true,
+              description:
+                "Identifiant de la collectivité, tel que rendu par `GET /v1/portal/tenant`.",
+              schema: { type: "string", format: "uuid" },
+            },
+            {
+              name: "slug",
+              in: "query",
+              required: true,
+              description: "Quel contenu. Seul `accessibilite` existe à ce jour.",
+              schema: { type: "string", pattern: "^[a-z0-9]+(-[a-z0-9]+)*$", examples: ["accessibilite"] },
+            },
+          ],
+          responses: {
+            "200": {
+              description: "Contenu publié.",
+              content: {
+                "application/json": { schema: { $ref: "#/components/schemas/PortalContent" } },
               },
             },
             ...errorResponses("400", "401", "404", "500"),
@@ -944,7 +988,7 @@ export function buildOpenApiDocument(serverUrl: string): Record<string, unknown>
             },
             accessibility: {
               type: "object",
-              required: ["high_contrast", "dark_primary", "declaration"],
+              required: ["high_contrast", "dark_primary", "declaration", "declaration_link"],
               properties: {
                 high_contrast: {
                   type: "boolean",
@@ -963,10 +1007,20 @@ export function buildOpenApiDocument(serverUrl: string): Record<string, unknown>
                 declaration: {
                   type: "string",
                   description:
-                    "Mention d'accessibilité **obligatoire (RGAA)** d'un site public, à " +
-                    "afficher au pied des pages. Chaîne vide = la collectivité ne l'a pas " +
-                    "encore écrite ; n'inventez rien à sa place.",
-                  examples: ["Conformité RGAA partielle — audit du 12 juin 2026"],
+                    "Texte de la mention d'accessibilité **obligatoire (RGAA)** d'un site public, " +
+                    "à afficher au pied des pages. Chaîne vide = la collectivité ne l'a pas " +
+                    "encore écrite, **ou l'a masquée** (son commutateur est appliqué par le " +
+                    "Socle) ; n'inventez rien à sa place.",
+                  examples: ["Accessibilité : partiellement conforme"],
+                },
+                declaration_link: {
+                  type: "boolean",
+                  description:
+                    "Ajouter à la mention un lien « Déclaration d'accessibilité » vers la page qui " +
+                    "rend `GET /v1/portal/content?slug=accessibilite`. **Résolu par le Socle** : vrai " +
+                    "seulement si la collectivité l'a demandé **et** qu'une déclaration non vide est " +
+                    "publiée — le lien ne mène jamais à une page vide. Il peut être vrai avec une " +
+                    "`declaration` vide : le lien s'affiche alors seul. Contrat 1.25.0.",
                 },
               },
             },
@@ -988,9 +1042,11 @@ export function buildOpenApiDocument(serverUrl: string): Record<string, unknown>
             user_description: {
               type: ["string", "null"],
               description:
-                "Descriptif destiné à l'usager. Ni celui-ci ni `short_description` n'est " +
-                "obligatoire au paramétrage : les deux sont servis pour qu'il reste toujours " +
-                "quelque chose à afficher.",
+                "Descriptif destiné à l'usager, en **Markdown** (contrat 1.24.0) — rendez-le " +
+                "en échappant le HTML, et tirez-en un résumé sans marques si vous l'affichez " +
+                "sur une carte. Ni celui-ci ni `short_description` n'est obligatoire au " +
+                "paramétrage : les deux sont servis pour qu'il reste toujours quelque chose à " +
+                "afficher. Sa traduction est dans `translations.<code>.user_description`.",
             },
             input_duration_minutes: {
               type: ["integer", "null"],
@@ -1135,6 +1191,35 @@ export function buildOpenApiDocument(serverUrl: string): Record<string, unknown>
             id: { type: "string", format: "uuid" },
             name: { type: "string", description: "Libellé en français, la langue pivot." },
             translations: { $ref: "#/components/schemas/Translations" },
+          },
+        },
+        PortalContent: {
+          type: "object",
+          description:
+            "Contenu publié du site : une page de texte en Markdown. À ce jour, la déclaration " +
+            "d'accessibilité (`accessibilite`).",
+          required: ["slug", "published_at", "format", "body"],
+          properties: {
+            slug: { type: "string", examples: ["accessibilite"] },
+            published_at: {
+              type: "string",
+              format: "date-time",
+              description:
+                "Date de la publication servie. ⚠️ C'est celle du **site** (publier publie tout " +
+                "d'un geste), pas celle de la déclaration : sa date d'établissement est dans le " +
+                "texte.",
+            },
+            format: {
+              type: "string",
+              enum: ["markdown"],
+              description: "Toujours `markdown` : le champ existe pour qu'un autre format s'annonce.",
+            },
+            body: {
+              type: "string",
+              description:
+                "Le texte, en Markdown (titres `#`, listes, `**gras**`, `*italique*`, liens " +
+                "`[texte](url)`). Jamais vide : un contenu vide rend `404`.",
+            },
           },
         },
         PortalPage: {
@@ -1675,7 +1760,9 @@ export function buildOpenApiDocument(serverUrl: string): Record<string, unknown>
             "Textes traduits, indexés par **code de langue** (BCP 47 : ISO 639-1 quand il " +
             "existe, ISO 639-3 sinon). Chaque langue porte un objet dont les clés sont celles " +
             "des colonnes françaises correspondantes : `name`, et — sur une démarche — " +
-            "`short_description`. Trois règles à connaître avant d'afficher quoi que ce " +
+            "`short_description` et `user_description` (depuis 1.26.0). Les textes de " +
+            "`user_communication` ne sont PAS ici : ils vivent dans un objet, et leur " +
+            "traduction est portée par chaque entrée. Trois règles à connaître avant d'afficher quoi que ce " +
             "soit : il n'y a **jamais** de clé `fr` (le texte français est le champ de même " +
             "nom) ; un texte **absent** n'est pas un texte vide, c'est un **repli sur le " +
             "champ français** ; et le repli se fait **champ par champ** — une langue peut " +
@@ -1692,10 +1779,20 @@ export function buildOpenApiDocument(serverUrl: string): Record<string, unknown>
                   "Descriptif court dans cette langue (démarches uniquement — une catégorie " +
                   "n'en a pas).",
               },
+              user_description: {
+                type: "string",
+                description:
+                  "Descriptif usager dans cette langue, en **Markdown** comme le français " +
+                  "(démarches uniquement, depuis 1.26.0). Même rendu que `user_description`.",
+              },
             },
           },
           example: {
-            en: { name: "Birth certificate", short_description: "To get a copy of your record." },
+            en: {
+              name: "Birth certificate",
+              short_description: "To get a copy of your record.",
+              user_description: "## Who is it for?\n\n- Anyone born in the town",
+            },
             br: { name: "Testeni ganedigezh" },
           },
         },
@@ -1919,7 +2016,10 @@ export function buildOpenApiDocument(serverUrl: string): Record<string, unknown>
             "tel quel. ⚠️ `null` = elle n'a rien écrit, et les défauts de cette colonne " +
             "sont **vides** — à l'inverse de `communication_config`, dont un `null` se lit " +
             "« visible ». N'affichez aucune section, et ne composez aucun texte à sa place. " +
-            "⚠️ **Le descriptif n'est pas ici** : c'est `user_description`, servi à côté.",
+            "⚠️ **Le descriptif n'est pas ici** : c'est `user_description`, servi à côté. " +
+            "**Traductions** (1.26.0) : la note, chaque pièce et chaque question portent " +
+            "leurs propres `translations` (`UserCommunicationTranslations`), à replier " +
+            "**champ par champ** sur le texte français de l'entrée.",
           properties: {
             delays: { $ref: "#/components/schemas/UserCommunicationDelays" },
             audience: {
@@ -1931,6 +2031,10 @@ export function buildOpenApiDocument(serverUrl: string): Record<string, unknown>
                 "en cas de contradiction, **`audiences` fait foi**.",
               properties: {
                 note: { type: "string", description: "Souvent vide." },
+                translations: {
+                  $ref: "#/components/schemas/UserCommunicationTranslations",
+                  description: "La note dans les autres langues : clé `note`.",
+                },
               },
             },
             attachments: {
@@ -1967,14 +2071,27 @@ export function buildOpenApiDocument(serverUrl: string): Record<string, unknown>
           },
           example: {
             delays: { processingTimeValue: 3, processingTimeUnit: "semaine" },
-            audience: { note: "Réservée aux personnes résidant sur la commune." },
+            audience: {
+              note: "Réservée aux personnes résidant sur la commune.",
+              translations: { en: { note: "For residents of the town only." } },
+            },
             attachments: {
               items: [
-                { label: "Justificatif de domicile", description: "De moins de trois mois" },
+                {
+                  label: "Justificatif de domicile",
+                  description: "De moins de trois mois",
+                  translations: { en: { label: "Proof of address" } },
+                },
               ],
             },
             faq: {
-              items: [{ question: "Où retirer l'acte ?", answer: "À l'accueil de la mairie." }],
+              items: [
+                {
+                  question: "Où retirer l'acte ?",
+                  answer: "À l'accueil de la mairie.",
+                  translations: {},
+                },
+              ],
             },
           },
         },
@@ -2014,6 +2131,10 @@ export function buildOpenApiDocument(serverUrl: string): Record<string, unknown>
               type: "string",
               description: "Précision facultative — ex. « De moins de trois mois ». Souvent vide.",
             },
+            translations: {
+              $ref: "#/components/schemas/UserCommunicationTranslations",
+              description: "L'intitulé et la précision dans les autres langues : clés `label`, `description`.",
+            },
           },
         },
         UserCommunicationFaqItem: {
@@ -2022,6 +2143,41 @@ export function buildOpenApiDocument(serverUrl: string): Record<string, unknown>
           properties: {
             question: { type: "string" },
             answer: { type: "string" },
+            translations: {
+              $ref: "#/components/schemas/UserCommunicationTranslations",
+              description: "La question et sa réponse dans les autres langues : clés `question`, `answer`.",
+            },
+          },
+        },
+        UserCommunicationTranslations: {
+          type: "object",
+          description:
+            "Textes d'UNE entrée de `user_communication` traduits, indexés par **code de " +
+            "langue** (BCP 47) — depuis 1.26.0. Les clés d'une langue sont celles des textes " +
+            "français de l'entrée : `note` pour la note sur le public, `label` et " +
+            "`description` pour une pièce, `question` et `answer` pour une question. La " +
+            "traduction vit **sur l'entrée** (et non dans une couche par langue) : elle suit " +
+            "sa question quand la collectivité réordonne sa FAQ. Mêmes trois règles que " +
+            "`Translations` : il n'y a **jamais** de clé `fr` (le français est le champ de " +
+            "même nom) ; un texte **absent** n'est pas un texte vide, c'est un **repli sur " +
+            "le champ français** ; et ce repli se fait **champ par champ** — une question " +
+            "peut être traduite sans sa réponse, c'est le cas normal. ⚠️ **Absent sur les " +
+            "entrées enregistrées avant 1.26.0** : lisez une absence comme `{}`. Les langues " +
+            "qu'une collectivité a activées sont servies par `GET /v1/portal/tenant` " +
+            "(`languages`).",
+          additionalProperties: {
+            type: "object",
+            properties: {
+              note: { type: "string" },
+              label: { type: "string" },
+              description: { type: "string" },
+              question: { type: "string" },
+              answer: { type: "string" },
+            },
+          },
+          example: {
+            en: { question: "Where can I collect the certificate?", answer: "At the town hall." },
+            br: { question: "Pelec'h e c'hellan kaout an akta ?" },
           },
         },
         CommunicationConfig: {

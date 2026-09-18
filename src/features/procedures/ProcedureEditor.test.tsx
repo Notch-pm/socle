@@ -184,10 +184,10 @@ describe("ProcedureEditor — pied de page du stepper", () => {
     expect(onStepChange).not.toHaveBeenCalled();
   });
 
-  it("⚠️ étape « Communication usager » : le descriptif et la config partent dans UNE seule mutation", () => {
+  it("⚠️ étape « Communication usager » : descriptif, config et traductions partent dans UNE seule mutation", () => {
     // C'est la seule étape du stepper qui écrit une colonne TEXTE en plus de son
-    // JSON. Les scinder en deux mutations laisserait l'agent devant un écran à
-    // moitié enregistré sans qu'il puisse le savoir.
+    // JSON — et la traduction de ce texte. Les scinder laisserait l'agent devant
+    // un écran à moitié enregistré sans qu'il puisse le savoir.
     const { onStepChange } = renderEditor(3);
 
     fireEvent.change(screen.getByLabelText("Descriptif de la démarche"), {
@@ -205,10 +205,12 @@ describe("ProcedureEditor — pied de page du stepper", () => {
       user_description: "Ce que l'usager lit.",
       user_communication: {
         delays: { processingTimeValue: 3, processingTimeUnit: "semaine" },
-        audience: { note: "" },
+        audience: { note: "", translations: {} },
         attachments: { items: [] },
         faq: { items: [] },
       },
+      // Collectivité monolingue : rien à traduire, rien d'effacé.
+      translations: {},
     });
     expect(onStepChange).toHaveBeenCalledWith(4);
   });
