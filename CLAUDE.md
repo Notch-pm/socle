@@ -35,6 +35,14 @@ ajoute une entrée datée
 à `docs/api-changelog.md` ; une doc périmée par une PR se met à jour **dans cette PR**.
 `docs/archive/` = instantanés historiques non maintenus.
 
+⚠️ **`AGENTS.md` est une copie BYTE-IDENTIQUE de ce fichier** (c'est le nom que lisent les
+outils autres que Claude Code), et un test l'épingle — `src/agentsMirror.test.ts`, motif
+`apiKeyAuth.ts` : la duplication est acceptée, la dérive ne l'est pas. Toute modification de
+l'un se recopie dans l'autre **dans la même PR** (`cp CLAUDE.md AGENTS.md`). Sans ce test,
+`AGENTS.md` retombe dans l'état où il était jusqu'au 2026-09-18 : un instantané du 23 août qui
+annonçait encore comme « placeholder » une étape livrée depuis, et auquel manquaient neuf
+sections entières — une doc fausse coûte plus cher qu'une doc absente, parce qu'on la croit.
+
 ## Stack
 
 - **Vite 8** (rolldown) + **React 18** + **TypeScript** (strict)
