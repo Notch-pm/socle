@@ -166,9 +166,10 @@ export function ProcedureEditor({
   }
 
   /**
-   * ⚠️ Seule étape qui écrit une colonne TEXTE en plus de son JSON, et les deux
-   * partent dans la MÊME mutation : un descriptif enregistré sans sa FAQ (ou
-   * l'inverse) laisserait l'agent devant un écran à moitié sauvegardé.
+   * ⚠️ Seule étape qui écrit une colonne TEXTE en plus de son JSON — et, depuis
+   * le 2026-09-18, la traduction de ce texte dans `translations`. Les trois
+   * partent dans la MÊME mutation : un descriptif enregistré sans sa FAQ, ou
+   * sans sa traduction, laisserait l'agent devant un écran à moitié sauvegardé.
    */
   function handleUsagerSubmit(values: UserCommunicationValues) {
     updateProc.mutate(
@@ -176,6 +177,7 @@ export function ProcedureEditor({
         id: procedureId!,
         user_description: values.userDescription,
         user_communication: values.config as unknown as Json,
+        translations: values.translations as unknown as Json,
       },
       { onSuccess: afterSave },
     );

@@ -22,7 +22,24 @@
  * Le JSON est organisé en **blocs** (`delays`, `audience`, `attachments`, `faq`) :
  * les réglages à venir de l'étape s'ajoutent comme clés voisines, sans déplacer
  * l'existant — même parti que `communication.ts`.
+ *
+ * **Traductions** (2026-09-18) : chaque texte se traduit dans les langues de la
+ * collectivité, et la traduction vit SUR L'ENTRÉE (`translations` de la note,
+ * de chaque pièce, de chaque question) — motif des sections de page du portail.
+ * Ces textes vivent dans un JSONB, pas dans des colonnes : ils ne pouvaient pas
+ * rejoindre `procedures.translations`, et une couche par langue au niveau du
+ * bloc aurait dû se resynchroniser à chaque question déplacée ou supprimée.
+ * Même forme (`{ "<code>": { "<champ français>": "…" } }`) et mêmes trois règles
+ * que partout — elles sont écrites une seule fois, dans
+ * `src/features/languages/translations.ts`. ⚠️ Le descriptif, lui, est une
+ * colonne : sa traduction est dans `procedures.translations.<code>.user_description`.
  */
+
+import {
+  parseTranslations,
+  type TranslationMap,
+  type UserCommunicationField,
+} from "@/features/languages/translations";
 
 // ---- Délais ----------------------------------------------------------------
 
@@ -87,7 +104,15 @@ export interface DelaysConfig {
 export interface AudienceNoticeConfig {
   /** Ex. « Réservée aux personnes résidant sur la commune. » Souvent vide. */
   note: string;
+  /** La note dans les autres langues de la collectivité. */
+  translations: TranslationMap<AudienceTranslatableField>;
 }
+
+/** Le texte traduisible de la note — et le seul que sa traduction porte. */
+export const AUDIENCE_TRANSLATABLE_FIELDS = [
+  "note",
+] as const satisfies readonly UserCommunicationField[];
+export type AudienceTranslatableField = (typeof AUDIENCE_TRANSLATABLE_FIELDS)[number];
 
 // ---- Pièces demandées ------------------------------------------------------
 
@@ -97,7 +122,15 @@ export interface RequiredPiece {
   label: string;
   /** Ex. « De moins de trois mois ». Facultatif. */
   description: string;
+  /** L'intitulé et la précision dans les autres langues — la traduction voyage avec la pièce. */
+  translations: TranslationMap<PieceTranslatableField>;
 }
+
+export const PIECE_TRANSLATABLE_FIELDS = [
+  "label",
+  "description",
+] as const satisfies readonly UserCommunicationField[];
+export type PieceTranslatableField = (typeof PIECE_TRANSLATABLE_FIELDS)[number];
 
 /**
  * Bloc « Pièces demandées » : ce que la collectivité ANNONCE à l'usager.
@@ -131,7 +164,15 @@ export interface AttachmentsNoticeConfig {
 export interface UserFaqItem {
   question: string;
   answer: string;
+  /** La question et sa réponse dans les autres langues — la traduction voyage avec la question. */
+  translations: TranslationMap<FaqTranslatableField>;
 }
+
+export const FAQ_TRANSLATABLE_FIELDS = [
+  "question",
+  "answer",
+] as const satisfies readonly UserCommunicationField[];
+export type FaqTranslatableField = (typeof FAQ_TRANSLATABLE_FIELDS)[number];
 
 export interface FaqConfig {
   items: UserFaqItem[];
@@ -158,10 +199,20 @@ export interface UserCommunication {
 export function defaultUserCommunication(): UserCommunication {
   return {
     delays: { processingTimeValue: null, processingTimeUnit: DEFAULT_UNIT },
-    audience: { note: "" },
+    audience: { note: "", translations: {} },
     attachments: { items: [] },
     faq: { items: [] },
   };
+}
+
+/** Une pièce vierge — ce qu'ajoute le bouton « Ajouter une pièce ». */
+export function emptyRequiredPiece(): RequiredPiece {
+  return { label: "", description: "", translations: {} };
+}
+
+/** Une question vierge — ce qu'ajoute le bouton « Ajouter une question ». */
+export function emptyUserFaqItem(): UserFaqItem {
+  return { question: "", answer: "", translations: {} };
 }
 
 /** Chaîne telle quelle : ce qui n'en est pas une devient la chaîne vide. */
@@ -191,16 +242,21 @@ function coerceUnit(value: unknown): ProcessingTimeUnit {
  * Liste de pièces annoncées. ⚠️ Une entrée **à moitié** remplie est conservée :
  * c'est une saisie en cours, et la faire disparaître entre deux rendus serait
  * incompréhensible. C'est `requiredPiecesError` qui refuse l'enregistrement.
+ *
+ * ⚠️ Une entrée dont le FRANÇAIS est vide est écartée même si elle porte des
+ * traductions : une traduction sans texte pivot n'aurait rien sur quoi se
+ * replier, et l'écran n'aurait plus de ligne où la montrer.
  */
 function parsePieces(raw: unknown): RequiredPiece[] {
   if (!Array.isArray(raw)) return [];
   const pieces: RequiredPiece[] = [];
   for (const item of raw) {
     if (!item || typeof item !== "object") continue;
-    const { label, description } = item as Record<string, unknown>;
+    const { label, description, translations } = item as Record<string, unknown>;
     const piece: RequiredPiece = {
       label: coerceString(label),
       description: coerceString(description),
+      translations: parseTranslations(translations, PIECE_TRANSLATABLE_FIELDS),
     };
     // On ignore les entrées entièrement vides (lignes ébauchées puis abandonnées).
     if (piece.label.trim() || piece.description.trim()) pieces.push(piece);
@@ -214,10 +270,11 @@ function parseFaqItems(raw: unknown): UserFaqItem[] {
   const items: UserFaqItem[] = [];
   for (const item of raw) {
     if (!item || typeof item !== "object") continue;
-    const { question, answer } = item as Record<string, unknown>;
+    const { question, answer, translations } = item as Record<string, unknown>;
     const entry: UserFaqItem = {
       question: coerceString(question),
       answer: coerceString(answer),
+      translations: parseTranslations(translations, FAQ_TRANSLATABLE_FIELDS),
     };
     if (entry.question.trim() || entry.answer.trim()) items.push(entry);
   }
@@ -248,7 +305,10 @@ export function parseUserCommunication(raw: unknown): UserCommunication {
   const storedAudience = root.audience;
   if (storedAudience && typeof storedAudience === "object") {
     const audience = storedAudience as Record<string, unknown>;
-    config.audience = { note: coerceString(audience.note) };
+    config.audience = {
+      note: coerceString(audience.note),
+      translations: parseTranslations(audience.translations, AUDIENCE_TRANSLATABLE_FIELDS),
+    };
   }
 
   const storedAttachments = root.attachments;
@@ -293,7 +353,9 @@ export function processingTimeError(delays: DelaysConfig): string | null {
  * démarches. ⚠️ Le PARSEUR, lui, reste tolérant : une saisie en cours ne doit pas
  * disparaître entre deux rendus.
  */
-export function requiredPiecesError(items: readonly RequiredPiece[]): string | null {
+export function requiredPiecesError(
+  items: readonly Pick<RequiredPiece, "label" | "description">[],
+): string | null {
   return items.some((p) => !p.label.trim())
     ? "Chaque pièce demandée doit avoir un intitulé."
     : null;
@@ -304,7 +366,9 @@ export function requiredPiecesError(items: readonly RequiredPiece[]): string | n
  * sans réponse s'afficherait telle quelle sur le site de démarches : mieux vaut
  * refuser la ligne que publier une question restée en l'air.
  */
-export function userFaqError(items: readonly UserFaqItem[]): string | null {
+export function userFaqError(
+  items: readonly Pick<UserFaqItem, "question" | "answer">[],
+): string | null {
   if (items.some((i) => i.question.trim() && !i.answer.trim())) {
     return "Chaque question doit avoir une réponse.";
   }

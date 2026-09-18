@@ -26,7 +26,7 @@ est fonctionnelle (voir feature « Édition d'organisation » ci-dessous). Param
   | Descriptif | `descriptif` | colonnes plates + `translations` |
   | Informations demandeur | `demandeur` | `requester_config` |
   | Formulaire | `formulaire` | `form_schema` |
-  | **Communication usager** | `usager` | **`user_communication`** + `user_description` |
+  | **Communication usager** | `usager` | **`user_communication`** + `user_description` (+ `translations.user_description`) |
   | **Publication** | `communication` | `communication_config` |
   | Base de connaissances | `connaissances` | `knowledge_base` |
  Chaque étape a un `<form id>` soumis depuis le pied de `ProcedureEditor`
@@ -191,15 +191,20 @@ est fonctionnelle (voir feature « Édition d'organisation » ci-dessous). Param
   (`{question, answer}`), deux destinataires : **elles ne se fusionnent jamais**. Les libellés
   d'écran les séparent (« FAQ usager » / « FAQ interne (agent et IA) ») — c'est la seule
   protection contre un agent qui répondrait à l'usager dans la mauvaise case.
-  ⚠️ **L'étape écrit DEUX colonnes dans UNE seule mutation** (`user_description` +
-  `user_communication`) : c'est le seul endroit du stepper où une étape persiste une colonne
-  texte en plus de son JSON. Les scinder laisserait l'agent devant un écran à moitié enregistré
-  sans qu'il puisse le savoir — un test l'épingle.
-  ⚠️ **Pas de traduction pour l'instant** : les textes de ce JSON ne rejoignent pas
-  `translations` (qui ne porte que des colonnes). `user_description`, lui, y a sa place —
-  roadmap, § Multilingue.
+  ⚠️ **L'étape écrit TROIS colonnes dans UNE seule mutation** (`user_description`,
+  `user_communication` et `translations`) : c'est le seul endroit du stepper où une étape persiste
+  une colonne texte en plus de son JSON — et la traduction de ce texte. Les scinder laisserait
+  l'agent devant un écran à moitié enregistré sans qu'il puisse le savoir — un test l'épingle.
+  **Traductions** (2026-09-18, voir feature « Langues ») : chaque texte a les siennes, repliées
+  sous lui. Le descriptif est une colonne → `translations.<code>.user_description`, et l'étape
+  ne réécrit **que ce champ** de `translations` (le libellé traduit à l'étape « Descriptif » lui
+  survit, et réciproquement). La note, les pièces et les questions vivent dans le JSON → leur
+  traduction vit **sur l'entrée** (`translations` de chacune) et la suit quand on réordonne. ⚠️ Une
+  entrée sans texte français est écartée à l'enregistrement, traductions comprises : elles
+  n'auraient rien sur quoi se replier.
   **En aval** (contrat 1.24.0) : `user_communication` sur `Procedure` **et** sur
-  `PortalProcedureDetail`, transmis tel quel. ⚠️ **Rien sur la LISTE** `GET
+  `PortalProcedureDetail`, transmis tel quel — traductions des entrées comprises depuis **1.26.0**
+  (schéma `UserCommunicationTranslations`). ⚠️ **Rien sur la LISTE** `GET
   /v1/portal/procedures` : ce contenu appartient à la page d'une démarche, pas à un catalogue —
   un test épingle ses neuf champs des deux côtés. ⚠️ Toute colonne absente du **select explicite**
   du détail (`index.ts`) arrive `undefined` et devient `null` en silence : ajouter le champ au DTO

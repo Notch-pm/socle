@@ -3,6 +3,8 @@ import {
   MAX_PROCESSING_TIME,
   cleanUserCommunication,
   defaultUserCommunication,
+  emptyRequiredPiece,
+  emptyUserFaqItem,
   parseUserCommunication,
   processingTimeError,
   processingTimeLabel,
@@ -18,7 +20,7 @@ describe("defaultUserCommunication", () => {
     // texte à la place de la collectivité, ce serait publier en son nom.
     expect(defaultUserCommunication()).toEqual({
       delays: { processingTimeValue: null, processingTimeUnit: "jour" },
-      audience: { note: "" },
+      audience: { note: "", translations: {} },
       attachments: { items: [] },
       faq: { items: [] },
     });
@@ -44,9 +46,11 @@ describe("parseUserCommunication", () => {
       }),
     ).toEqual({
       delays: { processingTimeValue: 3, processingTimeUnit: "semaine" },
-      audience: { note: "Réservée aux résidents." },
-      attachments: { items: [{ label: "Justificatif de domicile", description: "3 mois" }] },
-      faq: { items: [{ question: "Où déposer ?", answer: "En ligne." }] },
+      audience: { note: "Réservée aux résidents.", translations: {} },
+      attachments: {
+        items: [{ label: "Justificatif de domicile", description: "3 mois", translations: {} }],
+      },
+      faq: { items: [{ question: "Où déposer ?", answer: "En ligne.", translations: {} }] },
     });
   });
 
@@ -57,8 +61,8 @@ describe("parseUserCommunication", () => {
       faq: { items: [{ question: "Q", answer: "R" }] },
     });
     expect(parsed.delays).toEqual({ processingTimeValue: null, processingTimeUnit: "jour" });
-    expect(parsed.audience).toEqual({ note: "" });
-    expect(parsed.faq.items).toEqual([{ question: "Q", answer: "R" }]);
+    expect(parsed.audience).toEqual({ note: "", translations: {} });
+    expect(parsed.faq.items).toEqual([{ question: "Q", answer: "R", translations: {} }]);
   });
 
   it("ignore les clés inconnues", () => {
@@ -108,8 +112,8 @@ describe("parseUserCommunication", () => {
       },
     });
     expect(parsed.attachments.items).toEqual([
-      { label: "Pièce d'identité", description: "" },
-      { label: "", description: "précision orpheline" },
+      { label: "Pièce d'identité", description: "", translations: {} },
+      { label: "", description: "précision orpheline", translations: {} },
     ]);
   });
 
@@ -124,8 +128,8 @@ describe("parseUserCommunication", () => {
       },
     });
     expect(parsed.faq.items).toEqual([
-      { question: "Combien de temps ?", answer: "" },
-      { question: "", answer: "Réponse orpheline" },
+      { question: "Combien de temps ?", answer: "", translations: {} },
+      { question: "", answer: "Réponse orpheline", translations: {} },
     ]);
   });
 
@@ -139,23 +143,131 @@ describe("parseUserCommunication", () => {
   });
 });
 
+describe("parseUserCommunication — traductions (2026-09-18)", () => {
+  it("relit la traduction de la note, de chaque pièce et de chaque question", () => {
+    const parsed = parseUserCommunication({
+      audience: {
+        note: "Réservée aux résidents.",
+        translations: { en: { note: "Residents only." } },
+      },
+      attachments: {
+        items: [
+          {
+            label: "Justificatif de domicile",
+            description: "De moins de 3 mois",
+            translations: { en: { label: "Proof of address" }, br: { description: "Nevez" } },
+          },
+        ],
+      },
+      faq: {
+        items: [
+          {
+            question: "Où déposer ?",
+            answer: "En ligne.",
+            translations: { en: { question: "Where?", answer: "Online." } },
+          },
+        ],
+      },
+    });
+    expect(parsed.audience.translations).toEqual({ en: { note: "Residents only." } });
+    // ⚠️ Champ par champ : l'anglais porte l'intitulé sans la précision, le
+    // breton l'inverse — c'est le cas normal, pas une traduction inachevée.
+    expect(parsed.attachments.items[0].translations).toEqual({
+      en: { label: "Proof of address" },
+      br: { description: "Nevez" },
+    });
+    expect(parsed.faq.items[0].translations).toEqual({
+      en: { question: "Where?", answer: "Online." },
+    });
+  });
+
+  it("⚠️ applique les trois règles de la maison : ni `fr`, ni vide, ni langue creuse", () => {
+    const parsed = parseUserCommunication({
+      faq: {
+        items: [
+          {
+            question: "Q",
+            answer: "R",
+            translations: {
+              fr: { question: "Q bis" },
+              en: { question: "  ", answer: "" },
+              es: { question: "  ¿Dónde?  " },
+            },
+          },
+        ],
+      },
+    });
+    // `fr` écarté (le français est le champ de même nom), `en` n'a plus aucun
+    // texte et disparaît, `es` est élagué.
+    expect(parsed.faq.items[0].translations).toEqual({ es: { question: "¿Dónde?" } });
+  });
+
+  it("⚠️ une entrée ne porte QUE ses propres champs traduits", () => {
+    // Une réponse égarée dans la traduction d'une pièce n'a nulle part où
+    // s'afficher : elle est écartée comme une clé inconnue.
+    const parsed = parseUserCommunication({
+      audience: { note: "N", translations: { en: { note: "N", label: "x" } } },
+      attachments: {
+        items: [{ label: "L", translations: { en: { label: "L", answer: "x" } } }],
+      },
+      faq: { items: [{ question: "Q", answer: "R", translations: { en: { note: "x" } } }] },
+    });
+    expect(parsed.audience.translations).toEqual({ en: { note: "N" } });
+    expect(parsed.attachments.items[0].translations).toEqual({ en: { label: "L" } });
+    expect(parsed.faq.items[0].translations).toEqual({});
+  });
+
+  it("une table de traductions abîmée est vide, sans emporter l'entrée", () => {
+    const parsed = parseUserCommunication({
+      audience: { note: "N", translations: "en" },
+      faq: { items: [{ question: "Q", answer: "R", translations: [1, 2] }] },
+    });
+    expect(parsed.audience).toEqual({ note: "N", translations: {} });
+    expect(parsed.faq.items).toEqual([{ question: "Q", answer: "R", translations: {} }]);
+  });
+
+  it("⚠️ une entrée sans français est écartée, traductions comprises", () => {
+    // Une traduction sans texte pivot n'aurait rien sur quoi se replier.
+    const parsed = parseUserCommunication({
+      faq: { items: [{ question: "", answer: "", translations: { en: { question: "Q" } } }] },
+    });
+    expect(parsed.faq.items).toEqual([]);
+  });
+});
+
 describe("cleanUserCommunication", () => {
   it("est idempotent", () => {
     const once = cleanUserCommunication(
       parseUserCommunication({
         delays: { processingTimeValue: 2, processingTimeUnit: "mois" },
-        audience: { note: "Une précision." },
+        audience: { note: "Une précision.", translations: { en: { note: "A detail." } } },
         attachments: { items: [{ label: "CNI", description: "" }] },
-        faq: { items: [{ question: "Q", answer: "R" }] },
+        faq: { items: [{ question: "Q", answer: "R", translations: { en: { answer: "A" } } }] },
       }),
     );
     expect(cleanUserCommunication(once)).toEqual(once);
   });
 
+  it("⚠️ élague les traductions saisies frappe par frappe, et laisse l'identité d'écran en route", () => {
+    // L'écran stocke la saisie telle quelle (espaces compris, pour qu'on puisse
+    // les taper) et porte une clé de ligne : ni l'une ni l'autre ne s'enregistre.
+    const config = defaultUserCommunication();
+    config.faq.items = [
+      Object.assign(
+        { question: "Q", answer: "R", translations: { en: { question: " Q ", answer: "  " } } },
+        { key: "ligne-1" },
+      ),
+    ];
+    const cleaned = cleanUserCommunication(config);
+    expect(cleaned.faq.items).toEqual([
+      { question: "Q", answer: "R", translations: { en: { question: "Q" } } },
+    ]);
+  });
+
   it("écarte à l'enregistrement les lignes restées entièrement vides", () => {
     const config = defaultUserCommunication();
-    config.attachments.items = [{ label: "", description: "" }];
-    config.faq.items = [{ question: "", answer: "" }];
+    config.attachments.items = [emptyRequiredPiece()];
+    config.faq.items = [emptyUserFaqItem()];
     const cleaned = cleanUserCommunication(config);
     expect(cleaned.attachments.items).toEqual([]);
     expect(cleaned.faq.items).toEqual([]);

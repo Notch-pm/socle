@@ -31,6 +31,11 @@ export interface TranslationFieldSpec {
   source: string;
   /** Un résumé se saisit sur plusieurs lignes, un intitulé non. */
   multiline?: boolean;
+  /**
+   * Hauteur de la case, pour un texte `multiline` — un descriptif de plusieurs
+   * paragraphes ne se relit pas dans trois lignes. Trois par défaut.
+   */
+  rows?: number;
 }
 
 /**
@@ -254,7 +259,15 @@ export function TranslationFields({
       </div>
 
       {codes.length === 0 ? null : (
-        <div className={cn("grid gap-4", dense ? "grid-cols-1" : "sm:grid-cols-2")}>
+        // Deux colonnes seulement quand il y a deux langues à y mettre : une
+        // langue seule dans une demi-largeur laisse un vide à côté, et serre un
+        // descriptif de plusieurs paragraphes dans la moitié de l'écran.
+        <div
+          className={cn(
+            "grid gap-4",
+            dense || codes.length === 1 ? "grid-cols-1" : "sm:grid-cols-2",
+          )}
+        >
           {codes.map((code) =>
             // Un seul texte traduisible : le nom de la langue EST son étiquette.
             // Encadrer un champ unique n'ajouterait qu'une boîte.
@@ -367,7 +380,7 @@ function TranslationControl({
       <textarea
         id={id}
         lang={code}
-        rows={3}
+        rows={field.rows ?? 3}
         placeholder={field.source}
         value={value}
         onChange={(e) => onChange(e.target.value)}

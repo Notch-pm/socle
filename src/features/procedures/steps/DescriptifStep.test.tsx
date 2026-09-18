@@ -117,6 +117,31 @@ describe("DescriptifStep — traductions", () => {
       oc: { name: "Acte de naissença" },
     });
   });
+
+  it("⚠️ n'efface pas le descriptif usager traduit à l'étape « Communication usager »", () => {
+    // Deux écrans écrivent la même colonne : chacun ne gouverne que ses champs.
+    const onSubmit = vi.fn();
+    render(
+      <DescriptifStep
+        formId="f3"
+        organizationId="org-1"
+        procedure={
+          {
+            ...procedure,
+            translations: { en: { name: "Birth certificate", user_description: "Long text." } },
+          } as unknown as Procedure
+        }
+        onSubmit={onSubmit}
+      />,
+    );
+
+    fireEvent.change(cell("Anglais", "Libellé"), { target: { value: "  " } });
+    fireEvent.submit(document.getElementById("f3")!);
+
+    expect(onSubmit.mock.calls[0][0].translations).toEqual({
+      en: { user_description: "Long text." },
+    });
+  });
 });
 
 describe("DescriptifStep — accès libre ou usagers authentifiés", () => {

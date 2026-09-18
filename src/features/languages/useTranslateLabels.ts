@@ -25,10 +25,15 @@ import type { AnyTranslatableField } from "@/features/languages/translations";
 
 /**
  * Ce qu'on traduit. Le modèle n'écrit pas dans le même registre selon les cas :
- * un intitulé de démarche, un libellé de catégorie, ou les textes d'un bloc de
- * page d'accueil.
+ * un intitulé de démarche, un libellé de catégorie, les textes d'un bloc de
+ * page d'accueil, ou ceux que la collectivité écrit pour ses usagers sur la
+ * page d'une démarche (note sur le public, pièce annoncée, question de la FAQ).
  */
-export type TranslateLabelKind = "procedure" | "category" | "portal_section";
+export type TranslateLabelKind =
+  | "procedure"
+  | "category"
+  | "portal_section"
+  | "user_communication";
 
 /** Un texte français à traduire, sous la clé qu'il portera dans `translations`. */
 export interface TranslateLabelsField {

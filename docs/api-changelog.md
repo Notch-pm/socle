@@ -13,6 +13,50 @@ Format d'une entrée : `## AAAA-MM-JJ — <api> — ajout|correctif|rupture`
 
 ---
 
+## 2026-09-18 — public-api — ajout (traduction de la communication usager)
+
+**Ce que la collectivité écrit pour ses usagers se traduit dans ses langues.** L'étape
+« Communication usager » propose, sous chaque texte, ses traductions dans les langues activées par
+la collectivité, avec la traduction automatique habituelle. Version du contrat : **1.26.0**. Ajout
+**additif** : un consommateur qui l'ignore affiche le français, exactement comme aujourd'hui.
+
+**Le descriptif usager rejoint `translations`** (`Procedure`, `PortalProcedure`,
+`PortalProcedureDetail`) — c'est une colonne, il prend sa place à côté du libellé :
+
+| Champ | Valeur | Ce qu'il dit |
+|---|---|---|
+| `translations.<code>.user_description` | texte **Markdown** | Le descriptif usager dans cette langue |
+
+**Les textes de `user_communication` portent leur traduction SUR L'ENTRÉE** (`Procedure`,
+`PortalProcedureDetail`) — ils vivent dans un objet, pas dans des colonnes :
+
+| Champ | Clés d'une langue | Ce qu'il traduit |
+|---|---|---|
+| `…audience.translations` | `note` | La précision sur le public concerné |
+| `…attachments.items[].translations` | `label`, `description` | Une pièce annoncée |
+| `…faq.items[].translations` | `question`, `answer` | Une question de la FAQ usager |
+
+- ⚠️ **Les trois règles de `Translations` valent ici aussi** : jamais de clé `fr` (le français est
+  le champ de même nom) ; un texte absent est un **repli sur le français**, pas un texte vide ; et le
+  repli se fait **champ par champ** — une question traduite sans sa réponse est le cas normal.
+  Pour l'attribut `lang` de l'écran (RGAA 8.7), c'est donc **texte par texte** qu'il faut savoir ce
+  qui est traduit : une réponse repliée sur le français se marque `lang="fr"` dans une page servie
+  en anglais.
+- ⚠️ **La traduction voyage avec son entrée** : réordonner la FAQ ne demande rien au consommateur.
+  Ne l'associez jamais à une question par son **index**.
+- ⚠️ **Absent sur les entrées enregistrées avant ce contrat** : lisez une absence comme `{}` (le
+  Socle écrit `{}` à chaque nouvel enregistrement de l'étape).
+- **Rien ne se traduit dans `delays`** : la durée est structurée (valeur + unité), le portail la
+  rend dans sa propre langue.
+- **Un correctif de documentation au passage** : `PortalProcedure.user_description` dit désormais,
+  comme `Procedure`, qu'il est en **Markdown** (depuis 1.24.0). Et `user_communication` est affiché
+  par Nora depuis le 2026-09-18 — l'entrée 1.24.0 disait « l'affichera ».
+- **Consommateur** : Nora sert déjà `translations.user_description` sur la page d'une démarche ; la
+  traduction des entrées de `user_communication` reste à brancher de son côté (repli champ par
+  champ, `lang="fr"` texte par texte). Rien à faire pour les autres.
+
+---
+
 ## 2026-09-18 — public-api — ajout (déclaration d'accessibilité)
 
 **La mention d'accessibilité du pied de page peut mener à la déclaration complète.** La

@@ -930,7 +930,10 @@ Leur structure n'est **pas** décrite ici (propriété du code applicatif et de 
   nombre). ⚠️ **`attachments.items` n'est pas la liste des pièces à téléverser** (ce sont les
   champs `attachment` de `form_schema`) : c'est un texte d'annonce, qui peut les recouper.
   ⚠️ **Deux FAQ coexistent sur la même ligne** : `user_communication.faq` est publiée,
-  `knowledge_base.faq` ne l'a jamais été.
+  `knowledge_base.faq` ne l'a jamais été. **Traductions** (2026-09-18) : la note, chaque pièce et
+  chaque question portent leur propre `translations` (mêmes trois règles que la colonne
+  `translations`, clés = leurs champs français) — elles vivent **sur l'entrée** parce que ces
+  textes ne sont pas des colonnes, et suivent ainsi leur question quand la FAQ est réordonnée.
 - ⚠️ `communication_config` **NULL** n'est pas « non publiée » : c'est une démarche jamais passée
   par l'étape, à lire comme les valeurs par défaut (visible, non bornée). Le parseur applicatif
   le fait ; un consommateur SQL direct doit le faire aussi. ⚠️ Le bloc `documents` du même JSON
@@ -942,8 +945,10 @@ Leur structure n'est **pas** décrite ici (propriété du code applicatif et de 
 - ⚠️ `translations` (sur `procedures` **et** `categories`) a une forme depuis le 2026-09-06 :
   `{ "<code de langue>": { "name": "…", "short_description": "…" } }`, code faisant foi
   `src/features/languages/translations.ts` (testé). Les clés sous une langue sont celles des
-  **colonnes françaises** correspondantes ; `short_description` n'existe que sur `procedures`
-  (ajouté le 2026-09-07 — une catégorie n'a pas de descriptif). Trois règles portent tout le
+  **colonnes françaises** correspondantes ; `short_description` (ajouté le 2026-09-07) et
+  `user_description` (Markdown, ajouté le 2026-09-18) n'existent que sur `procedures` — une
+  catégorie n'a pas de descriptif. ⚠️ Deux étapes écrivent la colonne (« Descriptif » et
+  « Communication usager ») : chacune ne réécrit que ses champs. Trois règles portent tout le
   reste : **jamais de clé `fr`** (le texte français est la colonne — l'y écrire créerait une
   seconde source de vérité) ; un **champ absent = repli sur la colonne française**, pas un texte
   vide ; et ce repli se fait **champ par champ**, une langue pouvant légitimement porter le

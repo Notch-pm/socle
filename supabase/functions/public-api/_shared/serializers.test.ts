@@ -840,6 +840,27 @@ describe("serializePortalProcedureDetail — le formulaire sort, l'instruction n
     expect(dto.user_communication).toBe(detail.user_communication);
   });
 
+  it("les traductions traversent avec leurs entrées, le descriptif traduit avec la ligne (1.26.0)", () => {
+    // Rien à résoudre ici : la traduction d'une question vit SUR la question,
+    // celle du descriptif dans la colonne `translations`. Le portail replie.
+    const translated = {
+      ...detail,
+      user_communication: {
+        faq: {
+          items: [{ question: "Q", answer: "R", translations: { en: { question: "Q en" } } }],
+        },
+      },
+    };
+    const dto = serializePortalProcedureDetail(
+      { ...row, translations: { en: { user_description: "In English." } } },
+      [],
+      translated,
+      null,
+    );
+    expect(dto.user_communication).toEqual(translated.user_communication);
+    expect(dto.translations).toEqual({ en: { user_description: "In English." } });
+  });
+
   it("⚠️ la LISTE ne le porte pas : ce contenu appartient à la page d'une démarche", () => {
     const list = serializePortalProcedure({ ...row, user_communication: detail.user_communication });
     expect(list).not.toHaveProperty("user_communication");

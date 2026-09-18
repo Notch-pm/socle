@@ -271,15 +271,12 @@ suppose la précédente.
    l'ajout étant purement additif (écrire un `version: 2` que le parse actuel refuse ferait
    retomber la page entière sur `defaultPortalPage()`) —, les **~100 chaînes propres au portail**
    (dictionnaire statique à la manière d'Ariane, jeu de langues couvertes déclaré et repli
-   français **par clé**), et le **descriptif usager** (`user_description`) : il est **saisi
-   depuis le 2026-09-18** (étape « Communication usager », en Markdown), il reste à le traduire
-   — il rejoindra `translations` en clé voisine, sans reprise, et son `TranslationFields` vivra
-   dans cette étape avec `fields = ["user_description"]` seulement (un écran n'efface que les
-   champs qu'il affiche). ⚠️ Les autres textes de cette étape — note de public, pièces
-   annoncées, FAQ usager — vivent dans un **JSONB** (`user_communication`) et non dans des
-   colonnes : ils ne peuvent pas rejoindre `translations` tel quel, et demandent leur propre
-   décision (une clé `translations` par entrée, comme les sections du portail ?). Rien n'est
-   engagé. Enfin, les langues de France sans code ISO (gallo,
+   français **par clé**). **Fait le 2026-09-18** (contrat 1.26.0) : toute l'étape « Communication
+   usager » se traduit — le **descriptif usager** a rejoint `translations` en clé voisine, sans
+   reprise, et la note de public, les pièces annoncées et la FAQ usager portent leur traduction
+   **sur l'entrée**, comme les sections du portail. Reste à le **brancher dans Nora** : le
+   descriptif traduit y est déjà servi, pas les entrées (repli champ par champ, `lang="fr"`
+   texte par texte). Enfin, les langues de France sans code ISO (gallo,
    poitevin-saintongeais, francique lorrain) attendent une convention de nommage — voir l'en-tête
    de `src/features/languages/languages.ts`.
 2. **Les autres templates.** Gabarits de page et variantes de mise en page au-delà de la

@@ -231,8 +231,8 @@ Emails, Domaines), gestion superadmin (`OrgSettingsPage`, menu latéral par clie
 
 ### [Langues et libellés traduits](docs/features/langues.md)
 - `enabled_languages` sur la **racine** ; catalogue figé dans le code (`languages.ts`, codes
-  BCP 47 — contrat de nommage). `translations` sur `procedures`, `categories` et les sections de
-  `portal_pages`.
+  BCP 47 — contrat de nommage). `translations` sur `procedures`, `categories`, les sections de
+  `portal_pages` et chaque entrée de `user_communication` (la traduction vit sur l'entrée).
 - ⚠️ Le français est la langue pivot : il vit dans les colonnes, **jamais** dans `translations`.
   ⚠️ Repli **champ par champ** ; traduction vide = non stockée ; désactiver une langue n'efface
   rien ; un écran n'efface que les champs qu'il affiche (`translationsForWrite(…, fields)`).

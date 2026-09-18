@@ -4,8 +4,10 @@
 > et pointeurs de code : **à lire avant de toucher la feature, à mettre à jour dans la même PR.**
 
 Une collectivité choisit les langues dans lesquelles elle s'adresse à ses usagers ; les libellés
-des **démarches** et des **catégories** se traduisent dans chacune, et depuis le 2026-09-07 le
-**descriptif court** d'une démarche avec eux. Le réglage vit sur
+des **démarches** et des **catégories** se traduisent dans chacune, depuis le 2026-09-07 le
+**descriptif court** d'une démarche avec eux, et depuis le 2026-09-18 tout ce qu'elle écrit pour
+ses usagers à l'étape « Communication usager » (descriptif usager, note sur le public, pièces
+annoncées, FAQ usager). Le réglage vit sur
 l'**organisation principale** (racine) : les langues d'une collectivité ne se découpent pas par
 service — motif du catalogue de démarches, des quartiers, du plafond IA.
 
@@ -32,11 +34,15 @@ service — motif du catalogue de démarches, des quartiers, du plafond IA.
   une forme possédée) et `categories.translations` (nouvelle). Forme
   `{ "<code>": { "name": "…", "short_description": "…" } }` — un objet par langue, dont les clés
   sont celles des **colonnes françaises** correspondantes. C'est ce choix qui a permis au
-  descriptif court de rejoindre le libellé le 2026-09-07 **sans déplacer une seule entrée** ; le
-  descriptif usager s'ajoutera de la même façon. `short_description` n'existe que sur `procedures`
-  (une catégorie n'a pas de descriptif) ; les champs traduisibles sont déclarés une fois pour
-  toutes dans `TRANSLATABLE_FIELDS` (front) et `FIELD_SPECS` (fonction). CHECK
-  `jsonb_typeof = 'object'` des deux côtés.
+  descriptif court de rejoindre le libellé le 2026-09-07 **sans déplacer une seule entrée**, puis
+  au **descriptif usager** (`user_description`, Markdown) de les rejoindre le 2026-09-18.
+  `short_description` et `user_description` n'existent que sur `procedures` (une catégorie n'a pas
+  de descriptif) ; les champs traduisibles sont déclarés une fois pour toutes dans
+  `TRANSLATABLE_FIELDS` (front) et `FIELD_SPECS` (fonction). CHECK `jsonb_typeof = 'object'` des
+  deux côtés. ⚠️ **Deux écrans écrivent `procedures.translations`** : l'étape « Descriptif »
+  (libellé, descriptif court) et l'étape « Communication usager » (`user_description`) — chacun ne
+  gouverne que ses champs (`translationsForWrite(…, fields)`), un test de chaque côté épingle
+  que l'un n'efface pas le travail fait dans l'autre.
 - **Troisième porteur (2026-09-07)** : les **textes de la page composée** du portail
   (`portal_pages.draft/published`), sous la même forme, avec le jeu de champs
   `PORTAL_SECTION_FIELDS` (`title`, `subtitle`, `placeholder`, `body`, `alt` — le texte alternatif
@@ -49,6 +55,21 @@ service — motif du catalogue de démarches, des quartiers, du plafond IA.
   perdre la composition d'une collectivité. ⚠️ **Zod strippe les clés inconnues** : `translations`
   doit être déclaré dans les six schémas de section, sans quoi une traduction saisie survit à la
   frappe puis disparaît au rechargement de l'éditeur (test d'aller-retour dédié).
+- **Quatrième porteur (2026-09-18)** : les **textes de `procedures.user_communication`** — la
+  note sur le public (`note`), chaque pièce annoncée (`label`, `description`), chaque question de
+  la FAQ usager (`question`, `answer`) —, jeu `USER_COMMUNICATION_FIELDS`. Ces textes vivent dans
+  un JSONB, pas dans des colonnes : ils ne peuvent pas rejoindre `procedures.translations`, et la
+  traduction vit donc **sur l'entrée** (`translations` de la note, de chaque pièce, de chaque
+  question), exactement comme sur une section de page — elle **suit sa question** quand la FAQ
+  est réordonnée, disparaît avec elle, et aucune liste n'est à resynchroniser. Même forme, mêmes
+  trois règles. ⚠️ **Toujours `{}` à l'écriture**, mais **absente** des entrées enregistrées avant
+  le 2026-09-18 : un lecteur lit une absence comme `{}`. ⚠️ **L'état de l'écran EST le JSON** :
+  la saisie passe par `setTranslation`/`applyTranslations` (valeur gardée telle quelle, élaguée à
+  la relecture), pas par `translationsForWrite` — motif des sections. ⚠️ **Une réponse de
+  traduction retrouve sa ligne par une CLÉ d'écran, jamais par son index** : elle revient
+  plusieurs secondes après le clic, et repérée par son index elle se poserait sur la question qui
+  a pris la place de celle qu'on vient de retirer (test dédié). La clé n'est jamais enregistrée.
+  Rien ne se traduit dans `delays` : la durée est structurée, le portail la rend dans sa langue.
 - ⚠️ **CHAQUE CHAMP EST INDÉPENDANT, ET LE REPLI SE FAIT CHAMP PAR CHAMP** : une langue peut
   porter le libellé traduit sans le descriptif — c'est le cas normal, pas une traduction
   inachevée. Un consommateur qui replierait la **langue entière** parce qu'un champ manque
@@ -77,7 +98,13 @@ service — motif du catalogue de démarches, des quartiers, du plafond IA.
   un champ unique n'ajouterait qu'une boîte. ⚠️ Le bloc est placé **sous** les textes français
   qu'il traduit : demander à un agent la traduction d'un descriptif qu'il n'a pas encore écrit ne
   peut donner que des cases vides. `TranslatedIn` montre dans les deux listes les langues déjà
-  traduites.
+  traduites. L'étape **« Communication usager »** porte un bloc **par texte** (le descriptif, la
+  note, chaque pièce, chaque question), chacun **replié** sous le texte qu'il traduit
+  (`TranslationsDisclosure`, ouvert d'emblée s'il porte déjà une traduction) : un seul bloc pour
+  toute l'étape aurait perdu la traduction au premier réordonnancement de la FAQ. ⚠️ **Rien ne
+  s'y affiche pour une collectivité monolingue** (motif `SectionTranslations`) : répéter « aucune
+  autre langue n'est activée » sous chaque question n'apprendrait rien — l'étape « Descriptif » le
+  dit déjà.
 - **Traduction automatique** (2026-09-06, étendue au descriptif court le 2026-09-07) : bouton
   **« Traduire automatiquement »** dans `TranslationFields` — donc dans les **deux** écrans,
   démarches et catégories, puisque c'est le même geste sur le même type de texte. ⚠️ **Un seul
@@ -96,6 +123,17 @@ service — motif du catalogue de démarches, des quartiers, du plafond IA.
   pendant l'appel est protégée elle aussi. L'appel ne demande d'ailleurs que ce qui manque — les
   textes absents quelque part, les langues incomplètes. « Tout retraduire » existe, sous
   `AlertDialog`.
+  **Communication usager** (2026-09-18) : le descriptif part en `kind: "procedure"` (c'est une
+  colonne de la démarche), les entrées en `kind: "user_communication"` — **une entrée par appel**
+  (la note, une pièce, une question), jamais tout le bloc. ⚠️ Le descriptif est en **Markdown** :
+  le prompt exige d'en garder la syntaxe et de ne **jamais traduire l'adresse d'un lien**.
+  ⚠️ **C'est le seul champ qui REFUSE au lieu de tronquer** (`refuseLonger`, 3 500 caractères,
+  message à l'agent) : un intitulé trop long n'en est plus un, mais traduire en silence le début
+  d'un descriptif de trois pages publierait une page amputée que personne n'aurait vue l'être.
+  ⚠️ **Le budget de sortie suit la longueur réelle** des textes (`perLanguageCost`,
+  `SOURCE_CHARS_PER_OUTPUT_TOKEN = 2`, estimation prudente pour les écritures non latines), le
+  `cost` de `FIELD_SPECS` n'en est plus que le plancher : un long descriptif part une langue par
+  appel, un court dans un seul lot.
   ⚠️ **Rien n'est persisté par la fonction** : la proposition se pose dans les champs, c'est
   l'enregistrement du formulaire qui l'écrit — l'agent garde le dernier mot (d'où « relisez avant
   d'enregistrer »). ⚠️ **Un texte qui ne se traduit pas est RECOPIÉ, pas écarté** (décision du 2026-09-07, après
@@ -114,7 +152,8 @@ service — motif du catalogue de démarches, des quartiers, du plafond IA.
   chaque langue, lui, vient du front, seul propriétaire du catalogue (le dupliquer dans la fonction
   ferait deux listes pour un seul contrat de nommage). Sans le secret, la fonction répond
   `503 not_configured` et l'écran le dit — voir `docs/operations.md`.
-- **En aval** (contrat 1.11.0 ; `short_description` traduit servi en **1.13.0**) :
+- **En aval** (contrat 1.11.0 ; `short_description` traduit servi en **1.13.0** ;
+  `user_description` traduit et traductions des entrées de `user_communication` en **1.26.0**) :
   `GET /v1/portal/tenant` porte `languages` (héritage **résolu** par
   la RPC `resolve_org_languages`, EXECUTE réservé au service role — motif `resolve_branding`), et
   `translations` est servi **tel quel** sur `Category`, `Procedure` et `PortalProcedure` (schéma
@@ -123,13 +162,16 @@ service — motif du catalogue de démarches, des quartiers, du plafond IA.
   collectivité monolingue — même piège que les colonnes de charte graphique.
 - Code : `src/features/languages/` — `languages.ts` (catalogue + `parseEnabledLanguages`,
   `enabledLanguagesForWrite`, `sortLanguageCodes`), `translations.ts` (`TRANSLATABLE_FIELDS`,
-  `PORTAL_SECTION_FIELDS`, `parseTranslations`, `translationsForWrite`,
+  `PORTAL_SECTION_FIELDS`, `USER_COMMUNICATION_FIELDS`, `parseTranslations`,
+  `translationsForWrite`, `setTranslation`/`applyTranslations` — l'état qui EST le JSON —,
   `localizedField`/`localizedName`) — les deux **purs et testés**, et les trois règles n'y sont
   écrites **qu'une fois** : `parseTranslations` et `translationsForWrite` prennent un paramètre
   `known` (ce que la colonne peut porter) distinct de `fields` (ce que l'écran a le droit
   d'effacer) — les confondre ferait effacer précisément ce que `fields` protège —,
   `useOrganizationLanguages.ts`, `LanguagesSection.tsx` (testé), `TranslationFields.tsx` (**testé** :
-  ce qu'il complète et ce qu'il n'écrase pas), `TranslatedIn.tsx`, `useTranslateLabels.ts`. Miroir
+  ce qu'il complète et ce qu'il n'écrase pas), `TranslationsDisclosure.tsx`, `TranslatedIn.tsx`,
+  `useTranslateLabels.ts`. Côté démarches : `userCommunication.ts` (`*_TRANSLATABLE_FIELDS` par
+  entrée) et `steps/UserCommunicationStep.tsx` (testé, dont la réponse qui retrouve sa ligne). Miroir
   côté edge function : `readLanguages` dans `public-api/_shared/serializers.ts` (testé des deux
   côtés, motif `readDocumentIds`). Traduction automatique :
   `supabase/functions/translate-labels/` — `index.ts` + `_shared/translate.ts` (pur, **testé** :

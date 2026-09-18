@@ -30,7 +30,7 @@ export function buildOpenApiDocument(serverUrl: string): Record<string, unknown>
     openapi: "3.1.0",
     info: {
       title: "API Socle — Référentiel de la gamme",
-      version: "1.25.0",
+      version: "1.26.0",
       description: [
         "API **en lecture seule** exposant le référentiel central de la gamme : les",
         "**organisations** (et sous-organisations) avec l'intégralité de leur configuration,",
@@ -1042,9 +1042,11 @@ export function buildOpenApiDocument(serverUrl: string): Record<string, unknown>
             user_description: {
               type: ["string", "null"],
               description:
-                "Descriptif destiné à l'usager. Ni celui-ci ni `short_description` n'est " +
-                "obligatoire au paramétrage : les deux sont servis pour qu'il reste toujours " +
-                "quelque chose à afficher.",
+                "Descriptif destiné à l'usager, en **Markdown** (contrat 1.24.0) — rendez-le " +
+                "en échappant le HTML, et tirez-en un résumé sans marques si vous l'affichez " +
+                "sur une carte. Ni celui-ci ni `short_description` n'est obligatoire au " +
+                "paramétrage : les deux sont servis pour qu'il reste toujours quelque chose à " +
+                "afficher. Sa traduction est dans `translations.<code>.user_description`.",
             },
             input_duration_minutes: {
               type: ["integer", "null"],
@@ -1758,7 +1760,9 @@ export function buildOpenApiDocument(serverUrl: string): Record<string, unknown>
             "Textes traduits, indexés par **code de langue** (BCP 47 : ISO 639-1 quand il " +
             "existe, ISO 639-3 sinon). Chaque langue porte un objet dont les clés sont celles " +
             "des colonnes françaises correspondantes : `name`, et — sur une démarche — " +
-            "`short_description`. Trois règles à connaître avant d'afficher quoi que ce " +
+            "`short_description` et `user_description` (depuis 1.26.0). Les textes de " +
+            "`user_communication` ne sont PAS ici : ils vivent dans un objet, et leur " +
+            "traduction est portée par chaque entrée. Trois règles à connaître avant d'afficher quoi que ce " +
             "soit : il n'y a **jamais** de clé `fr` (le texte français est le champ de même " +
             "nom) ; un texte **absent** n'est pas un texte vide, c'est un **repli sur le " +
             "champ français** ; et le repli se fait **champ par champ** — une langue peut " +
@@ -1775,10 +1779,20 @@ export function buildOpenApiDocument(serverUrl: string): Record<string, unknown>
                   "Descriptif court dans cette langue (démarches uniquement — une catégorie " +
                   "n'en a pas).",
               },
+              user_description: {
+                type: "string",
+                description:
+                  "Descriptif usager dans cette langue, en **Markdown** comme le français " +
+                  "(démarches uniquement, depuis 1.26.0). Même rendu que `user_description`.",
+              },
             },
           },
           example: {
-            en: { name: "Birth certificate", short_description: "To get a copy of your record." },
+            en: {
+              name: "Birth certificate",
+              short_description: "To get a copy of your record.",
+              user_description: "## Who is it for?\n\n- Anyone born in the town",
+            },
             br: { name: "Testeni ganedigezh" },
           },
         },
@@ -2002,7 +2016,10 @@ export function buildOpenApiDocument(serverUrl: string): Record<string, unknown>
             "tel quel. ⚠️ `null` = elle n'a rien écrit, et les défauts de cette colonne " +
             "sont **vides** — à l'inverse de `communication_config`, dont un `null` se lit " +
             "« visible ». N'affichez aucune section, et ne composez aucun texte à sa place. " +
-            "⚠️ **Le descriptif n'est pas ici** : c'est `user_description`, servi à côté.",
+            "⚠️ **Le descriptif n'est pas ici** : c'est `user_description`, servi à côté. " +
+            "**Traductions** (1.26.0) : la note, chaque pièce et chaque question portent " +
+            "leurs propres `translations` (`UserCommunicationTranslations`), à replier " +
+            "**champ par champ** sur le texte français de l'entrée.",
           properties: {
             delays: { $ref: "#/components/schemas/UserCommunicationDelays" },
             audience: {
@@ -2014,6 +2031,10 @@ export function buildOpenApiDocument(serverUrl: string): Record<string, unknown>
                 "en cas de contradiction, **`audiences` fait foi**.",
               properties: {
                 note: { type: "string", description: "Souvent vide." },
+                translations: {
+                  $ref: "#/components/schemas/UserCommunicationTranslations",
+                  description: "La note dans les autres langues : clé `note`.",
+                },
               },
             },
             attachments: {
@@ -2050,14 +2071,27 @@ export function buildOpenApiDocument(serverUrl: string): Record<string, unknown>
           },
           example: {
             delays: { processingTimeValue: 3, processingTimeUnit: "semaine" },
-            audience: { note: "Réservée aux personnes résidant sur la commune." },
+            audience: {
+              note: "Réservée aux personnes résidant sur la commune.",
+              translations: { en: { note: "For residents of the town only." } },
+            },
             attachments: {
               items: [
-                { label: "Justificatif de domicile", description: "De moins de trois mois" },
+                {
+                  label: "Justificatif de domicile",
+                  description: "De moins de trois mois",
+                  translations: { en: { label: "Proof of address" } },
+                },
               ],
             },
             faq: {
-              items: [{ question: "Où retirer l'acte ?", answer: "À l'accueil de la mairie." }],
+              items: [
+                {
+                  question: "Où retirer l'acte ?",
+                  answer: "À l'accueil de la mairie.",
+                  translations: {},
+                },
+              ],
             },
           },
         },
@@ -2097,6 +2131,10 @@ export function buildOpenApiDocument(serverUrl: string): Record<string, unknown>
               type: "string",
               description: "Précision facultative — ex. « De moins de trois mois ». Souvent vide.",
             },
+            translations: {
+              $ref: "#/components/schemas/UserCommunicationTranslations",
+              description: "L'intitulé et la précision dans les autres langues : clés `label`, `description`.",
+            },
           },
         },
         UserCommunicationFaqItem: {
@@ -2105,6 +2143,41 @@ export function buildOpenApiDocument(serverUrl: string): Record<string, unknown>
           properties: {
             question: { type: "string" },
             answer: { type: "string" },
+            translations: {
+              $ref: "#/components/schemas/UserCommunicationTranslations",
+              description: "La question et sa réponse dans les autres langues : clés `question`, `answer`.",
+            },
+          },
+        },
+        UserCommunicationTranslations: {
+          type: "object",
+          description:
+            "Textes d'UNE entrée de `user_communication` traduits, indexés par **code de " +
+            "langue** (BCP 47) — depuis 1.26.0. Les clés d'une langue sont celles des textes " +
+            "français de l'entrée : `note` pour la note sur le public, `label` et " +
+            "`description` pour une pièce, `question` et `answer` pour une question. La " +
+            "traduction vit **sur l'entrée** (et non dans une couche par langue) : elle suit " +
+            "sa question quand la collectivité réordonne sa FAQ. Mêmes trois règles que " +
+            "`Translations` : il n'y a **jamais** de clé `fr` (le français est le champ de " +
+            "même nom) ; un texte **absent** n'est pas un texte vide, c'est un **repli sur " +
+            "le champ français** ; et ce repli se fait **champ par champ** — une question " +
+            "peut être traduite sans sa réponse, c'est le cas normal. ⚠️ **Absent sur les " +
+            "entrées enregistrées avant 1.26.0** : lisez une absence comme `{}`. Les langues " +
+            "qu'une collectivité a activées sont servies par `GET /v1/portal/tenant` " +
+            "(`languages`).",
+          additionalProperties: {
+            type: "object",
+            properties: {
+              note: { type: "string" },
+              label: { type: "string" },
+              description: { type: "string" },
+              question: { type: "string" },
+              answer: { type: "string" },
+            },
+          },
+          example: {
+            en: { question: "Where can I collect the certificate?", answer: "At the town hall." },
+            br: { question: "Pelec'h e c'hellan kaout an akta ?" },
           },
         },
         CommunicationConfig: {

@@ -115,6 +115,9 @@ export interface ProcedureDto {
    * d'annonce, qui peut les recouper. Ne les concaténez pas.
    * ⚠️ **Deux FAQ existent, une seule sort** : celle de `knowledge_base` est
    * écrite pour l'agent et n'a jamais traversé vers un portail public.
+   * **Traductions** (1.26.0) : la note, chaque pièce et chaque question portent
+   * leurs propres `translations` (clés = leurs champs français), à replier
+   * champ par champ. Le descriptif traduit, lui, est dans `translations`.
    */
   user_communication: unknown;
   /**
@@ -587,6 +590,9 @@ export interface PortalProcedureDetailDto extends PortalProcedureDto {
    * d'annonce, qui peut les recouper. Ne les concaténez pas.
    * ⚠️ **Deux FAQ existent, une seule sort** : celle de `knowledge_base` est
    * écrite pour l'agent et n'a jamais traversé vers un portail public.
+   * **Traductions** (1.26.0) : la note, chaque pièce et chaque question portent
+   * leurs propres `translations` (clés = leurs champs français), à replier
+   * champ par champ. Le descriptif traduit, lui, est dans `translations`.
    */
   user_communication: unknown;
 }
