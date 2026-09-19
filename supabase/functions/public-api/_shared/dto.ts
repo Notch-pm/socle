@@ -288,6 +288,40 @@ export interface BrandingDto {
 }
 
 /**
+ * Les cinq rubriques des recommandations aux agents — JSON possédé, mêmes clés
+ * que `src/features/organizations/agentGuidance.ts` (et, pour la FAQ et les
+ * liens, mêmes formes que `knowledge_base`). Textes en Markdown.
+ */
+export interface AgentGuidanceBody {
+  roleDescription: string;
+  physicalReception: string;
+  guidelines: Array<{ title: string; text: string }>;
+  faq: Array<{ question: string; answer: string }>;
+  recommendedSources: Array<{ url: string; description: string }>;
+}
+
+/**
+ * Recommandations aux agents **applicables** à une organisation (2026-09-19) :
+ * ce que la collectivité dit à ses agents pour toutes ses démarches à la fois.
+ * Elles se rédigent sur l'organisation principale ; une sous-organisation reçoit
+ * celles de sa racine, et `source_organization_id` dit laquelle les porte.
+ *
+ * ⚠️ **Interne** : destiné aux applications côté agent (et à leur assistant IA),
+ * jamais à un usager — aucune route `/v1/portal/*` ne le sert.
+ *
+ * `configured = false` ⇒ rien d'écrit : les rubriques sont vides, pas absentes.
+ */
+export interface AgentGuidanceDto {
+  organization_id: string;
+  /** Organisation qui porte les recommandations servies (aujourd'hui, la racine) ; `null` si rien n'est écrit. */
+  source_organization_id: string | null;
+  configured: boolean;
+  /** Dernier enregistrement ; `null` si rien n'est écrit. */
+  updated_at: string | null;
+  guidance: AgentGuidanceBody;
+}
+
+/**
  * Collectivité derrière un domaine du portail usagers — réponse de
  * `GET /v1/portal/tenant`.
  *

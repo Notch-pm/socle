@@ -2,6 +2,7 @@ import * as React from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import {
   ArrowLeft,
+  BookUser,
   Globe,
   Languages,
   ListChecks,
@@ -20,8 +21,9 @@ import { OrganizationProceduresTab } from "@/features/organizations/Organization
 import { BrandingSection } from "@/features/organizations/BrandingSection";
 import { DomainsSection } from "@/features/organizations/DomainsSection";
 import { LanguagesSection } from "@/features/languages/LanguagesSection";
+import { AgentGuidanceSection } from "@/features/organizations/AgentGuidanceSection";
 
-type TabKey = "infos" | "charte" | "langues" | "domaines" | "demarches" | "smtp";
+type TabKey = "infos" | "charte" | "langues" | "agents" | "domaines" | "demarches" | "smtp";
 
 const TABS: { key: TabKey; label: string; icon: LucideIcon }[] = [
   { key: "infos", label: "Informations de base", icon: Settings2 },
@@ -31,6 +33,9 @@ const TABS: { key: TabKey; label: string; icon: LucideIcon }[] = [
   // Les langues, elles, ne se découpent pas par service : le réglage n'existe
   // que sur l'organisation principale, l'onglet le dit sur les autres.
   { key: "langues", label: "Langues", icon: Languages },
+  // Même parti que les langues : la doctrine de la collectivité ne se découpe
+  // pas par service, l'onglet renvoie une sous-organisation à sa racine.
+  { key: "agents", label: "Recommandations aux agents", icon: BookUser },
   // Le portail usagers sert la collectivité que DÉSIGNE le domaine visité :
   // l'onglet vit donc sur toute organisation, sous-organisation comprise, dès
   // lors qu'elle tient son propre guichet.
@@ -114,6 +119,7 @@ export function OrganizationEditorPage() {
         {activeTab === "infos" && <OrganizationInfoTab organization={organization} />}
         {activeTab === "charte" && <BrandingSection organization={organization} />}
         {activeTab === "langues" && <LanguagesSection organization={organization} />}
+        {activeTab === "agents" && <AgentGuidanceSection organization={organization} />}
         {activeTab === "domaines" && <DomainsSection organizationId={organization.id} />}
         {activeTab === "demarches" && (
           <OrganizationProceduresTab organizationId={organization.id} />

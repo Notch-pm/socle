@@ -250,6 +250,27 @@ aucun endpoint, il décrit ce qui existe **en base**.
 
 ---
 
+### `organization_agent_guidance` — recommandations aux agents (2026-09-19)
+
+- `organization_id` **clé primaire**, FK **CASCADE** vers `organizations` (une ligne par
+  collectivité) ; `guidance` jsonb NOT NULL défaut `{}` (CHECK objet, garde-fou de taille 500 000
+  caractères) ; `created_at` / `updated_at` (trigger `set_updated_at`).
+- Ce que la collectivité dit **à ses agents** pour toutes ses démarches à la fois : rôle des agents,
+  accueil physique, consignes générales, FAQ, sources recommandées. **Version globale de
+  `procedures.knowledge_base`** — même public (l'agent et son assistant IA) —, jamais fusionnée
+  avec elle : la consigne d'une démarche l'emporte.
+- ⚠️ **Une table, pas une colonne d'`organizations`** : la liste des organisations se lit en
+  `select("*")` (écrans d'administration, `GET /v1/organizations`), et ce texte peut peser des
+  dizaines de kilo-octets.
+- ⚠️ **Interne** : aucune route `/v1/portal/*` ne le sert.
+- **Racine uniquement** (trigger `enforce_agent_guidance_root_org`, EXECUTE révoqué des trois
+  rôles) · **RLS** : lecture `has_org_access` · INSERT/UPDATE `is_org_admin` · pas de DELETE
+  client (vider les rubriques suffit).
+- Servi, héritage résolu, par `GET /v1/organizations/{id}/agent-guidance` (contrat 1.27.0) via la
+  RPC `resolve_agent_guidance`. Contrat JSON : `src/features/organizations/agentGuidance.ts`.
+
+---
+
 ---
 
 ## Catalogue de démarches
@@ -807,6 +828,14 @@ redire après l'ajout du favicon.
   `organizations.enabled_languages` : au moins `fr`, pas de doublon, codes de la forme
   `^[a-z]{2,3}(-[a-z0-9]{2,8})*$`. Miroir de `LANGUAGE_CODE_RE` côté application.
 
+### RPC recommandations aux agents
+
+- `resolve_agent_guidance(p_org_id) → TABLE(source_organization_id, guidance, updated_at)` — SQL
+  `STABLE`, `SECURITY INVOKER`, CTE ascendante jusqu'à la racine (garde 20 niveaux), jointe à
+  `organization_agent_guidance` : les recommandations **applicables** à une organisation, celles de
+  sa racine. **Aucune ligne** si rien n'est écrit. EXECUTE **réservé à `service_role`** (motif
+  `resolve_org_languages`), servie par `public-api`.
+
 ### `match_contacts(...)` — rapprochement d'identités
 
 `match_contacts(p_org_id, p_contact_type, p_first_name, p_last_name, p_usage_name, p_legal_name,
@@ -1188,6 +1217,14 @@ redire après l'ajout du favicon.
 - `is_valid_language_set(codes text[]) → bool` — SQL `IMMUTABLE`, support du CHECK sur
   `organizations.enabled_languages` : au moins `fr`, pas de doublon, codes de la forme
   `^[a-z]{2,3}(-[a-z0-9]{2,8})*$`. Miroir de `LANGUAGE_CODE_RE` côté application.
+
+### RPC recommandations aux agents
+
+- `resolve_agent_guidance(p_org_id) → TABLE(source_organization_id, guidance, updated_at)` — SQL
+  `STABLE`, `SECURITY INVOKER`, CTE ascendante jusqu'à la racine (garde 20 niveaux), jointe à
+  `organization_agent_guidance` : les recommandations **applicables** à une organisation, celles de
+  sa racine. **Aucune ligne** si rien n'est écrit. EXECUTE **réservé à `service_role`** (motif
+  `resolve_org_languages`), servie par `public-api`.
 
 ### `match_contacts(...)` — rapprochement d'identités
 

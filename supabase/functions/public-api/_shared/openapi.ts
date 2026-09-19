@@ -30,7 +30,7 @@ export function buildOpenApiDocument(serverUrl: string): Record<string, unknown>
     openapi: "3.1.0",
     info: {
       title: "API Socle — Référentiel de la gamme",
-      version: "1.26.0",
+      version: "1.27.0",
       description: [
         "API **en lecture seule** exposant le référentiel central de la gamme : les",
         "**organisations** (et sous-organisations) avec l'intégralité de leur configuration,",
@@ -118,6 +118,13 @@ export function buildOpenApiDocument(serverUrl: string): Record<string, unknown>
         description:
           "Logos et couleurs de la collectivité, héritage déjà résolu — de quoi habiller " +
           "une interface aux couleurs de l'organisation sans remonter sa hiérarchie.",
+      },
+      {
+        name: "Recommandations aux agents",
+        description:
+          "Ce que la collectivité dit à ses agents pour toutes ses démarches à la fois : rôle, " +
+          "accueil physique, consignes générales, FAQ, sources recommandées. Version globale de " +
+          "`knowledge_base`, même public (l'agent et son assistant IA). Interne : jamais pour un usager.",
       },
       { name: "Documents", description: "Accès temporaire aux documents privés." },
       {
@@ -525,6 +532,50 @@ export function buildOpenApiDocument(serverUrl: string): Record<string, unknown>
               description: "La charte applicable, ou l'absence de charte.",
               content: {
                 "application/json": { schema: { $ref: "#/components/schemas/Branding" } },
+              },
+            },
+            ...errorResponses("400", "401", "404", "500"),
+          },
+        },
+      },
+      "/v1/organizations/{id}/agent-guidance": {
+        get: {
+          tags: ["Recommandations aux agents"],
+          summary: "Recommandations aux agents applicables à une organisation",
+          description: [
+            "Ce que la collectivité dit **à ses agents**, pour toutes ses démarches à la fois : le",
+            "rôle des agents, les spécificités de l'accueil physique, des consignes générales, une",
+            "FAQ et des sources recommandées. Scope `read`.",
+            "",
+            "**Rédigées sur l'organisation principale.** Interroger une sous-organisation est",
+            "légitime : la réponse est celle de sa racine, et `source_organization_id` le dit.",
+            "",
+            "**Version globale de `knowledge_base`** (base de connaissances d'une démarche) : même",
+            "public, mêmes formes pour la FAQ et les liens. Les deux ne se fusionnent pas — montrez-",
+            "les côte à côte, et donnez à votre assistant IA cette règle : **la consigne de la",
+            "démarche l'emporte sur la consigne générale**.",
+            "",
+            "⚠️ **Interne.** Destiné aux applications côté agent et à leur assistant IA, jamais à",
+            "un usager : ne le servez sur aucune page publique. Les `recommendedSources` sont des",
+            "liens à citer — un assistant ne les consulte pas pour autant.",
+            "",
+            "Rien d'écrit ⇒ **200** avec `configured: false` et des rubriques **vides** (jamais",
+            "absentes) : n'affichez rien. Le 404 est réservé à une organisation hors périmètre.",
+          ].join("\n"),
+          parameters: [
+            {
+              name: "id",
+              in: "path",
+              required: true,
+              description: "Identifiant UUID de l'organisation (principale ou sous-organisation).",
+              schema: { type: "string", format: "uuid" },
+            },
+          ],
+          responses: {
+            "200": {
+              description: "Les recommandations applicables, ou leur absence.",
+              content: {
+                "application/json": { schema: { $ref: "#/components/schemas/AgentGuidance" } },
               },
             },
             ...errorResponses("400", "401", "404", "500"),
@@ -1587,6 +1638,86 @@ export function buildOpenApiDocument(serverUrl: string): Record<string, unknown>
             favicon_url: "https://exemple.fr/favicon.png",
             primary_color: "#1f8a5b",
             secondary_color: "#ffd166",
+          },
+        },
+        AgentGuidance: {
+          type: "object",
+          description:
+            "Recommandations aux agents applicables, rédigées sur l'organisation principale. " +
+            "`configured: false` = rien d'écrit ; `guidance` porte alors cinq rubriques vides.",
+          required: ["organization_id", "source_organization_id", "configured", "updated_at", "guidance"],
+          properties: {
+            organization_id: { type: "string", format: "uuid", description: "Organisation demandée." },
+            source_organization_id: {
+              type: ["string", "null"],
+              format: "uuid",
+              description: "Organisation qui porte les recommandations servies (sa racine) ; `null` si rien n'est écrit.",
+            },
+            configured: { type: "boolean", description: "Au moins une rubrique est remplie." },
+            updated_at: {
+              type: ["string", "null"],
+              format: "date-time",
+              description: "Dernier enregistrement ; `null` si rien n'est écrit.",
+            },
+            guidance: {
+              type: "object",
+              description:
+                "Les cinq rubriques, toujours présentes. Textes en **Markdown**. Les entrées de " +
+                "liste entièrement vides sont écartées ; l'ordre des listes est un ordre de lecture.",
+              required: ["roleDescription", "physicalReception", "guidelines", "faq", "recommendedSources"],
+              properties: {
+                roleDescription: { type: "string", description: "Rôle des agents (Markdown)." },
+                physicalReception: {
+                  type: "string",
+                  description: "Spécificités de l'accueil physique (Markdown).",
+                },
+                guidelines: {
+                  type: "array",
+                  description:
+                    "Consignes générales. ⚠️ Pas des « procédures » : le mot désigne les démarches.",
+                  items: { $ref: "#/components/schemas/AgentGuideline" },
+                },
+                faq: {
+                  type: "array",
+                  description:
+                    "FAQ des agents, toutes démarches confondues — distincte de `knowledge_base.faq` " +
+                    "et de la FAQ usager.",
+                  items: {
+                    type: "object",
+                    properties: { question: { type: "string" }, answer: { type: "string" } },
+                  },
+                },
+                recommendedSources: {
+                  type: "array",
+                  description: "Sources de données recommandées, pour l'agent comme pour son assistant IA.",
+                  items: { $ref: "#/components/schemas/KbLink" },
+                },
+              },
+            },
+          },
+          example: {
+            organization_id: "44b8ebdb-2e7b-4cfa-b4c7-51896b5ff606",
+            source_organization_id: "d5227d25-f327-493a-a9a2-278397531e33",
+            configured: true,
+            updated_at: "2026-09-19T08:00:00+00:00",
+            guidance: {
+              roleDescription: "Accueillir, **orienter**, instruire.",
+              physicalReception: "Guichet ouvert du lundi au vendredi, de 8 h 30 à 12 h.",
+              guidelines: [
+                { title: "Confidentialité", text: "Aucun dossier ne se lit à voix haute au guichet." },
+              ],
+              faq: [{ question: "Un usager peut-il déposer pour un tiers ?", answer: "Oui, avec une procuration." }],
+              recommendedSources: [
+                { url: "https://www.service-public.fr", description: "Fiches pratiques de l'administration" },
+              ],
+            },
+          },
+        },
+        AgentGuideline: {
+          type: "object",
+          properties: {
+            title: { type: "string", description: "Titre de la consigne (peut être vide)." },
+            text: { type: "string", description: "Texte de la consigne (Markdown)." },
           },
         },
         SmtpSettings: {

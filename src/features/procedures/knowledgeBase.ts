@@ -94,7 +94,7 @@ function coerceString(value: unknown): string {
   return typeof value === "string" ? value : "";
 }
 
-function parseLinks(raw: unknown): KbLink[] {
+export function parseLinks(raw: unknown): KbLink[] {
   if (!Array.isArray(raw)) return [];
   const links: KbLink[] = [];
   for (const item of raw) {
@@ -107,7 +107,7 @@ function parseLinks(raw: unknown): KbLink[] {
   return links;
 }
 
-function parseFaq(raw: unknown): FaqItem[] {
+export function parseFaq(raw: unknown): FaqItem[] {
   if (!Array.isArray(raw)) return [];
   const faq: FaqItem[] = [];
   for (const item of raw) {

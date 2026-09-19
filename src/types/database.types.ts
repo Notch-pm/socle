@@ -764,6 +764,35 @@ export type Database = {
           },
         ]
       }
+      organization_agent_guidance: {
+        Row: {
+          created_at: string
+          guidance: Json
+          organization_id: string
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          guidance?: Json
+          organization_id: string
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          guidance?: Json
+          organization_id?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "organization_agent_guidance_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: true
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       organization_applications: {
         Row: {
           application_id: string
@@ -1637,6 +1666,14 @@ export type Database = {
       reset_orphan_manual_quartiers: {
         Args: { p_org_id: string }
         Returns: undefined
+      }
+      resolve_agent_guidance: {
+        Args: { p_org_id: string }
+        Returns: {
+          guidance: Json
+          source_organization_id: string
+          updated_at: string
+        }[]
       }
       resolve_branding: {
         Args: { p_org_id: string }

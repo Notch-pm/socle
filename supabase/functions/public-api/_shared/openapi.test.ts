@@ -30,6 +30,7 @@ describe("buildOpenApiDocument", () => {
         "/v1/organizations/{id}",
         "/v1/organizations/{id}/smtp",
         "/v1/organizations/{id}/branding",
+        "/v1/organizations/{id}/agent-guidance",
         "/v1/categories",
         "/v1/procedures",
         "/v1/procedures/{id}",
@@ -152,6 +153,46 @@ describe("buildOpenApiDocument", () => {
   });
 });
 
+describe("contrat — recommandations aux agents (1.27.0)", () => {
+  const doc = buildOpenApiDocument("https://example.supabase.co/functions/v1/public-api") as any;
+  const route = doc.paths["/v1/organizations/{id}/agent-guidance"].get;
+  const schema = doc.components.schemas.AgentGuidance;
+
+  it("scope `read`, 404 réservé au hors-périmètre, rien d'écrit = 200", () => {
+    expect(route.tags).toEqual(["Recommandations aux agents"]);
+    expect(route.responses).not.toHaveProperty("403");
+    expect(route.responses).toHaveProperty("404");
+    expect(route.description).toContain("`configured: false`");
+  });
+
+  it("⚠️ dit que c'est interne, et que la démarche l'emporte", () => {
+    expect(route.description).toContain("Interne");
+    expect(route.description).toContain("la consigne de la");
+    expect(route.description).toContain("l'emporte");
+  });
+
+  it("les cinq rubriques sont toujours présentes, sous les clés du Socle", () => {
+    expect(schema.properties.guidance.required).toEqual([
+      "roleDescription",
+      "physicalReception",
+      "guidelines",
+      "faq",
+      "recommendedSources",
+    ]);
+    // Mêmes liens que `knowledge_base` : un consommateur réutilise son parseur.
+    expect(schema.properties.guidance.properties.recommendedSources.items).toEqual({
+      $ref: "#/components/schemas/KbLink",
+    });
+  });
+
+  it("aucune route du portail ne sert ces recommandations", () => {
+    const portalRefs = Object.entries(doc.paths)
+      .filter(([path]) => path.startsWith("/v1/portal/"))
+      .map(([, spec]) => JSON.stringify(spec));
+    for (const spec of portalRefs) expect(spec).not.toContain("AgentGuidance");
+  });
+});
+
 describe("contrat — ce que la collectivité écrit pour ses usagers", () => {
   const doc = buildOpenApiDocument("https://example.supabase.co/functions/v1/public-api") as any;
   const schemas = doc.components.schemas;
@@ -251,8 +292,8 @@ describe("contrat — traduction de la communication usager (1.26.0)", () => {
 describe("contrat — documents et courriers", () => {
   const doc = buildOpenApiDocument("https://example.supabase.co/functions/v1/public-api") as any;
 
-  it("annonce la version 1.26.0 du contrat", () => {
-    expect(doc.info.version).toBe("1.26.0");
+  it("annonce la version 1.27.0 du contrat", () => {
+    expect(doc.info.version).toBe("1.27.0");
   });
 
   it("le thème voyage avec le TENANT : il vaut pour toutes les pages", () => {

@@ -13,12 +13,15 @@ export function LinkListEditor({
   value,
   onChange,
   addLabel = "Ajouter un lien",
+  max,
 }: {
   label: string;
   hint?: string;
   value: KbLink[];
   onChange: (value: KbLink[]) => void;
   addLabel?: string;
+  /** Nombre maximal de liens : le bouton d'ajout disparaît une fois atteint. */
+  max?: number;
 }) {
   const update = (index: number, patch: Partial<KbLink>) =>
     onChange(value.map((item, i) => (i === index ? { ...item, ...patch } : item)));
@@ -51,7 +54,9 @@ export function LinkListEditor({
             <RemoveButton onClick={() => remove(index)} label="Retirer ce lien" />
           </div>
         ))}
-        <AddButton onClick={add}>{addLabel}</AddButton>
+        {max === undefined || value.length < max ? (
+          <AddButton onClick={add}>{addLabel}</AddButton>
+        ) : null}
       </div>
     </Field>
   );

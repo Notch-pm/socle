@@ -161,6 +161,7 @@ exécutables par `authenticated` : le RLS les évalue avec les droits de l'appel
 - `portal_pages` (composition des pages du portail, `draft` autosauvegardé / `published` explicite — voir feature « site de démarches »).
 - `portal_themes` (apparence du site de démarches — une ligne par racine, `draft`/`published` comme `portal_pages` ; **aucune couleur** : elles vivent dans la charte — voir feature « thème du site »).
 - `portal_contents` (pages de **texte** du site, une par `(racine, slug)`, `draft`/`published` ; aujourd'hui la **déclaration d'accessibilité** — voir feature « site de démarches »).
+- `organization_agent_guidance` (**recommandations aux agents**, une ligne par racine — version globale de `knowledge_base`, **interne** — voir feature « Organisations »).
 
 Types TS générés dans `src/types/database.types.ts` — **ne pas éditer à la main**,
 régénérer depuis le schéma live (Supabase MCP `generate_typescript_types` / CLI).
@@ -187,8 +188,12 @@ Trois motifs reviennent dans presque toutes les fiches — les connaître évite
   des deux côtés et **testée des deux côtés** (motif `readDocumentIds`).
 
 ### [Organisations](docs/features/organisations.md)
-Hiérarchie, édition en pleine page (onglets Informations, Charte graphique, Langues, Démarches,
-Emails, Domaines), gestion superadmin (`OrgSettingsPage`, menu latéral par client).
+Hiérarchie, édition en pleine page (onglets Informations, Charte graphique, Langues,
+Recommandations aux agents, Démarches, Emails, Domaines), gestion superadmin (`OrgSettingsPage`,
+menu latéral par client).
+- ⚠️ **Recommandations aux agents** (2026-09-19) : version **globale** de `knowledge_base`, sur la
+  racine seule, servie par `GET /v1/organizations/{id}/agent-guidance` — **interne**, jamais au
+  portail ; « consignes générales », jamais « procédures » (le mot désigne les démarches).
 - Arbre `parent_id`, **10 niveaux max** (`enforce_org_depth`, bloque aussi les cycles). Le super
   admin seul crée les racines et supprime (jamais une racine) ; un admin d'org gère tout son
   sous-arbre, sans suppression. Les racines sont les **clients** : aucune vue n'en fond plusieurs.

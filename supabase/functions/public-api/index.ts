@@ -34,6 +34,7 @@ import { errorResponse, jsonResponse } from "./_shared/errors.ts";
 import { buildOpenApiDocument } from "./_shared/openapi.ts";
 import { isoDay } from "./_shared/publication.ts";
 import { serializePortalPage } from "./_shared/portalPage.ts";
+import { serializeAgentGuidance } from "./_shared/agentGuidance.ts";
 import {
   ACCESSIBILITY_STATEMENT_SLUG,
   hasPublishedContent,
@@ -711,6 +712,32 @@ Deno.serve(async (req: Request) => {
         if (brandingError) throw brandingError;
         const branding = Array.isArray(brandingRows) ? brandingRows[0] : brandingRows;
         return jsonResponse(200, serializeBranding(id, branding ?? null), corsHeaders);
+      }
+      // --- /v1/organizations/{id}/agent-guidance ---
+      // Recommandations aux agents **applicables** : celles de l'organisation
+      // principale, pour toute organisation de son arbre (2026-09-19). Scope
+      // `read` : c'est du référentiel INTERNE, comme `knowledge_base` — rien
+      // ici n'est un secret, mais rien n'est destiné à l'usager non plus, et
+      // aucune route `/v1/portal/*` ne le sert.
+      //
+      // Remontée à la racine faite en base (`resolve_agent_guidance`, EXECUTE
+      // réservé au service role). Rien d'écrit ⇒ 200 `configured: false`, pas
+      // un 404 : le 404 reste réservé au hors-périmètre.
+      if (segments.length === 4 && segments[3] === "agent-guidance") {
+        const id = segments[2];
+        if (!isUuid(id)) {
+          return errorResponse("bad_request", "Identifiant d'organisation invalide.", corsHeaders);
+        }
+        if (!inScope(id)) {
+          return errorResponse("not_found", "Organisation introuvable.", corsHeaders);
+        }
+        const { data: guidanceRows, error: guidanceError } = await admin.rpc(
+          "resolve_agent_guidance",
+          { p_org_id: id },
+        );
+        if (guidanceError) throw guidanceError;
+        const guidance = Array.isArray(guidanceRows) ? guidanceRows[0] : guidanceRows;
+        return jsonResponse(200, serializeAgentGuidance(id, guidance ?? null), corsHeaders);
       }
     }
 

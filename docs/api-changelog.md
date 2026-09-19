@@ -1,7 +1,7 @@
 # Journal des évolutions des API publiques
 
 > **Public** : équipes consommatrices (Ariane, Clara, Iris, partenaires) · **Question traitée** :
-> quand un contrat d'API a-t-il changé, et comment ? · **Dernière mise à jour** : 2026-09-18
+> quand un contrat d'API a-t-il changé, et comment ? · **Dernière mise à jour** : 2026-09-19
 
 Journal **append-only** : chaque évolution de la surface de contrat des API publiques
 (`public-api`, `contacts-api`, `ai-api`, `audience-api`) — endpoint, paramètre, champ de réponse,
@@ -10,6 +10,40 @@ réécrite ; une correction s'ajoute sous une nouvelle date. Politique de compat
 consommateur : [integration.md](./integration.md#politique-de-compatibilité-v1).
 
 Format d'une entrée : `## AAAA-MM-JJ — <api> — ajout|correctif|rupture`
+
+---
+
+## 2026-09-19 — public-api — ajout (recommandations aux agents)
+
+**Ce que la collectivité dit à ses agents, pour toutes ses démarches à la fois.** Nouvel onglet
+« Recommandations aux agents » sur l'organisation principale, servi par une route nouvelle. Version du
+contrat : **1.27.0**. Ajout **additif** : rien ne change pour qui ne l'appelle pas.
+
+`GET /v1/organizations/{id}/agent-guidance` — scope `read`, 404 hors périmètre :
+
+| Champ | Valeur | Ce qu'il dit |
+|---|---|---|
+| `organization_id` | uuid | L'organisation demandée |
+| `source_organization_id` | uuid ou `null` | Celle qui porte les recommandations (sa racine) ; `null` si rien n'est écrit |
+| `configured` | booléen | Au moins une rubrique est remplie |
+| `updated_at` | date-heure ou `null` | Dernier enregistrement |
+| `guidance.roleDescription` | Markdown | Rôle des agents |
+| `guidance.physicalReception` | Markdown | Spécificités de l'accueil physique |
+| `guidance.guidelines[]` | `{ title, text }` | Consignes générales, dans l'ordre de lecture |
+| `guidance.faq[]` | `{ question, answer }` | FAQ des agents |
+| `guidance.recommendedSources[]` | `{ url, description }` (`KbLink`) | Sources de données recommandées |
+
+- **C'est la version GLOBALE de `knowledge_base`** : même public (l'agent et son assistant IA),
+  mêmes formes pour la FAQ et les liens — votre parseur de `knowledge_base` les lit déjà. Les deux ne
+  se fusionnent pas : montrez-les côte à côte, et dites à votre assistant que **la consigne de la
+  démarche l'emporte sur la consigne générale**.
+- ⚠️ **Interne** : jamais sur une page destinée à un usager. Aucune route `/v1/portal/*` ne le sert.
+- ⚠️ **Rédigées sur l'organisation principale seulement** : interroger une sous-organisation rend
+  celles de sa racine. Le jour où un organisme pourra avoir les siennes, `source_organization_id` le
+  dira sans rupture.
+- **Rien d'écrit ⇒ 200**, `configured: false` et cinq rubriques **vides, jamais absentes**.
+- ⚠️ **« Consignes générales », pas « procédures »** : ce mot désigne les démarches.
+- **Consommateur** : Iris (base de connaissances et assistant IA). Rien à faire pour les autres.
 
 ---
 

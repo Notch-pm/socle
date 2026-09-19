@@ -101,6 +101,19 @@ garde sa modale (`OrganizationsManager` reçoit `onEditOrganization` seulement c
   `revoke ... from public` n'enlève pas. Reposer les droits en citant les **trois** rôles.
   Côté Nora, le favicon se pose en `<link rel="icon">` (`src/features/portal/favicon.ts`) :
   ⚠️ **son absence n'est pas un effacement**, l'onglet garde ce qu'il affichait.
+- **Onglet « Recommandations aux agents »** (`AgentGuidanceSection`, 2026-09-19, **organisation
+  principale uniquement** — une sous-organisation y lit que le réglage vit sur sa racine) : ce que
+  la collectivité dit **à ses agents**, pour toutes ses démarches à la fois — rôle des agents et
+  accueil physique (Markdown), **consignes générales** (titre + texte, ajout/suppression), FAQ des
+  agents, sources de données recommandées. Table `organization_agent_guidance` (une ligne par
+  racine, trigger `enforce_agent_guidance_root_org`), contrat pur `agentGuidance.ts` (testé, miroir
+  edge testé contre lui), servi par `GET /v1/organizations/{id}/agent-guidance` (1.27.0).
+  ⚠️ **Version globale de `knowledge_base`**, jamais fusionnée avec elle : même public (l'agent et
+  son assistant IA), mêmes éditeurs (`MarkdownField`, `FaqEditor`, `LinkListEditor`), et la
+  consigne d'une démarche l'emporte. ⚠️ **« Consignes », pas « procédures »** : le mot désigne
+  déjà les démarches et `proceduresText`. ⚠️ **Interne** : aucune route du portail ne le sert.
+  ⚠️ **Une table et non une colonne** : `organizations` se lit en `select("*")` partout.
+  Côté superadmin, la même section est une carte d'`OrgSettingsPage` (`?section=agents`).
 - **Onglet « Langues »** (`LanguagesSection`, **organisation principale uniquement** — une
   sous-organisation y lit qu'elle suit sa racine) : quelles langues la collectivité active pour
   s'adresser à ses usagers. Voir feature « Langues et libellés traduits ».

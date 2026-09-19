@@ -21,6 +21,7 @@ export function FaqEditor<T extends FaqItem = FaqItem>({
   createItem,
   itemKey,
   renderItemFooter,
+  max,
 }: {
   label: string;
   hint?: string;
@@ -39,6 +40,8 @@ export function FaqEditor<T extends FaqItem = FaqItem>({
   itemKey?: (item: T, index: number) => React.Key;
   /** Ce qui s'affiche sous une question (ses traductions, pour la FAQ usager). */
   renderItemFooter?: (item: T, index: number) => React.ReactNode;
+  /** Nombre maximal de questions : le bouton d'ajout disparaît une fois atteint. */
+  max?: number;
 }) {
   const update = (index: number, patch: Partial<FaqItem>) =>
     onChange(value.map((item, i) => (i === index ? { ...item, ...patch } : item)));
@@ -74,7 +77,9 @@ export function FaqEditor<T extends FaqItem = FaqItem>({
             <RemoveButton onClick={() => remove(index)} label="Retirer cette question" />
           </div>
         ))}
-        <AddButton onClick={add}>{addLabel}</AddButton>
+        {max === undefined || value.length < max ? (
+          <AddButton onClick={add}>{addLabel}</AddButton>
+        ) : null}
       </div>
     </Field>
   );
