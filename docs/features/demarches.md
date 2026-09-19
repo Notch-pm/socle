@@ -137,6 +137,13 @@ est fonctionnelle (voir feature « Édition d'organisation » ci-dessous). Param
   `procedure-documents` (voir feature ci-dessous), référencés dans le JSON par `{path, name}`
   (`agentDocuments`/`trainingDocuments`). Logique pure + parseur robuste `knowledgeBase.ts`
   (testé), UI `steps/KnowledgeBaseStep.tsx` (+ `steps/connaissances/*`).
+  ⚠️ **Ce qu'un consommateur en fait, depuis le 2026-09-19** : l'assistant d'Iris PROPOSE à
+  l'agent de consulter les **sources IA** et les **documents d'entraînement**, et n'en lit le
+  contenu **qu'avec son accord** (même règle pour les `recommendedSources` d'une collectivité —
+  journal des API du 2026-09-19). Conséquence pour qui rédige : une source en ligne est une
+  page **https publique et stable**, pas une page d'accueil ; un document d'entraînement est
+  servi par `GET /v1/documents/signed-url`, et un PDF **scanné** ne sera pas lu (le
+  consommateur l'annonce « non lu » plutôt que d'en deviner le contenu).
 - **Communication usager** (2026-09-18) → colonne `procedures.user_communication` (JSONB) : ce que
   la collectivité écrit **pour ses usagers**, schéma **possédé**, organisé en **blocs** voisins
   comme `communication_config`. `delays` (durée habituelle d'instruction : valeur + unité),
