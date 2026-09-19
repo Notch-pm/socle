@@ -13,6 +13,24 @@ Format d'une entrée : `## AAAA-MM-JJ — <api> — ajout|correctif|rupture`
 
 ---
 
+## 2026-09-19 — public-api — correctif (sources recommandées : consultables par un assistant)
+
+**Une phrase du contrat 1.27.0 disait l'inverse de ce que fait désormais Iris.** La description de
+`GET /v1/organizations/{id}/agent-guidance` affirmait que les `recommendedSources` sont « des liens
+à citer — un assistant ne les consulte pas pour autant », et l'aide de l'onglet « Recommandations
+aux agents » qu'il « les cite sans jamais les ouvrir ». Depuis le 2026-09-19, l'assistant d'Iris
+peut **proposer** à l'agent de consulter ces sources — comme les sources en ligne IA d'une
+démarche (`knowledge_base.aiSources`) — et n'en lit le contenu **qu'avec son accord**. Les deux
+textes le disent désormais.
+
+- **Aucun champ ne bouge**, aucune route : contrat toujours **1.27.0**.
+- La lecture est faite **par le consommateur**, depuis son propre serveur : le Socle ne va chercher
+  aucune page, et `ai-api` reste sans outil (`tools` toujours refusé).
+- **Pour qui rédige les sources** : une adresse en `https` publique peut désormais être lue et
+  résumée à un agent. Préférez une page stable et officielle à une page d'accueil.
+
+---
+
 ## 2026-09-19 — public-api — ajout (recommandations aux agents)
 
 **Ce que la collectivité dit à ses agents, pour toutes ses démarches à la fois.** Nouvel onglet

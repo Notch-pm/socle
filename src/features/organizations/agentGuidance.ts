@@ -38,7 +38,8 @@ export interface AgentGuidance {
   faq: FaqItem[];
   /**
    * Sources de données recommandées, pour l'agent comme pour l'assistant IA.
-   * ⚠️ L'assistant les CITE, il ne les ouvre jamais.
+   * Un assistant peut en lire le contenu, à la demande et avec l'accord de
+   * l'agent (Iris, depuis le 2026-09-19) — jamais d'office.
    */
   recommendedSources: KbLink[];
 }

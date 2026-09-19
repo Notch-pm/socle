@@ -167,7 +167,7 @@ export function AgentGuidanceSection({ organization }: { organization: Organizat
           />
           <LinkListEditor
             label="Sources de données recommandées"
-            hint="Pour l'agent comme pour l'assistant IA, qui les cite sans jamais les ouvrir."
+            hint="Pour l'agent comme pour l'assistant IA, qui peut proposer à l'agent de les consulter."
             value={draft.recommendedSources}
             onChange={(recommendedSources) => patch({ recommendedSources })}
             addLabel="Ajouter une source"
