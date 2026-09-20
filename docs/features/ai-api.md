@@ -46,6 +46,20 @@ dossier, et n'a pas à le savoir — il ne compose aucun prompt.
   `reserve_ai_usage` fait UN `UPDATE` conditionnel (zéro ligne ⇒ refus **sans jamais appeler le
   fournisseur**), `settle_ai_usage` corrige avec la consommation réelle. Un échec ne consomme
   rien. Détail : [`docs/data-model.md`](../data-model.md) § « Plafond et journal d'utilisation IA ».
+- ⚠️ **Sous-plafond par application** (2026-09-20) — le plafond reste **commun** à toutes les
+  applications d'une collectivité (« l'application discrimine le journal, jamais le compteur »),
+  et cette règle est **amendée, pas abandonnée** : une application peut porter en plus une borne
+  **propre** (`ai_usage_consumer_quotas`). Née avec l'assistant du portail usagers (`nora`), ouvert
+  à des visiteurs **anonymes**, qui sans elle pourrait épuiser le crédit des agents. `reserve_ai_usage`
+  a désormais **trois portes** — cadence, **sous-plafond**, plafond — et **rend** la réservation du
+  sous-compteur quand le plafond commun refuse ensuite. Sans sous-plafond posé, **rien ne change**
+  (assertions S1). ⚠️ Pour l'appelant, le refus est le **même** `429 ai_quota_exceeded`, avec les
+  chiffres du sous-plafond dans `quota` : le geste attendu est identique, et un consommateur n'a pas
+  à connaître la politique commerciale d'une collectivité. ⚠️ Le journal gagne `consumer_counted`
+  (booléen — le passe-plat tient, test Q9). Réglage : fiche du client › « Assistant du portail
+  usagers » (`PortalAssistantBudget`), RPC `set_/delete_ai_usage_consumer_quota`, super admin seul.
+  Suite SQL : `supabase/tests/plafond-ia.test.sql`, section S (11 règles) — elle se joue **à blanc**
+  avec la migration, dans une transaction annulée, avant toute application.
 - **Écrans** : `/superadmin/ia` (inter-clients : qui coûte quoi, qui n'est pas bordé — **lecture
   seule**), Organisations › « Assistant IA » (plafond, consommation par application, 20
   derniers appels — **le seul écran qui écrit**, par les RPC) et, dans l'app par organisation,

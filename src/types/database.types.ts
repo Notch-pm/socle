@@ -14,6 +14,96 @@ export type Database = {
   }
   public: {
     Tables: {
+      ai_usage_consumer_counters: {
+        Row: {
+          consumer: string
+          organization_id: string
+          period: string
+          reserved_tokens: number
+          updated_at: string
+          used_tokens: number
+        }
+        Insert: {
+          consumer: string
+          organization_id: string
+          period: string
+          reserved_tokens?: number
+          updated_at?: string
+          used_tokens?: number
+        }
+        Update: {
+          consumer?: string
+          organization_id?: string
+          period?: string
+          reserved_tokens?: number
+          updated_at?: string
+          used_tokens?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "ai_usage_consumer_counters_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      ai_usage_consumer_quotas: {
+        Row: {
+          consumer: string
+          created_at: string
+          id: string
+          is_active: boolean
+          monthly_limit_tokens: number
+          organization_id: string
+          updated_at: string
+          updated_by: string | null
+        }
+        Insert: {
+          consumer: string
+          created_at?: string
+          id?: string
+          is_active?: boolean
+          monthly_limit_tokens: number
+          organization_id: string
+          updated_at?: string
+          updated_by?: string | null
+        }
+        Update: {
+          consumer?: string
+          created_at?: string
+          id?: string
+          is_active?: boolean
+          monthly_limit_tokens?: number
+          organization_id?: string
+          updated_at?: string
+          updated_by?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "ai_usage_consumer_quotas_consumer_fkey"
+            columns: ["consumer"]
+            isOneToOne: false
+            referencedRelation: "applications"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "ai_usage_consumer_quotas_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "ai_usage_consumer_quotas_updated_by_fkey"
+            columns: ["updated_by"]
+            isOneToOne: false
+            referencedRelation: "users"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       ai_usage_counters: {
         Row: {
           id: string
@@ -57,6 +147,7 @@ export type Database = {
           actual_tokens: number | null
           api_key_id: string | null
           consumer: string
+          consumer_counted: boolean
           counter_provider: string | null
           created_at: string
           estimated_tokens: number
@@ -76,6 +167,7 @@ export type Database = {
           actual_tokens?: number | null
           api_key_id?: string | null
           consumer: string
+          consumer_counted?: boolean
           counter_provider?: string | null
           created_at?: string
           estimated_tokens: number
@@ -95,6 +187,7 @@ export type Database = {
           actual_tokens?: number | null
           api_key_id?: string | null
           consumer?: string
+          consumer_counted?: boolean
           counter_provider?: string | null
           created_at?: string
           estimated_tokens?: number
@@ -1553,6 +1646,10 @@ export type Database = {
           quartier_name: string
         }[]
       }
+      delete_ai_usage_consumer_quota: {
+        Args: { p_consumer: string; p_org_id: string }
+        Returns: undefined
+      }
       delete_ai_usage_quota: {
         Args: { p_org_id: string; p_provider?: string }
         Returns: Json
@@ -1761,6 +1858,15 @@ export type Database = {
         }
       }
       root_onboarding_status: { Args: { p_org_id: string }; Returns: Json }
+      set_ai_usage_consumer_quota: {
+        Args: {
+          p_consumer: string
+          p_is_active?: boolean
+          p_monthly_limit_tokens: number
+          p_org_id: string
+        }
+        Returns: Json
+      }
       set_ai_usage_quota: {
         Args: {
           p_is_active?: boolean

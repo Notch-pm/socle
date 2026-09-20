@@ -615,8 +615,21 @@ comptabilité ont été centralisées ici (2026-08-29).
   `external_ref_kind`/`external_ref_id`/`external_actor_id`, uuid **sans FK**. Aucune FK ne
   franchit une frontière de projet, et une cascade effacerait une consommation facturée.
   ⚠️ **Aucune colonne ne peut porter un prompt ou une réponse**, et c'est la première preuve du
-  passe-plat : un test épingle l'ensemble exact des 17 colonnes, si bien qu'une future colonne
-  `prompt`/`content`/`answer` le casse.
+  passe-plat : un test épingle l'ensemble exact des 18 colonnes, si bien qu'une future colonne
+  `prompt`/`content`/`answer` le casse. La dix-huitième, `consumer_counted` (2026-09-20), est un
+  **booléen** : vrai si l'appel a réservé sur le sous-compteur de son application — c'est ce que
+  le règlement doit solder. Aucun contenu.
+- **`ai_usage_consumer_quotas`** / **`ai_usage_consumer_counters`** (2026-09-20) — le
+  **sous-plafond par application** : `(organization_id, consumer)` UNIQUE, `consumer` FK
+  `applications`, `monthly_limit_tokens`, `is_active` (désactiver **conserve** la valeur) ; le
+  sous-compteur a la forme d'`ai_usage_counters`, clé `(organization_id, consumer, period)`.
+  Racine seulement (même trigger `enforce_ai_usage_quota_root_org`). Né avec l'assistant du
+  portail usagers (`nora`), ouvert à des visiteurs **anonymes** : sans borne propre, il pourrait
+  épuiser le crédit des agents. ⚠️ **Une porte EN PLUS, jamais à la place** : le plafond de la
+  collectivité reste UN compteur commun ; sans sous-plafond posé, rien ne change.
+  ⚠️ **Deux tables à part, pas une colonne `consumer` sur les existantes** : les lecteurs font
+  `find(provider = '__global__')` sur `ai_usage_quotas`/`ai_usage_counters` — plusieurs lignes par
+  fournisseur les tromperaient en silence.
 
 - **`ai_usage_rate`** (2026-08-29) — le garde-fou de **DÉBIT**, que le plafond ne couvre pas :
   il dit *combien*, jamais *à quelle vitesse*, et une boucle accidentelle consommerait un mois
@@ -631,8 +644,14 @@ comptabilité ont été centralisées ici (2026-08-29).
   ⚠️ **Elle compte les TENTATIVES, pas les appels aboutis** : une boucle que le plafond refuse
   déjà continue de marteler, et un compteur de succès ne la couperait jamais.
 
-**Cycle réserver → appeler → solder, et DEUX portes avant lui.** `reserve_ai_usage` vérifie
-d'abord la **cadence**, puis le **plafond**. Les seuils sont **en dur** (un garde-fou n'est pas
+**Cycle réserver → appeler → solder, et TROIS portes avant lui.** `reserve_ai_usage` vérifie
+d'abord la **cadence**, puis le **sous-plafond de l'application** s'il en existe un (le plus
+étroit d'abord — refus `consumer_quota_exceeded`, chiffres du sous-plafond), puis le **plafond**
+de la collectivité. ⚠️ Si le plafond refuse **après** un sous-plafond réussi, la réservation du
+sous-compteur est **rendue** avant de refuser, dans la même transaction et sous le verrou de
+ligne déjà pris : sans cela, chaque refus du commun rongerait le sous-plafond d'une application
+qui n'a rien consommé. `settle_ai_usage` solde le sous-compteur **avant** son retour anticipé —
+une collectivité sans plafond commun peut tout de même borner une application. Les seuils sont **en dur** (un garde-fou n'est pas
 un paramètre commercial) et dépendent de la NATURE de l'appel — conversationnel 20/minute par
 agent (120 sans agent), lot d'OCR 60 (360 sans agent) : un humain qui lit 150 mots entre deux
 questions n'a pas le rythme d'une machine qui enchaîne des documents.

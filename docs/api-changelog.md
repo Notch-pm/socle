@@ -13,6 +13,24 @@ Format d'une entrée : `## AAAA-MM-JJ — <api> — ajout|correctif|rupture`
 
 ---
 
+## 2026-09-20 — ai-api — ajout (sous-plafond par application)
+
+**Une application peut désormais porter une borne mensuelle propre, en plus du plafond commun de
+la collectivité.** Aucun champ, aucune route, aucun code d'erreur ne change : version du contrat
+`ai-api` **inchangée**.
+
+- **Ce qui change pour un consommateur : rien, tant qu'aucun sous-plafond ne le concerne.** Le
+  plafond de la collectivité reste commun à toutes les applications.
+- Quand le super administrateur pose un sous-plafond pour **votre** application, vos appels peuvent
+  être refusés **avant** que le plafond commun soit atteint — par le **même** `429` de code
+  `ai_quota_exceeded`, avec le même message daté. L'objet `quota` rendu porte alors les chiffres du
+  **sous-plafond** (`limit`, `used_tokens`, `reserved_tokens`). Le geste attendu est identique :
+  relayer le message, ne pas réessayer avant le renouvellement.
+- Première application concernée : `nora` (assistant du portail usagers, ouvert à des visiteurs
+  anonymes). Iris et Clara ne portent aucun sous-plafond et ne sont pas touchées.
+
+---
+
 ## 2026-09-20 — public-api — ajout (assistant du portail usagers)
 
 **Ce que la collectivité a ouvert de l'assistant conversationnel de son site.** Nouveau champ

@@ -3,6 +3,7 @@ import { Link } from "react-router-dom";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Switch } from "@/components/ui/switch";
 import { useAuth } from "@/features/auth/AuthProvider";
+import { PortalAssistantBudget } from "@/features/superadmin/organizations/sections/PortalAssistantBudget";
 import {
   PORTAL_ASSISTANT_CLOSED,
   usePortalAssistantSettings,
@@ -87,6 +88,10 @@ export function PortalAssistantSection({ organizationId }: { organizationId: str
                 onCheckedChange={(deposit_enabled) => save({ deposit_enabled })}
               />
             </label>
+
+            {/* La borne de l'assistant, à côté de son interrupteur : on ne devrait
+                pas pouvoir ouvrir l'un sans voir l'autre. */}
+            <PortalAssistantBudget organizationId={organizationId} assistantEnabled={flags.enabled} />
 
             <p className="text-xs text-muted-foreground">
               L'assistant puise dans le crédit IA de la collectivité, comme Iris et Clara.{" "}

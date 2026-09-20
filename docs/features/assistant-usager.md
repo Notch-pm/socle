@@ -45,16 +45,22 @@ crédit** (déjà compté).
   secret `MISTRAL_AGENT_ASSISTANT_USAGER` (voir [`docs/operations.md`](../operations.md) ; absent,
   repli sur le modèle par défaut). `actor_id` = identifiant de **conversation**, jamais un haché
   d'IP (il est persisté au journal). La consommation se lit par application sur `/consommation-ia`.
-- ⚠️ **Avant toute ouverture au public : un sous-plafond par application.** Le plafond mensuel est
-  commun à toutes les applications d'une collectivité ; sans sous-plafond, l'assistant public peut
-  affamer les agents. **Pas encore livré** — tant qu'il ne l'est pas, n'ouvrir l'assistant que sur
-  des environnements de démonstration.
+- ⚠️ **Avant toute ouverture au public : poser la borne de l'assistant.** Le plafond mensuel est
+  commun à toutes les applications d'une collectivité ; sans borne propre, l'assistant — ouvert à
+  des visiteurs anonymes — peut affamer les agents. Le **sous-plafond par application** (livré le
+  2026-09-20, voir [`ai-api.md`](ai-api.md)) se règle **dans cette même section**, à côté de
+  l'interrupteur (`PortalAssistantBudget`, application `nora`) : on ne devrait pas pouvoir ouvrir
+  l'un sans voir l'autre. L'écran **avertit** quand l'assistant est ouvert sans borne ; il ne
+  l'interdit pas — une collectivité de démonstration peut s'en passer. « Lever la borne » en
+  **conserve** la valeur. Repère : une conversation ≈ 25 000 jetons (mesuré : ≈ 3 250 par appel).
 - ⚠️ **`assistant` est un slug d'organisation RÉSERVÉ** (contrainte `organizations_slug_url_form`,
   miroir `SLUG_RESERVED` dans `organizationSlug.ts`) : Nora sert l'assistant à `/assistant`, et
   `/<slug>` y ouvre la page d'un organisme. Toute nouvelle adresse de premier niveau chez Nora se
   réserve ici **avant** d'être servie là-bas.
 - Code : `src/features/superadmin/organizations/usePortalAssistant.ts`,
-  `sections/PortalAssistantSection.tsx` (+ test), migration `portal_assistant_settings`.
+  `sections/PortalAssistantSection.tsx` et `sections/PortalAssistantBudget.tsx` (+ tests),
+  `src/features/ai-usage/useConsumerQuota.ts`, migrations `portal_assistant_settings` et
+  `ai_usage_sous_plafond_par_application`.
 
 **Plan d'ensemble** (2026-09-20) — lot 0 : moteur de formulaire de Nora partagé avec son serveur ;
 lot 1 : renseigner et orienter (cette fiche + route `POST /v1/assistant` de Nora) ; lot 2 : collecte

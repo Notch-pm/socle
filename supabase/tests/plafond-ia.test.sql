@@ -23,6 +23,10 @@
 --   6. LE SCHÉMA EST LA PREUVE DU PASSE-PLAT — l'ensemble des colonnes
 --      d'`ai_usage_events` est épinglé : une future colonne `prompt`,
 --      `content` ou `answer` casse ce test au lieu de passer inaperçue.
+--   8. 🆕 LE SOUS-PLAFOND PAR APPLICATION EST UNE PORTE EN PLUS, JAMAIS À LA
+--      PLACE (2026-09-20) — sans sous-plafond rien ne change ; il ne borne que
+--      SON application ; un refus du plafond commun lui REND sa réservation ;
+--      et il borne même une collectivité sans plafond (section S).
 --   7. 🆕 LE GARDE-FOU DE DÉBIT COMPTE LES TENTATIVES, PAS LES SUCCÈS — c'est
 --      la règle qui coupe une boucle que le plafond refuse déjà (R3), et c'est
 --      elle qui permet de vérifier la porte SANS dépenser un jeton.
@@ -59,6 +63,11 @@ declare
   a_3 uuid := gen_random_uuid();
   v_i int;
   v_win timestamptz := date_trunc('minute', now());
+  -- Sous-plafond par application (2026-09-20)
+  org_s  uuid;  -- collectivité avec un plafond commun ET un sous-plafond pour nora
+  org_s2 uuid;  -- collectivité SANS plafond commun, mais avec un sous-plafond
+  key_nora uuid;
+  ev_n uuid;
 begin
   -- ==========================================================================
   -- MISE EN PLACE
@@ -253,7 +262,7 @@ begin
     from information_schema.columns
    where table_schema = 'public' and table_name = 'ai_usage_events';
   if v_arr is distinct from array[
-      'actual_tokens','api_key_id','consumer','counter_provider','created_at',
+      'actual_tokens','api_key_id','consumer','consumer_counted','counter_provider','created_at',
       'estimated_tokens','external_actor_id','external_ref_id','external_ref_kind',
       'feature','id','organization_id','period','provider','resource_type',
       'settled_at','status'] then
@@ -520,8 +529,218 @@ begin
   if v_bool then v_fail := v_fail || 'E4d: authenticated a INSERT sur ai_usage_events'::text; end if;
 
   -- ==========================================================================
+  -- S. LE SOUS-PLAFOND PAR APPLICATION 🆕 (2026-09-20)
+  --
+  -- L'assistant du portail usagers (nora) est ouvert à des visiteurs anonymes :
+  -- sans borne propre, il peut épuiser le crédit dont les agents ont besoin.
+  -- Le sous-plafond est une porte EN PLUS du plafond commun.
+  -- ==========================================================================
+  insert into public.organizations (name, parent_id) values ('Collectivité S', null)  returning id into org_s;
+  insert into public.organizations (name, parent_id) values ('Collectivité S2', null) returning id into org_s2;
+  insert into public.ai_usage_quotas (organization_id, provider, monthly_limit_tokens)
+       values (org_s, '__global__', 10000);
+  insert into public.api_keys (organization_id, name, key_prefix, key_hash, scopes, consumer)
+    values (null, 'Nora IA', 'sk_test_n', 'hash-nora-' || gen_random_uuid()::text, array['ai'], 'nora')
+    returning id into key_nora;
+
+  -- S0. Un sous-plafond se pose sur une RACINE, comme le plafond.
+  execute 'reset role';
+  perform set_config('request.jwt.claims',
+    jsonb_build_object('sub', u_super, 'role', 'authenticated')::text, true);
+  execute 'set local role authenticated';
+  begin
+    perform public.set_ai_usage_consumer_quota(org_sub, 'nora', 1000);
+    v_fail := v_fail || 'S0a: un sous-plafond a ete pose sur une sous-organisation'::text;
+  exception when others then
+    if sqlerrm not like '%organisation principale%' then
+      v_fail := v_fail || format('S0a: refuse, mais message inattendu (%s)', sqlerrm);
+    end if; end;
+  begin
+    perform public.set_ai_usage_consumer_quota(org_s, 'appli-inconnue', 1000);
+    v_fail := v_fail || 'S0b: un sous-plafond a ete pose pour une application hors registre'::text;
+  exception when others then
+    if sqlerrm not like '%Application inconnue%' then
+      v_fail := v_fail || format('S0b: refuse, mais message inattendu (%s)', sqlerrm);
+    end if; end;
+  execute 'reset role';
+
+  -- S1. SANS sous-plafond, RIEN ne change : ni refus, ni sous-compteur, ni drapeau.
+  select * into r from public.reserve_ai_usage(org_s, 'mistral', 'agent', 100, 'nora', key_nora);
+  if not r.allowed or r.reason is distinct from 'ok' then
+    v_fail := v_fail || format('S1a: sans sous-plafond, allowed=%s reason=%s', r.allowed, r.reason); end if;
+  select consumer_counted into v_bool from public.ai_usage_events where id = r.event_id;
+  if v_bool then v_fail := v_fail || 'S1b: consumer_counted sans sous-plafond'::text; end if;
+  select count(*) into v_int from public.ai_usage_consumer_counters where organization_id = org_s;
+  if v_int <> 0 then v_fail := v_fail || format('S1c: %s sous-compteur(s) sans sous-plafond', v_int); end if;
+  perform public.settle_ai_usage(r.event_id, 0, 'failed');
+
+  -- S2. Sous-plafond posé : l'appel réserve sur LES DEUX compteurs.
+  execute 'reset role';
+  perform set_config('request.jwt.claims',
+    jsonb_build_object('sub', u_super, 'role', 'authenticated')::text, true);
+  execute 'set local role authenticated';
+  perform public.set_ai_usage_consumer_quota(org_s, 'nora', 1000);
+  execute 'reset role';
+
+  select * into r from public.reserve_ai_usage(org_s, 'mistral', 'agent', 600, 'nora', key_nora);
+  ev_n := r.event_id;
+  if not r.allowed or r.reason is distinct from 'ok' then
+    v_fail := v_fail || format('S2a: sous le sous-plafond, allowed=%s reason=%s', r.allowed, r.reason); end if;
+  select consumer_counted into v_bool from public.ai_usage_events where id = ev_n;
+  if v_bool is not true then v_fail := v_fail || 'S2b: consumer_counted absent du journal'::text; end if;
+  select reserved_tokens into v_big from public.ai_usage_consumer_counters
+   where organization_id = org_s and consumer = 'nora' and period = v_period;
+  if v_big is distinct from 600 then v_fail := v_fail || format('S2c: sous-compteur reserve %s, attendu 600', v_big); end if;
+  select reserved_tokens into v_big from public.ai_usage_counters
+   where organization_id = org_s and provider = '__global__' and period = v_period;
+  if v_big is distinct from 600 then v_fail := v_fail || format('S2d: compteur commun reserve %s, attendu 600', v_big); end if;
+
+  -- S3. Au-delà : refus NOMMÉ, chiffres du sous-plafond, et RIEN n'est incrémenté.
+  select * into r from public.reserve_ai_usage(org_s, 'mistral', 'agent', 600, 'nora', key_nora);
+  if r.allowed or r.reason is distinct from 'consumer_quota_exceeded' then
+    v_fail := v_fail || format('S3a: au-dela du sous-plafond, allowed=%s reason=%s', r.allowed, r.reason); end if;
+  if r.event_id is not null then v_fail := v_fail || 'S3b: un refus a ete journalise'::text; end if;
+  if r.limit_tokens is distinct from 1000 then
+    v_fail := v_fail || format('S3c: limite rendue %s, attendu celle du sous-plafond (1000)', r.limit_tokens); end if;
+  select reserved_tokens into v_big from public.ai_usage_consumer_counters
+   where organization_id = org_s and consumer = 'nora' and period = v_period;
+  select reserved_tokens into v_big2 from public.ai_usage_counters
+   where organization_id = org_s and provider = '__global__' and period = v_period;
+  if v_big is distinct from 600 or v_big2 is distinct from 600 then
+    v_fail := v_fail || format('S3d: un refus a incremente (sous=%s commun=%s)', v_big, v_big2); end if;
+
+  -- S4. ⚠️ Il ne borne que SON application : les agents ne sont pas concernés.
+  select * into r from public.reserve_ai_usage(org_s, 'mistral', 'agent', 9200, 'iris', key_iris);
+  if not r.allowed then v_fail := v_fail || format('S4a: iris refusee par le sous-plafond de nora (%s)', r.reason); end if;
+  select consumer_counted into v_bool from public.ai_usage_events where id = r.event_id;
+  if v_bool then v_fail := v_fail || 'S4b: iris comptee sur un sous-compteur'::text; end if;
+
+  -- S5. Le règlement solde LES DEUX compteurs avec la consommation réelle.
+  perform public.settle_ai_usage(ev_n, 450, 'completed');
+  select used_tokens, reserved_tokens into v_big, v_big2 from public.ai_usage_consumer_counters
+   where organization_id = org_s and consumer = 'nora' and period = v_period;
+  if v_big is distinct from 450 or v_big2 is distinct from 0 then
+    v_fail := v_fail || format('S5a: sous-compteur used=%s reserved=%s, attendu 450/0', v_big, v_big2); end if;
+  select used_tokens into v_big from public.ai_usage_counters
+   where organization_id = org_s and provider = '__global__' and period = v_period;
+  if v_big is distinct from 450 then v_fail := v_fail || format('S5b: compteur commun used=%s, attendu 450', v_big); end if;
+  -- Idempotent là aussi : un second règlement ne double rien.
+  perform public.settle_ai_usage(ev_n, 450, 'completed');
+  select used_tokens into v_big from public.ai_usage_consumer_counters
+   where organization_id = org_s and consumer = 'nora' and period = v_period;
+  if v_big is distinct from 450 then v_fail := v_fail || format('S5c: second reglement, sous-compteur used=%s', v_big); end if;
+
+  -- S6. Un échec libère la réservation du sous-compteur, et ne facture rien.
+  select * into r from public.reserve_ai_usage(org_s, 'mistral', 'agent', 300, 'nora', key_nora);
+  perform public.settle_ai_usage(r.event_id, 300, 'failed');
+  select used_tokens, reserved_tokens into v_big, v_big2 from public.ai_usage_consumer_counters
+   where organization_id = org_s and consumer = 'nora' and period = v_period;
+  if v_big is distinct from 450 or v_big2 is distinct from 0 then
+    v_fail := v_fail || format('S6a: apres echec, sous-compteur used=%s reserved=%s', v_big, v_big2); end if;
+
+  -- S7. ⚠️ LE POINT DÉLICAT : le sous-plafond accepte (450+500 ≤ 1000), le
+  -- plafond commun refuse (450+9200+500 > 10000). La réservation du
+  -- sous-compteur doit être RENDUE — sinon chaque refus du commun rongerait le
+  -- sous-plafond d'une application qui n'a rien consommé.
+  select * into r from public.reserve_ai_usage(org_s, 'mistral', 'agent', 500, 'nora', key_nora);
+  if r.allowed or r.reason is distinct from 'quota_exceeded' then
+    v_fail := v_fail || format('S7a: plafond commun depasse, allowed=%s reason=%s', r.allowed, r.reason); end if;
+  if r.limit_tokens is distinct from 10000 then
+    v_fail := v_fail || format('S7b: limite rendue %s, attendu celle du plafond commun', r.limit_tokens); end if;
+  select reserved_tokens into v_big from public.ai_usage_consumer_counters
+   where organization_id = org_s and consumer = 'nora' and period = v_period;
+  if v_big is distinct from 0 then
+    v_fail := v_fail || format('S7c: reservation du sous-compteur NON rendue (%s)', v_big); end if;
+
+  -- S8. Le réglage gouverne l'usage, pas la donnée : désactivé, il ne borne
+  -- plus rien, et sa valeur est conservée.
+  execute 'reset role';
+  perform set_config('request.jwt.claims',
+    jsonb_build_object('sub', u_super, 'role', 'authenticated')::text, true);
+  execute 'set local role authenticated';
+  perform public.set_ai_usage_consumer_quota(org_s, 'nora', 1000, false);
+  execute 'reset role';
+  select * into r from public.reserve_ai_usage(org_s, 'mistral', 'agent', 100, 'nora', key_nora);
+  if not r.allowed then v_fail := v_fail || format('S8a: sous-plafond desactive, refus (%s)', r.reason); end if;
+  select consumer_counted into v_bool from public.ai_usage_events where id = r.event_id;
+  if v_bool then v_fail := v_fail || 'S8b: sous-plafond desactive, appel tout de meme compte'::text; end if;
+  perform public.settle_ai_usage(r.event_id, 0, 'failed');
+  select monthly_limit_tokens into v_big from public.ai_usage_consumer_quotas
+   where organization_id = org_s and consumer = 'nora';
+  if v_big is distinct from 1000 then v_fail := v_fail || format('S8c: valeur perdue a la desactivation (%s)', v_big); end if;
+
+  -- S9. Une collectivité SANS plafond commun peut tout de même borner une
+  -- application — et son règlement passe AVANT le retour anticipé de settle.
+  execute 'reset role';
+  perform set_config('request.jwt.claims',
+    jsonb_build_object('sub', u_super, 'role', 'authenticated')::text, true);
+  execute 'set local role authenticated';
+  perform public.set_ai_usage_consumer_quota(org_s2, 'nora', 200);
+  execute 'reset role';
+  select * into r from public.reserve_ai_usage(org_s2, 'mistral', 'agent', 150, 'nora', key_nora);
+  ev_n := r.event_id;
+  if not r.allowed or r.reason is distinct from 'no_quota_configured' then
+    v_fail := v_fail || format('S9a: sans plafond commun, allowed=%s reason=%s', r.allowed, r.reason); end if;
+  select * into r from public.reserve_ai_usage(org_s2, 'mistral', 'agent', 100, 'nora', key_nora);
+  if r.allowed or r.reason is distinct from 'consumer_quota_exceeded' then
+    v_fail := v_fail || format('S9b: sous-plafond seul, allowed=%s reason=%s', r.allowed, r.reason); end if;
+  perform public.settle_ai_usage(ev_n, 120, 'completed');
+  select used_tokens, reserved_tokens into v_big, v_big2 from public.ai_usage_consumer_counters
+   where organization_id = org_s2 and consumer = 'nora' and period = v_period;
+  if v_big is distinct from 120 or v_big2 is distinct from 0 then
+    v_fail := v_fail || format('S9c: sous-compteur used=%s reserved=%s, attendu 120/0', v_big, v_big2); end if;
+  select count(*) into v_int from public.ai_usage_counters where organization_id = org_s2;
+  if v_int <> 0 then v_fail := v_fail || 'S9d: un compteur commun a ete cree sans plafond commun'::text; end if;
+
+  -- S10. La porte de réglage est réservée au SUPER ADMIN, et il n'y en a pas d'autre.
+  execute 'reset role';
+  perform set_config('request.jwt.claims',
+    jsonb_build_object('sub', u_admin, 'role', 'authenticated')::text, true);
+  execute 'set local role authenticated';
+  begin
+    perform public.set_ai_usage_consumer_quota(org_s, 'nora', 999999);
+    v_fail := v_fail || 'S10a: un utilisateur ordinaire a pose un sous-plafond'::text;
+  exception when others then
+    if sqlerrm not like '%super administrateur%' then
+      v_fail := v_fail || format('S10a: refuse, message inattendu (%s)', sqlerrm);
+    end if; end;
+  begin
+    perform public.delete_ai_usage_consumer_quota(org_s, 'nora');
+    v_fail := v_fail || 'S10b: un utilisateur ordinaire a retire un sous-plafond'::text;
+  exception when others then
+    if sqlerrm not like '%super administrateur%' then
+      v_fail := v_fail || format('S10b: refuse, message inattendu (%s)', sqlerrm);
+    end if; end;
+  execute 'reset role';
+  -- Le privilège de table existe (Supabase l'accorde par défaut) : c'est le RLS
+  -- sans policy d'écriture qui ferme. On vérifie donc les policies, pas le GRANT.
+  select count(*) into v_int from pg_policies
+   where schemaname = 'public'
+     and tablename in ('ai_usage_consumer_quotas', 'ai_usage_consumer_counters')
+     and cmd <> 'SELECT';
+  if v_int <> 0 then v_fail := v_fail || format('S10c: %s policy d''ecriture sur les tables du sous-plafond', v_int); end if;
+  select count(*) into v_int from pg_class
+   where oid in ('public.ai_usage_consumer_quotas'::regclass, 'public.ai_usage_consumer_counters'::regclass)
+     and relrowsecurity;
+  if v_int <> 2 then v_fail := v_fail || 'S10d: RLS non actif sur les tables du sous-plafond'::text; end if;
+
+  -- S11. Retirer le sous-plafond conserve le sous-compteur : c'est de
+  -- l'historique, et un sous-plafond reposé dans le mois retrouve la dépense.
+  execute 'reset role';
+  perform set_config('request.jwt.claims',
+    jsonb_build_object('sub', u_super, 'role', 'authenticated')::text, true);
+  execute 'set local role authenticated';
+  perform public.delete_ai_usage_consumer_quota(org_s2, 'nora');
+  execute 'reset role';
+  select used_tokens into v_big from public.ai_usage_consumer_counters
+   where organization_id = org_s2 and consumer = 'nora' and period = v_period;
+  if v_big is distinct from 120 then v_fail := v_fail || format('S11a: sous-compteur perdu au retrait (%s)', v_big); end if;
+  select * into r from public.reserve_ai_usage(org_s2, 'mistral', 'agent', 5000, 'nora', key_nora);
+  if not r.allowed then v_fail := v_fail || format('S11b: sous-plafond retire, refus (%s)', r.reason); end if;
+
+  -- ==========================================================================
   if array_length(v_fail, 1) is null then
-    raise exception 'TOUS LES TESTS SONT PASSES (plafond + debit IA, Socle) -- transaction annulee.';
+    raise exception 'TOUS LES TESTS SONT PASSES (plafond + debit + sous-plafond IA, Socle) -- transaction annulee.';
   else
     raise exception 'ECHECS (%) : %', array_length(v_fail, 1), array_to_string(v_fail, ' · ');
   end if;

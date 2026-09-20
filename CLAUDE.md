@@ -152,7 +152,7 @@ exécutables par `authenticated` : le RLS les évalue avec les droits de l'appel
   voir feature).
 - `api_keys` (clés d'API rattachées à une racine — partenaires —, ou **clé plateforme** — `organization_id` NULL, rattachée à une **application** du registre et bornée aux collectivités **abonnées** à celle-ci — voir feature « Applications et abonnements » ; `consumer` = l'application, FK `applications`, et l'imputation des appels facturés).
 - `applications` (registre des applications de la gamme : `nora`, `iris`, `clara`, `socle`), `organization_applications` (abonnements par racine), `platform_settings` (ligne unique : zone des sous-domaines fournis, cible CNAME, plafond IA par défaut — voir feature « Mise en service d'un client »).
-- `ai_usage_quotas` / `ai_usage_counters` / `ai_usage_events` (plafond mensuel de jetons, compteur et journal — voir feature « guichet IA »).
+- `ai_usage_quotas` / `ai_usage_counters` / `ai_usage_events` (plafond mensuel de jetons, compteur et journal ; `ai_usage_consumer_quotas` / `_counters` = sous-plafond par application — voir feature « guichet IA »).
 - `contacts`, `contact_roles`, `contact_role_assignments`, `contact_external_references`,
   `contact_relations` (référentiel des usagers — voir feature).
 - `quartiers` (découpage du territoire par racine, polygones PostGIS — voir feature).
@@ -323,6 +323,10 @@ menu latéral par client).
 - ⚠️ **Passe-plat** : aucun contenu persisté ni journalisé (tests sur les colonnes et sur le
   source). ⚠️ Délais fournisseur 55 s < Socle 60 s < consommateur. Cadence avant plafond, seuil
   non réglable. Le plafond ne s'écrit que côté superadmin.
+- ⚠️ Le plafond est **commun** aux applications d'une collectivité ; une application peut porter
+  **en plus** un sous-plafond (`ai_usage_consumer_quotas`, né pour `nora`). `reserve_ai_usage` :
+  cadence → sous-plafond → plafond, et **rend** la réservation du sous-compteur si le plafond
+  refuse. Toute retouche se joue d'abord **à blanc** avec `supabase/tests/plafond-ia.test.sql`.
 
 ### [Assistant du portail usagers](docs/features/assistant-usager.md)
 - Assistant conversationnel de Nora. Le Socle n'en tient que **l'interrupteur**
@@ -332,8 +336,8 @@ menu latéral par client).
   conserve `deposit_enabled`. Au doute, **fermé**. `TenantDto` est public : deux booléens, rien
   d'autre.
 - ⚠️ Corpus = ce que `/v1/portal/*` sert déjà ; `knowledge_base` et les recommandations aux agents
-  n'entrent **jamais** dans son prompt. ⚠️ Pas d'ouverture au public sans sous-plafond IA par
-  application (pas encore livré).
+  n'entrent **jamais** dans son prompt. ⚠️ Pas d'ouverture au public sans **borne de crédit** :
+  elle se pose dans la même section que l'interrupteur (sous-plafond de l'application `nora`).
 
 ### [Tableau de bord et fréquentation](docs/features/tableau-de-bord.md)
 - ⚠️ **Aucune donnée personnelle** (ni cookie, ni IP, ni User-Agent, ni référent) : c'est ce qui
