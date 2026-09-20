@@ -32,6 +32,8 @@ export const SLUG_RESERVED: readonly string[] = [
   "contact",
   "mentions-legales",
   "accessibilite",
+  // L'assistant conversationnel du portail, servi à `/assistant` (2026-09-20).
+  "assistant",
 ];
 
 /**

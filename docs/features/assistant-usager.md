@@ -49,6 +49,10 @@ crédit** (déjà compté).
   commun à toutes les applications d'une collectivité ; sans sous-plafond, l'assistant public peut
   affamer les agents. **Pas encore livré** — tant qu'il ne l'est pas, n'ouvrir l'assistant que sur
   des environnements de démonstration.
+- ⚠️ **`assistant` est un slug d'organisation RÉSERVÉ** (contrainte `organizations_slug_url_form`,
+  miroir `SLUG_RESERVED` dans `organizationSlug.ts`) : Nora sert l'assistant à `/assistant`, et
+  `/<slug>` y ouvre la page d'un organisme. Toute nouvelle adresse de premier niveau chez Nora se
+  réserve ici **avant** d'être servie là-bas.
 - Code : `src/features/superadmin/organizations/usePortalAssistant.ts`,
   `sections/PortalAssistantSection.tsx` (+ test), migration `portal_assistant_settings`.
 
