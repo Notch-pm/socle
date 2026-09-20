@@ -18,6 +18,12 @@ export default defineConfig({
     // Passer à "jsdom" quand on ajoutera des tests de composants.
     environment: "node",
     globals: true,
+    // Valeurs factices : `src/lib/supabase.ts` lève au chargement sans elles, et
+    // la CI n'a pas de `.env.local`. Aucun test n'atteint le réseau.
+    env: {
+      VITE_SUPABASE_URL: "http://localhost:54321",
+      VITE_SUPABASE_PUBLISHABLE_KEY: "test-publishable-key",
+    },
     // `src/**` + la logique pure des edge functions (co-localisée dans `_shared`,
     // sans dépendance Deno) — voir supabase/functions/public-api/_shared.
     include: [
