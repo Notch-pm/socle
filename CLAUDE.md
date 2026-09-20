@@ -162,6 +162,7 @@ exécutables par `authenticated` : le RLS les évalue avec les droits de l'appel
 - `portal_themes` (apparence du site de démarches — une ligne par racine, `draft`/`published` comme `portal_pages` ; **aucune couleur** : elles vivent dans la charte — voir feature « thème du site »).
 - `portal_contents` (pages de **texte** du site, une par `(racine, slug)`, `draft`/`published` ; aujourd'hui la **déclaration d'accessibilité** — voir feature « site de démarches »).
 - `organization_agent_guidance` (**recommandations aux agents**, une ligne par racine — version globale de `knowledge_base`, **interne** — voir feature « Organisations »).
+- `portal_assistant_settings` (**interrupteur de l'assistant du portail**, une ligne par racine, écriture **super admin** seule — voir feature « Assistant du portail usagers »).
 
 Types TS générés dans `src/types/database.types.ts` — **ne pas éditer à la main**,
 régénérer depuis le schéma live (Supabase MCP `generate_typescript_types` / CLI).
@@ -322,6 +323,17 @@ menu latéral par client).
 - ⚠️ **Passe-plat** : aucun contenu persisté ni journalisé (tests sur les colonnes et sur le
   source). ⚠️ Délais fournisseur 55 s < Socle 60 s < consommateur. Cadence avant plafond, seuil
   non réglable. Le plafond ne s'écrit que côté superadmin.
+
+### [Assistant du portail usagers](docs/features/assistant-usager.md)
+- Assistant conversationnel de Nora. Le Socle n'en tient que **l'interrupteur**
+  (`portal_assistant_settings` : `enabled`, `deposit_enabled`), réglé par le **super admin** seul,
+  effet immédiat (⚠️ ni dans le thème, ni sur `organizations`), servi sur `TenantDto.assistant`.
+- ⚠️ Le commutateur s'applique **à la frontière** (`readPortalAssistant`) : couper `enabled`
+  conserve `deposit_enabled`. Au doute, **fermé**. `TenantDto` est public : deux booléens, rien
+  d'autre.
+- ⚠️ Corpus = ce que `/v1/portal/*` sert déjà ; `knowledge_base` et les recommandations aux agents
+  n'entrent **jamais** dans son prompt. ⚠️ Pas d'ouverture au public sans sous-plafond IA par
+  application (pas encore livré).
 
 ### [Tableau de bord et fréquentation](docs/features/tableau-de-bord.md)
 - ⚠️ **Aucune donnée personnelle** (ni cookie, ni IP, ni User-Agent, ni référent) : c'est ce qui

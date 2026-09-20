@@ -18,6 +18,7 @@ import type {
   ProcedureDto,
   QuartierDto,
   SmtpSettingsDto,
+  PortalAssistantDto,
   TenantDto,
 } from "./dto.ts";
 import { serializePortalTheme } from "./portalTheme.ts";
@@ -365,6 +366,11 @@ export function serializeTenant(
    * autorise le lien de la mention — voir `serializePortalTheme`.
    */
   accessibilityStatement = false,
+  /**
+   * Le réglage de l'assistant, tel que rendu par `resolve_portal_assistant`
+   * (une ligne, un tableau d'une ligne, ou rien).
+   */
+  assistant: unknown = null,
 ): TenantDto {
   return {
     id: str(row.id),
@@ -375,7 +381,22 @@ export function serializeTenant(
     // Rien de publié ⇒ les défauts du Socle, jamais `null` : voir
     // `serializePortalTheme`.
     theme: serializePortalTheme(theme, { accessibilityStatement }),
+    assistant: readPortalAssistant(assistant),
   };
+}
+
+/**
+ * L'assistant du portail, commutateur appliqué. Rien de réglé, une lecture en
+ * échec ou une forme inattendue ⇒ assistant FERMÉ : au doute, on ne dépense pas
+ * le crédit IA d'une collectivité. `deposit_enabled` ne sort `true` que sous un
+ * assistant ouvert — la base, elle, conserve la valeur (le réglage gouverne
+ * l'usage, pas la donnée).
+ */
+export function readPortalAssistant(raw: unknown): PortalAssistantDto {
+  const row = Array.isArray(raw) ? raw[0] : raw;
+  const source = typeof row === "object" && row !== null ? (row as Row) : {};
+  const enabled = source.enabled === true;
+  return { enabled, deposit_enabled: enabled && source.deposit_enabled === true };
 }
 
 /**

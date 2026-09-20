@@ -1,7 +1,7 @@
 # Modèle de données
 
 > **Public** : développeurs, ops · **Question traitée** : qu'est-ce qui existe en base (tables,
-> contraintes, RLS, fonctions, storage) ? · **Dernière mise à jour** : 2026-09-18
+> contraintes, RLS, fonctions, storage) ? · **Dernière mise à jour** : 2026-09-20
 
 Pour le rôle de Socle dans la gamme et les décisions d'architecture, voir [../CLAUDE.md](../CLAUDE.md)
 et [./architecture.md](./architecture.md). Pour les endpoints, schémas de requête/réponse et la
@@ -268,6 +268,28 @@ aucun endpoint, il décrit ce qui existe **en base**.
   client (vider les rubriques suffit).
 - Servi, héritage résolu, par `GET /v1/organizations/{id}/agent-guidance` (contrat 1.27.0) via la
   RPC `resolve_agent_guidance`. Contrat JSON : `src/features/organizations/agentGuidance.ts`.
+
+---
+
+### `portal_assistant_settings` — assistant du portail usagers (2026-09-20)
+
+- `organization_id` **clé primaire**, FK **CASCADE** vers `organizations` (une ligne par
+  collectivité) ; `enabled` bool NOT NULL défaut `false` (l'assistant est proposé sur le site) ;
+  `deposit_enabled` bool NOT NULL défaut `false` (il peut recueillir un formulaire dans la
+  conversation) ; `created_at` / `updated_at` (trigger `set_updated_at`) ; `updated_by` FK
+  `users` **SET NULL**.
+- **Aucune ligne = assistant fermé.** ⚠️ Le réglage gouverne l'usage, pas la donnée : couper
+  `enabled` **conserve** `deposit_enabled` ; c'est `public-api` qui sert `false` tant que
+  l'assistant est fermé (`readPortalAssistant`).
+- ⚠️ **Une table, pas une colonne d'`organizations`** : un administrateur d'organisation modifie sa
+  ligne `organizations` ; une colonne y serait à sa portée. ⚠️ **Pas dans `portal_themes`** : un
+  interrupteur qu'on doit pouvoir couper n'attend pas un « Publier ».
+- **Racine uniquement** (trigger `enforce_portal_assistant_root_org`, EXECUTE révoqué des trois
+  rôles) · **RLS** : lecture `has_org_access` · INSERT/UPDATE **`is_super_admin()`** · pas de
+  DELETE client (fermer = `enabled = false`).
+- Servi, héritage résolu, dans `GET /v1/portal/tenant` → `assistant` (contrat 1.28.0) via la RPC
+  `resolve_portal_assistant` (service role seul). Fiche :
+  [`features/assistant-usager.md`](features/assistant-usager.md).
 
 ---
 

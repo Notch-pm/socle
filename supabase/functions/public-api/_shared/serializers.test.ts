@@ -13,6 +13,7 @@ import {
   serializeQuartier,
   serializeBranding,
   serializeSmtpSettings,
+  readPortalAssistant,
   serializeTenant,
 } from "./serializers.ts";
 import { defaultPortalThemeDto } from "./portalTheme.ts";
@@ -535,9 +536,10 @@ describe("serializeTenant — la whitelist la plus étroite (page publique)", ()
     parent_id: null,
   };
 
-  it("n'expose que id, name, slug, le domaine résolu, les langues et le thème", () => {
+  it("n'expose que id, name, slug, le domaine résolu, les langues, le thème et l'assistant", () => {
     const dto = serializeTenant(row, "nantes.edilumen.fr", ["fr", "br"], null);
     expect(Object.keys(dto).sort()).toEqual([
+      "assistant",
       "hostname",
       "id",
       "languages",
@@ -556,6 +558,42 @@ describe("serializeTenant — la whitelist la plus étroite (page publique)", ()
     for (const leak of ["address", "phone", "email", "metadata", "email_sender_name", "status"]) {
       expect(dto).not.toHaveProperty(leak);
     }
+  });
+
+  it("⚠️ l'assistant est FERMÉ tant que rien ne l'ouvre — jamais null, jamais un trou", () => {
+    // Rien de réglé, lecture en échec, forme inattendue : au doute, on ne
+    // dépense pas le crédit IA d'une collectivité.
+    const closed = { enabled: false, deposit_enabled: false };
+    expect(serializeTenant(row, "n.fr", null, null).assistant).toEqual(closed);
+    for (const raw of [null, undefined, [], "oui", 1, { enabled: "true" }, [{ enabled: 1 }]]) {
+      expect(readPortalAssistant(raw)).toEqual(closed);
+    }
+  });
+
+  it("lit la ligne de `resolve_portal_assistant`, seule ou en tableau", () => {
+    const open = { source_organization_id: "org-1", enabled: true, deposit_enabled: true };
+    const expected = { enabled: true, deposit_enabled: true };
+    expect(readPortalAssistant(open)).toEqual(expected);
+    expect(readPortalAssistant([open])).toEqual(expected);
+    expect(serializeTenant(row, "n.fr", null, null, false, [open]).assistant).toEqual(expected);
+    // Deux booléens, et rien de la ligne : ni la source, ni qui a réglé.
+    expect(Object.keys(readPortalAssistant({ ...open, updated_by: "user-1" })).sort()).toEqual([
+      "deposit_enabled",
+      "enabled",
+    ]);
+  });
+
+  it("⚠️ le commutateur s'applique à la frontière : pas de dépôt sous un assistant fermé", () => {
+    // La base CONSERVE `deposit_enabled` quand on coupe l'assistant (le réglage
+    // gouverne l'usage, pas la donnée) ; c'est ici qu'il cesse de sortir.
+    expect(readPortalAssistant({ enabled: false, deposit_enabled: true })).toEqual({
+      enabled: false,
+      deposit_enabled: false,
+    });
+    expect(readPortalAssistant({ enabled: true, deposit_enabled: false })).toEqual({
+      enabled: true,
+      deposit_enabled: false,
+    });
   });
 
   it("⚠️ un tenant sans thème publié reçoit les DÉFAUTS, jamais null", () => {

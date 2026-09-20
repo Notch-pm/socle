@@ -1,6 +1,6 @@
 import * as React from "react";
 import { useParams, useNavigate, useSearchParams } from "react-router-dom";
-import { ArrowLeft, BookUser, Settings2, Users as UsersIcon, ListChecks, FileCheck2, FileSignature, MapPin, Mail, Palette, Globe, Languages, LayoutTemplate, KeyRound, Gauge, Tags, ToggleRight, AppWindow, type LucideIcon } from "lucide-react";
+import { ArrowLeft, BookUser, Settings2, Users as UsersIcon, ListChecks, FileCheck2, FileSignature, MapPin, Mail, Palette, Globe, Languages, LayoutTemplate, KeyRound, Gauge, Tags, ToggleRight, AppWindow, MessagesSquare, type LucideIcon } from "lucide-react";
 import { Card, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { EmptyState } from "@/components/shared/EmptyState";
@@ -17,6 +17,7 @@ import { LanguagesSection } from "@/features/languages/LanguagesSection";
 import { AgentGuidanceSection } from "@/features/organizations/AgentGuidanceSection";
 import { ApiKeysSection } from "@/features/superadmin/organizations/sections/ApiKeysSection";
 import { AiUsageSection } from "@/features/superadmin/organizations/sections/AiUsageSection";
+import { PortalAssistantSection } from "@/features/superadmin/organizations/sections/PortalAssistantSection";
 import { UsersManagementPage } from "@/features/users/UsersManagementPage";
 import { ProceduresListPanel } from "@/features/procedures/ProceduresListPanel";
 import { CategoriesManager } from "@/features/categories/CategoriesManager";
@@ -41,7 +42,8 @@ type Section =
   | "quartiers"
   | "smtp"
   | "api"
-  | "ia";
+  | "ia"
+  | "assistant-portail";
 
 const SECTIONS: { key: Exclude<Section, "menu">; title: string; description: string; icon: LucideIcon }[] = [
   { key: "general", title: "Informations générales", description: "Nom, coordonnées, slug, organisation parente", icon: Settings2 },
@@ -60,6 +62,7 @@ const SECTIONS: { key: Exclude<Section, "menu">; title: string; description: str
   { key: "smtp", title: "Emails (SMTP)", description: "Serveur SMTP utilisé pour les emails de cette organisation", icon: Mail },
   { key: "api", title: "API publique", description: "Clés d'accès des partenaires : référentiel, usagers, relais, assistant IA", icon: KeyRound },
   { key: "ia", title: "Assistant IA", description: "Plafond mensuel de jetons et consommation par application", icon: Gauge },
+  { key: "assistant-portail", title: "Assistant du portail usagers", description: "Ouvrir l'assistant conversationnel du site de démarches, et le dépôt par la conversation", icon: MessagesSquare },
 ];
 
 /**
@@ -192,6 +195,13 @@ export function OrgSettingsPage() {
             plafond se pose sur la racine, et le trigger le garde en base. */}
         {activeSection === "ia" &&
           rootOnly(<AiUsageSection organizationId={organization.id} />, "Le plafond IA se règle")}
+        {/* Le site est celui de la collectivité : l'interrupteur vit sur la
+            racine, et le trigger le garde en base. */}
+        {activeSection === "assistant-portail" &&
+          rootOnly(
+            <PortalAssistantSection organizationId={organization.id} />,
+            "L'assistant du portail s'active",
+          )}
       </div>
     );
   }

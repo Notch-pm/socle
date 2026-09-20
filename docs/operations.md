@@ -1,7 +1,7 @@
 # Exploitation & déploiement
 
 > **Public** : ops, devs déployant Socle · **Question traitée** : comment exploiter et déployer
-> Socle (edge functions, secrets, base, CI) ? · **Dernière mise à jour** : 2026-09-12
+> Socle (edge functions, secrets, base, CI) ? · **Dernière mise à jour** : 2026-09-20
 
 Ce document est un runbook. Pour le « pourquoi » des choix, voir
 [architecture.md](./architecture.md) ; pour le détail du schéma, [data-model.md](./data-model.md).
@@ -117,6 +117,7 @@ fichiers casse la fonction en production alors que les tests passent en local.
   | `assistant-instruction` | `MISTRAL_AGENT_ASSISTANT_INSTRUCTION` | Iris | Assistant d'instruction des demandes |
   | `extraction-courrier` | `MISTRAL_AGENT_EXTRACTION_COURRIER` | Clara | Analyse de courrier, extraction structurée, préremplissage de démarche |
   | `redaction-reponse` | `MISTRAL_AGENT_REDACTION_REPONSE` | Clara | Brouillon de réponse à un courrier |
+  | `assistant-usager` | `MISTRAL_AGENT_ASSISTANT_USAGER` | Nora | Assistant conversationnel du portail usagers — **à créer** ; absent, repli sur le modèle par défaut (le choix du modèle, donc du coût, ne se pilote alors pas depuis la console) |
 
   ⚠️ **« Optionnel » ne veut pas dire « sans conséquence », et l'écart entre consommateurs
   mérite d'être connu.** Pour un assistant conversationnel (Iris), le repli sur le modèle par

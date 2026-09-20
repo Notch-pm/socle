@@ -1028,6 +1028,48 @@ export type Database = {
           },
         ]
       }
+      portal_assistant_settings: {
+        Row: {
+          created_at: string
+          deposit_enabled: boolean
+          enabled: boolean
+          organization_id: string
+          updated_at: string
+          updated_by: string | null
+        }
+        Insert: {
+          created_at?: string
+          deposit_enabled?: boolean
+          enabled?: boolean
+          organization_id: string
+          updated_at?: string
+          updated_by?: string | null
+        }
+        Update: {
+          created_at?: string
+          deposit_enabled?: boolean
+          enabled?: boolean
+          organization_id?: string
+          updated_at?: string
+          updated_by?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "portal_assistant_settings_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: true
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "portal_assistant_settings_updated_by_fkey"
+            columns: ["updated_by"]
+            isOneToOne: false
+            referencedRelation: "users"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       portal_audience_breakdown: {
         Row: {
           day: string
@@ -1687,6 +1729,14 @@ export type Database = {
         }[]
       }
       resolve_org_languages: { Args: { p_org_id: string }; Returns: string[] }
+      resolve_portal_assistant: {
+        Args: { p_org_id: string }
+        Returns: {
+          deposit_enabled: boolean
+          enabled: boolean
+          source_organization_id: string
+        }[]
+      }
       resolve_smtp_settings: {
         Args: { p_org_id: string }
         Returns: {

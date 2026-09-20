@@ -406,6 +406,14 @@ Deno.serve(async (req: Request) => {
         .eq("slug", ACCESSIBILITY_STATEMENT_SLUG)
         .maybeSingle();
 
+      // L'assistant du portail — réglé par le super admin sur la racine, donc
+      // résolu en base comme les langues. Un échec de lecture ne ferme pas le
+      // portail : il ferme l'ASSISTANT (le sérialiseur lit « rien » comme
+      // « fermé »), ce qui est le bon côté où tomber quand un crédit est en jeu.
+      const { data: assistant } = await admin.rpc("resolve_portal_assistant", {
+        p_org_id: org.id,
+      });
+
       return jsonResponse(
         200,
         serializeTenant(
@@ -414,6 +422,7 @@ Deno.serve(async (req: Request) => {
           languages,
           theme?.published ?? null,
           hasPublishedContent(statement?.published ?? null),
+          assistant,
         ),
         corsHeaders,
       );

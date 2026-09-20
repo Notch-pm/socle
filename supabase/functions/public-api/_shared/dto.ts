@@ -368,6 +368,32 @@ export interface TenantDto {
    * ses couleurs qu'une fois, pour toute la gamme.
    */
   theme: PortalThemeDto;
+  /**
+   * L'assistant conversationnel du portail — ce que la collectivité a OUVERT
+   * (contrat 1.28.0). Réglé par le super administrateur, sur l'organisation
+   * principale ; l'héritage est **déjà résolu**.
+   *
+   * ⚠️ **Toujours présent, jamais `null`** : une collectivité qui n'a rien réglé
+   * reçoit `{ enabled: false, deposit_enabled: false }`.
+   *
+   * ⚠️ Deux faits publics, rien d'autre : ni prompt, ni alias d'agent, ni
+   * plafond. Tout visiteur du portail peut lire ce DTO.
+   */
+  assistant: PortalAssistantDto;
+}
+
+/**
+ * Ce que l'assistant du portail a le droit de faire pour cette collectivité.
+ *
+ * ⚠️ Le commutateur s'applique **à la frontière** (motif `declaration_link`) :
+ * `deposit_enabled` n'est `true` que si `enabled` l'est aussi. Un consommateur
+ * lit donc chaque booléen tel quel, sans les croiser.
+ */
+export interface PortalAssistantDto {
+  /** L'assistant est proposé sur le site : il renseigne et oriente. */
+  enabled: boolean;
+  /** Il peut en outre recueillir un formulaire dans la conversation. */
+  deposit_enabled: boolean;
 }
 
 /**

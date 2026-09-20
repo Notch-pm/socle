@@ -292,8 +292,8 @@ describe("contrat — traduction de la communication usager (1.26.0)", () => {
 describe("contrat — documents et courriers", () => {
   const doc = buildOpenApiDocument("https://example.supabase.co/functions/v1/public-api") as any;
 
-  it("annonce la version 1.27.0 du contrat", () => {
-    expect(doc.info.version).toBe("1.27.0");
+  it("annonce la version 1.28.0 du contrat", () => {
+    expect(doc.info.version).toBe("1.28.0");
   });
 
   it("le thème voyage avec le TENANT : il vaut pour toutes les pages", () => {
@@ -490,6 +490,7 @@ describe("contrat — portail usagers", () => {
   it("sert un tenant minimal — pas une fiche organisation", () => {
     const schema = doc.components.schemas.Tenant;
     expect(Object.keys(schema.properties).sort()).toEqual([
+      "assistant",
       "hostname",
       "id",
       "languages",
@@ -501,6 +502,16 @@ describe("contrat — portail usagers", () => {
     for (const leak of ["address", "phone", "email", "metadata", "email_sender_name"]) {
       expect(schema.properties).not.toHaveProperty(leak);
     }
+  });
+
+  it("⚠️ l'assistant du portail : deux faits publics, et rien de ce qui le fait parler (1.28.0)", () => {
+    // Tout visiteur lit ce DTO. Un prompt, un alias d'agent ou un plafond n'y
+    // ont pas leur place — le portail compose son prompt, le guichet le borne.
+    const schema = doc.components.schemas.PortalAssistant;
+    expect(Object.keys(schema.properties).sort()).toEqual(["deposit_enabled", "enabled"]);
+    expect(schema.required.sort()).toEqual(["deposit_enabled", "enabled"]);
+    expect(schema.description).toContain("jamais `null`");
+    expect(schema.description).toContain("à la frontière");
   });
 });
 

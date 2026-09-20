@@ -1,7 +1,7 @@
 # Journal des évolutions des API publiques
 
 > **Public** : équipes consommatrices (Ariane, Clara, Iris, partenaires) · **Question traitée** :
-> quand un contrat d'API a-t-il changé, et comment ? · **Dernière mise à jour** : 2026-09-19
+> quand un contrat d'API a-t-il changé, et comment ? · **Dernière mise à jour** : 2026-09-20
 
 Journal **append-only** : chaque évolution de la surface de contrat des API publiques
 (`public-api`, `contacts-api`, `ai-api`, `audience-api`) — endpoint, paramètre, champ de réponse,
@@ -10,6 +10,32 @@ réécrite ; une correction s'ajoute sous une nouvelle date. Politique de compat
 consommateur : [integration.md](./integration.md#politique-de-compatibilité-v1).
 
 Format d'une entrée : `## AAAA-MM-JJ — <api> — ajout|correctif|rupture`
+
+---
+
+## 2026-09-20 — public-api — ajout (assistant du portail usagers)
+
+**Ce que la collectivité a ouvert de l'assistant conversationnel de son site.** Nouveau champ
+`assistant` sur la réponse de `GET /v1/portal/tenant`. Version du contrat : **1.28.0**. Ajout
+**additif** : rien ne change pour qui ne le lit pas.
+
+```json
+"assistant": { "enabled": false, "deposit_enabled": false }
+```
+
+- `enabled` — l'assistant est proposé sur le site : il renseigne et oriente. `deposit_enabled` —
+  il peut en outre recueillir les réponses d'un formulaire dans la conversation (le dépôt reste un
+  geste de l'usager).
+- ⚠️ **Toujours présent, jamais `null`** : rien de réglé ⇒ tout à `false`. Face à un Socle d'avant
+  1.28.0, lisez une **absence** comme un assistant fermé.
+- ⚠️ **Le commutateur s'applique à la frontière** : `deposit_enabled` n'est `true` que si `enabled`
+  l'est (la base, elle, conserve la valeur). Lisez chaque booléen tel quel, sans les croiser.
+- Réglé par le **super administrateur**, sur l'organisation principale (fiche du client ›
+  « Assistant du portail usagers ») ; héritage **déjà résolu** quand le domaine désigne une
+  sous-organisation. **Effet immédiat** — il ne passe pas par « Publier ».
+- **Deux faits publics, rien d'autre** : ni prompt, ni alias d'agent, ni plafond. Le Socle ne
+  compose aucun prompt ; le portail bâtit le sien à partir de ce que `/v1/portal/*` sert déjà et le
+  confie à `ai-api` (scope `ai`, clé dédiée).
 
 ---
 

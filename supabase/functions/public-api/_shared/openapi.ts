@@ -30,7 +30,7 @@ export function buildOpenApiDocument(serverUrl: string): Record<string, unknown>
     openapi: "3.1.0",
     info: {
       title: "API Socle — Référentiel de la gamme",
-      version: "1.27.0",
+      version: "1.28.0",
       description: [
         "API **en lecture seule** exposant le référentiel central de la gamme : les",
         "**organisations** (et sous-organisations) avec l'intégralité de leur configuration,",
@@ -945,6 +945,35 @@ export function buildOpenApiDocument(serverUrl: string): Record<string, unknown>
               examples: [["fr", "en", "br"]],
             },
             theme: { $ref: "#/components/schemas/PortalTheme" },
+            assistant: { $ref: "#/components/schemas/PortalAssistant" },
+          },
+        },
+        PortalAssistant: {
+          type: "object",
+          description:
+            "Assistant conversationnel du portail — ce que la collectivité a **ouvert** " +
+            "(contrat 1.28.0). Réglé par le super administrateur sur l'organisation " +
+            "principale, héritage **déjà résolu**.\n\n" +
+            "⚠️ **Toujours présent, jamais `null`** : rien de réglé ⇒ tout à `false`. Un " +
+            "consommateur d'avant 1.28.0 ne reçoit pas le champ : lisez une absence comme " +
+            "un assistant fermé.\n\n" +
+            "⚠️ Le commutateur s'applique **à la frontière** : `deposit_enabled` n'est `true` " +
+            "que si `enabled` l'est. Lisez chaque booléen tel quel, sans les croiser.\n\n" +
+            "Le Socle ne compose aucun prompt : le portail bâtit le sien à partir de ce que " +
+            "`/v1/portal/*` sert déjà — ce que la collectivité écrit **pour l'usager** — et le " +
+            "confie au guichet `ai-api`. Ce DTO ne porte ni prompt, ni alias d'agent, ni plafond.",
+          required: ["enabled", "deposit_enabled"],
+          properties: {
+            enabled: {
+              type: "boolean",
+              description: "L'assistant est proposé sur le site : il renseigne et oriente.",
+            },
+            deposit_enabled: {
+              type: "boolean",
+              description:
+                "Il peut en outre recueillir les réponses d'un formulaire dans la conversation. " +
+                "Le dépôt lui-même reste un geste de l'usager.",
+            },
           },
         },
         PortalTheme: {
