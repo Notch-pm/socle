@@ -1,5 +1,6 @@
 import { NavLink } from "react-router-dom";
 import { House, Network, ListChecks, LayoutTemplate, Tags, FileCheck2, FileSignature, MapPin, Users, Sparkles } from "lucide-react";
+import { API_DOC_LINKS, apiDocLinkTitle, type ApiDocLink } from "@/features/public-api-docs/apiDocLinks";
 import { cn } from "@/lib/utils";
 
 /**
@@ -65,6 +66,13 @@ const ITEMS: NavItem[] = [
  * (`bg-X` / `text-X-foreground`) : un `white/…` ou `black/…` en dur ne suit
  * plus le fond.
  */
+const TILE_CLASS = cn(
+  // 36 px : la tuile de la gamme (Iris, Clara, Ariane).
+  "flex h-9 w-9 items-center justify-center rounded-lg text-rail-foreground transition-colors",
+  "hover:bg-rail-foreground/10",
+  "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-rail-foreground focus-visible:ring-offset-2 focus-visible:ring-offset-rail",
+);
+
 function Tile({ item }: { item: NavItem }) {
   const Icon = item.icon;
   return (
@@ -73,18 +81,37 @@ function Tile({ item }: { item: NavItem }) {
       end={item.end}
       title={item.title}
       aria-label={item.title}
-      className={({ isActive }) =>
-        cn(
-          // 36 px : la tuile de la gamme (Iris, Clara, Ariane).
-          "flex h-9 w-9 items-center justify-center rounded-lg text-rail-foreground transition-colors",
-          "hover:bg-rail-foreground/10",
-          "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-rail-foreground focus-visible:ring-offset-2 focus-visible:ring-offset-rail",
-          isActive && "bg-rail-foreground/20",
-        )
-      }
+      className={({ isActive }) => cn(TILE_CLASS, isActive && "bg-rail-foreground/20")}
     >
       <Icon className="size-5" />
     </NavLink>
+  );
+}
+
+/**
+ * ⚠️ **UN LIEN SORTANT, PAS UNE SECTION DE L'APPLICATION.** Une documentation
+ * d'API s'ouvre dans un **nouvel onglet** — on ne quitte pas un paramétrage en
+ * cours pour aller lire un contrat —, elle ne porte donc jamais d'état actif :
+ * l'écran actif est resté derrière. D'où un `a` et non un `NavLink`, et le pied
+ * du rail plutôt que le groupe centré, qui est la navigation de l'application.
+ *
+ * L'intitulé **annonce le nouvel onglet** (`apiDocLinkTitle`) : dans un rail
+ * d'icônes, c'est le seul endroit où le prévenir.
+ */
+function DocTile({ link }: { link: ApiDocLink }) {
+  const Icon = link.icon;
+  const title = apiDocLinkTitle(link);
+  return (
+    <a
+      href={link.path}
+      target="_blank"
+      rel="noreferrer"
+      title={title}
+      aria-label={title}
+      className={TILE_CLASS}
+    >
+      <Icon className="size-5" />
+    </a>
   );
 }
 
@@ -97,7 +124,8 @@ export function Sidebar() {
       (`absolute inset-0`), pas sur la place qui reste sous le tableau de bord,
       sans quoi le groupe tomberait plus bas que dans les autres applications.
       Aucune pastille de produit au-dessus (il se nomme dans l'en-tête), aucun
-      trait de séparation.
+      trait de séparation. En pied de rail, hors de ce groupe : les
+      documentations d'API, qui sortent de l'application (voir `DocTile`).
     */
     <nav
       aria-label="Navigation principale"
@@ -113,6 +141,15 @@ export function Sidebar() {
             <Tile key={item.to} item={item} />
           ))}
         </div>
+      </div>
+      {/*
+        Les documentations d'API en pied de rail, comme le tableau de bord en
+        tête : hors du groupe centré, qui reste la navigation de l'application.
+      */}
+      <div className="mt-auto flex flex-col items-center gap-0.5">
+        {API_DOC_LINKS.map((link) => (
+          <DocTile key={link.path} link={link} />
+        ))}
       </div>
     </nav>
   );

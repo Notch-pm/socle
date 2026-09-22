@@ -37,7 +37,11 @@
   « Organisations » (même `OrganizationFormDialog`). Sous les organisations, l'entrée **« Applications »**
   (`/superadmin/applications`, une clé plateforme par application) et l'entrée **« Plateforme »**
   (`/superadmin/plateforme`, réglages de plateforme et rejeu du provisioning) — voir features
-  « Applications et abonnements » et « Mise en service d'un client ».
+  « Applications et abonnements » et « Mise en service d'un client ». En pied de menu, un groupe
+  **« Documentation des API »** (catalogue partagé `src/features/public-api-docs/apiDocLinks.ts`,
+  voir feature « Shell de l'app ») : « API Référentiel » et « API Usagers », en **nouvel onglet**
+  et **sans état actif** — c'est d'ici qu'on délivre les clés, c'est ici qu'on doit pouvoir relire
+  ce qu'elles ouvrent.
 
 ## Édition d'organisation en pleine page (app par organisation)
 

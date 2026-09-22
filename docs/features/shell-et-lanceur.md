@@ -30,6 +30,20 @@
   dans la hauteur du rail** — centré sur le rail ENTIER (`absolute inset-0`), pas sur la place
   qui reste sous le tableau de bord, sans quoi le groupe tomberait plus bas qu'ailleurs. Ni
   pastille de produit au-dessus (l'application se nomme dans l'en-tête), ni trait de séparation.
+- **Documentations d'API en pied de rail** (`DocTile`, catalogue
+  `src/features/public-api-docs/apiDocLinks.ts`) : « API Référentiel » (`/api-doc`) et
+  « API Usagers » (`/api-doc-usagers`), **hors du groupe centré** comme le tableau de bord est
+  hors de lui en tête.
+  ⚠️ **Ce sont des liens sortants, pas des sections de l'application** : un `a` en
+  `target="_blank"` et non un `NavLink` — on ne quitte pas un paramétrage en cours pour lire un
+  contrat —, donc **jamais d'état actif** (l'écran actif est resté derrière). Le nouvel onglet
+  s'annonce dans l'intitulé (`apiDocLinkTitle`) : dans un rail d'icônes, c'est le seul endroit où
+  prévenir.
+  ⚠️ **Un seul catalogue pour les deux menus** (ce rail et `SuperAdminSidebar`) : ajouter une
+  documentation, c'est ajouter une entrée dans `apiDocLinks.ts`. Un test vérifie que chaque route
+  citée existe **et reste publique** dans `App.tsx` — un lien mort ne lèverait rien à la
+  compilation, il mènerait les deux menus sur `/login`. Le contrat `ai-api` (`/api-doc-ia`) n'y
+  est pas : le guichet IA n'est ouvert qu'aux applications de la gamme.
 - **En-tête** (`Header.tsx`) : **lanceur d'applications** (dans une colonne de la largeur du rail,
   voir ci-dessous) · wordmark Edilumen · séparateur · **logo + nom de l'organisation principale**
   — à droite : **pastille + nom du produit** (« Socle », en primaire) · séparateur · menu

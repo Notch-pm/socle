@@ -62,6 +62,10 @@ avec **`verify_jwt = false`** (l'auth est portée par la fonction, pas par la pa
   servie par la function : la passerelle Supabase force les réponses **HTML** des functions en
   `text/plain` + CSP `sandbox` (anti-hameçonnage sur `*.supabase.co`) → un rendu HTML depuis la
   function ne s'affiche pas. Le `openapi.json` (JSON) est, lui, servi normalement.
+  **Où on la trouve** : pied du rail de l'app (`Sidebar`) et groupe « Documentation des API » du
+  menu superadmin (`SuperAdminSidebar`), tous deux nourris par le catalogue
+  `src/features/public-api-docs/apiDocLinks.ts` (**nouvel onglet**, annoncé dans l'intitulé) —
+  plus les liens de la section « API publique » d'`OrgSettingsPage`.
 - **Gestion des clés (super admin)** : section **« API publique »** de `OrgSettingsPage`
   (**racine uniquement**), à côté de SMTP / catalogue / types de PJ, et page **« Applications »**
   (`/superadmin/applications`, `ApiKeysList` montée une fois par application). Les deux partagent `ApiKeysList` (liste + révocation via

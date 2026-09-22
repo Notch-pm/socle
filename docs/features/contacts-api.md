@@ -76,7 +76,9 @@ est portée par la fonction). Permet de **consulter, créer, modifier, archiver*
   consommateur servant des usagers finaux ne doit jamais la retransmettre — documenté dans l'OpenAPI.
 - **Docs** : `/api-doc-usagers` (route publique, `ApiDocsPage api="contacts-api"` — Redoc pointé
   sur `…/contacts-api/openapi.json`) ; liens depuis la section « APIs de la gamme » de
-  `OrgSettingsPage`.
+  `OrgSettingsPage`, depuis le **pied du rail** de l'app et depuis le groupe « Documentation des
+  API » du menu superadmin (catalogue `src/features/public-api-docs/apiDocLinks.ts`, nouvel
+  onglet).
 - Code : `supabase/functions/contacts-api/` — `index.ts` + `_shared/{dto,errors,validation,
   serializers,openapi}.ts` (logique pure **testée** par vitest, sans dépendance Deno, déployée avec
   la fonction). Le déploiement (`deploy_edge_function`) doit inclure `index.ts` + tout `_shared/*.ts`.

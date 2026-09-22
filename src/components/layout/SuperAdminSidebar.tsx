@@ -1,7 +1,8 @@
 import * as React from "react";
 import { NavLink, matchPath, useLocation } from "react-router-dom";
-import { LayoutDashboard, Building2, LogOut, Plus, AppWindow, Sparkles, SlidersHorizontal } from "lucide-react";
+import { LayoutDashboard, Building2, LogOut, Plus, AppWindow, Sparkles, SlidersHorizontal, ExternalLink } from "lucide-react";
 import { useAuth } from "@/features/auth/AuthProvider";
+import { API_DOC_LINKS, apiDocLinkTitle } from "@/features/public-api-docs/apiDocLinks";
 import { cn } from "@/lib/utils";
 import {
   useAllOrganizations,
@@ -133,6 +134,38 @@ export function SuperAdminSidebar() {
               Plateforme
             </NavLink>
           </li>
+        </ul>
+
+        {/*
+          Les contrats publiés, à portée de main : c'est d'ici qu'on délivre les
+          clés, c'est ici qu'on doit pouvoir relire ce qu'elles ouvrent.
+          ⚠️ Un **nouvel onglet**, annoncé comme tel : la page Redoc est lourde
+          et l'on n'abandonne pas le paramétrage en cours pour lire une doc.
+          Aucun état actif — ces routes ne sont pas des écrans du superadmin.
+        */}
+        <span className="mt-5 block px-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+          Documentation des API
+        </span>
+        <ul className="mt-2 flex flex-col gap-0.5">
+          {API_DOC_LINKS.map((link) => {
+            const Icon = link.icon;
+            return (
+              <li key={link.path}>
+                <a
+                  href={link.path}
+                  target="_blank"
+                  rel="noreferrer"
+                  title={apiDocLinkTitle(link)}
+                  aria-label={apiDocLinkTitle(link)}
+                  className="flex items-center gap-3 rounded-md px-3 py-2 text-sm text-foreground/80 hover:bg-muted"
+                >
+                  <Icon className="size-4 shrink-0" />
+                  <span className="flex-1 truncate">{link.label}</span>
+                  <ExternalLink className="size-3.5 shrink-0 text-muted-foreground" aria-hidden="true" />
+                </a>
+              </li>
+            );
+          })}
         </ul>
       </nav>
 
