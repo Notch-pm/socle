@@ -96,3 +96,47 @@ export function rateLimitedMessage(): string {
   return "Trop d'appels à l'IA en peu de temps. " +
     "Réessayez dans quelques secondes.";
 }
+
+/**
+ * Une part réservée, telle que la sert la RPC `ai_usage_shares` (résolue par
+ * le serveur contre le plafond commun actif : `effective_tokens` NULL = sans
+ * effet — part désactivée, ou pourcentage sans plafond).
+ */
+export interface ShareRow {
+  consumer: string;
+  effective_tokens: number | null;
+  used_tokens: number;
+  reserved_tokens: number;
+}
+
+/**
+ * Le plafond d'une application SANS part : le commun moins les parts des
+ * autres. Jumeau de `v_caller_limit` dans `reserve_ai_usage` et de
+ * `remainderLimit` (front) — un chiffre que `/v1/usage` doit rendre
+ * IDENTIQUE à celui du refus 429, sans quoi une application lirait deux
+ * plafonds pour le même mois.
+ *
+ * `max(part, engagé)` et non `part` : une part dépassée par un règlement
+ * plus lourd que son estimation a consommé au-delà, et ce dépassement est
+ * sorti du reste. Jamais négatif — n parts peuvent, ensemble, dépasser le
+ * plafond.
+ */
+export function callerLimit(plafond: number | null, shares: ShareRow[], consumer: string): number | null {
+  if (plafond === null || plafond <= 0) return null;
+  const taken = shares.reduce((sum, s) => {
+    if (s.consumer === consumer || s.effective_tokens === null) return sum;
+    return sum + Math.max(s.effective_tokens, s.used_tokens + s.reserved_tokens);
+  }, 0);
+  return Math.max(plafond - taken, 0);
+}
+
+/** L'engagé des AUTRES parts, à retrancher de l'engagé commun pour rendre à l'appelant le sien. */
+export function othersEngaged(shares: ShareRow[], consumer: string): { used: number; reserved: number } {
+  return shares.reduce(
+    (acc, s) => {
+      if (s.consumer === consumer || s.effective_tokens === null) return acc;
+      return { used: acc.used + s.used_tokens, reserved: acc.reserved + s.reserved_tokens };
+    },
+    { used: 0, reserved: 0 },
+  );
+}

@@ -6,6 +6,7 @@ import {
   type CounterRow,
   type OrgRow,
   type QuotaRow,
+  type ShareRow,
 } from "./aiUsageAll";
 
 const org = (id: string, name: string, parent: string | null = null): OrgRow =>
@@ -79,6 +80,39 @@ describe("buildUsageRows", () => {
       [counter("a", 100), counter("b", 900)],
     );
     expect(rows.map((r) => r.name)).toEqual(["Béziers", "ACCM", "Arles"]);
+  });
+});
+
+describe("buildUsageRows — la part de l'assistant", () => {
+  const shareRow = (id: string, over: Partial<ShareRow> = {}): ShareRow => ({
+    organization_id: id,
+    limit_mode: "percent",
+    monthly_limit_tokens: null,
+    limit_percent: 25,
+    is_active: true,
+    ...over,
+  });
+
+  it("dit la part telle qu'elle est réglée : pourcentage, jetons, ou levée", () => {
+    const rows = buildUsageRows(
+      [org("a", "ACCM"), org("b", "Arles"), org("c", "Béziers"), org("d", "Nîmes")],
+      [], [],
+      [
+        shareRow("a"),
+        shareRow("b", { limit_mode: "tokens", limit_percent: null, monthly_limit_tokens: 500_000 }),
+        shareRow("c", { is_active: false }),
+      ],
+    );
+    const byName = Object.fromEntries(rows.map((r) => [r.name, r.share]));
+    expect(byName.ACCM).toEqual({ label: "25 %", active: true });
+    expect(byName.Arles).toEqual({ label: "500 000", active: true });
+    expect(byName["Béziers"]).toEqual({ label: "levée", active: false });
+    expect(byName["Nîmes"]).toBeNull();
+  });
+
+  it("sans liste de parts, la colonne est vide et rien ne casse", () => {
+    const [row] = buildUsageRows([org("a", "ACCM")], [], []);
+    expect(row.share).toBeNull();
   });
 });
 

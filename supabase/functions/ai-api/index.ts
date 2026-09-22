@@ -44,11 +44,14 @@ import { buildOpenApiDocument } from "./_shared/openapi.ts";
 import { callProvider, callProviderOcr, PROVIDER_NAME } from "./_shared/provider.ts";
 import { parseOcrPayload, reservationForOcr, tokensForOcrText } from "./_shared/ocr.ts";
 import {
+  callerLimit,
   nextRenewalIso,
+  othersEngaged,
   periodKey,
   quotaExceededMessage,
   rateLimitedMessage,
   secondsUntilNextMinute,
+  type ShareRow,
 } from "./_shared/quota.ts";
 import {
   clampOutput,
@@ -286,7 +289,15 @@ Deno.serve(async (req: Request) => {
     const now = new Date();
 
     // ======================================================================
-    // GET /v1/usage — ce que la collectivité a consommé, et par qui
+    // GET /v1/usage — ce que l'APPLICATION APPELANTE peut encore dépenser,
+    // et ce que la collectivité a consommé, par qui
+    //
+    // ⚠️ Le point de vue est celui de l'appelant (2026-09-22, partage du
+    // plafond) : les mêmes chiffres que le refus 429. Une application AVEC
+    // part lit sa part ; une application SANS part lit le commun moins les
+    // parts des autres. Sans aucune part active, rien ne change : c'est le
+    // plafond de la collectivité, comme avant. `by_consumer`, lui, reste le
+    // journal de toute la collectivité.
     // ======================================================================
     if (segments[1] === "usage" && segments.length === 2) {
       if (req.method !== "GET") {
@@ -296,21 +307,38 @@ Deno.serve(async (req: Request) => {
       const asked = url.searchParams.get("period");
       const period = asked && /^\d{4}-\d{2}$/.test(asked) ? asked : periodKey(now);
 
-      const [{ data: quotas }, { data: counters }, { data: breakdown }] = await Promise.all([
-        admin.from("ai_usage_quotas")
-          .select("provider, monthly_limit_tokens, is_active, updated_at")
-          .eq("organization_id", orgId).eq("is_active", true),
-        admin.from("ai_usage_counters")
-          .select("provider, used_tokens, reserved_tokens")
-          .eq("organization_id", orgId).eq("period", period),
-        admin.rpc("ai_usage_breakdown", { p_org_id: orgId, p_period: period }),
-      ]);
+      const [{ data: quotas }, { data: counters }, { data: breakdown }, { data: shareRows }] =
+        await Promise.all([
+          admin.from("ai_usage_quotas")
+            .select("provider, monthly_limit_tokens, is_active, updated_at")
+            .eq("organization_id", orgId).eq("is_active", true),
+          admin.from("ai_usage_counters")
+            .select("provider, used_tokens, reserved_tokens")
+            .eq("organization_id", orgId).eq("period", period),
+          admin.rpc("ai_usage_breakdown", { p_org_id: orgId, p_period: period }),
+          admin.rpc("ai_usage_shares", { p_org_id: orgId, p_period: period }),
+        ]);
 
       const quota = (quotas ?? []).find((q) => q.provider === "__global__") ?? null;
       const counter = (counters ?? []).find((c) => c.provider === "__global__") ?? null;
-      const used = counter?.used_tokens ?? 0;
-      const reserved = counter?.reserved_tokens ?? 0;
-      const limit = quota?.monthly_limit_tokens ?? null;
+      const shares = (shareRows ?? []) as ShareRow[];
+      const own = shares.find((s) => s.consumer === consumer && s.effective_tokens !== null) ?? null;
+      const commonLimit = quota?.monthly_limit_tokens ?? null;
+
+      let limit: number | null;
+      let used: number;
+      let reserved: number;
+      if (own) {
+        // Une application avec part lit SA part : c'est elle qui la borne.
+        limit = own.effective_tokens;
+        used = own.used_tokens;
+        reserved = own.reserved_tokens;
+      } else {
+        const others = othersEngaged(shares, consumer);
+        limit = callerLimit(commonLimit, shares, consumer);
+        used = Math.max((counter?.used_tokens ?? 0) - others.used, 0);
+        reserved = Math.max((counter?.reserved_tokens ?? 0) - others.reserved, 0);
+      }
 
       return jsonResponse(200, {
         organization_id: orgId,

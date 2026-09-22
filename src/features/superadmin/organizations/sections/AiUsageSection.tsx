@@ -1,29 +1,32 @@
 import * as React from "react";
-import { Loader2, Pencil } from "lucide-react";
+import { Loader2, Pencil, SlidersHorizontal } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Field } from "@/components/ui/field";
 import { Input } from "@/components/ui/input";
 import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter,
 } from "@/components/ui/dialog";
-import { AiUsageOverview } from "@/features/ai-usage/AiUsageOverview";
+import { AiUsageOverview, shareSettingLabel } from "@/features/ai-usage/AiUsageOverview";
 import { formatTokens, nextRenewalIso, renewalLabel } from "@/features/ai-usage/aiQuota";
 import { useAiUsage, useSetAiQuota } from "@/features/ai-usage/useAiUsage";
+import { AiShareDialog } from "./AiShareDialog";
 
 /**
- * Assistant IA d'une collectivité : le plafond mensuel de jetons et ce qui a
- * été consommé, par application.
+ * Assistant IA d'une collectivité : le plafond mensuel de jetons, sa
+ * répartition entre l'assistant du portail et les agents, et ce qui a été
+ * consommé, par application.
  *
  * Le RÉGLAGE et la LECTURE au même endroit — dans le Socle, c'est une seule
  * personne. Les séparer reproduirait l'arrangement d'Iris, qui n'existait que
  * parce que les deux publics étaient dans deux produits différents.
  *
- * ⚠️ CE FICHIER NE PORTE PLUS QUE LA PART QUI ÉCRIT. Les trois cartes vivent
- * dans `AiUsageOverview`, parce que l'administrateur de la collectivité les
- * consulte lui aussi depuis `/consommation-ia` — mais sans le bouton
+ * ⚠️ CE FICHIER NE PORTE PLUS QUE LA PART QUI ÉCRIT. Les cartes vivent dans
+ * `AiUsageOverview`, parce que l'administrateur de la collectivité les
+ * consulte lui aussi depuis `/consommation-ia` — mais sans les boutons
  * ci-dessous : le budget se négocie avec l'éditeur, il ne se sert pas. Le
- * serveur dit d'ailleurs la même chose, `set_ai_usage_quota` gardant sa garde
- * `is_super_admin()` à l'intérieur de la fonction.
+ * serveur dit d'ailleurs la même chose, `set_ai_usage_quota` et
+ * `set_ai_usage_consumer_quota` gardant leur garde `is_super_admin()` à
+ * l'intérieur de la fonction.
  *
  * Trois états, et le troisième est une DÉCISION : un plafond actif, un plafond
  * « passé en illimité » (la ligne reste, `is_active = false`, la valeur est
@@ -38,6 +41,7 @@ export function AiUsageSection({ organizationId }: { organizationId: string }) {
   const setQuota = useSetAiQuota();
 
   const [open, setOpen] = React.useState(false);
+  const [shareOpen, setShareOpen] = React.useState(false);
   const [value, setValue] = React.useState("");
   const [error, setError] = React.useState<string | null>(null);
   const renewsAt = nextRenewalIso();
@@ -94,6 +98,15 @@ export function AiUsageSection({ organizationId }: { organizationId: string }) {
   const decided = usage.data?.configuredLimit != null;
   const unlimitedByChoice = decided && usage.data?.isActive === false;
 
+  // Les cas limites du partage, DITS au moment où l'on touche au plafond :
+  // la base les accepte et les rend inoffensifs, l'écran doit les nommer.
+  const share = usage.data?.split.share ?? null;
+  const activeShare = share && share.isActive ? share : null;
+  const typed = parseValue();
+  const shareTakesAll =
+    activeShare?.mode === "tokens" && typed !== null && (activeShare.configuredTokens ?? 0) >= typed;
+  const percentWouldIdle = activeShare?.mode === "percent";
+
   return (
     <>
       <AiUsageOverview
@@ -103,7 +116,21 @@ export function AiUsageSection({ organizationId }: { organizationId: string }) {
             <Pencil className="size-4" /> {decided ? "Modifier" : "Décider"}
           </Button>
         }
+        shareAction={
+          <Button type="button" variant="outline" size="sm" onClick={() => setShareOpen(true)}>
+            <SlidersHorizontal className="size-4" /> Répartir
+          </Button>
+        }
       />
+
+      {usage.data ? (
+        <AiShareDialog
+          organizationId={organizationId}
+          usage={usage.data}
+          open={shareOpen}
+          onOpenChange={setShareOpen}
+        />
+      ) : null}
 
       <Dialog open={open} onOpenChange={setOpen}>
         <DialogContent>
@@ -134,6 +161,19 @@ export function AiUsageSection({ organizationId }: { organizationId: string }) {
             <p className="text-xs text-muted-foreground">
               Déjà engagé ce mois : {formatTokens(view.engaged)} jetons. Un plafond inférieur
               bloque l'assistant immédiatement, jusqu'au {renewalLabel(renewsAt)}.
+            </p>
+          ) : null}
+
+          {activeShare && shareTakesAll ? (
+            <p className="text-xs text-amber-700">
+              La part de l'assistant ({shareSettingLabel(activeShare)}) atteint ou dépasse ce
+              plafond : elle serait bornée au plafond, et il ne resterait rien aux agents.
+            </p>
+          ) : null}
+          {activeShare && percentWouldIdle ? (
+            <p className="text-xs text-muted-foreground">
+              La part de l'assistant ({shareSettingLabel(activeShare)}) suit ce plafond. Passer en
+              illimité la laisserait sans effet.
             </p>
           ) : null}
 

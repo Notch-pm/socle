@@ -4,7 +4,11 @@ import {
   formatTokens,
   nextRenewalIso,
   quotaView,
+  remainderLimit,
   renewalLabel,
+  resolveShare,
+  splitView,
+  type AiShare,
 } from "./aiQuota";
 
 describe("quotaView", () => {
@@ -87,5 +91,112 @@ describe("currentPeriod / nextRenewalIso", () => {
     expect(currentPeriod(new Date("2026-09-01T00:00:00Z"))).toBe("2026-09");
     expect(nextRenewalIso(new Date("2026-08-29T12:00:00Z"))).toBe("2026-09-01");
     expect(nextRenewalIso(new Date("2026-12-01T00:00:00Z"))).toBe("2027-01-01");
+  });
+});
+
+describe("resolveShare — jumeau de `ai_usage_share_effective`", () => {
+  it("un pourcentage est un plancher entier du plafond", () => {
+    expect(resolveShare({ mode: "percent", tokens: null, percent: 25 }, 999)).toBe(249);
+    expect(resolveShare({ mode: "percent", tokens: null, percent: 25 }, 10_000)).toBe(2_500);
+  });
+
+  // Sans plafond, un pourcentage n'a rien à multiplier : la part est SANS
+  // EFFET, elle ne borne personne — le serveur saute la porte.
+  it("un pourcentage sans plafond est sans effet", () => {
+    expect(resolveShare({ mode: "percent", tokens: null, percent: 25 }, null)).toBeNull();
+    expect(resolveShare({ mode: "percent", tokens: null, percent: 25 }, 0)).toBeNull();
+  });
+
+  it("une part en jetons se borne au plafond, et vaut telle quelle sans plafond", () => {
+    expect(resolveShare({ mode: "tokens", tokens: 5_000, percent: null }, 3_000)).toBe(3_000);
+    expect(resolveShare({ mode: "tokens", tokens: 5_000, percent: null }, null)).toBe(5_000);
+    expect(resolveShare({ mode: "tokens", tokens: null, percent: null }, 3_000)).toBeNull();
+  });
+});
+
+const share = (over: Partial<AiShare> = {}): AiShare => ({
+  consumer: "nora",
+  mode: "tokens",
+  configuredTokens: 4_000,
+  percent: null,
+  effectiveTokens: 4_000,
+  isActive: true,
+  used: 0,
+  reserved: 0,
+  updatedAt: null,
+  ...over,
+});
+
+describe("remainderLimit — jumeau de `v_caller_limit`", () => {
+  it("le reste est le plafond moins les parts", () => {
+    expect(remainderLimit(10_000, [share()])).toBe(6_000);
+    expect(remainderLimit(10_000, [])).toBe(10_000);
+    expect(remainderLimit(null, [share()])).toBeNull();
+  });
+
+  // Une part dépassée (règlement plus lourd que l'estimation) a consommé
+  // au-delà : ce dépassement est sorti du reste.
+  it("une part dépassée compte pour ce qu'elle a réellement engagé", () => {
+    expect(remainderLimit(10_000, [share({ used: 4_500 })])).toBe(5_500);
+  });
+
+  it("n'est jamais négatif : n parts peuvent dépasser le plafond ensemble", () => {
+    expect(remainderLimit(5_000, [share(), share({ consumer: "clara", effectiveTokens: 4_000 })])).toBe(0);
+  });
+
+  it("ignore les parts sans effet", () => {
+    expect(remainderLimit(10_000, [share({ effectiveTokens: null })])).toBe(10_000);
+  });
+});
+
+describe("splitView", () => {
+  it("part et plafond : deux jauges dont la somme fait le plafond", () => {
+    const v = splitView({
+      plafond: 10_000,
+      share: share({ used: 1_000, reserved: 500 }),
+      totalUsed: 3_000,
+      totalReserved: 700,
+    });
+    expect(v.state).toBe("split");
+    expect(v.usagers?.limit).toBe(4_000);
+    expect(v.usagers?.engaged).toBe(1_500);
+    expect(v.agents?.limit).toBe(6_000);
+    // L'engagé du reste est l'engagé commun moins celui de la part.
+    expect(v.agents?.used).toBe(2_000);
+    expect(v.agents?.reserved).toBe(200);
+  });
+
+  it("aucune part active : rien à répartir, la part levée reste visible", () => {
+    const levee = share({ isActive: false, effectiveTokens: null });
+    const v = splitView({ plafond: 10_000, share: levee, totalUsed: 0, totalReserved: 0 });
+    expect(v.state).toBe("none");
+    expect(v.share).toBe(levee);
+    expect(v.usagers).toBeNull();
+    expect(splitView({ plafond: 10_000, share: null, totalUsed: 0, totalReserved: 0 }).state).toBe("none");
+  });
+
+  it("part en jetons sans plafond : l'assistant est borné, le reste est illimité", () => {
+    const v = splitView({ plafond: null, share: share({ used: 100 }), totalUsed: 900, totalReserved: 0 });
+    expect(v.state).toBe("share-without-quota");
+    expect(v.usagers?.limit).toBe(4_000);
+    expect(v.agents?.unlimited).toBe(true);
+    expect(v.agents?.used).toBe(800);
+  });
+
+  it("pourcentage sans plafond : sans effet, le commun vaut pour tous", () => {
+    const v = splitView({
+      plafond: null,
+      share: share({ mode: "percent", configuredTokens: null, percent: 25, effectiveTokens: null }),
+      totalUsed: 50,
+      totalReserved: 0,
+    });
+    expect(v.state).toBe("percent-without-quota");
+    expect(v.usagers).toBeNull();
+    expect(v.agents?.unlimited).toBe(true);
+  });
+
+  it("le sous-compteur ne peut pas faire passer le reste en négatif", () => {
+    const v = splitView({ plafond: 10_000, share: share({ used: 500 }), totalUsed: 200, totalReserved: 0 });
+    expect(v.agents?.used).toBe(0);
   });
 });

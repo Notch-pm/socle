@@ -324,9 +324,13 @@ menu latéral par client).
   source). ⚠️ Délais fournisseur 55 s < Socle 60 s < consommateur. Cadence avant plafond, seuil
   non réglable. Le plafond ne s'écrit que côté superadmin.
 - ⚠️ Le plafond est **commun** aux applications d'une collectivité ; une application peut porter
-  **en plus** un sous-plafond (`ai_usage_consumer_quotas`, né pour `nora`). `reserve_ai_usage` :
-  cadence → sous-plafond → plafond, et **rend** la réservation du sous-compteur si le plafond
-  refuse. Toute retouche se joue d'abord **à blanc** avec `supabase/tests/plafond-ia.test.sql`.
+  une **part réservée** (`ai_usage_consumer_quotas`, née pour `nora` — en jetons ou en
+  **pourcentage vivant** du plafond), et **les applications sans part se partagent le reste**, où
+  elles sont bornées (partage du 2026-09-22). `reserve_ai_usage` : cadence → part → plafond moins
+  les parts des autres, et **rend** la réservation du sous-compteur si le plafond refuse. Les
+  chiffres rendus (appel, `429`, `/v1/usage`) sont ceux de **l'appelant**. Cas limites acceptés
+  et inoffensifs (pourcentage sans plafond = sans effet), jamais refusés à la pose. Toute
+  retouche se joue d'abord **à blanc** avec `supabase/tests/plafond-ia.test.sql`.
 
 ### [Assistant du portail usagers](docs/features/assistant-usager.md)
 - Assistant conversationnel de Nora. Le Socle n'en tient que **l'interrupteur**
@@ -336,8 +340,9 @@ menu latéral par client).
   conserve `deposit_enabled`. Au doute, **fermé**. `TenantDto` est public : deux booléens, rien
   d'autre.
 - ⚠️ Corpus = ce que `/v1/portal/*` sert déjà ; `knowledge_base` et les recommandations aux agents
-  n'entrent **jamais** dans son prompt. ⚠️ Pas d'ouverture au public sans **borne de crédit** :
-  elle se pose dans la même section que l'interrupteur (sous-plafond de l'application `nora`).
+  n'entrent **jamais** dans son prompt. ⚠️ Pas d'ouverture au public sans **part de crédit
+  réservée** : elle se règle dans la section « Assistant IA » (bouton « Répartir », le seul écran
+  qui écrit) et s'affiche à côté de l'interrupteur, qui y renvoie.
 
 ### [Tableau de bord et fréquentation](docs/features/tableau-de-bord.md)
 - ⚠️ **Aucune donnée personnelle** (ni cookie, ni IP, ni User-Agent, ni référent) : c'est ce qui

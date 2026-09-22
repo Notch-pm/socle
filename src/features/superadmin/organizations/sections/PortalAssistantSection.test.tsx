@@ -19,7 +19,7 @@ vi.mock("@/features/superadmin/organizations/usePortalAssistant", () => ({
   useSetPortalAssistant: () => ({ mutate: h.set, isPending: false, error: null }),
 }));
 
-// La borne a son propre test (`PortalAssistantBudget.test.tsx`) ; ici on vérifie
+// La part a son propre test (`PortalAssistantBudget.test.tsx`) ; ici on vérifie
 // seulement qu'elle est montrée À CÔTÉ de l'interrupteur, et qu'elle sait s'il est ouvert.
 vi.mock("@/features/superadmin/organizations/sections/PortalAssistantBudget", () => ({
   PortalAssistantBudget: (props: { assistantEnabled: boolean }) => (
@@ -86,18 +86,19 @@ describe("PortalAssistantSection", () => {
     expect(screen.getByText(/Sans effet tant que l'assistant n'est pas proposé/)).toBeTruthy();
   });
 
-  it("⚠️ montre la borne de crédit à côté de l'interrupteur, et lui dit s'il est ouvert", () => {
+  it("⚠️ montre la part de crédit à côté de l'interrupteur, et lui dit s'il est ouvert", () => {
     // On ne devrait pas pouvoir ouvrir l'assistant au public sans voir sa borne.
     h.settings = { enabled: true, deposit_enabled: false };
     renderSection();
     expect(screen.getByTestId("budget").getAttribute("data-enabled")).toBe("true");
   });
 
-  it("dit d'où vient le corpus, et renvoie au plafond avant l'ouverture au public", () => {
+  it("dit d'où vient le corpus, et que l'assistant puise dans le crédit commun", () => {
     renderSection();
     expect(screen.getByText(/jamais sur la base de connaissances des agents/)).toBeTruthy();
-    expect(screen.getByRole("link", { name: "Vérifier le plafond" }).getAttribute("href")).toBe(
-      "/?section=ia",
-    );
+    expect(screen.getByText(/puise dans le crédit IA de la collectivité/)).toBeTruthy();
+    // Le lien vers la section IA vit dans le résumé de la part (mocké ici) :
+    // un seul chemin vers le réglage, pas deux liens côte à côte.
+    expect(screen.queryByRole("link")).toBeNull();
   });
 });

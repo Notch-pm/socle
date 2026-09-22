@@ -1,6 +1,8 @@
 import { describe, expect, it } from "vitest";
 import {
+  callerLimit,
   nextRenewalIso,
+  othersEngaged,
   periodKey,
   quotaExceededMessage,
   rateLimitedMessage,
@@ -159,5 +161,36 @@ describe("rateLimitedMessage", () => {
   // fermée pour les routes à venir.
   it("ne nomme aucune route en particulier", () => {
     expect(rateLimitedMessage()).not.toMatch(/assistant|question|document|courrier/i);
+  });
+});
+
+describe("callerLimit / othersEngaged — jumeaux de `v_caller_limit`", () => {
+  const nora = { consumer: "nora", effective_tokens: 4_000, used_tokens: 1_000, reserved_tokens: 500 };
+
+  it("le plafond d'une application sans part est le commun moins les parts", () => {
+    expect(callerLimit(10_000, [nora], "iris")).toBe(6_000);
+    expect(callerLimit(10_000, [], "iris")).toBe(10_000);
+    expect(callerLimit(null, [nora], "iris")).toBeNull();
+  });
+
+  it("la part de l'appelant lui-même n'est pas retranchée", () => {
+    expect(callerLimit(10_000, [nora], "nora")).toBe(10_000);
+  });
+
+  // Une part dépassée (règlement plus lourd que l'estimation) a consommé
+  // au-delà : ce dépassement est sorti du reste.
+  it("une part dépassée compte pour ce qu'elle a réellement engagé", () => {
+    expect(callerLimit(10_000, [{ ...nora, used_tokens: 4_500, reserved_tokens: 0 }], "iris")).toBe(5_500);
+  });
+
+  it("n'est jamais négatif, et ignore les parts sans effet", () => {
+    expect(callerLimit(5_000, [nora, { ...nora, consumer: "clara", effective_tokens: 4_000 }], "iris")).toBe(0);
+    expect(callerLimit(10_000, [{ ...nora, effective_tokens: null }], "iris")).toBe(10_000);
+  });
+
+  it("l'engagé des autres parts se retranche de l'engagé commun", () => {
+    expect(othersEngaged([nora], "iris")).toEqual({ used: 1_000, reserved: 500 });
+    expect(othersEngaged([nora], "nora")).toEqual({ used: 0, reserved: 0 });
+    expect(othersEngaged([{ ...nora, effective_tokens: null }], "iris")).toEqual({ used: 0, reserved: 0 });
   });
 });

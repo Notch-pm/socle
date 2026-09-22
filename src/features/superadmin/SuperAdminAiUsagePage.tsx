@@ -105,7 +105,8 @@ export function SuperAdminAiUsagePage() {
             Consommation du mois
           </CardTitle>
           <CardDescription>
-            Le plafond se règle sur la fiche de la collectivité — cliquez son nom.
+            Le plafond et sa répartition se règlent sur la fiche de la collectivité — cliquez son
+            nom. « Part usagers » : ce que l'assistant du portail peut consommer, telle que réglée.
           </CardDescription>
         </CardHeader>
         <CardContent>
@@ -117,11 +118,12 @@ export function SuperAdminAiUsagePage() {
             <EmptyState message="Aucune collectivité." />
           ) : (
             <div className="overflow-x-auto">
-              <table className="w-full min-w-[640px] text-sm">
+              <table className="w-full min-w-[720px] text-sm">
                 <thead>
                   <tr className="border-b border-border text-left text-xs font-semibold text-muted-foreground">
                     <th className="py-2 pr-4">Collectivité</th>
                     <th className="py-2 pr-4">Plafond</th>
+                    <th className="py-2 pr-4">Part usagers</th>
                     <th className="py-2 pr-4">Engagé</th>
                     <th className="w-[180px] py-2 pr-4">Consommation</th>
                     <th className="py-2">Plafond modifié le</th>
@@ -146,6 +148,15 @@ export function SuperAdminAiUsagePage() {
                           </span>
                         ) : (
                           formatTokens(row.view.limit ?? 0)
+                        )}
+                      </td>
+                      <td className="py-3 pr-4 tabular-nums">
+                        {row.share ? (
+                          <span className={row.share.active ? undefined : "text-muted-foreground"}>
+                            {row.share.label}
+                          </span>
+                        ) : (
+                          <span className="text-xs text-muted-foreground">—</span>
                         )}
                       </td>
                       <td className="py-3 pr-4 tabular-nums">

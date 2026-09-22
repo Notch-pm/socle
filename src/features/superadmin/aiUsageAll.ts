@@ -15,10 +15,14 @@
  * `reserve_ai_usage`, et un écran qui dirait autre chose que le serveur
  * mentirait sur ce qui va réellement se passer au prochain appel.
  *
+ * La PART de l'assistant du portail (2026-09-22) apparaît telle qu'elle est
+ * réglée — « 25 % », « 500 000 », « levée » — pour repérer d'un coup d'œil
+ * les collectivités qui ont ouvert l'assistant sans le border.
+ *
  * Module PUR, testé.
  */
 
-import { quotaView, type QuotaView } from "@/features/ai-usage/aiQuota";
+import { formatTokens, quotaView, type QuotaView } from "@/features/ai-usage/aiQuota";
 
 /** Sentinelle du plafond « tous fournisseurs confondus » (jumeau du SQL). */
 export const GLOBAL_PROVIDER = "__global__";
@@ -44,6 +48,15 @@ export interface CounterRow {
   reserved_tokens: number;
 }
 
+/** La part de l'assistant, telle qu'enregistrée (une ligne par collectivité). */
+export interface ShareRow {
+  organization_id: string;
+  limit_mode: string;
+  monthly_limit_tokens: number | null;
+  limit_percent: number | null;
+  is_active: boolean;
+}
+
 export interface OrgUsage {
   organizationId: string;
   name: string;
@@ -51,6 +64,8 @@ export interface OrgUsage {
   /** `false` quand un plafond existe mais a été désactivé — nuance utile. */
   isActive: boolean;
   updatedAt: string | null;
+  /** « 25 % », « 500 000 » ou « levée » ; `null` sans part enregistrée. */
+  share: { label: string; active: boolean } | null;
 }
 
 export interface UsageTotals {
@@ -63,16 +78,27 @@ export interface UsageTotals {
   atRisk: number;
 }
 
+function shareCell(row: ShareRow | null): OrgUsage["share"] {
+  if (!row) return null;
+  if (!row.is_active) return { label: "levée", active: false };
+  if (row.limit_mode === "percent" && row.limit_percent !== null) {
+    return { label: `${row.limit_percent} %`, active: true };
+  }
+  return { label: formatTokens(row.monthly_limit_tokens ?? 0), active: true };
+}
+
 /**
- * Rapproche organisations, plafonds et compteurs. Les racines SANS ligne de
- * plafond ni de compteur apparaissent quand même, en « illimité, 0 jeton » :
- * une collectivité absente du tableau serait lue comme une collectivité qui ne
- * consomme pas, alors qu'elle est surtout celle qu'on a oublié de border.
+ * Rapproche organisations, plafonds, compteurs et parts. Les racines SANS
+ * ligne de plafond ni de compteur apparaissent quand même, en « illimité,
+ * 0 jeton » : une collectivité absente du tableau serait lue comme une
+ * collectivité qui ne consomme pas, alors qu'elle est surtout celle qu'on a
+ * oublié de border.
  */
 export function buildUsageRows(
   orgs: OrgRow[],
   quotas: QuotaRow[],
   counters: CounterRow[],
+  shares: ShareRow[] = [],
 ): OrgUsage[] {
   const quotaByOrg = new Map(
     quotas.filter((q) => q.provider === GLOBAL_PROVIDER).map((q) => [q.organization_id, q]),
@@ -80,6 +106,7 @@ export function buildUsageRows(
   const counterByOrg = new Map(
     counters.filter((c) => c.provider === GLOBAL_PROVIDER).map((c) => [c.organization_id, c]),
   );
+  const shareByOrg = new Map(shares.map((s) => [s.organization_id, s]));
 
   return orgs
     .filter((o) => o.parent_id === null)
@@ -97,6 +124,7 @@ export function buildUsageRows(
           used: counter?.used_tokens ?? 0,
           reserved: counter?.reserved_tokens ?? 0,
         }),
+        share: shareCell(shareByOrg.get(org.id) ?? null),
       };
     })
     .sort((a, b) => b.view.engaged - a.view.engaged || a.name.localeCompare(b.name));

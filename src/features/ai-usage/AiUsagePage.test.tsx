@@ -3,7 +3,7 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 import { render, screen, fireEvent } from "@testing-library/react";
 import { AiUsagePage } from "./AiUsagePage";
 import { AiUsageOverview } from "./AiUsageOverview";
-import { quotaView } from "./aiQuota";
+import { quotaView, splitView, type AiShare } from "./aiQuota";
 
 // Les hooks sont court-circuités : ce qui est vérifié ici, c'est ce que l'écran
 // MONTRE et ce qu'il n'offre pas — pas la lecture Supabase, déjà gardée par le
@@ -19,11 +19,12 @@ vi.mock("@/features/ai-usage/useAdminRootOrganizations", () => ({
 }));
 
 vi.mock("@/features/ai-usage/useAiUsage", () => ({
+  ASSISTANT_CONSUMER: "nora",
   useAiUsage: (...args: unknown[]) => h.usage(...args),
   useAiUsageEvents: (...args: unknown[]) => h.events(...args),
 }));
 
-const usageData = (limit: number | null, used: number, reserved = 0) => ({
+const usageData = (limit: number | null, used: number, reserved = 0, share: AiShare | null = null) => ({
   data: {
     organizationId: "org-1",
     period: "2026-08",
@@ -31,10 +32,24 @@ const usageData = (limit: number | null, used: number, reserved = 0) => ({
     updatedAt: limit === null ? null : "2026-08-29T10:00:00Z",
     view: quotaView({ limit, used, reserved }),
     byConsumer: [{ consumer: "iris", feature: "assistant-instruction", calls: 3, tokens: 42_000 }],
+    shares: share ? [share] : [],
+    split: splitView({ plafond: limit, share, totalUsed: used, totalReserved: reserved }),
   },
   isLoading: false,
   isError: false,
 });
+
+const noraShare: AiShare = {
+  consumer: "nora",
+  mode: "percent",
+  configuredTokens: null,
+  percent: 25,
+  effectiveTokens: 500_000,
+  isActive: true,
+  used: 100_000,
+  reserved: 0,
+  updatedAt: null,
+};
 
 beforeEach(() => {
   h.roots.mockReset();
@@ -69,6 +84,27 @@ describe("AiUsagePage — consultation par l'administrateur", () => {
     expect(screen.queryByRole("button", { name: /Retirer le plafond/ })).toBeNull();
     expect(screen.queryByRole("dialog")).toBeNull();
     // Pas un seul bouton sur la page : c'est la définition de « consultation ».
+    expect(screen.queryAllByRole("button")).toHaveLength(0);
+  });
+
+  it("dit qu'il n'y a pas de part réservée quand rien n'est réparti", () => {
+    render(<AiUsagePage />);
+    expect(screen.getByText(/Pas de part réservée/)).toBeTruthy();
+  });
+
+  // La répartition se LIT ici ; elle se règle dans le Socle, par le super admin.
+  it("montre la répartition usagers / agents, toujours sans bouton", () => {
+    h.usage.mockReturnValue(usageData(2_000_000, 500_000, 0, noraShare));
+    render(<AiUsagePage />);
+
+    const usagers = screen.getByRole("progressbar", { name: "Part de l'assistant" });
+    // 100 000 engagés sur 500 000 → 20 %.
+    expect(usagers.getAttribute("aria-valuenow")).toBe("20");
+    expect(screen.getByText(/25 % du plafond/)).toBeTruthy();
+    expect(screen.getByText("100 000 / 500 000")).toBeTruthy();
+    // Les agents ont le reste : 1 500 000, dont 400 000 engagés.
+    screen.getByRole("progressbar", { name: "Part des agents" });
+    expect(screen.getByText("400 000 / 1 500 000")).toBeTruthy();
     expect(screen.queryAllByRole("button")).toHaveLength(0);
   });
 
@@ -109,11 +145,16 @@ describe("AiUsagePage — consultation par l'administrateur", () => {
   });
 });
 
-describe("AiUsageOverview — la commande de réglage est un apport de l'appelant", () => {
-  it("rend l'action quand l'écran qui écrit la fournit", () => {
+describe("AiUsageOverview — les commandes de réglage sont un apport de l'appelant", () => {
+  it("rend les actions quand l'écran qui écrit les fournit", () => {
     render(
-      <AiUsageOverview organizationId="org-1" action={<button type="button">Modifier</button>} />,
+      <AiUsageOverview
+        organizationId="org-1"
+        action={<button type="button">Modifier</button>}
+        shareAction={<button type="button">Répartir</button>}
+      />,
     );
     expect(screen.getByRole("button", { name: "Modifier" })).toBeTruthy();
+    expect(screen.getByRole("button", { name: "Répartir" })).toBeTruthy();
   });
 });

@@ -8,7 +8,7 @@ describe("buildOpenApiDocument", () => {
   it("est un document OpenAPI 3.1 avec le serveur injecté", () => {
     expect(doc.openapi).toBe("3.1.0");
     expect(doc.servers[0].url).toBe("https://ex.supabase.co/functions/v1/ai-api");
-    expect(doc.info.version).toBe("1.2.0");
+    expect(doc.info.version).toBe("1.3.0");
   });
 
   it("déclare la sécurité par clé API bearer", () => {

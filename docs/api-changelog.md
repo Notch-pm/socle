@@ -1,7 +1,7 @@
 # Journal des évolutions des API publiques
 
 > **Public** : équipes consommatrices (Ariane, Clara, Iris, partenaires) · **Question traitée** :
-> quand un contrat d'API a-t-il changé, et comment ? · **Dernière mise à jour** : 2026-09-20
+> quand un contrat d'API a-t-il changé, et comment ? · **Dernière mise à jour** : 2026-09-22
 
 Journal **append-only** : chaque évolution de la surface de contrat des API publiques
 (`public-api`, `contacts-api`, `ai-api`, `audience-api`) — endpoint, paramètre, champ de réponse,
@@ -10,6 +10,34 @@ réécrite ; une correction s'ajoute sous une nouvelle date. Politique de compat
 consommateur : [integration.md](./integration.md#politique-de-compatibilité-v1).
 
 Format d'une entrée : `## AAAA-MM-JJ — <api> — ajout|correctif|rupture`
+
+---
+
+## 2026-09-22 — ai-api — correctif (partage du plafond, 1.3.0)
+
+**Une part du plafond peut désormais être RÉSERVÉE à une application — en jetons ou en pourcentage
+vivant du plafond — et les applications sans part se partagent le reste, auquel elles sont
+bornées.** Aucun champ, aucune route, aucun code d'erreur ne change ; la **sémantique des chiffres
+rendus** change, d'où le passage du contrat `ai-api` à **1.3.0** et la qualification « correctif ».
+
+- **Ce qui change pour un consommateur : rien, tant qu'aucune part n'est réservée dans la
+  collectivité.** Les chiffres sont alors ceux du plafond commun, comme avant.
+- ⚠️ **L'entrée du 2026-09-20 ne vaut plus** sur un point : elle disait qu'Iris et Clara « ne sont
+  pas touchées ». Dès qu'une part est réservée à une autre application (l'assistant du portail,
+  `nora`), une application **sans part peut être refusée avant que le plafond commun soit
+  atteint** — par le **même** `429 ai_quota_exceeded`, avec le même message daté. Le geste attendu
+  est identique : relayer le message, ne pas réessayer avant le renouvellement.
+- ⚠️ **Les chiffres sont désormais ceux de l'application appelante**, partout et de façon
+  cohérente — `quota` d'un appel accepté, `quota` du `429`, et `GET /v1/usage` : pour une
+  application avec part, `limit`/`used_tokens`/`reserved_tokens` sont ceux de **sa part** ; pour
+  une application sans part, `limit` est le **plafond commun moins les parts des autres** (stable
+  dans le mois) et `used_tokens`/`reserved_tokens` excluent l'engagé des parts.
+  `remaining_tokens = limit − used − reserved` est exactement ce que la prochaine réservation
+  laissera passer. Un écran qui affichait « consommé / plafond de la collectivité » affiche
+  désormais « consommé par nous / notre plafond » — c'est ce qu'il voulait dire.
+- `by_consumer` de `GET /v1/usage` reste la ventilation de **toute la collectivité**.
+- Un pourcentage sans plafond commun est **sans effet** (la part ne borne personne) ; une part en
+  jetons plus grande que le plafond s'y borne. Aucun de ces cas ne produit d'erreur côté API.
 
 ---
 

@@ -1,89 +1,102 @@
 // @vitest-environment jsdom
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import { render, screen, fireEvent, waitFor } from "@testing-library/react";
+import { render, screen } from "@testing-library/react";
+import { MemoryRouter } from "react-router-dom";
+import { splitView, type AiShare } from "@/features/ai-usage/aiQuota";
 import { PortalAssistantBudget } from "./PortalAssistantBudget";
 
 const h = vi.hoisted(() => ({
-  quota: { configuredLimit: null as number | null, isActive: false, used: 0, reserved: 0 },
-  set: vi.fn(),
+  usage: vi.fn(),
 }));
 
-vi.mock("@/features/ai-usage/useConsumerQuota", () => ({
-  useConsumerQuota: () => ({ data: h.quota, isLoading: false }),
-  useSetConsumerQuota: () => ({ mutateAsync: h.set, isPending: false }),
+vi.mock("@/features/ai-usage/useAiUsage", () => ({
+  useAiUsage: () => h.usage(),
 }));
 
-beforeEach(() => {
-  h.quota = { configuredLimit: null, isActive: false, used: 0, reserved: 0 };
-  h.set.mockReset();
-  h.set.mockResolvedValue(undefined);
+const share = (over: Partial<AiShare> = {}): AiShare => ({
+  consumer: "nora",
+  mode: "tokens",
+  configuredTokens: 500_000,
+  percent: null,
+  effectiveTokens: 500_000,
+  isActive: true,
+  used: 40_000,
+  reserved: 2_000,
+  updatedAt: null,
+  ...over,
 });
 
-const input = () => screen.getByLabelText("Borne mensuelle (jetons)") as HTMLInputElement;
+function usageWith(plafond: number | null, s: AiShare | null) {
+  return {
+    data: { split: splitView({ plafond, share: s, totalUsed: 100_000, totalReserved: 2_000 }) },
+    isLoading: false,
+  };
+}
 
-describe("PortalAssistantBudget", () => {
-  it("⚠️ assistant ouvert SANS borne : l'écran dit ce que cela risque", () => {
-    render(<PortalAssistantBudget organizationId="org-1" assistantEnabled />);
+function renderBudget(assistantEnabled: boolean) {
+  return render(
+    <MemoryRouter>
+      <PortalAssistantBudget organizationId="org-1" assistantEnabled={assistantEnabled} />
+    </MemoryRouter>,
+  );
+}
+
+beforeEach(() => {
+  h.usage.mockReset();
+  h.usage.mockReturnValue(usageWith(2_000_000, null));
+});
+
+describe("PortalAssistantBudget — le résumé de la part, à côté de l'interrupteur", () => {
+  it("⚠️ assistant ouvert SANS part : l'écran dit ce que cela risque", () => {
+    renderBudget(true);
     expect(screen.getByText(/peut consommer tout le crédit IA de la collectivité/)).toBeTruthy();
   });
 
-  it("assistant fermé sans borne : invite à la poser avant l'ouverture", () => {
-    render(<PortalAssistantBudget organizationId="org-1" assistantEnabled={false} />);
+  it("assistant fermé sans part : invite à la poser avant l'ouverture", () => {
+    renderBudget(false);
     expect(screen.getByText(/À poser avant d'ouvrir l'assistant au public/)).toBeTruthy();
   });
 
-  it("pose la borne pour l'application nora — espaces et séparateurs tolérés", async () => {
-    render(<PortalAssistantBudget organizationId="org-1" assistantEnabled />);
-    fireEvent.change(input(), { target: { value: "500 000" } });
-    fireEvent.click(screen.getByRole("button", { name: "Poser la borne" }));
-    await waitFor(() =>
-      expect(h.set).toHaveBeenCalledWith({
-        organizationId: "org-1",
-        consumer: "nora",
-        limitTokens: 500000,
-        isActive: true,
-      }),
-    );
+  it("dit la part en jetons, sa valeur effective et l'engagé du mois", () => {
+    h.usage.mockReturnValue(usageWith(2_000_000, share()));
+    renderBudget(true);
+    expect(
+      screen.getByText(/Part réservée : 500.000 jetons, soit 500.000 jetons par mois — 42.000 engagés/),
+    ).toBeTruthy();
   });
 
-  it("refuse une borne nulle ou illisible, sans rien envoyer", () => {
-    render(<PortalAssistantBudget organizationId="org-1" assistantEnabled />);
-    fireEvent.change(input(), { target: { value: "zéro" } });
-    fireEvent.click(screen.getByRole("button", { name: "Poser la borne" }));
-    expect(screen.getByRole("alert").textContent).toMatch(/strictement positif/);
-    expect(h.set).not.toHaveBeenCalled();
+  it("dit la part en pourcentage, résolue contre le plafond", () => {
+    h.usage.mockReturnValue(usageWith(
+      2_000_000,
+      share({ mode: "percent", configuredTokens: null, percent: 25, effectiveTokens: 500_000 }),
+    ));
+    renderBudget(true);
+    expect(screen.getByText(/25 % du plafond, soit 500.000 jetons par mois/)).toBeTruthy();
   });
 
-  it("dit ce qui est engagé ce mois-ci sous une borne active", () => {
-    h.quota = { configuredLimit: 500000, isActive: true, used: 40000, reserved: 2000 };
-    render(<PortalAssistantBudget organizationId="org-1" assistantEnabled />);
-    expect(screen.getByText(/Bornée à 500.000 jetons par mois — 42.000 engagés/)).toBeTruthy();
-    expect(input().value).toBe("500000");
+  // Le réglage gouverne l'usage, pas la donnée : une part levée reste lisible.
+  it("une part levée dit que sa valeur est conservée, et avertit si l'assistant est ouvert", () => {
+    h.usage.mockReturnValue(usageWith(2_000_000, share({ isActive: false, effectiveTokens: null })));
+    renderBudget(true);
+    expect(screen.getByText(/Part levée — sa valeur \(500.000 jetons\) est conservée/)).toBeTruthy();
+    expect(screen.getByText(/peut consommer tout le crédit IA/)).toBeTruthy();
   });
 
-  it("⚠️ lever la borne CONSERVE sa valeur — la rétablir est un geste, pas une ressaisie", async () => {
-    h.quota = { configuredLimit: 500000, isActive: true, used: 0, reserved: 0 };
-    render(<PortalAssistantBudget organizationId="org-1" assistantEnabled />);
-    fireEvent.click(screen.getByRole("button", { name: "Lever la borne" }));
-    await waitFor(() =>
-      expect(h.set).toHaveBeenCalledWith(
-        expect.objectContaining({ limitTokens: 500000, isActive: false }),
-      ),
-    );
+  // Un pourcentage sans plafond n'a rien à multiplier : il ne borne personne.
+  it("un pourcentage sans plafond est dit SANS EFFET", () => {
+    h.usage.mockReturnValue(usageWith(
+      null,
+      share({ mode: "percent", configuredTokens: null, percent: 25, effectiveTokens: null }),
+    ));
+    renderBudget(true);
+    expect(screen.getByText(/aucun plafond n'est posé : elle est sans effet/)).toBeTruthy();
   });
 
-  it("propose de rétablir une borne levée", () => {
-    h.quota = { configuredLimit: 500000, isActive: false, used: 0, reserved: 0 };
-    render(<PortalAssistantBudget organizationId="org-1" assistantEnabled />);
-    expect(screen.getByRole("button", { name: "Rétablir la borne" })).toBeTruthy();
-    expect(screen.queryByRole("button", { name: "Lever la borne" })).toBeNull();
-  });
-
-  it("affiche tel quel le refus du serveur", async () => {
-    h.set.mockRejectedValue(new Error("Le plafond d'utilisation IA est réservé au super administrateur."));
-    render(<PortalAssistantBudget organizationId="org-1" assistantEnabled />);
-    fireEvent.change(input(), { target: { value: "1000" } });
-    fireEvent.click(screen.getByRole("button", { name: "Poser la borne" }));
-    await waitFor(() => expect(screen.getByRole("alert").textContent).toMatch(/réservé au super administrateur/));
+  // ⚠️ Le seul écran qui écrit est la section IA : ici, un lien, jamais un bouton.
+  it("renvoie vers la section IA pour régler la part, sans aucun chemin vers l'écriture", () => {
+    renderBudget(true);
+    expect(screen.getByRole("link", { name: "Régler la part" }).getAttribute("href")).toBe("/?section=ia");
+    expect(screen.queryAllByRole("button")).toHaveLength(0);
+    expect(screen.queryByRole("textbox")).toBeNull();
   });
 });

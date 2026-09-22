@@ -38,7 +38,7 @@ export function buildOpenApiDocument(serverUrl: string): Record<string, unknown>
     openapi: "3.1.0",
     info: {
       title: "API IA Socle — guichet du fournisseur LLM",
-      version: "1.2.0",
+      version: "1.3.0",
       description: [
         "Le Socle détient la clé du fournisseur LLM et **compte ce qu'elle dépense** pour",
         "toute la gamme. Les applications (Iris, Clara…) n'appellent plus le fournisseur :",
@@ -57,6 +57,13 @@ export function buildOpenApiDocument(serverUrl: string): Record<string, unknown>
         "**journal**, jamais le compteur ni le plafond — c'est ce qui permet de répondre à",
         "« combien me coûte cette collectivité ? » ET à « qui a dépensé ? ».",
         "Aucun plafond configuré ⇒ consommation illimitée (déploiement progressif).",
+        "",
+        "**Une PART du plafond peut être réservée à une application** (depuis le 2026-09-22 :",
+        "l'assistant du portail usagers, ouvert à des visiteurs anonymes). L'application qui porte",
+        "une part ne peut pas la dépasser ; **les autres se partagent le reste**, et y sont",
+        "bornées. Les chiffres rendus — dans le `quota` d'un appel accepté, dans le `429`, et par",
+        "`GET /v1/usage` — sont toujours ceux de **l'application appelante** : sa part, ou le",
+        "reste. Sans part réservée, ce sont ceux du plafond de la collectivité, comme avant.",
         "",
         "## Un garde-fou de cadence, distinct du plafond",
         "Un plafond mensuel dit *combien*, jamais *à quelle vitesse* : une boucle accidentelle",
@@ -181,9 +188,9 @@ export function buildOpenApiDocument(serverUrl: string): Record<string, unknown>
       },
       "/v1/usage": {
         get: {
-          summary: "Consommation de la collectivité",
+          summary: "Plafond de l'application appelante et consommation de la collectivité",
           description:
-            "Plafond, consommé, réservé et **ventilation par application** sur une période. Sert aux écrans d'administration des applications consommatrices.",
+            "`limit`, `used_tokens`, `reserved_tokens` et `remaining_tokens` sont ceux de **l'application appelante** — sa part réservée si elle en a une, sinon le plafond de la collectivité moins les parts des autres — c'est-à-dire exactement ce que la prochaine réservation laissera passer, et les mêmes chiffres que le `429`. Sans part réservée, c'est le plafond de la collectivité. `by_consumer` est la **ventilation de toute la collectivité** sur la période. Sert aux écrans d'administration des applications consommatrices.",
           parameters: [{
             name: "period",
             in: "query",

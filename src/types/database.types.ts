@@ -55,7 +55,9 @@ export type Database = {
           created_at: string
           id: string
           is_active: boolean
-          monthly_limit_tokens: number
+          limit_mode: string
+          limit_percent: number | null
+          monthly_limit_tokens: number | null
           organization_id: string
           updated_at: string
           updated_by: string | null
@@ -65,7 +67,9 @@ export type Database = {
           created_at?: string
           id?: string
           is_active?: boolean
-          monthly_limit_tokens: number
+          limit_mode?: string
+          limit_percent?: number | null
+          monthly_limit_tokens?: number | null
           organization_id: string
           updated_at?: string
           updated_by?: string | null
@@ -75,7 +79,9 @@ export type Database = {
           created_at?: string
           id?: string
           is_active?: boolean
-          monthly_limit_tokens?: number
+          limit_mode?: string
+          limit_percent?: number | null
+          monthly_limit_tokens?: number | null
           organization_id?: string
           updated_at?: string
           updated_by?: string | null
@@ -1617,6 +1623,29 @@ export type Database = {
           tokens: number
         }[]
       }
+      ai_usage_share_effective: {
+        Args: {
+          p_mode: string
+          p_percent: number
+          p_quota: number
+          p_tokens: number
+        }
+        Returns: number
+      }
+      ai_usage_shares: {
+        Args: { p_org_id: string; p_period?: string }
+        Returns: {
+          configured_tokens: number
+          consumer: string
+          effective_tokens: number
+          is_active: boolean
+          limit_mode: string
+          limit_percent: number
+          reserved_tokens: number
+          updated_at: string
+          used_tokens: number
+        }[]
+      }
       application_scope_ids: {
         Args: { p_application: string }
         Returns: string[]
@@ -1862,7 +1891,8 @@ export type Database = {
         Args: {
           p_consumer: string
           p_is_active?: boolean
-          p_monthly_limit_tokens: number
+          p_limit_percent?: number
+          p_monthly_limit_tokens?: number
           p_org_id: string
         }
         Returns: Json

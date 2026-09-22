@@ -1,24 +1,36 @@
 import * as React from "react";
 import { Gauge, Infinity as InfinityIcon, Loader2 } from "lucide-react";
 import { Card, CardHeader, CardTitle, CardDescription, CardContent } from "@/components/ui/card";
-import { formatTokens, nextRenewalIso, renewalLabel, type QuotaTone } from "./aiQuota";
+import {
+  formatTokens,
+  nextRenewalIso,
+  renewalLabel,
+  type AiShare,
+  type QuotaTone,
+  type QuotaView,
+  type SplitView,
+} from "./aiQuota";
 import { useAiUsage, useAiUsageEvents } from "./useAiUsage";
 
 /**
  * Ce que la consommation IA d'une collectivité donne à VOIR : le plafond et sa
- * jauge, la ventilation par application, les derniers appels.
+ * jauge, la répartition entre l'assistant du portail et les agents, la
+ * ventilation par application, les derniers appels.
  *
  * ⚠️ CE COMPOSANT N'ÉCRIT RIEN. C'est ce qui lui permet de servir les deux
  * publics — le super administrateur, qui pose le plafond, et l'administrateur
- * de la collectivité, qui le consulte. La partie qui écrit est glissée par le
- * premier via `action` ; le second ne passe rien, et il n'y a alors aucun
- * chemin vers l'écriture dans l'arbre rendu. Deux copies de ces trois cartes
- * auraient divergé au premier ajustement de libellé.
+ * de la collectivité, qui le consulte. Les parties qui écrivent sont glissées
+ * par le premier via `action` (le plafond) et `shareAction` (la répartition) ;
+ * le second ne passe rien, et il n'y a alors aucun chemin vers l'écriture
+ * dans l'arbre rendu. Deux copies de ces cartes auraient divergé au premier
+ * ajustement de libellé.
  *
  * ⚠️ Le plafond est GLOBAL à la collectivité : Iris, Clara et les suivants
- * puisent au même seau. La table « par application » ne ventile que le
- * journal — c'est ce qui permet de répondre à « combien me coûte ce client ? »
- * ET à « qui a dépensé ? » sans deux systèmes de comptage.
+ * puisent au même seau. Depuis le 2026-09-22, une PART peut en être réservée
+ * à l'assistant du portail — les agents disposent du reste, et y sont bornés.
+ * La table « par application » ne ventile que le journal — c'est ce qui
+ * permet de répondre à « combien me coûte ce client ? » ET à « qui a
+ * dépensé ? » sans deux systèmes de comptage.
  *
  * ⚠️ Pas de colonne de contenu dans le journal, et il n'y en aura pas : le
  * Socle ne conserve ni le prompt ni la réponse.
@@ -43,13 +55,106 @@ function formatDateTime(iso: string): string {
   });
 }
 
-export interface AiUsageOverviewProps {
-  organizationId: string;
-  /** Commande de réglage, glissée par le seul écran qui écrit (superadmin). */
-  action?: React.ReactNode;
+/** « 25 % du plafond » ou « 500 000 jetons » — la part telle qu'elle est réglée. */
+export function shareSettingLabel(share: AiShare): string {
+  if (share.mode === "percent" && share.percent !== null) return `${share.percent} % du plafond`;
+  return `${formatTokens(share.configuredTokens ?? 0)} jetons`;
 }
 
-export function AiUsageOverview({ organizationId, action }: AiUsageOverviewProps) {
+function ShareGauge({ label, view, ariaLabel }: { label: string; view: QuotaView; ariaLabel: string }) {
+  return (
+    <div className="flex flex-col gap-1">
+      <div className="flex flex-wrap items-baseline justify-between gap-2">
+        <span className="text-sm">{label}</span>
+        <span className="text-sm font-semibold tabular-nums">
+          {view.unlimited
+            ? `${formatTokens(view.engaged)} engagés · illimité`
+            : `${formatTokens(view.engaged)} / ${formatTokens(view.limit ?? 0)}`}
+        </span>
+      </div>
+      {view.unlimited ? null : (
+        <div
+          role="progressbar"
+          aria-valuenow={view.percent}
+          aria-valuemin={0}
+          aria-valuemax={100}
+          aria-label={ariaLabel}
+          className="h-1.5 w-full overflow-hidden rounded-full bg-muted"
+        >
+          <span
+            className={`block h-full rounded-full ${BAR_TONE[view.tone]}`}
+            style={{ width: `${view.percent}%` }}
+          />
+        </div>
+      )}
+    </div>
+  );
+}
+
+/**
+ * La répartition, dans chacun de ses états. Les cas limites sont dits en une
+ * phrase, jamais cachés : un pourcentage sans plafond est un réglage SANS
+ * EFFET, et l'écran doit le dire avant que quelqu'un ne s'y fie.
+ */
+function ShareBlock({ split, shareAction }: { split: SplitView; shareAction?: React.ReactNode }) {
+  const share = split.share;
+  return (
+    <div className="mt-4 flex flex-col gap-3 rounded-lg border p-3">
+      <div className="flex items-start justify-between gap-3">
+        <div className="flex flex-col gap-0.5">
+          <span className="text-sm font-medium">Répartition</span>
+          <span className="text-xs text-muted-foreground">
+            Une part du plafond réservée à l'assistant du portail usagers ; les agents disposent du
+            reste, et y sont bornés.
+          </span>
+        </div>
+        {shareAction}
+      </div>
+
+      {split.state === "none" ? (
+        <p className="text-sm text-muted-foreground">
+          Pas de part réservée : toutes les applications puisent dans le plafond commun.
+          {share && !share.isActive
+            ? ` La part de l'assistant est levée ; sa valeur (${shareSettingLabel(share)}) est conservée.`
+            : ""}
+        </p>
+      ) : split.state === "percent-without-quota" && share ? (
+        <p className="text-sm text-muted-foreground">
+          La part de l'assistant est réglée à {shareSettingLabel(share)}, mais aucun plafond n'est
+          posé : elle est <strong>sans effet</strong> tant qu'il n'y a rien à partager.
+        </p>
+      ) : (
+        <div className="flex flex-col gap-3">
+          {split.state === "share-without-quota" ? (
+            <p className="text-sm text-muted-foreground">
+              Sans plafond commun : l'assistant est borné à sa part, les agents restent illimités.
+            </p>
+          ) : null}
+          {split.usagers ? (
+            <ShareGauge
+              label={`Assistant du portail (usagers)${share ? ` · ${shareSettingLabel(share)}` : ""}`}
+              view={split.usagers}
+              ariaLabel="Part de l'assistant"
+            />
+          ) : null}
+          {split.agents ? (
+            <ShareGauge label="Agents (le reste)" view={split.agents} ariaLabel="Part des agents" />
+          ) : null}
+        </div>
+      )}
+    </div>
+  );
+}
+
+export interface AiUsageOverviewProps {
+  organizationId: string;
+  /** Commande de réglage du plafond, glissée par le seul écran qui écrit (superadmin). */
+  action?: React.ReactNode;
+  /** Commande de réglage de la répartition — même règle. */
+  shareAction?: React.ReactNode;
+}
+
+export function AiUsageOverview({ organizationId, action, shareAction }: AiUsageOverviewProps) {
   const usage = useAiUsage(organizationId);
   const events = useAiUsageEvents(organizationId);
   const renewsAt = nextRenewalIso();
@@ -116,6 +221,8 @@ export function AiUsageOverview({ organizationId, action }: AiUsageOverviewProps
               </p>
             </div>
           ) : null}
+
+          {usage.data ? <ShareBlock split={usage.data.split} shareAction={shareAction} /> : null}
         </CardContent>
       </Card>
 

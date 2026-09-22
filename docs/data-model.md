@@ -619,14 +619,24 @@ comptabilité ont été centralisées ici (2026-08-29).
   `prompt`/`content`/`answer` le casse. La dix-huitième, `consumer_counted` (2026-09-20), est un
   **booléen** : vrai si l'appel a réservé sur le sous-compteur de son application — c'est ce que
   le règlement doit solder. Aucun contenu.
-- **`ai_usage_consumer_quotas`** / **`ai_usage_consumer_counters`** (2026-09-20) — le
-  **sous-plafond par application** : `(organization_id, consumer)` UNIQUE, `consumer` FK
-  `applications`, `monthly_limit_tokens`, `is_active` (désactiver **conserve** la valeur) ; le
-  sous-compteur a la forme d'`ai_usage_counters`, clé `(organization_id, consumer, period)`.
-  Racine seulement (même trigger `enforce_ai_usage_quota_root_org`). Né avec l'assistant du
-  portail usagers (`nora`), ouvert à des visiteurs **anonymes** : sans borne propre, il pourrait
-  épuiser le crédit des agents. ⚠️ **Une porte EN PLUS, jamais à la place** : le plafond de la
-  collectivité reste UN compteur commun ; sans sous-plafond posé, rien ne change.
+- **`ai_usage_consumer_quotas`** / **`ai_usage_consumer_counters`** (2026-09-20, partage
+  2026-09-22) — la **part réservée d'une application** : `(organization_id, consumer)` UNIQUE,
+  `consumer` FK `applications`, `limit_mode` (`'tokens'` | `'percent'`), `monthly_limit_tokens`
+  (nullable) et `limit_percent` (1..99) sous un CHECK **exclusif** (`ai_usage_consumer_quotas_limit_shape` :
+  l'un ou l'autre, jamais les deux ni aucun), `is_active` (désactiver **conserve** valeur et
+  mode) ; le sous-compteur a la forme d'`ai_usage_counters`, clé `(organization_id, consumer,
+  period)`. Racine seulement (même trigger `enforce_ai_usage_quota_root_org`). Née avec
+  l'assistant du portail usagers (`nora`), ouvert à des visiteurs **anonymes** : sans part propre,
+  il pourrait épuiser le crédit des agents. ⚠️ **Règle uniforme** : une part active est
+  **réservée** à son application, les applications sans part se partagent le **reste** et y sont
+  bornées ; sans part posée, rien ne change. La résolution d'une part n'a qu'**une**
+  implémentation, `ai_usage_share_effective(mode, jetons, pourcentage, plafond)` (immutable :
+  pourcentage ⇒ plancher entier du plafond actif, NULL sans plafond = **sans effet** ; jetons ⇒
+  bornés au plafond) ; `ai_usage_shares(org, période)` (SECURITY INVOKER) les sert résolues au
+  front et à l'edge function. Réglage par `set_ai_usage_consumer_quota(org, consumer,
+  p_monthly_limit_tokens | p_limit_percent, p_is_active)` — l'ancienne signature à quatre
+  paramètres est retirée (surcharge ambiguë) ; la RPC ne refuse que l'intrinsèque, les cas limites
+  sont acceptés et rendus inoffensifs à la réservation.
   ⚠️ **Deux tables à part, pas une colonne `consumer` sur les existantes** : les lecteurs font
   `find(provider = '__global__')` sur `ai_usage_quotas`/`ai_usage_counters` — plusieurs lignes par
   fournisseur les tromperaient en silence.
@@ -645,13 +655,24 @@ comptabilité ont été centralisées ici (2026-08-29).
   déjà continue de marteler, et un compteur de succès ne la couperait jamais.
 
 **Cycle réserver → appeler → solder, et TROIS portes avant lui.** `reserve_ai_usage` vérifie
-d'abord la **cadence**, puis le **sous-plafond de l'application** s'il en existe un (le plus
-étroit d'abord — refus `consumer_quota_exceeded`, chiffres du sous-plafond), puis le **plafond**
-de la collectivité. ⚠️ Si le plafond refuse **après** un sous-plafond réussi, la réservation du
-sous-compteur est **rendue** avant de refuser, dans la même transaction et sous le verrou de
-ligne déjà pris : sans cela, chaque refus du commun rongerait le sous-plafond d'une application
-qui n'a rien consommé. `settle_ai_usage` solde le sous-compteur **avant** son retour anticipé —
-une collectivité sans plafond commun peut tout de même borner une application. Les seuils sont **en dur** (un garde-fou n'est pas
+d'abord la **cadence**, puis la **part de l'application** si elle en a une (le plus étroit
+d'abord — refus `consumer_quota_exceeded`, chiffres de la part ; une part en pourcentage sans
+plafond est irrésoluble ⇒ porte **sautée**), puis le **plafond de la collectivité moins ce que
+les autres parts n'ont pas encore consommé** : `borne = greatest(P − Σ greatest(X_eff − engagé,
+0), 0)`, appliquée au compteur commun. ⚠️ Le verrou de la ligne commune (`select … for update`)
+est pris **avant** de lire les sous-compteurs : une réservation concurrente non validée n'est pas
+vue, la borne calculée est alors plus basse, jamais plus haute ; et l'agrégat n'entre pas dans le
+`WHERE` de l'UPDATE (après une attente de verrou, les autres tables seraient relues avec l'ancien
+snapshot). Ordre des verrous sans cycle : une part prend son sous-compteur puis le commun, un
+appelant sans part prend le commun puis lit sans verrou. ⚠️ Si le plafond refuse **après** une
+part réussie, la réservation du sous-compteur est **rendue** avant de refuser, dans la même
+transaction et sous le verrou de ligne déjà pris : sans cela, chaque refus du commun rongerait la
+part d'une application qui n'a rien consommé. **Les chiffres rendus sont ceux de l'appelant** :
+sa part, ou pour une application sans part `limit = P − Σ greatest(part, engagé de la part)` (le
+commun moins les parts, stable dans le mois) et `used`/`reserved` = commun − parts — les mêmes
+que `GET /v1/usage`. `settle_ai_usage` solde le sous-compteur **avant** son retour anticipé —
+une collectivité sans plafond commun peut tout de même borner une application par une part en
+jetons. Les seuils sont **en dur** (un garde-fou n'est pas
 un paramètre commercial) et dépendent de la NATURE de l'appel — conversationnel 20/minute par
 agent (120 sans agent), lot d'OCR 60 (360 sans agent) : un humain qui lit 150 mots entre deux
 questions n'a pas le rythme d'une machine qui enchaîne des documents.

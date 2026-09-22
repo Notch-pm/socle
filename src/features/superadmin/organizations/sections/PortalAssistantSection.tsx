@@ -1,5 +1,4 @@
 import { MessagesSquare } from "lucide-react";
-import { Link } from "react-router-dom";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Switch } from "@/components/ui/switch";
 import { useAuth } from "@/features/auth/AuthProvider";
@@ -16,8 +15,9 @@ import {
  *
  * Réglé ICI, côté super admin, et nulle part ailleurs : un assistant public
  * dépense le crédit IA de la collectivité, que ses agents partagent (Iris,
- * Clara). L'ouvrir est une décision de mise en service, prise avec le plafond —
- * d'où le renvoi vers la section « Assistant IA ».
+ * Clara). L'ouvrir est une décision de mise en service, prise avec le plafond
+ * et sa répartition — que `PortalAssistantBudget` montre ici et qui se règlent
+ * dans la section « Assistant IA ».
  *
  * Deux niveaux, le second sous le premier : renseigner et orienter, puis
  * recueillir un formulaire dans la conversation. ⚠️ Couper le premier CONSERVE
@@ -89,16 +89,15 @@ export function PortalAssistantSection({ organizationId }: { organizationId: str
               />
             </label>
 
-            {/* La borne de l'assistant, à côté de son interrupteur : on ne devrait
-                pas pouvoir ouvrir l'un sans voir l'autre. */}
+            {/* La part de l'assistant, à côté de son interrupteur : on ne devrait
+                pas pouvoir ouvrir l'un sans voir l'autre. Elle se RÈGLE dans la
+                section « Assistant IA », avec le plafond qu'elle partage — le
+                résumé y renvoie. */}
             <PortalAssistantBudget organizationId={organizationId} assistantEnabled={flags.enabled} />
 
             <p className="text-xs text-muted-foreground">
-              L'assistant puise dans le crédit IA de la collectivité, comme Iris et Clara.{" "}
-              <Link className="underline" to="?section=ia">
-                Vérifier le plafond
-              </Link>{" "}
-              avant de l'ouvrir au public. La collectivité doit aussi être abonnée à Nora.
+              L'assistant puise dans le crédit IA de la collectivité, comme Iris et Clara. La
+              collectivité doit aussi être abonnée à Nora.
             </p>
           </>
         )}
