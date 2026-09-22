@@ -244,6 +244,18 @@ suppose la précédente.
   deux côtés. Filet restant : sous-titre à l'encre pleine, puces en blanc plein.
   **Reste ouvert** : un voile **sous le texte seul**, qui rendrait la photo intacte et le contraste
   avec. C'est un petit lot.
+- **2026-09-22 — Toute collectivité dépose, et la demande arrive au service qui instruit.** Deux
+  choses qui ne concernent pas le Socle par le code, mais que sa feuille de route attendait.
+  (1) Le dépôt était **mono-collectivité** : la clé Iris de Nora était liée à UNE source, donc à
+  une seule collectivité (403 pour les autres). Tranché : une **clé plateforme** de chaque côté,
+  comme le Socle en donne une à Nora — Iris (contrat `requests-api` 2.3.0) accepte une source
+  sans organisation, et Nora nomme la collectivité à chaque appel (`X-Socle-Root-Organization-Id`).
+  Ajouter une collectivité au portail, c'est son domaine ici et une ligne `integration_sources`
+  dans Iris ; aucun secret ne bouge. Une clé par collectivité a été essayée le même jour et
+  écartée (intenable dès la troisième). (2) Nora lit enfin `handling_organization_id` (1.16.0) :
+  la vitrine reste le porteur, la demande part vers le **service interne** — Iris, strict, la
+  refusait quand elle s'adressait à la mairie. Vérifié : trois dépôts (Rosny, SNA, ACCM), chacun
+  rattaché à sa collectivité et à son service. Rien à faire au Socle.
 
 ### Envisagé, dans l'ordre
 
