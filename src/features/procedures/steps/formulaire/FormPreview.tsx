@@ -1,10 +1,12 @@
 import * as React from "react";
+import { MapPin } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Field } from "@/components/ui/field";
 import { EmptyState } from "@/components/shared/EmptyState";
 import { evaluateCondition, type FormValues } from "@/features/procedures/conditions";
 import {
   isSection,
+  LOCATION_ADJUST_RADIUS_M,
   type AttachmentField,
   type Field as FormField,
   type FormSchema,
@@ -102,6 +104,49 @@ function AttachmentPreview({ id, field }: { id: string; field: AttachmentField }
   );
 }
 
+/**
+ * Lieu d'intervention dans l'aperçu : une ligne d'adresse et un cadre qui
+ * tient lieu de carte. Le Socle n'appelle ni la Base Adresse Nationale ni un
+ * serveur de tuiles depuis le builder : c'est le portail (Nora) qui complète
+ * l'adresse, dessine la carte et produit la valeur déposée — un objet
+ * `LocationValue` (voir l'OpenAPI), pas la chaîne que l'aperçu garde ici.
+ */
+function LocationPreview({
+  id,
+  value,
+  onChange,
+  placeholder,
+}: {
+  id: string;
+  value: unknown;
+  onChange: (value: unknown) => void;
+  placeholder?: string;
+}) {
+  return (
+    <div className="flex flex-col gap-2">
+      <Input
+        id={id}
+        type="text"
+        value={typeof value === "string" ? value : ""}
+        onChange={(e) => onChange(e.target.value)}
+        placeholder={placeholder || "Numéro, voie, code postal, ville"}
+        autoComplete="off"
+      />
+      <div
+        aria-hidden="true"
+        className="flex h-40 flex-col items-center justify-center gap-1 rounded-lg border border-dashed border-border bg-muted/40 px-4 text-center text-xs text-muted-foreground"
+      >
+        <MapPin className="size-5" />
+        <span>Carte OpenStreetMap</span>
+        <span>
+          L'usager pourra déplacer le point dans un rayon de {LOCATION_ADJUST_RADIUS_M} m autour de
+          l'adresse. L'adresse ne change pas.
+        </span>
+      </div>
+    </div>
+  );
+}
+
 function isRequired(field: FormField, values: FormValues): boolean {
   if (field.type === "attachment") return field.requiredIf != null && evaluateCondition(field.requiredIf, values);
   return field.required ?? false;
@@ -192,6 +237,13 @@ function PreviewField({
         </div>
       ) : field.type === "attachment" ? (
         <AttachmentPreview id={`prev-${field.id}`} field={field} />
+      ) : field.type === "location" ? (
+        <LocationPreview
+          id={`prev-${field.id}`}
+          value={value}
+          onChange={onChange}
+          placeholder={field.placeholder}
+        />
       ) : (
         <Input
           id={`prev-${field.id}`}

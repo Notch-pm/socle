@@ -20,7 +20,8 @@ export type FieldType =
   | "select"
   | "radio"
   | "checkboxes"
-  | "attachment";
+  | "attachment"
+  | "location";
 
 export const CHOICE_TYPES = ["select", "radio", "checkboxes"] as const;
 export type ChoiceType = (typeof CHOICE_TYPES)[number];
@@ -71,7 +72,31 @@ export interface AttachmentField extends FieldCommon {
   requiredIf?: Condition;
 }
 
-export type Field = SimpleField | ChoiceField | AttachmentField;
+/**
+ * Rayon, en mètres, dans lequel l'usager peut déplacer le point d'un lieu
+ * d'intervention autour de l'adresse. Constante de plateforme (pas une option
+ * du champ) : Nora borne à la saisie, Iris l'affiche. Miroirs dans les deux.
+ */
+export const LOCATION_ADJUST_RADIUS_M = 150;
+
+/**
+ * Lieu d'intervention : une adresse sur une ligne (complétée par la Base
+ * Adresse Nationale) et un point que l'usager peut déplacer, dans un rayon de
+ * `LOCATION_ADJUST_RADIUS_M`, pour désigner l'endroit exact — un dépôt sauvage
+ * n'est pas toujours « au 12 rue X ». L'adresse, elle, ne bouge pas.
+ *
+ * Aucune option propre. La valeur déposée est un objet (contrat public, décrit
+ * dans l'OpenAPI sous `LocationValue`) :
+ * `{ address, lat, lon, precision, adjusted }` — `lat`/`lon` vont ensemble et
+ * valent `null` quand aucune proposition BAN n'a été retenue (texte libre).
+ * Un consommateur qui a un point ne géocode pas : celui de l'usager est plus
+ * précis que tout géocodage.
+ */
+export interface LocationField extends FieldCommon {
+  type: "location";
+}
+
+export type Field = SimpleField | ChoiceField | AttachmentField | LocationField;
 
 export interface Section {
   id: string;
@@ -98,8 +123,11 @@ export function isChoiceType(type: FieldType): type is ChoiceType {
   return (CHOICE_TYPES as readonly string[]).includes(type);
 }
 
-/** Types de champ proposés dans le builder (la pièce jointe a son propre bouton). */
-export const FIELD_TYPES: { value: Exclude<FieldType, "attachment">; label: string }[] = [
+/**
+ * Types de champ proposés dans le builder (la pièce jointe et le lieu
+ * d'intervention ont chacun leur propre bouton).
+ */
+export const FIELD_TYPES: { value: Exclude<FieldType, "attachment" | "location">; label: string }[] = [
   { value: "text", label: "Texte court" },
   { value: "textarea", label: "Texte long" },
   { value: "number", label: "Nombre" },
@@ -123,6 +151,9 @@ export function createField(type: FieldType): Field {
   if (type === "attachment") {
     return { ...common, type, maxFiles: 1, acceptedFormats: ["pdf"] };
   }
+  if (type === "location") {
+    return { ...common, type };
+  }
   if (isChoiceType(type)) {
     return { ...common, type, options: [] };
   }
@@ -134,44 +165,24 @@ export function createSection(): Section {
 }
 
 /**
- * Bloc « Lieu d'intervention » : une section prête à l'emploi contenant tous
- * les champs d'une adresse (numéro, BTQ, voie, complément, appartement, code
- * postal, ville). C'est une section ordinaire du schéma (aucun type dédié dans
- * le contrat) — tout reste modifiable après insertion. Les clés sont préfixées
- * `intervention_` pour éviter les collisions avec d'autres champs.
+ * Champ « Lieu d'intervention » prêt à l'emploi, tel que la palette l'insère :
+ * clé, libellé et aide pré-remplis, tout reste modifiable après insertion. La
+ * clé garde le préfixe `intervention_` de l'ancien bloc pour éviter les
+ * collisions avec d'autres champs.
+ *
+ * Jusqu'au 2026-09-22, la palette insérait à la place une SECTION de sept
+ * champs d'adresse (clés `intervention_numero` … `intervention_ville`). Les
+ * démarches qui la portent la gardent telle quelle (rien n'est migré) : Iris
+ * continue de la lire par ses clés. Un consommateur reconnaît le nouveau champ
+ * par son `type`, jamais par sa clé.
  */
-export function createLieuInterventionSection(): Section {
+export function createLocationField(): LocationField {
   return {
     id: genId(),
-    kind: "section",
-    title: "Lieu d'intervention",
-    fields: [
-      { id: genId(), key: "intervention_numero", label: "Numéro", type: "text" },
-      {
-        id: genId(),
-        key: "intervention_btq",
-        label: "BTQ",
-        help: "Bis, ter, quater",
-        type: "select",
-        options: [
-          { value: "bis", label: "Bis" },
-          { value: "ter", label: "Ter" },
-          { value: "quater", label: "Quater" },
-        ],
-      },
-      { id: genId(), key: "intervention_voie", label: "Voie", type: "text", required: true },
-      { id: genId(), key: "intervention_complement", label: "Complément d'adresse", type: "text" },
-      { id: genId(), key: "intervention_appartement", label: "Appartement", type: "text" },
-      {
-        id: genId(),
-        key: "intervention_code_postal",
-        label: "Code postal",
-        type: "text",
-        required: true,
-        maxLength: 5,
-      },
-      { id: genId(), key: "intervention_ville", label: "Ville", type: "text", required: true },
-    ],
+    key: "intervention_lieu",
+    label: "Lieu d'intervention",
+    help: "Indiquez l'adresse, puis précisez l'emplacement sur la carte si besoin.",
+    type: "location",
   };
 }
 
@@ -181,7 +192,8 @@ export function defaultFormSchema(): FormSchema {
 
 /**
  * Tous les champs de saisie du formulaire (racine + sections), à plat. Les
- * pièces jointes sont exclues car non comparables — usage : sources de condition.
+ * pièces jointes et les lieux d'intervention sont exclus car non comparables
+ * (valeurs objet) — usage : sources de condition.
  */
 export function conditionSourceFields(schema: FormSchema): Field[] {
   const fields: Field[] = [];
@@ -189,7 +201,7 @@ export function conditionSourceFields(schema: FormSchema): Field[] {
     if (isSection(node)) fields.push(...node.fields);
     else fields.push(node);
   }
-  return fields.filter((f) => f.type !== "attachment");
+  return fields.filter((f) => f.type !== "attachment" && f.type !== "location");
 }
 
 /**
@@ -274,8 +286,18 @@ const attachmentFieldSchema = z.object({
   requiredIf: conditionSchema.optional(),
 });
 
-// Ordre important : les schémas les plus spécifiques (choix, PJ) avant le simple.
-const fieldSchema = z.union([choiceFieldSchema, attachmentFieldSchema, simpleFieldSchema]);
+const locationFieldSchema = z.object({
+  ...fieldCommonShape,
+  type: z.literal("location"),
+});
+
+// Ordre important : les schémas les plus spécifiques (choix, PJ, lieu) avant le simple.
+const fieldSchema = z.union([
+  choiceFieldSchema,
+  attachmentFieldSchema,
+  locationFieldSchema,
+  simpleFieldSchema,
+]);
 
 const sectionSchema = z.object({
   id: z.string(),

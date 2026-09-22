@@ -13,6 +13,57 @@ Format d'une entrée : `## AAAA-MM-JJ — <api> — ajout|correctif|rupture`
 
 ---
 
+## 2026-09-22 — public-api — ajout (lieu d'intervention : champ `location`)
+
+**Le lieu d'intervention devient un champ de formulaire à part entière : une adresse sur une
+ligne, complétée par la Base Adresse Nationale, et un point que l'usager peut déplacer dans un
+rayon de 150 m pour désigner l'endroit exact.** Nouveau type `location` dans `form_schema`
+(version du schéma **inchangée : 1**) ; sa réponse, dans `form_data[key]`, est un **objet**
+`LocationValue` et non une chaîne. Version du contrat : **1.29.0**. Ajout **additif** : un
+consommateur qui ignore les types inconnus n'affiche pas le champ, et rien d'autre ne change.
+
+```json
+"intervention_lieu": {
+  "address": "10 Avenue de Frémeur 44000 Nantes",
+  "lat": 47.2234, "lon": -1.5731,
+  "precision": "adresse",
+  "adjusted": true
+}
+```
+
+| Clé | Type | Sens |
+|---|---|---|
+| `address` | string, jamais vide | Le libellé BAN entier si une proposition a été retenue, **sinon le texte tapé** (retenir une proposition reste facultatif : la BAN ignore les adresses neuves) |
+| `lat`, `lon` | number ou `null`, **ensemble** | Le **point retenu** (WGS 84) : celui de l'adresse, ou celui où l'usager l'a déplacé. `null` en saisie libre |
+| `precision` | `adresse` · `voie` · `lieu_dit` · `commune` · `null` | Finesse de la proposition BAN retenue |
+| `adjusted` | boolean | L'usager a déplacé le point (de 150 m au plus) : il diffère de celui de l'adresse |
+
+- **Le type est structurel** : reconnaissez le champ par `type === "location"`, jamais par sa
+  clé (`intervention_lieu` n'est qu'un défaut, modifiable par l'agent).
+- ⚠️ **Un point présent ne se géocode pas.** Le point de l'usager est plus précis que tout
+  géocodage de `address` ; géocodez seulement quand `lat`/`lon` sont `null`.
+- ⚠️ **L'adresse ne bouge pas** : déplacer le point ne réécrit jamais `address`. Un itinéraire
+  peut viser les coordonnées quand `adjusted` est vrai, l'adresse sinon.
+- ⚠️ **L'ancien bloc subsiste sur les démarches paramétrées avant cette date** : une section
+  ordinaire de champs texte aux clés `intervention_numero`, `intervention_btq`,
+  `intervention_voie`, `intervention_complement`, `intervention_appartement`,
+  `intervention_code_postal`, `intervention_ville`. Rien n'est migré ; la palette ne le propose
+  plus (`createLieuInterventionSection` est retirée du Socle). Un consommateur lit les deux
+  formes tant que des démarches portent l'ancienne.
+- Un objet illisible (adresse vide, `lat` sans `lon`, précision hors vocabulaire…) vaut **non
+  renseigné** ; les clés inconnues s'ignorent. Le déplacement est borné **à la saisie** (portail)
+  et la forme revalidée à la frontière ; aucun serveur ne connaît le point de l'adresse pour
+  revérifier les 150 m.
+- Le champ n'est **pas** une source de condition (`visibleIf`) : valeur objet, non comparable —
+  comme une pièce justificative.
+- **Consommateur** : **Nora** rend le champ (adresse assistée + carte OpenStreetMap, déplacement
+  au pointeur et au clavier) et produit la valeur ; **Iris** la lit (fiche, carte des
+  interventions, itinéraire) et l'écrit à la création guichet. ⚠️ Iris : un type inconnu **vide
+  tout le schéma** dans son moteur de formulaire (client, edge function et jumeau SQL
+  `form_field_valid`) — le miroir doit être livré **avant** qu'une démarche publiée porte le champ.
+
+---
+
 ## 2026-09-22 — ai-api — correctif (partage du plafond, 1.3.0)
 
 **Une part du plafond peut désormais être RÉSERVÉE à une application — en jetons ou en pourcentage

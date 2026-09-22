@@ -4,7 +4,7 @@ import {
   attachmentFieldsMissingDocumentType,
   conditionSourceFields,
   createField,
-  createLieuInterventionSection,
+  createLocationField,
   createSection,
   defaultFormSchema,
   isChoiceType,
@@ -46,46 +46,45 @@ describe("createSection / isSection", () => {
   });
 });
 
-describe("createLieuInterventionSection", () => {
-  it("est une section pré-remplie avec tous les champs d'une adresse, dans l'ordre", () => {
-    const section = createLieuInterventionSection();
-    expect(isSection(section)).toBe(true);
-    expect(section.title).toBe("Lieu d'intervention");
-    expect(section.fields.map((f) => f.key)).toEqual([
-      "intervention_numero",
-      "intervention_btq",
-      "intervention_voie",
-      "intervention_complement",
-      "intervention_appartement",
-      "intervention_code_postal",
-      "intervention_ville",
-    ]);
-  });
-
-  it("BTQ est une liste déroulante bis/ter/quater ; voie, code postal et ville sont obligatoires", () => {
-    const section = createLieuInterventionSection();
-    const byKey = Object.fromEntries(section.fields.map((f) => [f.key, f]));
-    expect(byKey.intervention_btq).toMatchObject({
-      type: "select",
-      options: [
-        { value: "bis", label: "Bis" },
-        { value: "ter", label: "Ter" },
-        { value: "quater", label: "Quater" },
-      ],
+describe("createLocationField", () => {
+  it("est un champ unique pré-rempli (clé, libellé, aide), sans option propre", () => {
+    const field = createLocationField();
+    expect(isSection(field)).toBe(false);
+    expect(field).toMatchObject({
+      type: "location",
+      key: "intervention_lieu",
+      label: "Lieu d'intervention",
     });
-    expect(byKey.intervention_voie.required).toBe(true);
-    expect(byKey.intervention_code_postal).toMatchObject({ required: true, maxLength: 5 });
-    expect(byKey.intervention_ville.required).toBe(true);
-    expect(byKey.intervention_numero.required).toBeUndefined();
+    expect(field.help).toMatch(/carte/i);
+    expect(field.required).toBeUndefined();
+    expect("options" in field).toBe(false);
   });
 
-  it("chaque appel produit des ids uniques et le schéma se re-parse à l'identique", () => {
-    const a = createLieuInterventionSection();
-    const b = createLieuInterventionSection();
-    const ids = [a.id, b.id, ...a.fields.map((f) => f.id), ...b.fields.map((f) => f.id)];
-    expect(new Set(ids).size).toBe(ids.length);
-    const schema: FormSchema = { version: 1, content: [a] };
+  it("chaque appel produit un id unique et le schéma se re-parse à l'identique", () => {
+    const a = createLocationField();
+    const b = createLocationField();
+    expect(a.id).not.toBe(b.id);
+    const schema: FormSchema = { version: 1, content: [a, { ...b, required: true }] };
     expect(parseFormSchema(schema)).toEqual(schema);
+  });
+
+  it("le parseur strippe une clé inconnue d'un champ location (compatibilité additive)", () => {
+    const raw = {
+      version: 1,
+      content: [{ ...createLocationField(), radius: 300 }],
+    };
+    const parsed = parseFormSchema(raw);
+    expect(parsed.content[0]).toMatchObject({ type: "location" });
+    expect("radius" in parsed.content[0]).toBe(false);
+  });
+
+  it("n'est pas une source de condition (valeur objet, non comparable), comme la PJ", () => {
+    const text = createField("text");
+    const schema: FormSchema = {
+      version: 1,
+      content: [createLocationField(), text, createField("attachment")],
+    };
+    expect(conditionSourceFields(schema)).toEqual([text]);
   });
 });
 

@@ -86,6 +86,12 @@ existe réellement aujourd'hui : [architecture.md](./architecture.md),
 
 ## APIs / plateforme
 
+- **Biais géographique de la Base Adresse Nationale** : le champ « Lieu d'intervention »
+  (`location`, 2026-09-22) et l'adresse de l'usager interrogent la BAN sans la borner au
+  territoire — `organizations` ne porte ni centre, ni emprise, ni code INSEE. En poser un (ou
+  dériver l'emprise des quartiers) permettrait à Nora de passer `lat`/`lon` à la recherche et de
+  proposer d'abord les adresses de la collectivité. Un **rayon d'ajustement réglable** par champ
+  (aujourd'hui 150 m, constante de plateforme) relève du même lot, si un cas l'exige.
 - **Vérification des scopes dans `public-api`** : **livré le 2026-08-12** — le scope `read` est
   vérifié (403 sinon), après audit des clés existantes (aucune intégration impactée).
 - **`GET /v1/organization-procedures`** : le sérialiseur (`serializeOrganizationProcedure`,

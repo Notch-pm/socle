@@ -1,7 +1,7 @@
 import * as React from "react";
 import { useSortable } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
-import { GripVertical, ChevronDown, Trash2, Plus, X, Paperclip } from "lucide-react";
+import { GripVertical, ChevronDown, Trash2, Plus, X, Paperclip, MapPin } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -9,6 +9,7 @@ import { Field } from "@/components/ui/field";
 import { Switch } from "@/components/ui/switch";
 import {
   FIELD_TYPES,
+  LOCATION_ADJUST_RADIUS_M,
   MAX_ATTACHMENT_FILES,
   type Field as FormField,
 } from "@/features/procedures/formSchema";
@@ -16,13 +17,15 @@ import type { DocumentType } from "@/features/document-types/useDocumentTypes";
 import { ConditionEditor } from "./ConditionEditor";
 import { FormatsPicker } from "./FormatsPicker";
 
-const PLACEHOLDER_TYPES = ["text", "textarea", "number", "email", "phone", "select"];
+const PLACEHOLDER_TYPES = ["text", "textarea", "number", "email", "phone", "select", "location"];
 
 const selectClass =
   "h-9 w-full rounded-lg border border-input bg-background px-2 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring";
 
 function typeLabel(type: FormField["type"]): string {
-  return FIELD_TYPES.find((t) => t.value === (type as never))?.label ?? "Pièce justificative";
+  if (type === "attachment") return "Pièce justificative";
+  if (type === "location") return "Lieu d'intervention";
+  return FIELD_TYPES.find((t) => t.value === type)?.label ?? type;
 }
 
 /** Une ligne de champ (racine ou dans une section) : triable, panneau de réglages. */
@@ -57,6 +60,7 @@ export function FieldRow({
   };
 
   const isAttachment = field.type === "attachment";
+  const isLocation = field.type === "location";
 
   return (
     <div ref={setNodeRef} style={style} className="rounded-lg border border-border bg-background">
@@ -73,6 +77,7 @@ export function FieldRow({
 
         <span className="inline-flex items-center gap-1 rounded-md bg-muted px-2 py-0.5 text-xs font-medium text-muted-foreground">
           {isAttachment ? <Paperclip className="size-3" /> : null}
+          {isLocation ? <MapPin className="size-3" /> : null}
           {typeLabel(field.type)}
         </span>
 
@@ -130,6 +135,14 @@ export function FieldRow({
               </label>
             </div>
           </div>
+
+          {isLocation ? (
+            <p className="text-xs text-muted-foreground">
+              Adresse sur une ligne, complétée par la Base Adresse Nationale, avec une carte où
+              l'usager peut déplacer le point dans un rayon de {LOCATION_ADJUST_RADIUS_M} m pour
+              préciser l'endroit exact. L'adresse ne change pas.
+            </p>
+          ) : null}
 
           {PLACEHOLDER_TYPES.includes(field.type) ? (
             <div className="grid gap-3 sm:grid-cols-2">

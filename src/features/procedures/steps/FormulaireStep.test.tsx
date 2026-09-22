@@ -116,6 +116,19 @@ describe("FormulaireStep — construction et émission du schéma", () => {
     expect(onSubmit).toHaveBeenCalledTimes(1);
   });
 
+  it("ajoute un lieu d'intervention depuis la palette : un seul champ, pré-rempli", () => {
+    const { onSubmit, submit } = renderStep(makeProcedure(null));
+    fireEvent.click(screen.getByRole("button", { name: "Lieu d'intervention" }));
+    submit();
+    const schema = onSubmit.mock.calls[0][0] as FormSchema;
+    expect(schema.content).toHaveLength(1);
+    expect(schema.content[0]).toMatchObject({
+      type: "location",
+      key: "intervention_lieu",
+      label: "Lieu d'intervention",
+    });
+  });
+
   it("ajoute une section depuis la palette", () => {
     const { onSubmit, submit } = renderStep(makeProcedure(null));
 

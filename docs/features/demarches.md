@@ -91,10 +91,19 @@ est fonctionnelle (voir feature « Édition d'organisation » ci-dessous). Param
   champs simples / choix (options) / **pièce justificative** (1–5 fichiers, formats, obligatoire +
   conditionnel) ; **conditions** d'affichage & d'obligation (moteur pur `conditions.ts`). Ajout des
   champs par **palette** (glisser-déposer positionné, ou clic → ajout à la fin). La palette propose
-  aussi un bloc **« Lieu d'intervention »** : une **section pré-remplie** des champs d'adresse
-  (numéro, BTQ, voie, complément, appartement, code postal, ville ; clés `intervention_*`,
-  fabrique `createLieuInterventionSection`) — section ordinaire du schéma (pas de type dédié dans
-  le contrat), entièrement modifiable après insertion. Les champs
+  aussi un champ **« Lieu d'intervention »** (`type: "location"`, fabrique `createLocationField`,
+  clé par défaut `intervention_lieu`) : une adresse sur **une ligne** complétée par la Base Adresse
+  Nationale, et une carte OpenStreetMap où l'usager peut **déplacer le point** dans un rayon de
+  **150 m** (`LOCATION_ADJUST_RADIUS_M`, constante de plateforme — pas une option du champ) pour
+  désigner l'endroit exact ; **l'adresse ne bouge pas**. Sa réponse est un **objet**
+  `LocationValue` (`{ address, lat, lon, precision, adjusted }`, décrit dans l'OpenAPI, contrat
+  1.29.0) — `lat`/`lon` vont ensemble, `null` en saisie libre ; ⚠️ un consommateur qui a un point
+  **ne géocode pas**. Aucune option propre, pas de source de condition (valeur objet, comme la PJ).
+  ⚠️ L'aperçu du builder **ne simule ni la BAN ni la carte** (le Socle n'appelle aucun service
+  tiers depuis le builder) : c'est Nora qui complète, dessine et produit la valeur.
+  ⚠️ Jusqu'au 2026-09-22, la palette insérait à la place une **section de sept champs** d'adresse
+  (clés `intervention_numero` … `intervention_ville`) ; les démarches qui la portent la
+  **gardent** (rien n'est migré), Iris continue de la lire par ses clés. Les champs
   **existants** se déplacent au glisser-déposer entre racine et sections (entrée/sortie/changement
   de section) : un **seul `DndContext`** couvre tout le canevas (pas de contexte imbriqué dans
   `SectionEditor`, sinon les champs restent prisonniers de leur conteneur) ; logique pure

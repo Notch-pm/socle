@@ -19,7 +19,7 @@ import {
   attachmentFieldsMissingDocumentType,
   conditionSourceFields,
   createField,
-  createLieuInterventionSection,
+  createLocationField,
   createSection,
   isSection,
   parseFormSchema,
@@ -120,7 +120,7 @@ export function FormulaireStep({
   /** Fabrique le nœud correspondant à un item de palette. */
   function nodeFromPalette(kind: PaletteKind): FormNode {
     if (kind === "section") return createSection();
-    if (kind === "lieu_intervention") return createLieuInterventionSection();
+    if (kind === "location") return createLocationField();
     return createField(kind);
   }
 

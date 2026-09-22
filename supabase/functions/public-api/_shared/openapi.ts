@@ -30,7 +30,7 @@ export function buildOpenApiDocument(serverUrl: string): Record<string, unknown>
     openapi: "3.1.0",
     info: {
       title: "API Socle — Référentiel de la gamme",
-      version: "1.28.0",
+      version: "1.29.0",
       description: [
         "API **en lecture seule** exposant le référentiel central de la gamme : les",
         "**organisations** (et sous-organisations) avec l'intégralité de leur configuration,",
@@ -262,7 +262,17 @@ export function buildOpenApiDocument(serverUrl: string): Record<string, unknown>
             "nomme la donnée en aval ; son **`id`** ne sert qu'aux conditions (`visibleIf`, " +
             "`requiredIf`), qui s'évaluent sur les identifiants. Les deux schémas valent `null` " +
             "quand la démarche n'a rien de paramétré : c'est une démarche sans saisie, pas une " +
-            "erreur.",
+            "erreur.\n\n" +
+            "**Lieu d'intervention** (contrat 1.29.0) : un champ de `type: \"location\"` demande " +
+            "une adresse sur une ligne (complétée par la Base Adresse Nationale) et un point que " +
+            "l'usager peut déplacer dans un rayon de 150 m pour désigner l'endroit exact. Sa " +
+            "réponse est un objet `LocationValue` — `{ address, lat, lon, precision, adjusted }` — " +
+            "et non une chaîne. Un consommateur le reconnaît par son **type**, jamais par sa clé. " +
+            "⚠️ Un point présent **ne se géocode pas** : celui de l'usager est plus précis que " +
+            "tout géocodage. Les démarches paramétrées avant 1.29.0 peuvent porter à la place " +
+            "l'ancien bloc : une section ordinaire de champs texte aux clés `intervention_numero`, " +
+            "`intervention_voie`, `intervention_code_postal`, `intervention_ville`… — elle reste " +
+            "valable, rien n'est migré.",
           parameters: [
             {
               name: "id",
@@ -1244,11 +1254,11 @@ export function buildOpenApiDocument(serverUrl: string): Record<string, unknown>
                   ],
                 },
                 form_schema: {
-                  type: ["object", "null"],
                   description:
                     "Schéma de formulaire possédé, `{ version: 1, content: [...] }`. Un nœud " +
                     "racine est un champ ou une `section`. La clé machine d'un champ est " +
                     "`key` ; son `id` ne sert qu'aux conditions. `null` = pas de formulaire.",
+                  oneOf: [{ $ref: "#/components/schemas/FormSchema" }, { type: "null" }],
                 },
                 requester_config: {
                   type: ["object", "null"],
@@ -2023,8 +2033,9 @@ export function buildOpenApiDocument(serverUrl: string): Record<string, unknown>
           type: ["object", "null"],
           description:
             "Formulaire possédé : liste ordonnée de nœuds (champ ou section). Un champ peut être " +
-            "simple, un choix (avec options) ou une pièce justificative. Les conditions " +
-            "d'affichage (`visibleIf`) et d'obligation (`requiredIf`) suivent le schéma `Condition`.",
+            "simple, un choix (avec options), une pièce justificative ou un lieu d'intervention " +
+            "(`location`, réponse `LocationValue`). Les conditions d'affichage (`visibleIf`) et " +
+            "d'obligation (`requiredIf`) suivent le schéma `Condition`. Un `type` inconnu s'ignore.",
           properties: {
             version: { type: "integer", enum: [1] },
             content: {
@@ -2051,7 +2062,8 @@ export function buildOpenApiDocument(serverUrl: string): Record<string, unknown>
         },
         FormField: {
           type: "object",
-          description: "Champ de formulaire (simple, choix ou pièce justificative).",
+          description:
+            "Champ de formulaire (simple, choix, pièce justificative ou lieu d'intervention).",
           properties: {
             id: { type: "string" },
             key: { type: "string", description: "Clé machine — la donnée du contrat en aval." },
@@ -2073,7 +2085,12 @@ export function buildOpenApiDocument(serverUrl: string): Record<string, unknown>
                 "radio",
                 "checkboxes",
                 "attachment",
+                "location",
               ],
+              description:
+                "`location` (1.29.0) : lieu d'intervention — adresse sur une ligne et point " +
+                "déplaçable dans un rayon de 150 m ; sa réponse est un `LocationValue`. Aucune " +
+                "option propre.",
             },
             maxLength: { type: "integer", description: "Champs texte." },
             options: {
@@ -2097,6 +2114,48 @@ export function buildOpenApiDocument(serverUrl: string): Record<string, unknown>
             },
             visibleIf: { $ref: "#/components/schemas/Condition" },
             requiredIf: { $ref: "#/components/schemas/Condition" },
+          },
+        },
+        LocationValue: {
+          type: "object",
+          description:
+            "Réponse à un champ `location` (lieu d'intervention), telle qu'elle est déposée dans " +
+            "`form_data[key]` par le portail. L'adresse ne bouge jamais : déplacer le point ne " +
+            "réécrit pas `address`. Le déplacement est borné à 150 m du point de l'adresse, à la " +
+            "saisie. ⚠️ Quand `lat`/`lon` sont présents, ne géocodez pas `address` : le point " +
+            "de l'usager est plus précis. Un objet illisible (adresse vide, `lat` sans `lon`…) " +
+            "vaut « non renseigné » ; les clés inconnues s'ignorent.",
+          required: ["address", "lat", "lon", "precision", "adjusted"],
+          properties: {
+            address: {
+              type: "string",
+              description:
+                "Le libellé BAN entier si une proposition a été retenue (« 10 Avenue de Frémeur " +
+                "44000 Nantes »), sinon le texte tapé par l'usager. Jamais vide.",
+            },
+            lat: {
+              type: ["number", "null"],
+              description:
+                "Latitude WGS 84 du point retenu — celui de l'adresse, ou celui où l'usager l'a " +
+                "déplacé. `null` (avec `lon`) quand aucune proposition n'a été retenue.",
+            },
+            lon: {
+              type: ["number", "null"],
+              description: "Longitude WGS 84 du point retenu. Va avec `lat` : les deux, ou aucun.",
+            },
+            precision: {
+              type: ["string", "null"],
+              enum: ["adresse", "voie", "lieu_dit", "commune", null],
+              description:
+                "Finesse de la proposition BAN retenue : `adresse` (numéro), `voie`, `lieu_dit` " +
+                "ou `commune`. `null` en saisie libre.",
+            },
+            adjusted: {
+              type: "boolean",
+              description:
+                "`true` si l'usager a déplacé le point : il diffère alors de celui de l'adresse " +
+                "(de 150 m au plus).",
+            },
           },
         },
         Condition: {

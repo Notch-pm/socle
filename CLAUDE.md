@@ -230,6 +230,11 @@ menu latéral par client).
 - ⚠️ **Tout ce que porte `user_communication` est public** (servi tel quel au portail, défauts
   vides) ; rien de ce qui sert à instruire n'y entre. Deux FAQ qui ne se fusionnent jamais :
   `knowledge_base.faq` (agent et IA) ne traverse jamais vers le portail.
+- ⚠️ **Lieu d'intervention** = champ `type: "location"` (2026-09-22, contrat 1.29.0) : adresse
+  sur une ligne (BAN) + point déplaçable dans un rayon de **150 m** (constante, pas une option) ;
+  réponse **objet** `LocationValue`, un point présent **ne se géocode pas**, l'adresse ne bouge
+  pas. L'ancienne section `intervention_*` n'est plus proposée mais subsiste sur les démarches
+  existantes. L'aperçu du builder ne simule ni BAN ni carte.
 - JSON possédés = **contrats publics** (`form_schema`, `requester_config`,
   `communication_config`, `knowledge_base`, `user_communication`) : parseurs robustes testés.
   Documents de la base de connaissances : bucket privé `procedure-documents`, 1er segment du

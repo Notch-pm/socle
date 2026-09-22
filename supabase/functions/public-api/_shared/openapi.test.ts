@@ -292,8 +292,23 @@ describe("contrat — traduction de la communication usager (1.26.0)", () => {
 describe("contrat — documents et courriers", () => {
   const doc = buildOpenApiDocument("https://example.supabase.co/functions/v1/public-api") as any;
 
-  it("annonce la version 1.28.0 du contrat", () => {
-    expect(doc.info.version).toBe("1.28.0");
+  it("annonce la version 1.29.0 du contrat", () => {
+    expect(doc.info.version).toBe("1.29.0");
+  });
+
+  it("le lieu d'intervention est un type de champ structurel, à réponse objet (1.29.0)", () => {
+    const field = doc.components.schemas.FormField;
+    expect(field.properties.type.enum).toContain("location");
+    const value = doc.components.schemas.LocationValue;
+    expect(Object.keys(value.properties).sort()).toEqual(
+      ["address", "adjusted", "lat", "lon", "precision"].sort(),
+    );
+    expect(value.required).toEqual(["address", "lat", "lon", "precision", "adjusted"]);
+    // Un point présent ne se géocode pas : la règle est dite là où la valeur est décrite.
+    expect(value.description).toMatch(/ne géocodez pas/);
+    // Le détail d'une démarche du portail pointe vers le schéma possédé, pas une prose à part.
+    const detail = doc.components.schemas.PortalProcedureDetail.allOf[1].properties.form_schema;
+    expect(detail.oneOf).toContainEqual({ $ref: "#/components/schemas/FormSchema" });
   });
 
   it("le thème voyage avec le TENANT : il vaut pour toutes les pages", () => {

@@ -197,8 +197,11 @@ sont documentées dans les schémas du Redoc de `public-api`, pas ici. Quatre r�
 consommateur :
 
 - La **clé machine** d'un champ de formulaire (`form_schema`) est **`key`**, pas `id`.
-- Le bloc « Lieu d'intervention » est une **section ordinaire** pré-remplie — aucun type dédié à
-  détecter structurellement.
+- Le **lieu d'intervention** est un champ de `type: "location"` (contrat 1.29.0), à
+  reconnaître **par son type**, jamais par sa clé ; sa réponse est un objet `LocationValue`
+  (`{ address, lat, lon, precision, adjusted }`) et **un point présent ne se géocode pas**. Les
+  démarches paramétrées avant le 2026-09-22 peuvent porter à la place l'ancien bloc : une
+  **section ordinaire** de champs texte aux clés `intervention_*` — lisez les deux formes.
 - Un document référencé en `{path, name}` (pièce jointe de démarche, document de base de
   connaissances) n'est **pas une URL** : échangez `path` contre une URL signée temporaire (5 min)
   via `GET /v1/documents/signed-url?path=…`.

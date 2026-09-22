@@ -4,21 +4,23 @@ import { cn } from "@/lib/utils";
 import { FIELD_TYPES, type FieldType } from "@/features/procedures/formSchema";
 
 /**
- * Ce qu'un item de palette ajoute : un type de champ, une PJ, une section, ou
- * le bloc « Lieu d'intervention » (section pré-remplie des champs d'adresse).
+ * Ce qu'un item de palette ajoute : un type de champ (dont la PJ et le lieu
+ * d'intervention, qui ont leur propre bouton) ou une section.
  */
-export type PaletteKind = FieldType | "section" | "lieu_intervention";
+export type PaletteKind = FieldType | "section";
 
 export const PALETTE_ITEMS: { kind: PaletteKind; label: string }[] = [
   ...FIELD_TYPES.map((t) => ({ kind: t.value as PaletteKind, label: t.label })),
   { kind: "attachment", label: "Pièce justificative" },
+  // Un seul champ (adresse sur une ligne + carte), et non plus une section de
+  // sept champs d'adresse : voir `createLocationField`.
+  { kind: "location", label: "Lieu d'intervention" },
   { kind: "section", label: "Section" },
-  { kind: "lieu_intervention", label: "Lieu d'intervention" },
 ];
 
 /** L'item de palette produit-il une section (et non un champ) ? */
 export function paletteKindIsSection(kind: string): boolean {
-  return kind === "section" || kind === "lieu_intervention";
+  return kind === "section";
 }
 
 /**
@@ -62,7 +64,7 @@ function PaletteItem({
       <Paperclip className="size-3.5 text-muted-foreground" />
     ) : kind === "section" ? (
       <FolderPlus className="size-3.5 text-muted-foreground" />
-    ) : kind === "lieu_intervention" ? (
+    ) : kind === "location" ? (
       <MapPin className="size-3.5 text-muted-foreground" />
     ) : (
       <GripVertical className="size-3.5 text-muted-foreground" />
