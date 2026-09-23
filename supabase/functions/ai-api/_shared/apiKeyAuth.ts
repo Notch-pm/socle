@@ -21,7 +21,7 @@
 // périmètre par la RPC que `scopeRequest` désigne.
 
 /** Colonnes à sélectionner sur `api_keys` — jamais `key_hash`. */
-export const API_KEY_COLUMNS = "id, organization_id, revoked_at, expires_at, scopes, consumer";
+export const API_KEY_COLUMNS = "id, organization_id, revoked_at, expires_at, scopes, consumer, last_used_at";
 
 /** La ligne telle que PostgREST la rend. */
 export interface ApiKeyRow {
@@ -31,6 +31,7 @@ export interface ApiKeyRow {
   expires_at: string | null;
   scopes: unknown;
   consumer: string | null;
+  last_used_at: string | null;
 }
 
 /** La clé une fois admise. */
@@ -39,6 +40,7 @@ export interface AuthenticatedKey {
   organization_id: string | null;
   scopes: string[];
   consumer: string | null;
+  last_used_at: string | null;
 }
 
 export type ApiKeyDecision =
@@ -78,8 +80,33 @@ export function evaluateApiKey(
 
   return {
     ok: true,
-    key: { id: row.id, organization_id: row.organization_id, scopes, consumer },
+    key: {
+      id: row.id,
+      organization_id: row.organization_id,
+      scopes,
+      consumer,
+      last_used_at: row.last_used_at ?? null,
+    },
   };
+}
+
+/**
+ * Pas plus d'une horodate d'usage toutes les 5 minutes par clé.
+ *
+ * `last_used_at` n'est qu'un indicateur (« dernière utilisation » dans la liste
+ * des clés du superadmin) ; l'écrire à CHAQUE requête coûtait une écriture par
+ * appel — et une clé PLATEFORME (le portail Nora) porte tout le trafic public
+ * de toutes les collectivités sur UNE seule ligne : tuples morts en rafale sur
+ * une ligne chaude, et une latence ajoutée à chaque réponse tant que
+ * l'écriture était attendue. Audit purge / performance du 2026-09-23.
+ */
+export const KEY_TOUCH_INTERVAL_MS = 5 * 60 * 1000;
+
+export function shouldTouchKey(lastUsedAt: string | null, now: Date = new Date()): boolean {
+  if (lastUsedAt === null) return true;
+  const last = new Date(lastUsedAt).getTime();
+  if (Number.isNaN(last)) return true;
+  return now.getTime() - last >= KEY_TOUCH_INTERVAL_MS;
 }
 
 /**

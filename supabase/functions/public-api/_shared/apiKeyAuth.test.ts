@@ -4,7 +4,9 @@ import {
   API_KEY_COLUMNS,
   evaluateApiKey,
   PLATFORM_WITHOUT_APPLICATION_MESSAGE,
+  KEY_TOUCH_INTERVAL_MS,
   scopeRequest,
+  shouldTouchKey,
   UNAUTHORIZED_MESSAGE,
   type ApiKeyRow,
 } from "./apiKeyAuth";
@@ -19,6 +21,7 @@ function row(over: Partial<ApiKeyRow> = {}): ApiKeyRow {
     expires_at: null,
     scopes: ["read"],
     consumer: null,
+    last_used_at: null,
     ...over,
   };
 }
@@ -81,8 +84,20 @@ describe("evaluateApiKey — la clé admise", () => {
     );
     expect(decision).toEqual({
       ok: true,
-      key: { id: "key-1", organization_id: null, scopes: ["read", "smtp"], consumer: "nora" },
+      key: {
+        id: "key-1",
+        organization_id: null,
+        scopes: ["read", "smtp"],
+        consumer: "nora",
+        last_used_at: null,
+      },
     });
+  });
+
+  it("transmet la dernière utilisation, pour décider s'il faut la réécrire", () => {
+    const decision = evaluateApiKey(row({ last_used_at: "2026-09-08T11:58:00Z" }), READ);
+    expect(decision.ok && decision.key.last_used_at).toBe("2026-09-08T11:58:00Z");
+    expect(API_KEY_COLUMNS).toMatch(/last_used_at/);
   });
 
   it("ne sélectionne jamais le hachage", () => {
@@ -100,6 +115,23 @@ describe("scopeRequest — par quelle RPC calculer le périmètre", () => {
   it("une clé plateforme → les collectivités abonnées à son application", () => {
     expect(scopeRequest({ id: "k", organization_id: null, scopes: ["read"], consumer: "nora" }))
       .toEqual({ kind: "platform", rpc: "application_scope_ids", args: { p_application: "nora" } });
+  });
+});
+
+describe("shouldTouchKey — une horodate d'usage toutes les 5 minutes au plus", () => {
+  it("écrit une clé jamais utilisée, ou à la date illisible", () => {
+    expect(shouldTouchKey(null, NOW)).toBe(true);
+    expect(shouldTouchKey("pas une date", NOW)).toBe(true);
+  });
+
+  it("n'écrit pas tant que la dernière trace a moins de 5 minutes", () => {
+    const recent = new Date(NOW.getTime() - KEY_TOUCH_INTERVAL_MS + 1000).toISOString();
+    expect(shouldTouchKey(recent, NOW)).toBe(false);
+  });
+
+  it("écrit de nouveau passé 5 minutes", () => {
+    const old = new Date(NOW.getTime() - KEY_TOUCH_INTERVAL_MS).toISOString();
+    expect(shouldTouchKey(old, NOW)).toBe(true);
   });
 });
 

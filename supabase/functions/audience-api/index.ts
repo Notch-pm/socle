@@ -49,6 +49,7 @@ import {
   API_KEY_COLUMNS,
   evaluateApiKey,
   scopeRequest,
+  shouldTouchKey,
   type ApiKeyRow,
 } from "./_shared/apiKeyAuth.ts";
 
@@ -184,14 +185,16 @@ Deno.serve(async (req: Request) => {
       return Array.isArray(data) && (data as unknown[]).includes(tenantId);
     };
 
-    // Trace best-effort (n'interrompt jamais la requête).
-    const touchKey = async () => {
-      try {
-        await admin.from("api_keys").update({ last_used_at: new Date().toISOString() })
-          .eq("id", apiKey.id);
-      } catch (_) {
-        // ignoré
-      }
+    // Trace d'usage best-effort, au plus toutes les 5 minutes (shouldTouchKey)
+    // et HORS du chemin de la réponse : chaque vue de page du portail public
+    // arrive ici avec la même clé plateforme — l'écrire à chaque appel en
+    // attendant le résultat coûtait une écriture et une latence par vue.
+    const touchKey = () => {
+      if (!shouldTouchKey(apiKey.last_used_at)) return;
+      const touch = admin.from("api_keys").update({ last_used_at: new Date().toISOString() })
+        .eq("id", apiKey.id)
+        .then(() => {}, () => {});
+      (globalThis as { EdgeRuntime?: { waitUntil(p: Promise<unknown>): void } }).EdgeRuntime?.waitUntil(touch);
     };
 
     // ======================================================================
@@ -222,7 +225,7 @@ Deno.serve(async (req: Request) => {
         console.error(`${FUNCTION_NAME}: record_portal_page_view en échec`, error.message);
         return errorResponse("internal_error", "Erreur interne du serveur.", corsHeaders);
       }
-      await touchKey();
+      touchKey();
       return accepted(data === true);
     }
 
@@ -247,7 +250,7 @@ Deno.serve(async (req: Request) => {
       console.error(`${FUNCTION_NAME}: record_portal_deposit en échec`, error.message);
       return errorResponse("internal_error", "Erreur interne du serveur.", corsHeaders);
     }
-    await touchKey();
+    touchKey();
     return accepted(data === true);
   } catch (err) {
     console.error(`${FUNCTION_NAME} error:`, err instanceof Error ? err.message : "inconnue");

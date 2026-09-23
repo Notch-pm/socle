@@ -29,7 +29,7 @@ import {
   serializeTenant,
 } from "./_shared/serializers.ts";
 import { buildOrganizationTree, isUuid } from "./_shared/scope.ts";
-import { API_KEY_COLUMNS, evaluateApiKey, scopeRequest, type ApiKeyRow } from "./_shared/apiKeyAuth.ts";
+import { API_KEY_COLUMNS, evaluateApiKey, scopeRequest, shouldTouchKey, type ApiKeyRow } from "./_shared/apiKeyAuth.ts";
 import { errorResponse, jsonResponse } from "./_shared/errors.ts";
 import { buildOpenApiDocument } from "./_shared/openapi.ts";
 import { isoDay } from "./_shared/publication.ts";
@@ -283,13 +283,15 @@ Deno.serve(async (req: Request) => {
     const apiKey = decision.key;
 
     // Trace best-effort (n'interrompt pas la requête en cas d'échec).
-    try {
-      await admin
-        .from("api_keys")
-        .update({ last_used_at: new Date().toISOString() })
-        .eq("id", apiKey.id);
-    } catch (_) {
-      // ignoré
+    // Trace d'usage best-effort, au plus toutes les 5 minutes (shouldTouchKey)
+    // et HORS du chemin de la réponse : une clé plateforme porte tout le trafic
+    // public sur une seule ligne, l'écrire à chaque appel en attendant le
+    // résultat coûtait une écriture et une latence par requête.
+    if (shouldTouchKey(apiKey.last_used_at)) {
+      const touch = admin.from("api_keys").update({ last_used_at: new Date().toISOString() })
+        .eq("id", apiKey.id)
+        .then(() => {}, () => {});
+      (globalThis as { EdgeRuntime?: { waitUntil(p: Promise<unknown>): void } }).EdgeRuntime?.waitUntil(touch);
     }
 
     // --- Périmètre : sous-arbre de l'organisation de la clé — ou, pour une
