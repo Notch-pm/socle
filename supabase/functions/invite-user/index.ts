@@ -53,9 +53,9 @@ function buildBrandedEmail(siteName: string, heading: string, bodyHtml: string, 
 <body style="margin:0;padding:0;background-color:#ffffff;font-family:Arial,Helvetica,sans-serif;">
   <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background-color:#ffffff;padding:40px 20px;">
     <tr><td align="center">
-      <table role="presentation" width="520" cellpadding="0" cellspacing="0" style="background-color:#ffffff;border-radius:12px;overflow:hidden;box-shadow:0 2px 8px rgba(0,0,0,0.08);">
-        <tr><td style="background-color:${primary};padding:24px 32px;text-align:center;">
-          <h2 style="margin:0;color:#ffffff;font-size:20px;font-weight:700;">${siteName}</h2>
+      <table role="presentation" width="520" cellpadding="0" cellspacing="0" style="background-color:#ffffff;border:1px solid ${primary};border-radius:12px;overflow:hidden;">
+        <tr><td style="background-color:#ffffff;border-bottom:1px solid ${primary};padding:24px 32px;text-align:center;">
+          <h2 style="margin:0;color:#18181b;font-size:20px;font-weight:700;">${siteName}</h2>
         </td></tr>
         <tr><td style="padding:32px 32px 24px;">
           <h1 style="margin:0 0 16px;font-size:22px;font-weight:700;color:#18181b;">${heading}</h1>
