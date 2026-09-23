@@ -304,6 +304,36 @@ Ajoutés le 2026-09-05 (éditeur du site de démarches) :
   n'est couvert qu'à travers sa logique pure (`portalReorder.test.ts`) et le placement de l'ombre
   (`PortalCanvas.test.tsx`) ; le geste lui-même se vérifie à la main.
 
+Ajoutés le 2026-09-23 (audit purge / performance de la gamme, avant mise en production) :
+
+- **Policies RLS réévaluées à chaque ligne.** Aucune policy ne suit le motif
+  `(select …)` : elles appellent directement `is_super_admin()`, `has_org_access(organization_id)`,
+  `is_org_admin(organization_id)`, et l'advisor `auth_rls_initplan` en relève 4 sur `auth.uid()`
+  (`procedures` « read procedures », `users` « read / update own profile »,
+  `user_organizations` « read own org memberships »). Aggravant : `has_org_access`,
+  `is_org_admin` et `is_super_admin` sont en PL/pgSQL **sans marqueur `STABLE`** (donc
+  `VOLATILE`), contrairement à `org_subtree_ids` et `is_admin_of_self_or_ancestor` — le
+  planificateur les réexécute par ligne. Le coût croît avec les listes protégées (les écrans
+  superadmin sur `ai_usage_events` en premier). Correctif mécanique :
+  `alter function … stable` sur les trois (elles ne font que lire), puis réécriture des policies
+  en `using ((select public.is_super_admin()))` — table par table, en testant l'accès, une
+  policy mal réécrite coupe un écran.
+- **50 `multiple_permissive_policies`** (advisor) : un couple « read X » / « write X »
+  `FOR ALL` sur la plupart des tables du référentiel (`categories`, `document_types`,
+  `procedures`, `portal_*`, `users`, `user_organizations`…) ; les deux sont évaluées à chaque
+  SELECT. Scinder la policy d'écriture en `INSERT` / `UPDATE` / `DELETE`.
+- **FK sans index** (17, advisor) : les plus sollicitées sont `user_organizations.organization_id`
+  (comptage des membres) et `procedures.organization_id` / `category_id`. Faible volume
+  aujourd'hui. `organizations.parent_id`, le plus coûteux, est posé
+  (`20260923063836_organizations_parent_id_index.sql`).
+- **`quartiers` lu à 140 ms en moyenne** (`pg_stat_statements`, 5 lignes) : la géométrie part
+  en entier dans le `select *`. À vérifier avant que le nombre de quartiers ne grandisse.
+- **Fichiers orphelins des buckets** `document-templates` / `procedure-documents` : le fichier
+  part avant la ligne (`useDocumentTemplates.ts`, `useProcedureDocuments.ts`), une modale
+  abandonnée laisse un objet. Un seul orphelin au 2026-09-23 (une image retirée d'une base de
+  connaissances). Modèle à reprendre le jour venu : l'outbox `storage_deletions` d'Iris ou de
+  Clara (trigger AFTER DELETE + edge de drain), et non un DELETE SQL sur `storage.objects`.
+
 ## 8. Voir aussi
 
 - [`./data-model.md`](./data-model.md) — tables, contraintes, triggers, RLS, RPC, extensions, storage.
