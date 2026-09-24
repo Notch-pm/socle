@@ -11,14 +11,32 @@ import { parseUserInfo as parseFront } from "../../../../src/features/organizati
 
 const STORED = {
   description: "La mairie vous accueille.",
-  openingHours: "Lundi au vendredi : 8 h 30 – 12 h",
+  openingHours: [
+    { day: "saturday", morningOpen: "09:00", morningClose: null, afternoonOpen: null, afternoonClose: "12:00" },
+    { day: "monday", morningOpen: "08:30", morningClose: "12:00", afternoonOpen: "13:30", afternoonClose: "17:00" },
+    { day: "tuesday", morningOpen: "08:30", morningClose: "12:00", afternoonOpen: null, afternoonClose: "17:00" },
+    { day: "wednesday", morningOpen: "14:00", morningClose: "", afternoonOpen: "", afternoonClose: "12:00" },
+    { day: "friday", morningOpen: "09:00", morningClose: 12, afternoonOpen: "13:00", afternoonClose: "17:00" },
+    { day: "dimanche", morningOpen: "09:00", afternoonClose: "12:00" },
+    "texte",
+  ],
   faq: [{ question: "Rendez-vous ?", answer: "Non." }, { question: "", answer: "" }, "texte", [1]],
   physicalReception: "interne — ne sort pas",
 };
 
 describe("parseUserInfo (miroir edge)", () => {
   it("lit exactement comme l'écran du Socle", () => {
-    for (const raw of [STORED, null, undefined, [], "texte", { faq: "pas une liste" }, { description: 3 }]) {
+    for (const raw of [
+      STORED,
+      null,
+      undefined,
+      [],
+      "texte",
+      { faq: "pas une liste" },
+      { description: 3 },
+      { openingHours: "Lundi : 9 h – 12 h" },
+      { openingHours: [{ day: "monday", morningOpen: "08:00", afternoonClose: "18:00" }] },
+    ]) {
       expect(parseUserInfo(raw)).toEqual(parseFront(raw));
     }
   });
@@ -32,10 +50,22 @@ describe("parseUserInfo (miroir edge)", () => {
     expect(parseUserInfo(JSON.parse(JSON.stringify(once)))).toEqual(once);
   });
 
+  it("garde les jours valides dans l'ordre de la semaine, écarte le reste", () => {
+    expect(parseUserInfo(STORED).openingHours.map((d) => d.day)).toEqual(["monday", "saturday"]);
+  });
+
   it("des blancs ne sont pas un texte", () => {
-    expect(isUserInfoEmpty(parseUserInfo({ description: " ", openingHours: "" }))).toBe(true);
+    expect(isUserInfoEmpty(parseUserInfo({ description: " ", openingHours: [] }))).toBe(true);
   });
 });
+
+const TUESDAY = {
+  day: "tuesday",
+  morningOpen: "09:00",
+  morningClose: null,
+  afternoonOpen: null,
+  afternoonClose: "12:00",
+};
 
 describe("serializePortalOrganizationsInfo", () => {
   const TENANT = "00000000-0000-4000-8000-000000000001";
@@ -62,7 +92,7 @@ describe("serializePortalOrganizationsInfo", () => {
         org({ id: "a", name: "CCAS", parent_id: TENANT, slug: "" }),
         org({}),
       ],
-      [row("a", { openingHours: "Mardi" }), row("b", { description: "Livres" }), row(TENANT, STORED)],
+      [row("a", { openingHours: [TUESDAY] }), row("b", { description: "Livres" }), row(TENANT, STORED)],
     );
     expect(out.map((o) => o.name)).toEqual(["Mairie", "CCAS", "Médiathèque"]);
     expect(out[0].is_tenant).toBe(true);
@@ -80,8 +110,8 @@ describe("serializePortalOrganizationsInfo", () => {
         org({ id: "muette", name: "Sans ligne" }),
       ],
       [
-        row("interne", { openingHours: "Lundi" }),
-        row("obsolete", { openingHours: "Lundi" }),
+        row("interne", { openingHours: [TUESDAY] }),
+        row("obsolete", { openingHours: [TUESDAY] }),
         row("vide", { description: "  ", faq: [{ question: "", answer: "" }] }),
       ],
     );
@@ -92,7 +122,7 @@ describe("serializePortalOrganizationsInfo", () => {
     const out = serializePortalOrganizationsInfo(
       TENANT,
       [org({}), org({ id: "annexe", name: "Annexe", parent_id: TENANT })],
-      [row(TENANT, { openingHours: "Lundi" })],
+      [row(TENANT, { openingHours: [TUESDAY] })],
     );
     expect(out.map((o) => o.id)).toEqual([TENANT]);
   });

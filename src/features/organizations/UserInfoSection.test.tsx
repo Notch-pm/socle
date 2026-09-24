@@ -26,6 +26,15 @@ vi.mock("@/features/organizations/useUserInfo", () => ({
   }),
 }));
 
+// Le Switch Radix mesure son pouce : jsdom n'a pas de ResizeObserver.
+if (!globalThis.ResizeObserver) {
+  globalThis.ResizeObserver = class {
+    observe() {}
+    unobserve() {}
+    disconnect() {}
+  } as unknown as typeof ResizeObserver;
+}
+
 function org(over: Partial<Organization> = {}): Organization {
   return { id: "org-racine", name: "Mairie", parent_id: null, is_internal_service: false, ...over } as Organization;
 }
@@ -41,7 +50,7 @@ describe("UserInfoSection", () => {
     render(<UserInfoSection organization={org({ id: "org-annexe", parent_id: "org-racine" })} />);
 
     expect(h.requested).toContain("org-annexe");
-    expect(screen.getByLabelText("Horaires d'accueil")).toBeTruthy();
+    expect(screen.getByLabelText("Lundi — ouvert")).toBeTruthy();
     expect(screen.getByRole("button", { name: "Enregistrer" })).toBeTruthy();
   });
 
@@ -58,14 +67,20 @@ describe("UserInfoSection", () => {
 
   it("amorce le formulaire avec ce qui est enregistré, et dit de quand il date", () => {
     h.stored = {
-      info: { ...defaultUserInfo(), openingHours: "Lundi : 9 h – 12 h" },
+      info: {
+        ...defaultUserInfo(),
+        openingHours: [
+          { day: "monday", morningOpen: "09:00", morningClose: null, afternoonOpen: null, afternoonClose: "12:00" },
+        ],
+      },
       updatedAt: "2026-09-24T08:00:00Z",
     };
     render(<UserInfoSection organization={org()} />);
 
-    expect((screen.getByLabelText("Horaires d'accueil") as HTMLTextAreaElement).value).toBe(
-      "Lundi : 9 h – 12 h",
-    );
+    expect((screen.getByLabelText("Lundi — ouverture") as HTMLInputElement).value).toBe("09:00");
+    expect((screen.getByLabelText("Lundi — fermeture") as HTMLInputElement).value).toBe("12:00");
+    // Un jour absent est fermé : pas de champ d'heure.
+    expect(screen.queryByLabelText("Mardi — ouverture")).toBeNull();
     expect(screen.getByText(/Dernière mise à jour le 24 septembre 2026/)).toBeTruthy();
   });
 
@@ -73,16 +88,44 @@ describe("UserInfoSection", () => {
     render(<UserInfoSection organization={org()} />);
 
     fireEvent.change(screen.getByLabelText("Descriptif"), { target: { value: "La mairie." } });
-    fireEvent.change(screen.getByLabelText("Horaires d'accueil"), {
-      target: { value: "Lundi au vendredi : 8 h 30 – 17 h" },
-    });
+    fireEvent.click(screen.getByLabelText("Lundi — ouvert"));
+    const set = (label: string, value: string) =>
+      fireEvent.change(screen.getByLabelText(label), { target: { value } });
+    set("Lundi — ouverture", "08:30");
+    set("Lundi — fin de matinée", "12:00");
+    set("Lundi — début d'après-midi", "13:30");
+    set("Lundi — fermeture", "17:00");
+    fireEvent.click(screen.getByLabelText("Mardi — ouvert"));
+    // Recopier le lundi sur les autres jours ouverts.
+    fireEvent.click(screen.getByRole("button", { name: /Recopier le lundi/ }));
     fireEvent.click(screen.getByRole("button", { name: /Ajouter une question/ }));
     fireEvent.click(screen.getByRole("button", { name: "Enregistrer" }));
 
     expect(h.mutate).toHaveBeenCalledTimes(1);
     const saved = h.mutate.mock.calls[0][0] as OrganizationUserInfo;
     expect(saved.description).toBe("La mairie.");
-    expect(saved.openingHours).toBe("Lundi au vendredi : 8 h 30 – 17 h");
+    const monday = {
+      day: "monday",
+      morningOpen: "08:30",
+      morningClose: "12:00",
+      afternoonOpen: "13:30",
+      afternoonClose: "17:00",
+    };
+    expect(saved.openingHours).toEqual([monday, { ...monday, day: "tuesday" }]);
     expect(saved.faq).toHaveLength(1);
+  });
+
+  it("refuse d'enregistrer un jour ouvert sans heure de fermeture, et dit lequel", () => {
+    render(<UserInfoSection organization={org()} />);
+
+    fireEvent.click(screen.getByLabelText("Mercredi — ouvert"));
+    fireEvent.change(screen.getByLabelText("Mercredi — ouverture"), { target: { value: "09:00" } });
+    // Pas d'erreur avant la première tentative.
+    expect(screen.queryByText(/fermeture de l'après-midi est obligatoire/)).toBeNull();
+    fireEvent.click(screen.getByRole("button", { name: "Enregistrer" }));
+
+    expect(h.mutate).not.toHaveBeenCalled();
+    expect(screen.getByText("L'heure de fermeture de l'après-midi est obligatoire.")).toBeTruthy();
+    expect(screen.getByText(/corrigez les jours signalés/)).toBeTruthy();
   });
 });

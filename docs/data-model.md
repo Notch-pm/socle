@@ -277,8 +277,9 @@ aucun endpoint, il décrit ce qui existe **en base**.
   organisation, **racine comme sous-organisation**) ; `info` jsonb NOT NULL défaut `{}` (CHECK
   objet, garde-fou de taille 200 000 caractères) ; `created_at` / `updated_at` (trigger
   `set_updated_at`).
-- Ce que l'organisme dit **au public** : descriptif, horaires d'accueil (texte libre), FAQ
-  usagers. Contrat JSON `{ description, openingHours, faq[{question,answer}] }` :
+- Ce que l'organisme dit **au public** : descriptif, horaires d'accueil (structurés jour par
+  jour, `HH:MM`), FAQ usagers. Contrat JSON `{ description, openingHours[{day, morningOpen,
+  morningClose, afternoonOpen, afternoonClose}], faq[{question,answer}] }` :
   `src/features/organizations/userInfo.ts`.
 - ⚠️ **Public, sans brouillon** : pendant usager d'`organization_agent_guidance` (interne), jamais
   fusionné avec elle. ⚠️ **Pas d'héritage** ni de trigger de rattachement : chaque organisme parle

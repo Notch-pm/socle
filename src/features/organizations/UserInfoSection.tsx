@@ -4,10 +4,14 @@ import { Card, CardHeader, CardTitle, CardDescription, CardContent } from "@/com
 import { Button } from "@/components/ui/button";
 import { MarkdownField } from "@/features/procedures/steps/connaissances/MarkdownField";
 import { FaqEditor } from "@/features/procedures/steps/connaissances/FaqEditor";
+import { OpeningHoursEditor } from "@/features/organizations/OpeningHoursEditor";
 import {
   MAX_USER_INFO_DESCRIPTION_LENGTH,
   MAX_USER_INFO_FAQ,
-  MAX_USER_INFO_HOURS_LENGTH,
+  dayDraftErrors,
+  fromDayDrafts,
+  toDayDrafts,
+  type DayHoursDraft,
   type OrganizationUserInfo,
 } from "@/features/organizations/userInfo";
 import { useSaveUserInfo, useUserInfo } from "@/features/organizations/useUserInfo";
@@ -34,10 +38,18 @@ export function UserInfoSection({ organization }: { organization: Organization }
   const save = useSaveUserInfo(organization.id);
 
   const [draft, setDraft] = React.useState<OrganizationUserInfo | null>(null);
+  // Les horaires se saisissent sur sept lignes qui tolèrent des cases vides ;
+  // ils ne rejoignent le contrat qu'à l'enregistrement, une fois validés.
+  const [hours, setHours] = React.useState<DayHoursDraft[]>([]);
+  // Les erreurs ne s'affichent qu'après une tentative d'enregistrement.
+  const [showErrors, setShowErrors] = React.useState(false);
 
   // Une fois les informations enregistrées connues, elles amorcent le formulaire.
   React.useEffect(() => {
-    if (stored && draft === null) setDraft(stored.info);
+    if (stored && draft === null) {
+      setDraft(stored.info);
+      setHours(toDayDrafts(stored.info.openingHours));
+    }
   }, [stored, draft]);
 
   if (isLoading || draft === null) {
@@ -53,11 +65,19 @@ export function UserInfoSection({ organization }: { organization: Organization }
     save.reset();
   };
 
+  const hoursErrors = dayDraftErrors(hours);
+  const hasHoursErrors = Object.keys(hoursErrors).length > 0;
+
   return (
     <form
+      noValidate
       onSubmit={(e) => {
         e.preventDefault();
-        save.mutate(draft);
+        if (hasHoursErrors) {
+          setShowErrors(true);
+          return;
+        }
+        save.mutate({ ...draft, openingHours: fromDayDrafts(hours) });
       }}
       className="flex flex-col gap-6"
     >
@@ -90,15 +110,13 @@ export function UserInfoSection({ organization }: { organization: Organization }
             onChange={(description) => patch({ description })}
             maxLength={MAX_USER_INFO_DESCRIPTION_LENGTH}
           />
-          <MarkdownField
-            id="user-info-hours"
-            label="Horaires d'accueil"
-            hint="Jours et plages d'ouverture, permanences, fermetures exceptionnelles…"
-            placeholder={"Lundi au vendredi : 8 h 30 – 12 h et 13 h 30 – 17 h\nSamedi : 9 h – 12 h"}
-            rows={5}
-            value={draft.openingHours}
-            onChange={(openingHours) => patch({ openingHours })}
-            maxLength={MAX_USER_INFO_HOURS_LENGTH}
+          <OpeningHoursEditor
+            value={hours}
+            onChange={(next) => {
+              setHours(next);
+              save.reset();
+            }}
+            errors={showErrors ? hoursErrors : {}}
           />
           <FaqEditor
             label="FAQ usagers"
@@ -108,6 +126,11 @@ export function UserInfoSection({ organization }: { organization: Organization }
             max={MAX_USER_INFO_FAQ}
           />
 
+          {showErrors && hasHoursErrors ? (
+            <p className="text-sm text-destructive">
+              Des horaires sont incomplets : corrigez les jours signalés avant d'enregistrer.
+            </p>
+          ) : null}
           {save.isError ? (
             <p className="text-sm text-destructive">{(save.error as Error).message}</p>
           ) : null}

@@ -413,7 +413,8 @@ export function buildOpenApiDocument(serverUrl: string): Record<string, unknown>
             "**écrit** quelque chose. **Pas d'héritage** : un organisme absent n'a rien dit — ne lui",
             "prêtez pas les horaires de son parent. Enregistré = publié : il n'y a pas de brouillon.",
             "",
-            "Textes en **Markdown**, en français (pas de traduction pour l'instant). Rien d'écrit ⇒",
+            "Textes en **Markdown**, en français (pas de traduction pour l'instant) ; horaires",
+            "**structurés** jour par jour (`HH:MM`). Rien d'écrit ⇒",
             "`200` avec `[]` ; collectivité hors périmètre de la clé ⇒ `404`.",
           ].join("\n"),
           parameters: [
@@ -1754,10 +1755,13 @@ export function buildOpenApiDocument(serverUrl: string): Record<string, unknown>
               properties: {
                 description: { type: "string", description: "Présentation de l'organisme (Markdown)." },
                 openingHours: {
-                  type: "string",
+                  type: "array",
                   description:
-                    "Horaires d'accueil, décrits librement : jours, plages, permanences, fermetures " +
-                    "(Markdown). Pas de format structuré : lisez-le, ne le calculez pas.",
+                    "Horaires d'accueil **structurés** : un élément par jour d'ouverture, dans l'ordre " +
+                    "de la semaine, un au plus par jour. ⚠️ Un jour **absent est fermé** ; une liste " +
+                    "**vide** veut dire « horaires non renseignés » — ne dites alors pas que " +
+                    "l'organisme est fermé.",
+                  items: { $ref: "#/components/schemas/DayOpeningHours" },
                 },
                 faq: {
                   type: "array",
@@ -1780,9 +1784,38 @@ export function buildOpenApiDocument(serverUrl: string): Record<string, unknown>
             updated_at: "2026-09-24T08:00:00+00:00",
             info: {
               description: "La mairie vous accueille pour l'état civil, l'urbanisme et les élections.",
-              openingHours: "Lundi au vendredi : 8 h 30 – 12 h et 13 h 30 – 17 h\nSamedi : 9 h – 12 h",
+              openingHours: [
+                { day: "monday", morningOpen: "08:30", morningClose: "12:00", afternoonOpen: "13:30", afternoonClose: "17:00" },
+                { day: "saturday", morningOpen: "09:00", morningClose: null, afternoonOpen: null, afternoonClose: "12:00" },
+              ],
               faq: [{ question: "Faut-il prendre rendez-vous ?", answer: "Seulement pour les passeports." }],
             },
+          },
+        },
+        DayOpeningHours: {
+          type: "object",
+          description:
+            "Horaires d'un jour d'ouverture, en `HH:MM` (24 h, heure locale de l'organisme), " +
+            "strictement croissants. Sans pause de midi, `morningClose` et `afternoonOpen` valent " +
+            "`null` **ensemble** : l'accueil est continu de `morningOpen` à `afternoonClose`.",
+          required: ["day", "morningOpen", "morningClose", "afternoonOpen", "afternoonClose"],
+          properties: {
+            day: {
+              type: "string",
+              enum: ["monday", "tuesday", "wednesday", "thursday", "friday", "saturday", "sunday"],
+            },
+            morningOpen: { type: "string", pattern: "^([01]\\d|2[0-3]):[0-5]\\d$", description: "Ouverture." },
+            morningClose: {
+              type: ["string", "null"],
+              pattern: "^([01]\\d|2[0-3]):[0-5]\\d$",
+              description: "Fin de matinée (début de la pause), ou `null`.",
+            },
+            afternoonOpen: {
+              type: ["string", "null"],
+              pattern: "^([01]\\d|2[0-3]):[0-5]\\d$",
+              description: "Début d'après-midi (fin de la pause), ou `null`.",
+            },
+            afternoonClose: { type: "string", pattern: "^([01]\\d|2[0-3]):[0-5]\\d$", description: "Fermeture." },
           },
         },
         AgentGuidance: {

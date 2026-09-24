@@ -791,6 +791,13 @@ describe("contrat — informations à destination des usagers (1.30.0)", () => {
 
   it("les trois rubriques sont toujours présentes, sous les clés du Socle", () => {
     expect(schema.properties.info.required).toEqual(["description", "openingHours", "faq"]);
+    expect(schema.properties.info.properties.openingHours.items).toEqual({
+      $ref: "#/components/schemas/DayOpeningHours",
+    });
+    const day = doc.components.schemas.DayOpeningHours;
+    expect(day.required).toEqual(["day", "morningOpen", "morningClose", "afternoonOpen", "afternoonClose"]);
+    expect(new RegExp(day.properties.morningOpen.pattern).test("08:30")).toBe(true);
+    expect(new RegExp(day.properties.morningOpen.pattern).test("8h30")).toBe(false);
     // Rien d'interne ne se glisse dans le DTO public.
     expect(JSON.stringify(schema)).not.toContain("guidance");
   });

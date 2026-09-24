@@ -120,8 +120,13 @@ garde sa modale (`OrganizationsManager` reçoit `onEditOrganization` seulement c
   Côté superadmin, la même section est une carte d'`OrgSettingsPage` (`?section=agents`).
 - **Onglet « Informations usagers »** (`UserInfoSection`, 2026-09-24, **toute organisation**,
   sous-organisation comprise — chaque annexe a ses horaires) : ce que l'organisme dit **au public**
-  — un **descriptif**, ses **horaires d'accueil** (texte libre en Markdown, pas de format
-  structuré) et une **FAQ usagers**. Table `organization_user_info` (une ligne par organisation,
+  — un **descriptif**, ses **horaires d'accueil** et une **FAQ usagers**. Horaires
+  **structurés** (`OpeningHoursEditor`) : pour chaque jour, un interrupteur « Ouvert » et quatre
+  heures `HH:MM` — ouverture et fermeture **obligatoires**, pause de midi (fin de matinée → début
+  d'après-midi) facultative mais **par paire**, heures strictement croissantes (`dayHoursError`,
+  seule implémentation de la règle ; les erreurs ne s'affichent qu'à l'enregistrement, qui est
+  bloqué). ⚠️ Un jour absent du contrat est **fermé** ; une liste vide = non renseigné. Le
+  parseur **écarte** un jour incohérent, il ne le répare pas. Table `organization_user_info` (une ligne par organisation,
   RLS calquée sur `organizations` : écriture `is_admin_of_self_or_ancestor`), contrat pur
   `userInfo.ts` (testé, miroir edge `public-api/_shared/userInfo.ts` testé contre lui), servi par
   `GET /v1/portal/organizations?tenant_id=` (1.30.0) — donc au **corpus de l'assistant du

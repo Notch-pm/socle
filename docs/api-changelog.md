@@ -30,7 +30,10 @@ scope `read`. Version du contrat : **1.30.0**. Ajout **additif** : rien d'autre 
     "updated_at": "2026-09-24T08:00:00+00:00",
     "info": {
       "description": "La mairie vous accueille pour l'état civil, l'urbanisme et les élections.",
-      "openingHours": "Lundi au vendredi : 8 h 30 – 12 h et 13 h 30 – 17 h\nSamedi : 9 h – 12 h",
+      "openingHours": [
+        { "day": "monday", "morningOpen": "08:30", "morningClose": "12:00", "afternoonOpen": "13:30", "afternoonClose": "17:00" },
+        { "day": "saturday", "morningOpen": "09:00", "morningClose": null, "afternoonOpen": null, "afternoonClose": "12:00" }
+      ],
       "faq": [{ "question": "Faut-il prendre rendez-vous ?", "answer": "Seulement pour les passeports." }]
     }
   }
@@ -44,9 +47,14 @@ scope `read`. Version du contrat : **1.30.0**. Ajout **additif** : rien d'autre 
   que les organismes **affichés** (actifs, pas service interne) qui ont **écrit** quelque chose.
 - ⚠️ **Pas d'héritage** : un organisme absent de la liste n'a rien dit. Ne lui prêtez pas les
   horaires de son parent.
-- `openingHours` est un **texte libre** en Markdown, pas un format structuré : lisez-le, ne le
-  calculez pas (pas de « ouvert maintenant »). Textes en français ; pas de `translations` pour
-  l'instant.
+- `openingHours` est **structuré** (schéma `DayOpeningHours`) : un élément par jour d'ouverture,
+  dans l'ordre de la semaine (`monday` → `sunday`), heures en `HH:MM` 24 h, strictement
+  croissantes. `morningOpen` et `afternoonClose` toujours présents ; `morningClose` /
+  `afternoonOpen` (pause de midi) valent `null` **ensemble** quand l'accueil est continu.
+- ⚠️ **Un jour absent est fermé**, mais une liste **vide** veut dire « horaires non renseignés » :
+  n'annoncez pas un organisme fermé toute la semaine. Pas de fermetures exceptionnelles ni de
+  jours fériés : un « ouvert maintenant » calculé reste indicatif.
+- Textes (descriptif, FAQ) en Markdown, en français ; pas de `translations` pour l'instant.
 - Enregistré = publié (pas de brouillon). Rien d'écrit ⇒ `200 []` ; collectivité hors périmètre
   ⇒ `404`.
 - **Consommateur** : **Nora** — page d'accueil ou d'organisme, et **assistant du portail**, qui doit

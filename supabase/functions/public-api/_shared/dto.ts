@@ -328,8 +328,26 @@ export interface AgentGuidanceDto {
  */
 export interface UserInfoBody {
   description: string;
-  openingHours: string;
+  /**
+   * Jours d'ouverture, dans l'ordre de la semaine, un au plus par jour. Un jour
+   * absent est **fermé** ; une liste vide = horaires non renseignés.
+   */
+  openingHours: DayOpeningHoursDto[];
   faq: Array<{ question: string; answer: string }>;
+}
+
+/**
+ * Horaires d'un jour d'ouverture, en `HH:MM` (24 h, heure locale). Ouverture et
+ * fermeture toujours présentes ; la pause de midi (`morningClose` →
+ * `afternoonOpen`) vaut `null` des deux côtés quand l'accueil est continu.
+ * Heures strictement croissantes.
+ */
+export interface DayOpeningHoursDto {
+  day: "monday" | "tuesday" | "wednesday" | "thursday" | "friday" | "saturday" | "sunday";
+  morningOpen: string;
+  morningClose: string | null;
+  afternoonOpen: string | null;
+  afternoonClose: string;
 }
 
 /**

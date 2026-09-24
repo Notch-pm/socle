@@ -13,7 +13,7 @@
  * AFFICHE sortent de la liste : ni service interne, ni organisation obsolète,
  * ni organisme qui n'a rien écrit.
  */
-import type { PortalOrganizationInfoDto, UserInfoBody } from "./dto.ts";
+import type { DayOpeningHoursDto, PortalOrganizationInfoDto, UserInfoBody } from "./dto.ts";
 
 type Row = Record<string, unknown>;
 
@@ -27,12 +27,66 @@ function objects(raw: unknown): Row[] {
     : [];
 }
 
+/** Miroir de `WEEKDAYS` : jours de la semaine, dans l'ordre de lecture. */
+export const WEEKDAYS = [
+  "monday",
+  "tuesday",
+  "wednesday",
+  "thursday",
+  "friday",
+  "saturday",
+  "sunday",
+] as const;
+type Weekday = (typeof WEEKDAYS)[number];
+
+const TIME_RE = /^([01]\d|2[0-3]):[0-5]\d$/;
+
+function isTime(value: unknown): value is string {
+  return typeof value === "string" && TIME_RE.test(value);
+}
+
+/** Borne de pause stockée : absente (`null`), une heure, ou `undefined` si illisible. */
+function readPauseBound(value: unknown): string | null | undefined {
+  if (value === null || value === undefined || value === "") return null;
+  return isTime(value) ? value : undefined;
+}
+
+/**
+ * Miroir de `parseOpeningHours` : un jour inconnu, en double ou incohérent
+ * (ouverture ou fermeture manquante, pause à moitié, heures dans le désordre)
+ * est ÉCARTÉ, jamais réparé. Toujours dans l'ordre de la semaine.
+ */
+export function parseOpeningHours(raw: unknown): DayOpeningHoursDto[] {
+  const byDay = new Map<Weekday, DayOpeningHoursDto>();
+  for (const item of objects(raw)) {
+    const day = item.day as Weekday;
+    if (!WEEKDAYS.includes(day) || byDay.has(day)) continue;
+    const morningClose = readPauseBound(item.morningClose);
+    const afternoonOpen = readPauseBound(item.afternoonOpen);
+    if (morningClose === undefined || afternoonOpen === undefined) continue;
+    if ((morningClose === null) !== (afternoonOpen === null)) continue;
+    if (!isTime(item.morningOpen) || !isTime(item.afternoonClose)) continue;
+    const sequence = morningClose !== null
+      ? [item.morningOpen, morningClose, afternoonOpen as string, item.afternoonClose]
+      : [item.morningOpen, item.afternoonClose];
+    if (sequence.some((time, i) => i > 0 && time <= sequence[i - 1])) continue;
+    byDay.set(day, {
+      day,
+      morningOpen: item.morningOpen,
+      morningClose,
+      afternoonOpen,
+      afternoonClose: item.afternoonClose,
+    });
+  }
+  return WEEKDAYS.filter((day) => byDay.has(day)).map((day) => byDay.get(day)!);
+}
+
 /** Miroir de `parseUserInfo` (et, pour la FAQ, de `parseFaq`). */
 export function parseUserInfo(raw: unknown): UserInfoBody {
   const stored: Row = raw && typeof raw === "object" && !Array.isArray(raw) ? (raw as Row) : {};
   return {
     description: coerceString(stored.description),
-    openingHours: coerceString(stored.openingHours),
+    openingHours: parseOpeningHours(stored.openingHours),
     faq: objects(stored.faq)
       .map((item) => ({ question: coerceString(item.question), answer: coerceString(item.answer) }))
       .filter((item) => item.question.trim() !== "" || item.answer.trim() !== ""),
@@ -41,7 +95,7 @@ export function parseUserInfo(raw: unknown): UserInfoBody {
 
 /** Rien d'écrit ? Des blancs ne sont pas un texte. */
 export function isUserInfoEmpty(info: UserInfoBody): boolean {
-  return info.description.trim() === "" && info.openingHours.trim() === "" && info.faq.length === 0;
+  return info.description.trim() === "" && info.openingHours.length === 0 && info.faq.length === 0;
 }
 
 /** Organisation de l'arbre du tenant, telle que la route la lit. */
