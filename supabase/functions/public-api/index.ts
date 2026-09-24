@@ -662,7 +662,7 @@ Deno.serve(async (req: Request) => {
 
       const { data: organizations, error: organizationsError } = await admin
         .from("organizations")
-        .select("id, name, slug, parent_id, status, is_internal_service")
+        .select("id, name, slug, parent_id, status, is_internal_service, phone, email")
         .in("id", treeIds);
       if (organizationsError) throw organizationsError;
 

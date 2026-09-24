@@ -1,5 +1,5 @@
 import * as React from "react";
-import { Info, Loader2, MessageCircleQuestion } from "lucide-react";
+import { Loader2, MessageCircleQuestion } from "lucide-react";
 import { Card, CardHeader, CardTitle, CardDescription, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { MarkdownField } from "@/features/procedures/steps/connaissances/MarkdownField";
@@ -17,9 +17,6 @@ import {
 } from "@/features/organizations/userInfo";
 import { useSaveUserInfo, useUserInfo } from "@/features/organizations/useUserInfo";
 import type { Organization } from "@/features/superadmin/organizations/useOrganizationsAdmin";
-
-export const USER_INFO_INTERNAL_SERVICE_MESSAGE =
-  "Cet organisme est un service interne : il ne s'affiche pas sur le site de démarches, et ces informations n'y sont pas publiées.";
 
 function formatDate(iso: string): string {
   return new Date(iso).toLocaleDateString("fr-FR", { day: "numeric", month: "long", year: "numeric" });
@@ -97,12 +94,6 @@ export function UserInfoSection({ organization }: { organization: Organization }
           </div>
         </CardHeader>
         <CardContent className="flex flex-col gap-6">
-          {organization.is_internal_service ? (
-            <p className="flex items-start gap-2 rounded-lg border border-border bg-muted/40 p-3 text-sm text-muted-foreground">
-              <Info className="mt-0.5 size-4 shrink-0" />
-              {USER_INFO_INTERNAL_SERVICE_MESSAGE}
-            </p>
-          ) : null}
           <MarkdownField
             id="user-info-description"
             label="Descriptif"

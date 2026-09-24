@@ -376,7 +376,13 @@ export interface PortalOrganizationInfoDto {
   slug: string | null;
   /** C'est la collectivité du domaine elle-même (toujours en tête de liste). */
   is_tenant: boolean;
-  /** Dernier enregistrement (ISO 8601). */
+  /**
+   * Téléphone et courriel de la fiche de l'organisme (onglet « Informations de
+   * base »), `null` si non renseignés — 1.31.0. Pas d'héritage non plus.
+   */
+  phone: string | null;
+  email: string | null;
+  /** Dernier enregistrement des informations usagers (ISO 8601), `null` si rien d'écrit. */
   updated_at: string | null;
   info: UserInfoBody;
 }

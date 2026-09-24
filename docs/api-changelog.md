@@ -13,6 +13,31 @@ Format d'une entrée : `## AAAA-MM-JJ — <api> — ajout|correctif|rupture`
 
 ---
 
+## 2026-09-24 — public-api — ajout (téléphone et courriel des organismes du portail)
+
+Chaque élément de **`GET /v1/portal/organizations`** porte désormais le **téléphone** et le
+**courriel** de la fiche de l'organisme (onglet « Informations de base » du Socle). Version du
+contrat : **1.31.0**. Ajout **additif**.
+
+```json
+{ "id": "…", "name": "Mairie de Plounéour", "slug": "plouneour", "is_tenant": true,
+  "phone": "02 98 00 00 00", "email": "accueil@plouneour.fr",
+  "updated_at": "2026-09-24T08:00:00+00:00", "info": { … } }
+```
+
+- `phone`, `email` : chaînes telles que saisies (espaces de bord retirés), **`null`** si non
+  renseignées — toujours présentes.
+- ⚠️ **La liste s'élargit** : un organisme affiché qui n'a rien écrit dans « Informations
+  usagers » mais a un téléphone ou un courriel **est désormais listé**, avec ses quatre rubriques
+  vides et `updated_at: null`. Un consommateur qui supposait « listé ⇒ a des horaires ou un
+  descriptif » doit relire `info`.
+- ⚠️ **Pas d'héritage**, comme pour les horaires : ne donnez pas le numéro du parent à un organisme
+  qui n'en a pas.
+- **Consommateur** : **Nora** (assistant du portail, qui peut désormais dire comment joindre
+  l'organisme).
+
+---
+
 ## 2026-09-24 — public-api — ajout (informations usagers des organismes)
 
 **Chaque organisme peut dire au public qui il est, quand il ouvre, et répondre aux questions

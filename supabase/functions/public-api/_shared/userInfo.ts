@@ -112,11 +112,19 @@ export interface UserInfoOrganization {
   parent_id: string | null;
   status: string | null;
   is_internal_service: boolean | null;
+  phone: string | null;
+  email: string | null;
+}
+
+/** Coordonnée de la fiche : du texte non vide, ou `null`. */
+function contact(value: unknown): string | null {
+  return typeof value === "string" && value.trim() !== "" ? value.trim() : null;
 }
 
 /**
  * Organismes du portail et leurs informations usagers. Ne sort qu'un organisme
- * **affiché** (actif, pas service interne) qui a **écrit** quelque chose. Le
+ * **affiché** (actif, pas service interne) qui a **écrit** quelque chose ou qui
+ * a un **téléphone ou un courriel** sur sa fiche (1.31.0). Le
  * tenant en tête, puis les autres par nom : c'est l'ordre dans lequel un
  * usager (ou un assistant) les lit.
  */
@@ -130,15 +138,18 @@ export function serializePortalOrganizationsInfo(
   for (const org of organizations) {
     if (org.status !== "active" || org.is_internal_service === true) continue;
     const row = byOrg.get(org.id);
-    if (!row) continue;
-    const info = parseUserInfo(row.info);
-    if (isUserInfoEmpty(info)) continue;
+    const info = parseUserInfo(row?.info);
+    const phone = contact(org.phone);
+    const email = contact(org.email);
+    if (isUserInfoEmpty(info) && phone === null && email === null) continue;
     out.push({
       id: org.id,
       name: org.name,
       slug: typeof org.slug === "string" && org.slug !== "" ? org.slug : null,
       is_tenant: org.id === tenantId,
-      updated_at: typeof row.updated_at === "string" ? row.updated_at : null,
+      phone,
+      email,
+      updated_at: typeof row?.updated_at === "string" ? row.updated_at : null,
       info,
     });
   }

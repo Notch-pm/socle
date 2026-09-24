@@ -1,8 +1,8 @@
 // @vitest-environment jsdom
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { render, screen, fireEvent } from "@testing-library/react";
-import { UserInfoSection, USER_INFO_INTERNAL_SERVICE_MESSAGE } from "./UserInfoSection";
-import { defaultUserInfo, type OrganizationUserInfo } from "./userInfo";
+import { UserInfoSection } from "./UserInfoSection";
+import { defaultUserInfo, hasUserInfoTab, type OrganizationUserInfo } from "./userInfo";
 import type { Organization } from "@/features/superadmin/organizations/useOrganizationsAdmin";
 
 const h = vi.hoisted(() => ({
@@ -57,12 +57,11 @@ describe("UserInfoSection", () => {
   it("dit que tout est public, dès l'enregistrement", () => {
     render(<UserInfoSection organization={org()} />);
     expect(screen.getByText(/Tout ce qui est écrit ici est public, dès l'enregistrement/)).toBeTruthy();
-    expect(screen.queryByText(USER_INFO_INTERNAL_SERVICE_MESSAGE)).toBeNull();
   });
 
-  it("prévient qu'un service interne n'est pas publié", () => {
-    render(<UserInfoSection organization={org({ is_internal_service: true, parent_id: "org-racine" })} />);
-    expect(screen.getByText(USER_INFO_INTERNAL_SERVICE_MESSAGE)).toBeTruthy();
+  it("⚠️ pas d'onglet sur un service interne : le portail ne l'affiche pas", () => {
+    expect(hasUserInfoTab(org({ is_internal_service: true, parent_id: "org-racine" }))).toBe(false);
+    expect(hasUserInfoTab(org())).toBe(true);
   });
 
   it("amorce le formulaire avec ce qui est enregistré, et dit de quand il date", () => {

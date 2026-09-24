@@ -78,6 +78,8 @@ describe("serializePortalOrganizationsInfo", () => {
     parent_id: null,
     status: "active",
     is_internal_service: false,
+    phone: null,
+    email: null,
     ...over,
   });
   const row = (organization_id: string, info: unknown) => ({
@@ -118,6 +120,26 @@ describe("serializePortalOrganizationsInfo", () => {
       ],
     );
     expect(out).toEqual([]);
+  });
+
+  it("porte le téléphone et le courriel de la fiche, et liste un organisme qui n'a que ça (1.31.0)", () => {
+    const out = serializePortalOrganizationsInfo(
+      TENANT,
+      [
+        org({ phone: " 01 23 45 67 89 ", email: "mairie@example.fr" }),
+        org({ id: "ccas", name: "CCAS", parent_id: TENANT, phone: "01 98 76 54 32" }),
+        org({ id: "blanc", name: "Annexe", parent_id: TENANT, phone: "  ", email: "" }),
+        org({ id: "interne", name: "Service RH", parent_id: TENANT, is_internal_service: true, phone: "01 00 00 00 00" }),
+      ],
+      [row(TENANT, STORED)],
+    );
+    expect(out.map((o) => [o.id, o.phone, o.email])).toEqual([
+      [TENANT, "01 23 45 67 89", "mairie@example.fr"],
+      ["ccas", "01 98 76 54 32", null],
+    ]);
+    // Rien d'écrit : rubriques vides plutôt qu'absentes, et pas de date.
+    expect(out[1].info).toEqual(parseUserInfo(null));
+    expect(out[1].updated_at).toBeNull();
   });
 
   it("n'emprunte jamais les horaires du parent", () => {

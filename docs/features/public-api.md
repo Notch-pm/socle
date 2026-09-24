@@ -37,7 +37,7 @@ avec **`verify_jwt = false`** (l'auth est portée par la fonction, pas par la pa
   (**recommandations aux agents** de la racine, 2026-09-19 — interne, jamais au portail ; scope
   `read`, rien d'écrit = 200 `configured: false`), `portal/organizations?tenant_id=`
   (**informations usagers** des organismes affichés — descriptif, horaires, FAQ —, 2026-09-24,
-  public ; rien d'écrit = `[]`), `organizations/{id}/smtp` (**serveur
+  plus téléphone et courriel de la fiche en 1.31.0 ; public ; rien d'écrit = `[]`), `organizations/{id}/smtp` (**serveur
   d'envoi applicable** à l'organisation, héritage résolu — cf. sérialisation ci-dessous).
   Docs : `openapi.json` (public) et `docs`
   (Redoc, cf. ci-dessous).

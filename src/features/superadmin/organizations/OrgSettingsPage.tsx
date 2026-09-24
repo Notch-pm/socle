@@ -16,6 +16,7 @@ import { DomainsSection } from "@/features/organizations/DomainsSection";
 import { LanguagesSection } from "@/features/languages/LanguagesSection";
 import { AgentGuidanceSection } from "@/features/organizations/AgentGuidanceSection";
 import { UserInfoSection } from "@/features/organizations/UserInfoSection";
+import { hasUserInfoTab } from "@/features/organizations/userInfo";
 import { ApiKeysSection } from "@/features/superadmin/organizations/sections/ApiKeysSection";
 import { AiUsageSection } from "@/features/superadmin/organizations/sections/AiUsageSection";
 import { PortalAssistantSection } from "@/features/superadmin/organizations/sections/PortalAssistantSection";
@@ -101,7 +102,10 @@ export function OrgSettingsPage() {
   const { data: organization, isLoading } = useOrganization(orgId);
 
   const requested = searchParams.get("section") ?? "";
-  const activeSection: Section = SECTION_KEYS.has(requested) ? (requested as Section) : "menu";
+  // Un service interne n'a pas d'informations usagers (`hasUserInfoTab`) : ni
+  // carte au menu, ni section par l'URL.
+  const hidden = (key: string) => key === "usagers" && organization != null && !hasUserInfoTab(organization);
+  const activeSection: Section = SECTION_KEYS.has(requested) && !hidden(requested) ? (requested as Section) : "menu";
   const setActiveSection = React.useCallback(
     (section: Section) => {
       // `replace` : parcourir les réglages ne doit pas remplir l'historique de
@@ -281,7 +285,7 @@ export function OrgSettingsPage() {
       <section className="flex flex-col gap-3">
         <h2 className="text-lg font-semibold">Paramétrage</h2>
         <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-          {SECTIONS.map((section) => (
+          {SECTIONS.filter((section) => !hidden(section.key)).map((section) => (
             <Card
               key={section.key}
               className="cursor-pointer transition-all hover:border-primary/30 hover:shadow-socle-md"

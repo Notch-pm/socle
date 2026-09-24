@@ -184,6 +184,15 @@ export function parseUserInfo(raw: unknown): OrganizationUserInfo {
   return info;
 }
 
+/**
+ * L'onglet « Informations usagers » existe-t-il pour cette organisation ? Pas
+ * sur un service interne : le portail ne l'affiche pas, et la route ne le sert
+ * pas — ce qu'on y écrirait ne serait lu par personne.
+ */
+export function hasUserInfoTab(organization: { is_internal_service: boolean | null }): boolean {
+  return organization.is_internal_service !== true;
+}
+
 /** Normalise avant persistance : mêmes règles que la lecture. */
 export function cleanUserInfo(info: OrganizationUserInfo): OrganizationUserInfo {
   return parseUserInfo(info);

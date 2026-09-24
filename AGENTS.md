@@ -197,8 +197,9 @@ superadmin (`OrgSettingsPage`, menu latéral par client).
   racine seule, servie par `GET /v1/organizations/{id}/agent-guidance` — **interne**, jamais au
   portail ; « consignes générales », jamais « procédures » (le mot désigne les démarches).
 - ⚠️ **Informations usagers** (2026-09-24) : leur pendant **public** (descriptif, horaires d'accueil,
-  FAQ), sur **toute** organisation, sans héritage ni brouillon, servi par
-  `GET /v1/portal/organizations` — c'est là que l'assistant du portail trouve les horaires.
+  FAQ), sur toute organisation **sauf un service interne** (onglet retiré), sans héritage ni
+  brouillon, servi par `GET /v1/portal/organizations` avec le téléphone et le courriel de la fiche
+  — c'est là que l'assistant du portail trouve horaires et coordonnées.
 - Arbre `parent_id`, **10 niveaux max** (`enforce_org_depth`, bloque aussi les cycles). Le super
   admin seul crée les racines et supprime (jamais une racine) ; un admin d'org gère tout son
   sous-arbre, sans suppression. Les racines sont les **clients** : aucune vue n'en fond plusieurs.

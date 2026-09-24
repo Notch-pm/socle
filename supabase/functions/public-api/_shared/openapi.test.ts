@@ -293,8 +293,8 @@ describe("contrat — traduction de la communication usager (1.26.0)", () => {
 describe("contrat — documents et courriers", () => {
   const doc = buildOpenApiDocument("https://example.supabase.co/functions/v1/public-api") as any;
 
-  it("annonce la version 1.30.0 du contrat", () => {
-    expect(doc.info.version).toBe("1.30.0");
+  it("annonce la version 1.31.0 du contrat", () => {
+    expect(doc.info.version).toBe("1.31.0");
   });
 
   it("le lieu d'intervention est un type de champ structurel, à réponse objet (1.29.0)", () => {
@@ -800,5 +800,12 @@ describe("contrat — informations à destination des usagers (1.30.0)", () => {
     expect(new RegExp(day.properties.morningOpen.pattern).test("8h30")).toBe(false);
     // Rien d'interne ne se glisse dans le DTO public.
     expect(JSON.stringify(schema)).not.toContain("guidance");
+  });
+
+  it("téléphone et courriel de la fiche, toujours présents, nuls si absents (1.31.0)", () => {
+    expect(schema.required).toEqual(expect.arrayContaining(["phone", "email"]));
+    expect(schema.properties.phone.type).toEqual(["string", "null"]);
+    expect(schema.properties.email.type).toEqual(["string", "null"]);
+    expect(route.description).toContain("**courriel**");
   });
 });

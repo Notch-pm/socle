@@ -24,6 +24,7 @@ import { DomainsSection } from "@/features/organizations/DomainsSection";
 import { LanguagesSection } from "@/features/languages/LanguagesSection";
 import { AgentGuidanceSection } from "@/features/organizations/AgentGuidanceSection";
 import { UserInfoSection } from "@/features/organizations/UserInfoSection";
+import { hasUserInfoTab } from "@/features/organizations/userInfo";
 
 type TabKey = "infos" | "charte" | "langues" | "usagers" | "agents" | "domaines" | "demarches" | "smtp";
 
@@ -37,7 +38,7 @@ const TABS: { key: TabKey; label: string; icon: LucideIcon }[] = [
   { key: "langues", label: "Langues", icon: Languages },
   // Ce que l'organisme dit au PUBLIC — sur toute organisation, sous-organisation
   // comprise : chaque mairie annexe a ses horaires. Pendant public de l'onglet
-  // suivant, qui reste interne.
+  // suivant, qui reste interne. Retiré sur un service interne (`hasUserInfoTab`).
   { key: "usagers", label: "Informations usagers", icon: MessageCircleQuestion },
   // Même parti que les langues : la doctrine de la collectivité ne se découpe
   // pas par service, l'onglet renvoie une sous-organisation à sa racine.
@@ -75,7 +76,9 @@ export function OrganizationEditorPage() {
     );
   }
 
-  const activeTab = TABS.some((tab) => tab.key === requestedTab) ? requestedTab : "infos";
+  // Un service interne n'a pas d'informations usagers : le portail ne l'affiche pas.
+  const tabs = TABS.filter((tab) => tab.key !== "usagers" || hasUserInfoTab(organization));
+  const activeTab = tabs.some((tab) => tab.key === requestedTab) ? requestedTab : "infos";
 
   return (
     <div className="flex flex-col gap-6 p-6">
@@ -96,7 +99,7 @@ export function OrganizationEditorPage() {
 
       <div className="border-b border-border">
         <nav className="flex gap-1" role="tablist" aria-label="Sections de l'organisation">
-          {TABS.map((tab) => {
+          {tabs.map((tab) => {
             const active = activeTab === tab.key;
             return (
               <button

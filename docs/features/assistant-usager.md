@@ -37,7 +37,8 @@ crédit** (déjà compté).
 - ⚠️ **Le corpus est ce que `/v1/portal/*` sert déjà, et rien d'autre** : `user_description`,
   `user_communication`, `form_schema`, `requester_config`, page et contenus publiés, et — depuis
   le 2026-09-24 — les **informations usagers des organismes** (descriptif, **horaires
-  d'accueil**, FAQ : `GET /v1/portal/organizations`, onglet « Informations usagers »). C'est là
+  d'accueil**, FAQ : `GET /v1/portal/organizations`, onglet « Informations usagers »), avec le
+  **téléphone et le courriel** de la fiche de chaque organisme (1.31.0). C'est là
   qu'une collectivité écrit ce que l'assistant doit savoir d'elle-même ; ⚠️ le champ « accueil
   physique » des recommandations aux agents, lui, n'y entre jamais (incident du 2026-09-24 :
   l'assistant disait ne pas connaître des horaires qui n'étaient écrits que là).

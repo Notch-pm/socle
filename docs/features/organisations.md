@@ -119,7 +119,8 @@ garde sa modale (`OrganizationsManager` reçoit `onEditOrganization` seulement c
   ⚠️ **Une table et non une colonne** : `organizations` se lit en `select("*")` partout.
   Côté superadmin, la même section est une carte d'`OrgSettingsPage` (`?section=agents`).
 - **Onglet « Informations usagers »** (`UserInfoSection`, 2026-09-24, **toute organisation**,
-  sous-organisation comprise — chaque annexe a ses horaires) : ce que l'organisme dit **au public**
+  sous-organisation comprise — chaque annexe a ses horaires — **sauf un service interne**, où
+  l'onglet et la carte superadmin sont retirés : `hasUserInfoTab`) : ce que l'organisme dit **au public**
   — un **descriptif**, ses **horaires d'accueil** et une **FAQ usagers**. Horaires
   **structurés** (`OpeningHoursEditor`) : pour chaque jour, un interrupteur « Ouvert » et quatre
   heures `HH:MM` — ouverture et fermeture **obligatoires**, pause de midi (fin de matinée → début
@@ -138,8 +139,9 @@ garde sa modale (`OrganizationsManager` reçoit `onEditOrganization` seulement c
   internes : les deux ne se fusionnent jamais, et le champ « accueil physique » des
   recommandations renvoie ici pour les horaires. ⚠️ **Pas d'héritage** : un organisme qui n'a rien
   écrit n'est pas listé, il n'emprunte pas les horaires de son parent. ⚠️ La route ne sert que les
-  organismes **affichés** (actifs, pas service interne) — l'écran prévient sur un service
-  interne. Français seulement pour l'instant (pas de `translations`). Côté superadmin, même
+  organismes **affichés** (actifs, pas service interne) — d'où l'onglet retiré sur un service
+  interne. Depuis 1.31.0, elle porte aussi le **téléphone** et le **courriel** de la fiche
+  (« Informations de base »), et liste un organisme qui n'a que ça (rubriques vides). Français seulement pour l'instant (pas de `translations`). Côté superadmin, même
   composant en carte d'`OrgSettingsPage` (`?section=usagers`).
 - **Onglet « Langues »** (`LanguagesSection`, **organisation principale uniquement** — une
   sous-organisation y lit qu'elle suit sa racine) : quelles langues la collectivité active pour

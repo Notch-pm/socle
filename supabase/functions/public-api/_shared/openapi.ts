@@ -30,7 +30,7 @@ export function buildOpenApiDocument(serverUrl: string): Record<string, unknown>
     openapi: "3.1.0",
     info: {
       title: "API Socle — Référentiel de la gamme",
-      version: "1.30.0",
+      version: "1.31.0",
       description: [
         "API **en lecture seule** exposant le référentiel central de la gamme : les",
         "**organisations** (et sous-organisations) avec l'intégralité de leur configuration,",
@@ -409,9 +409,12 @@ export function buildOpenApiDocument(serverUrl: string): Record<string, unknown>
             "lit pour répondre à « à quelle heure ouvre la mairie ? ». Pendant usager de",
             "`GET /v1/organizations/{id}/agent-guidance`, qui reste interne et ne se sert jamais ici.",
             "",
+            "Chaque organisme porte aussi le **téléphone** et le **courriel** de sa fiche (1.31.0).",
+            "",
             "Ne sont listés que les organismes **affichés** (actifs, pas service interne) qui ont",
-            "**écrit** quelque chose. **Pas d'héritage** : un organisme absent n'a rien dit — ne lui",
-            "prêtez pas les horaires de son parent. Enregistré = publié : il n'y a pas de brouillon.",
+            "**écrit** quelque chose ou renseigné un téléphone ou un courriel. **Pas d'héritage** :",
+            "un organisme absent n'a rien dit — ne lui prêtez pas les horaires ni les coordonnées de",
+            "son parent. Enregistré = publié : il n'y a pas de brouillon.",
             "",
             "Textes en **Markdown**, en français (pas de traduction pour l'instant) ; horaires",
             "**structurés** jour par jour (`HH:MM`). Rien d'écrit ⇒",
@@ -428,7 +431,8 @@ export function buildOpenApiDocument(serverUrl: string): Record<string, unknown>
           ],
           responses: {
             "200": {
-              description: "Organismes qui ont écrit quelque chose, la collectivité en tête.",
+              description:
+                "Organismes qui ont écrit quelque chose ou renseigné une coordonnée, la collectivité en tête.",
               content: {
                 "application/json": {
                   schema: { type: "array", items: { $ref: "#/components/schemas/PortalOrganizationInfo" } },
@@ -1729,7 +1733,7 @@ export function buildOpenApiDocument(serverUrl: string): Record<string, unknown>
           description:
             "Un organisme du portail et ce qu'il dit à ses usagers. **Public.** Textes en Markdown, " +
             "en français.",
-          required: ["id", "name", "slug", "is_tenant", "updated_at", "info"],
+          required: ["id", "name", "slug", "is_tenant", "phone", "email", "updated_at", "info"],
           properties: {
             id: { type: "string", format: "uuid" },
             name: { type: "string", description: "Nom de l'organisme." },
@@ -1741,10 +1745,22 @@ export function buildOpenApiDocument(serverUrl: string): Record<string, unknown>
               type: "boolean",
               description: "C'est la collectivité du domaine elle-même (toujours en tête de liste).",
             },
+            phone: {
+              type: ["string", "null"],
+              description:
+                "Téléphone de la fiche de l'organisme, tel que saisi ; `null` si non renseigné. Pas " +
+                "d'héritage : ne donnez pas celui du parent (1.31.0).",
+            },
+            email: {
+              type: ["string", "null"],
+              description:
+                "Courriel de la fiche de l'organisme, tel que saisi ; `null` si non renseigné. Pas " +
+                "d'héritage (1.31.0).",
+            },
             updated_at: {
               type: ["string", "null"],
               format: "date-time",
-              description: "Dernier enregistrement.",
+              description: "Dernier enregistrement des informations usagers ; `null` si rien d'écrit.",
             },
             info: {
               type: "object",
