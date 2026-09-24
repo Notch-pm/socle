@@ -1,7 +1,7 @@
 # Exploitation & déploiement
 
 > **Public** : ops, devs déployant Socle · **Question traitée** : comment exploiter et déployer
-> Socle (edge functions, secrets, base, CI) ? · **Dernière mise à jour** : 2026-09-20
+> Socle (edge functions, fronts, secrets, base, CI) ? · **Dernière mise à jour** : 2026-09-24
 
 Ce document est un runbook. Pour le « pourquoi » des choix, voir
 [architecture.md](./architecture.md) ; pour le détail du schéma, [data-model.md](./data-model.md).
@@ -255,6 +255,38 @@ Bucket privé **`procedure-documents`** (documents de la base de connaissances d
 **25 Mio maximum par fichier**. Bucket privé, donc aucun accès direct — consultation uniquement
 par **URL signée temporaire** (`documents/signed-url` de `public-api`, ou `createSignedDocumentUrl`
 côté app). Convention de chemin et RLS détaillés dans [data-model.md](./data-model.md).
+
+## Fronts (Cloudflare Workers)
+
+Le front du Socle (Worker `socle`, `socle.edilumen.fr`) et le portail Nora (Worker `nora`, joker
+`*.edilumen.fr/*`) sont des Workers **sans code** qui servent `dist/`, sur le compte Cloudflare
+`9f6ab1722a04e6e1385445ee1cbb0261`. Ils se reconstruisent **au push sur `main`** (~2 min).
+
+⚠️ **Le push ne suffit pas toujours** : le 2026-09-24, les pushs de Socle et de Nora n'ont
+déclenché **aucun** build, et plus tôt le même jour un build avait échoué en publiant un bundle
+incomplet (version `12635b90`, **à ne jamais repromouvoir**). Après un push, vérifier que le
+bundle en ligne a changé :
+
+```bash
+js=$(curl -s https://socle.edilumen.fr/ | grep -o 'assets/index-[^"]*\.js' | head -1)
+curl -s "https://socle.edilumen.fr/$js" | grep -c "<un texte neuf de la feature>"
+```
+
+**Publier l'interface à la main** (depuis le dépôt concerné, poste authentifié par wrangler) :
+
+1. `npm run build` — les variables `VITE_*` sont inlinées **au build** : le `.env.local` doit
+   pointer sur la production (Nora : `VITE_PORTAL_API_URL` = `portal-api` de
+   `xbullkayqdzqiyrrwbqx`).
+2. **Comparer au bundle en ligne** avant de publier : taille voisine (le bundle Socle fait
+   ~1,2 Mo, Nora ~450 Ko) et mêmes URL (projet Supabase, géocodage, tuiles). Un écart de taille
+   franc = build incomplet ou variables manquantes — ne pas publier.
+3. `CLOUDFLARE_ACCOUNT_ID=9f6ab1722a04e6e1385445ee1cbb0261 npx wrangler deploy` — l'identifiant
+   est obligatoire, wrangler voit deux comptes.
+4. Revérifier le bundle en ligne, et que les autres sous-domaines (`iris`, `socle`, `clara`)
+   répondent toujours : la route joker de Nora les capterait sans leurs exclusions de zone.
+
+`npx wrangler deployments list --name <socle|nora>` montre ce qui est en ligne ; un rollback
+passe par `npx wrangler rollback`.
 
 ## CI & qualité
 
