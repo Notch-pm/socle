@@ -1749,9 +1749,9 @@ export function buildOpenApiDocument(serverUrl: string): Record<string, unknown>
             info: {
               type: "object",
               description:
-                "Les trois rubriques, toujours présentes (vides plutôt qu'absentes). Les questions " +
+                "Les quatre rubriques, toujours présentes (vides plutôt qu'absentes). Les questions " +
                 "entièrement vides sont écartées ; l'ordre de la FAQ est un ordre de lecture.",
-              required: ["description", "openingHours", "faq"],
+              required: ["description", "openingHours", "openingHoursNotes", "faq"],
               properties: {
                 description: { type: "string", description: "Présentation de l'organisme (Markdown)." },
                 openingHours: {
@@ -1762,6 +1762,13 @@ export function buildOpenApiDocument(serverUrl: string): Record<string, unknown>
                     "**vide** veut dire « horaires non renseignés » — ne dites alors pas que " +
                     "l'organisme est fermé.",
                   items: { $ref: "#/components/schemas/DayOpeningHours" },
+                },
+                openingHoursNotes: {
+                  type: "string",
+                  description:
+                    "Remarques sur les horaires (Markdown) : fermetures exceptionnelles, jours fériés, " +
+                    "horaires d'été, permanences… Elles **nuancent** `openingHours` : lisez-les avant " +
+                    "d'affirmer qu'un organisme est ouvert un jour donné. Vide = rien à signaler.",
                 },
                 faq: {
                   type: "array",
@@ -1788,6 +1795,7 @@ export function buildOpenApiDocument(serverUrl: string): Record<string, unknown>
                 { day: "monday", morningOpen: "08:30", morningClose: "12:00", afternoonOpen: "13:30", afternoonClose: "17:00" },
                 { day: "saturday", morningOpen: "09:00", morningClose: null, afternoonOpen: null, afternoonClose: "12:00" },
               ],
+              openingHoursNotes: "Fermé les jours fériés.",
               faq: [{ question: "Faut-il prendre rendez-vous ?", answer: "Seulement pour les passeports." }],
             },
           },

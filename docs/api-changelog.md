@@ -34,6 +34,7 @@ scope `read`. Version du contrat : **1.30.0**. Ajout **additif** : rien d'autre 
         { "day": "monday", "morningOpen": "08:30", "morningClose": "12:00", "afternoonOpen": "13:30", "afternoonClose": "17:00" },
         { "day": "saturday", "morningOpen": "09:00", "morningClose": null, "afternoonOpen": null, "afternoonClose": "12:00" }
       ],
+      "openingHoursNotes": "Fermé les jours fériés.",
       "faq": [{ "question": "Faut-il prendre rendez-vous ?", "answer": "Seulement pour les passeports." }]
     }
   }
@@ -52,8 +53,10 @@ scope `read`. Version du contrat : **1.30.0**. Ajout **additif** : rien d'autre 
   croissantes. `morningOpen` et `afternoonClose` toujours présents ; `morningClose` /
   `afternoonOpen` (pause de midi) valent `null` **ensemble** quand l'accueil est continu.
 - ⚠️ **Un jour absent est fermé**, mais une liste **vide** veut dire « horaires non renseignés » :
-  n'annoncez pas un organisme fermé toute la semaine. Pas de fermetures exceptionnelles ni de
-  jours fériés : un « ouvert maintenant » calculé reste indicatif.
+  n'annoncez pas un organisme fermé toute la semaine.
+- `openingHoursNotes` (Markdown, vide = rien à signaler) porte ce que la grille ne dit pas :
+  fermetures exceptionnelles, jours fériés, horaires d'été, permanences. ⚠️ Il **nuance**
+  `openingHours` : lisez-le avant d'affirmer qu'un organisme est ouvert un jour donné.
 - Textes (descriptif, FAQ) en Markdown, en français ; pas de `translations` pour l'instant.
 - Enregistré = publié (pas de brouillon). Rien d'écrit ⇒ `200 []` ; collectivité hors périmètre
   ⇒ `404`.

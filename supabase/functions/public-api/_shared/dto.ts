@@ -322,7 +322,7 @@ export interface AgentGuidanceDto {
 }
 
 /**
- * Les trois rubriques des informations à destination des usagers — JSON
+ * Les quatre rubriques des informations à destination des usagers — JSON
  * possédé, mêmes clés que `src/features/organizations/userInfo.ts` (et, pour la
  * FAQ, même forme que `knowledge_base.faq`). Textes en Markdown, en français.
  */
@@ -333,6 +333,12 @@ export interface UserInfoBody {
    * absent est **fermé** ; une liste vide = horaires non renseignés.
    */
   openingHours: DayOpeningHoursDto[];
+  /**
+   * Remarques sur les horaires (Markdown) : fermetures exceptionnelles, jours
+   * fériés, horaires d'été… Elles **nuancent** la grille : lisez-les avant
+   * d'affirmer qu'un organisme est ouvert.
+   */
+  openingHoursNotes: string;
   faq: Array<{ question: string; answer: string }>;
 }
 

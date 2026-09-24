@@ -37,7 +37,7 @@ describe("parseUserInfo — robustesse", () => {
 
   it("complète les champs manquants et ignore les clés inconnues", () => {
     const info = parseUserInfo({ openingHours: [MONDAY], physicalReception: "interne" });
-    expect(info).toEqual({ description: "", openingHours: [MONDAY], faq: [] });
+    expect(info).toEqual({ description: "", openingHours: [MONDAY], openingHoursNotes: "", faq: [] });
     expect(info).not.toHaveProperty("physicalReception");
   });
 
@@ -127,6 +127,7 @@ describe("cleanUserInfo / isUserInfoEmpty", () => {
     const cleaned = cleanUserInfo({
       description: "Mairie",
       openingHours: [MONDAY, { ...MONDAY, day: "tuesday", morningOpen: "" }],
+      openingHoursNotes: "",
       faq: [{ question: "", answer: "" }],
     });
     expect(cleaned.faq).toEqual([]);
@@ -135,7 +136,8 @@ describe("cleanUserInfo / isUserInfoEmpty", () => {
 
   it("des blancs ne sont pas un texte", () => {
     expect(isUserInfoEmpty(defaultUserInfo())).toBe(true);
-    expect(isUserInfoEmpty({ description: "  ", openingHours: [], faq: [] })).toBe(true);
+    expect(isUserInfoEmpty({ description: "  ", openingHours: [], openingHoursNotes: " \n", faq: [] })).toBe(true);
+    expect(isUserInfoEmpty({ ...defaultUserInfo(), openingHoursNotes: "Fermé le 15 août" })).toBe(false);
     expect(isUserInfoEmpty({ ...defaultUserInfo(), openingHours: [SATURDAY] })).toBe(false);
     expect(isUserInfoEmpty({ ...defaultUserInfo(), faq: [{ question: "Q", answer: "" }] })).toBe(false);
   });

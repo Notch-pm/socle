@@ -96,6 +96,9 @@ describe("UserInfoSection", () => {
     set("Lundi — début d'après-midi", "13:30");
     set("Lundi — fermeture", "17:00");
     fireEvent.click(screen.getByLabelText("Mardi — ouvert"));
+    fireEvent.change(screen.getByLabelText("Remarques sur les horaires"), {
+      target: { value: "Fermé les jours fériés." },
+    });
     // Recopier le lundi sur les autres jours ouverts.
     fireEvent.click(screen.getByRole("button", { name: /Recopier le lundi/ }));
     fireEvent.click(screen.getByRole("button", { name: /Ajouter une question/ }));
@@ -112,6 +115,7 @@ describe("UserInfoSection", () => {
       afternoonClose: "17:00",
     };
     expect(saved.openingHours).toEqual([monday, { ...monday, day: "tuesday" }]);
+    expect(saved.openingHoursNotes).toBe("Fermé les jours fériés.");
     expect(saved.faq).toHaveLength(1);
   });
 

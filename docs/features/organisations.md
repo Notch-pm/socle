@@ -126,7 +126,9 @@ garde sa modale (`OrganizationsManager` reçoit `onEditOrganization` seulement c
   d'après-midi) facultative mais **par paire**, heures strictement croissantes (`dayHoursError`,
   seule implémentation de la règle ; les erreurs ne s'affichent qu'à l'enregistrement, qui est
   bloqué). ⚠️ Un jour absent du contrat est **fermé** ; une liste vide = non renseigné. Le
-  parseur **écarte** un jour incohérent, il ne le répare pas. Table `organization_user_info` (une ligne par organisation,
+  parseur **écarte** un jour incohérent, il ne le répare pas. Sous la grille, des **remarques
+  sur les horaires** (`openingHoursNotes`, Markdown) : fermetures exceptionnelles, jours fériés,
+  horaires d'été — ce que la grille ne sait pas dire. Table `organization_user_info` (une ligne par organisation,
   RLS calquée sur `organizations` : écriture `is_admin_of_self_or_ancestor`), contrat pur
   `userInfo.ts` (testé, miroir edge `public-api/_shared/userInfo.ts` testé contre lui), servi par
   `GET /v1/portal/organizations?tenant_id=` (1.30.0) — donc au **corpus de l'assistant du

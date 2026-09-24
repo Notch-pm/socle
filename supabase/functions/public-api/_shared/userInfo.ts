@@ -8,7 +8,7 @@
  * entièrement vides écartées, jamais un texte tronqué — et les tests des deux
  * côtés l'épinglent.
  *
- * ⚠️ **Whitelist** : seules les trois rubriques du contrat sortent du JSON
+ * ⚠️ **Whitelist** : seules les quatre rubriques du contrat sortent du JSON
  * stocké, sous leurs noms exacts. Et seuls les organismes que le portail
  * AFFICHE sortent de la liste : ni service interne, ni organisation obsolète,
  * ni organisme qui n'a rien écrit.
@@ -87,6 +87,7 @@ export function parseUserInfo(raw: unknown): UserInfoBody {
   return {
     description: coerceString(stored.description),
     openingHours: parseOpeningHours(stored.openingHours),
+    openingHoursNotes: coerceString(stored.openingHoursNotes),
     faq: objects(stored.faq)
       .map((item) => ({ question: coerceString(item.question), answer: coerceString(item.answer) }))
       .filter((item) => item.question.trim() !== "" || item.answer.trim() !== ""),
@@ -95,7 +96,12 @@ export function parseUserInfo(raw: unknown): UserInfoBody {
 
 /** Rien d'écrit ? Des blancs ne sont pas un texte. */
 export function isUserInfoEmpty(info: UserInfoBody): boolean {
-  return info.description.trim() === "" && info.openingHours.length === 0 && info.faq.length === 0;
+  return (
+    info.description.trim() === "" &&
+    info.openingHours.length === 0 &&
+    info.openingHoursNotes.trim() === "" &&
+    info.faq.length === 0
+  );
 }
 
 /** Organisation de l'arbre du tenant, telle que la route la lit. */

@@ -11,6 +11,7 @@ import { parseUserInfo as parseFront } from "../../../../src/features/organizati
 
 const STORED = {
   description: "La mairie vous accueille.",
+  openingHoursNotes: "Fermé les jours fériés.",
   openingHours: [
     { day: "saturday", morningOpen: "09:00", morningClose: null, afternoonOpen: null, afternoonClose: "12:00" },
     { day: "monday", morningOpen: "08:30", morningClose: "12:00", afternoonOpen: "13:30", afternoonClose: "17:00" },
@@ -34,6 +35,7 @@ describe("parseUserInfo (miroir edge)", () => {
       "texte",
       { faq: "pas une liste" },
       { description: 3 },
+      { openingHoursNotes: 4 },
       { openingHours: "Lundi : 9 h – 12 h" },
       { openingHours: [{ day: "monday", morningOpen: "08:00", afternoonClose: "18:00" }] },
     ]) {
@@ -41,8 +43,8 @@ describe("parseUserInfo (miroir edge)", () => {
     }
   });
 
-  it("ne laisse sortir que les trois rubriques du contrat", () => {
-    expect(Object.keys(parseUserInfo(STORED))).toEqual(["description", "openingHours", "faq"]);
+  it("ne laisse sortir que les quatre rubriques du contrat", () => {
+    expect(Object.keys(parseUserInfo(STORED))).toEqual(["description", "openingHours", "openingHoursNotes", "faq"]);
   });
 
   it("est idempotente après un aller-retour JSON — le consommateur re-parse", () => {

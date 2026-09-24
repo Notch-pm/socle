@@ -8,6 +8,7 @@ import { OpeningHoursEditor } from "@/features/organizations/OpeningHoursEditor"
 import {
   MAX_USER_INFO_DESCRIPTION_LENGTH,
   MAX_USER_INFO_FAQ,
+  MAX_USER_INFO_HOURS_NOTES_LENGTH,
   dayDraftErrors,
   fromDayDrafts,
   toDayDrafts,
@@ -117,6 +118,16 @@ export function UserInfoSection({ organization }: { organization: Organization }
               save.reset();
             }}
             errors={showErrors ? hoursErrors : {}}
+          />
+          <MarkdownField
+            id="user-info-hours-notes"
+            label="Remarques sur les horaires"
+            hint="Ce que la grille ne dit pas : fermetures exceptionnelles, jours fériés, horaires d'été, permanences…"
+            placeholder="Fermé les jours fériés. Horaires d'été du 14 juillet au 15 août : 9 h – 12 h."
+            rows={3}
+            value={draft.openingHoursNotes}
+            onChange={(openingHoursNotes) => patch({ openingHoursNotes })}
+            maxLength={MAX_USER_INFO_HOURS_NOTES_LENGTH}
           />
           <FaqEditor
             label="FAQ usagers"

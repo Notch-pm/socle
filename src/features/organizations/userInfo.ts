@@ -67,6 +67,11 @@ export interface OrganizationUserInfo {
    * absent est un jour **fermé** ; une liste vide = horaires non renseignés.
    */
   openingHours: DayOpeningHours[];
+  /**
+   * Remarques sur les horaires (Markdown) : fermetures exceptionnelles, jours
+   * fériés, horaires d'été, permanences… — ce que la grille ne sait pas dire.
+   */
+  openingHoursNotes: string;
   /** FAQ usager de l'organisme — distincte de la FAQ usager de chaque démarche. */
   faq: FaqItem[];
 }
@@ -77,11 +82,12 @@ export interface OrganizationUserInfo {
  * fois. La base porte un garde-fou plus large sur la ligne entière.
  */
 export const MAX_USER_INFO_DESCRIPTION_LENGTH = 5_000;
+export const MAX_USER_INFO_HOURS_NOTES_LENGTH = 2_000;
 export const MAX_USER_INFO_FAQ = 30;
 
 /** Informations vierges. */
 export function defaultUserInfo(): OrganizationUserInfo {
-  return { description: "", openingHours: [], faq: [] };
+  return { description: "", openingHours: [], openingHoursNotes: "", faq: [] };
 }
 
 function coerceString(value: unknown): string {
@@ -173,6 +179,7 @@ export function parseUserInfo(raw: unknown): OrganizationUserInfo {
   const stored = raw as Record<string, unknown>;
   info.description = coerceString(stored.description);
   info.openingHours = parseOpeningHours(stored.openingHours);
+  info.openingHoursNotes = coerceString(stored.openingHoursNotes);
   info.faq = parseFaq(stored.faq);
   return info;
 }
@@ -184,7 +191,12 @@ export function cleanUserInfo(info: OrganizationUserInfo): OrganizationUserInfo 
 
 /** Rien d'écrit ? Des blancs ne sont pas un texte. */
 export function isUserInfoEmpty(info: OrganizationUserInfo): boolean {
-  return info.description.trim() === "" && info.openingHours.length === 0 && info.faq.length === 0;
+  return (
+    info.description.trim() === "" &&
+    info.openingHours.length === 0 &&
+    info.openingHoursNotes.trim() === "" &&
+    info.faq.length === 0
+  );
 }
 
 /**

@@ -789,8 +789,8 @@ describe("contrat — informations à destination des usagers (1.30.0)", () => {
     expect(route.description).toContain("assistant du portail");
   });
 
-  it("les trois rubriques sont toujours présentes, sous les clés du Socle", () => {
-    expect(schema.properties.info.required).toEqual(["description", "openingHours", "faq"]);
+  it("les quatre rubriques sont toujours présentes, sous les clés du Socle", () => {
+    expect(schema.properties.info.required).toEqual(["description", "openingHours", "openingHoursNotes", "faq"]);
     expect(schema.properties.info.properties.openingHours.items).toEqual({
       $ref: "#/components/schemas/DayOpeningHours",
     });
