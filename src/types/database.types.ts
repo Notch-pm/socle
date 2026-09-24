@@ -226,6 +226,72 @@ export type Database = {
           },
         ]
       }
+      ai_usage_events_archive: {
+        Row: {
+          actual_tokens: number | null
+          api_key_id: string | null
+          archived_at: string
+          consumer: string
+          consumer_counted: boolean
+          counter_provider: string | null
+          created_at: string
+          estimated_tokens: number
+          external_actor_id: string | null
+          external_ref_id: string | null
+          external_ref_kind: string | null
+          feature: string | null
+          id: string
+          organization_id: string
+          period: string
+          provider: string
+          resource_type: string
+          settled_at: string | null
+          status: string
+        }
+        Insert: {
+          actual_tokens?: number | null
+          api_key_id?: string | null
+          archived_at?: string
+          consumer: string
+          consumer_counted?: boolean
+          counter_provider?: string | null
+          created_at?: string
+          estimated_tokens: number
+          external_actor_id?: string | null
+          external_ref_id?: string | null
+          external_ref_kind?: string | null
+          feature?: string | null
+          id?: string
+          organization_id: string
+          period: string
+          provider: string
+          resource_type: string
+          settled_at?: string | null
+          status?: string
+        }
+        Update: {
+          actual_tokens?: number | null
+          api_key_id?: string | null
+          archived_at?: string
+          consumer?: string
+          consumer_counted?: boolean
+          counter_provider?: string | null
+          created_at?: string
+          estimated_tokens?: number
+          external_actor_id?: string | null
+          external_ref_id?: string | null
+          external_ref_kind?: string | null
+          feature?: string | null
+          id?: string
+          organization_id?: string
+          period?: string
+          provider?: string
+          resource_type?: string
+          settled_at?: string | null
+          status?: string
+        }
+        Relationships: []
+      }
       ai_usage_quotas: {
         Row: {
           created_at: string
@@ -1012,6 +1078,35 @@ export type Database = {
           },
         ]
       }
+      organization_user_info: {
+        Row: {
+          created_at: string
+          info: Json
+          organization_id: string
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          info?: Json
+          organization_id: string
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          info?: Json
+          organization_id?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "organization_user_info_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: true
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       organizations: {
         Row: {
           address: string | null
@@ -1649,6 +1744,10 @@ export type Database = {
       application_scope_ids: {
         Args: { p_application: string }
         Returns: string[]
+      }
+      archive_ai_usage_events: {
+        Args: { p_keep_months?: number }
+        Returns: number
       }
       contacts_outside_quartiers: {
         Args: { p_org_id: string }

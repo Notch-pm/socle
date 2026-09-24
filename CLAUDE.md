@@ -162,6 +162,7 @@ exécutables par `authenticated` : le RLS les évalue avec les droits de l'appel
 - `portal_themes` (apparence du site de démarches — une ligne par racine, `draft`/`published` comme `portal_pages` ; **aucune couleur** : elles vivent dans la charte — voir feature « thème du site »).
 - `portal_contents` (pages de **texte** du site, une par `(racine, slug)`, `draft`/`published` ; aujourd'hui la **déclaration d'accessibilité** — voir feature « site de démarches »).
 - `organization_agent_guidance` (**recommandations aux agents**, une ligne par racine — version globale de `knowledge_base`, **interne** — voir feature « Organisations »).
+- `organization_user_info` (**informations usagers** — descriptif, horaires d'accueil, FAQ —, une ligne par organisation, racine ou non, **public** et sans brouillon, servi par `GET /v1/portal/organizations` au portail et à son assistant — voir feature « Organisations »).
 - `portal_assistant_settings` (**interrupteur de l'assistant du portail**, une ligne par racine, écriture **super admin** seule — voir feature « Assistant du portail usagers »).
 
 Types TS générés dans `src/types/database.types.ts` — **ne pas éditer à la main**,
@@ -190,11 +191,14 @@ Trois motifs reviennent dans presque toutes les fiches — les connaître évite
 
 ### [Organisations](docs/features/organisations.md)
 Hiérarchie, édition en pleine page (onglets Informations, Charte graphique, Langues,
-Recommandations aux agents, Démarches, Emails, Domaines), gestion superadmin (`OrgSettingsPage`,
-menu latéral par client).
+Informations usagers, Recommandations aux agents, Démarches, Emails, Domaines), gestion
+superadmin (`OrgSettingsPage`, menu latéral par client).
 - ⚠️ **Recommandations aux agents** (2026-09-19) : version **globale** de `knowledge_base`, sur la
   racine seule, servie par `GET /v1/organizations/{id}/agent-guidance` — **interne**, jamais au
   portail ; « consignes générales », jamais « procédures » (le mot désigne les démarches).
+- ⚠️ **Informations usagers** (2026-09-24) : leur pendant **public** (descriptif, horaires d'accueil,
+  FAQ), sur **toute** organisation, sans héritage ni brouillon, servi par
+  `GET /v1/portal/organizations` — c'est là que l'assistant du portail trouve les horaires.
 - Arbre `parent_id`, **10 niveaux max** (`enforce_org_depth`, bloque aussi les cycles). Le super
   admin seul crée les racines et supprime (jamais une racine) ; un admin d'org gère tout son
   sous-arbre, sans suppression. Les racines sont les **clients** : aucune vue n'en fond plusieurs.
@@ -344,8 +348,8 @@ menu latéral par client).
 - ⚠️ Le commutateur s'applique **à la frontière** (`readPortalAssistant`) : couper `enabled`
   conserve `deposit_enabled`. Au doute, **fermé**. `TenantDto` est public : deux booléens, rien
   d'autre.
-- ⚠️ Corpus = ce que `/v1/portal/*` sert déjà ; `knowledge_base` et les recommandations aux agents
-  n'entrent **jamais** dans son prompt. ⚠️ Pas d'ouverture au public sans **part de crédit
+- ⚠️ Corpus = ce que `/v1/portal/*` sert déjà (dont les informations usagers des organismes) ;
+  `knowledge_base` et les recommandations aux agents n'entrent **jamais** dans son prompt. ⚠️ Pas d'ouverture au public sans **part de crédit
   réservée** : elle se règle dans la section « Assistant IA » (bouton « Répartir », le seul écran
   qui écrit) et s'affiche à côté de l'interrupteur, qui y renvoie.
 

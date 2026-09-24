@@ -322,6 +322,42 @@ export interface AgentGuidanceDto {
 }
 
 /**
+ * Les trois rubriques des informations à destination des usagers — JSON
+ * possédé, mêmes clés que `src/features/organizations/userInfo.ts` (et, pour la
+ * FAQ, même forme que `knowledge_base.faq`). Textes en Markdown, en français.
+ */
+export interface UserInfoBody {
+  description: string;
+  openingHours: string;
+  faq: Array<{ question: string; answer: string }>;
+}
+
+/**
+ * Un organisme du portail et ce qu'il dit à ses usagers — élément de
+ * `GET /v1/portal/organizations` (contrat 1.30.0) : descriptif, horaires
+ * d'accueil, FAQ.
+ *
+ * ⚠️ **Public** : c'est fait pour être affiché, et c'est le corpus de
+ * l'assistant du portail pour « à quelle heure ouvre la mairie ? ». Pendant
+ * usager d'`AgentGuidanceDto`, qui reste interne.
+ *
+ * Seuls les organismes **affichés** (actifs, pas service interne) qui ont
+ * **écrit** quelque chose sont listés. Pas d'héritage : un organisme absent de
+ * la liste n'a rien dit, il n'emprunte pas les horaires de son parent.
+ */
+export interface PortalOrganizationInfoDto {
+  id: string;
+  name: string;
+  /** Adresse de l'organisme sur le portail (`/<slug>`), ou `null`. */
+  slug: string | null;
+  /** C'est la collectivité du domaine elle-même (toujours en tête de liste). */
+  is_tenant: boolean;
+  /** Dernier enregistrement (ISO 8601). */
+  updated_at: string | null;
+  info: UserInfoBody;
+}
+
+/**
  * Collectivité derrière un domaine du portail usagers — réponse de
  * `GET /v1/portal/tenant`.
  *

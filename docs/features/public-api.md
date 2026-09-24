@@ -35,7 +35,9 @@ avec **`verify_jwt = false`** (l'auth est portée par la fonction, pas par la pa
   `procedure-documents`), `organizations/{id}/branding` (**charte graphique applicable**,
   héritage résolu — logos, favicon et couleurs ; scope `read`), `organizations/{id}/agent-guidance`
   (**recommandations aux agents** de la racine, 2026-09-19 — interne, jamais au portail ; scope
-  `read`, rien d'écrit = 200 `configured: false`), `organizations/{id}/smtp` (**serveur
+  `read`, rien d'écrit = 200 `configured: false`), `portal/organizations?tenant_id=`
+  (**informations usagers** des organismes affichés — descriptif, horaires, FAQ —, 2026-09-24,
+  public ; rien d'écrit = `[]`), `organizations/{id}/smtp` (**serveur
   d'envoi applicable** à l'organisation, héritage résolu — cf. sérialisation ci-dessous).
   Docs : `openapi.json` (public) et `docs`
   (Redoc, cf. ci-dessous).

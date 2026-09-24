@@ -26,6 +26,7 @@ describe("buildOpenApiDocument", () => {
         "/v1/portal/procedures/{id}",
         "/v1/portal/page",
         "/v1/portal/content",
+        "/v1/portal/organizations",
         "/v1/organizations",
         "/v1/organizations/{id}",
         "/v1/organizations/{id}/smtp",
@@ -292,8 +293,8 @@ describe("contrat — traduction de la communication usager (1.26.0)", () => {
 describe("contrat — documents et courriers", () => {
   const doc = buildOpenApiDocument("https://example.supabase.co/functions/v1/public-api") as any;
 
-  it("annonce la version 1.29.0 du contrat", () => {
-    expect(doc.info.version).toBe("1.29.0");
+  it("annonce la version 1.30.0 du contrat", () => {
+    expect(doc.info.version).toBe("1.30.0");
   });
 
   it("le lieu d'intervention est un type de champ structurel, à réponse objet (1.29.0)", () => {
@@ -767,5 +768,30 @@ describe("contrat — contenus du site et mention d'accessibilité (1.25.0)", ()
     expect(accessibility.properties.declaration_link.description).toContain("Résolu par le Socle");
     // Masquer la mention la vide : le consommateur n'a aucun commutateur à lire.
     expect(accessibility.properties.declaration.description).toContain("ou l'a masquée");
+  });
+});
+
+describe("contrat — informations à destination des usagers (1.30.0)", () => {
+  const doc = buildOpenApiDocument("https://example.supabase.co/functions/v1/public-api") as any;
+  const route = doc.paths["/v1/portal/organizations"].get;
+  const schema = doc.components.schemas.PortalOrganizationInfo;
+
+  it("route du portail, bornée au tenant : 404 hors périmètre, rien d'écrit = []", () => {
+    expect(route.tags).toEqual(["Portail"]);
+    expect(route.parameters.map((p: { name: string }) => p.name)).toEqual(["tenant_id"]);
+    expect(route.responses).toHaveProperty("404");
+    expect(route.description).toContain("`[]`");
+  });
+
+  it("⚠️ dit que c'est public, sans héritage, et que l'assistant s'en sert", () => {
+    expect(route.description).toContain("**Public**");
+    expect(route.description).toContain("Pas d'héritage");
+    expect(route.description).toContain("assistant du portail");
+  });
+
+  it("les trois rubriques sont toujours présentes, sous les clés du Socle", () => {
+    expect(schema.properties.info.required).toEqual(["description", "openingHours", "faq"]);
+    // Rien d'interne ne se glisse dans le DTO public.
+    expect(JSON.stringify(schema)).not.toContain("guidance");
   });
 });

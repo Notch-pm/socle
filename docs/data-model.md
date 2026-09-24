@@ -1,7 +1,7 @@
 # Modèle de données
 
 > **Public** : développeurs, ops · **Question traitée** : qu'est-ce qui existe en base (tables,
-> contraintes, RLS, fonctions, storage) ? · **Dernière mise à jour** : 2026-09-20
+> contraintes, RLS, fonctions, storage) ? · **Dernière mise à jour** : 2026-09-24
 
 Pour le rôle de Socle dans la gamme et les décisions d'architecture, voir [../CLAUDE.md](../CLAUDE.md)
 et [./architecture.md](./architecture.md). Pour les endpoints, schémas de requête/réponse et la
@@ -268,6 +268,28 @@ aucun endpoint, il décrit ce qui existe **en base**.
   client (vider les rubriques suffit).
 - Servi, héritage résolu, par `GET /v1/organizations/{id}/agent-guidance` (contrat 1.27.0) via la
   RPC `resolve_agent_guidance`. Contrat JSON : `src/features/organizations/agentGuidance.ts`.
+
+---
+
+### `organization_user_info` — informations à destination des usagers (2026-09-24)
+
+- `organization_id` **clé primaire**, FK **CASCADE** vers `organizations` (une ligne par
+  organisation, **racine comme sous-organisation**) ; `info` jsonb NOT NULL défaut `{}` (CHECK
+  objet, garde-fou de taille 200 000 caractères) ; `created_at` / `updated_at` (trigger
+  `set_updated_at`).
+- Ce que l'organisme dit **au public** : descriptif, horaires d'accueil (texte libre), FAQ
+  usagers. Contrat JSON `{ description, openingHours, faq[{question,answer}] }` :
+  `src/features/organizations/userInfo.ts`.
+- ⚠️ **Public, sans brouillon** : pendant usager d'`organization_agent_guidance` (interne), jamais
+  fusionné avec elle. ⚠️ **Pas d'héritage** ni de trigger de rattachement : chaque organisme parle
+  pour lui-même.
+- ⚠️ **Une table, pas une colonne d'`organizations`** (même raison que les recommandations).
+- **RLS** (calquée sur `organizations`) : lecture `has_org_access OR
+  is_admin_of_self_or_ancestor` · INSERT/UPDATE `is_admin_of_self_or_ancestor` · pas de DELETE
+  client (vider les rubriques suffit).
+- Servi par `GET /v1/portal/organizations?tenant_id=` (contrat 1.30.0), organismes **affichés**
+  seulement (actifs, pas service interne), fiches vides écartées — corpus de l'assistant du
+  portail.
 
 ---
 

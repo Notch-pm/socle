@@ -1,6 +1,6 @@
 import * as React from "react";
 import { useParams, useNavigate, useSearchParams } from "react-router-dom";
-import { ArrowLeft, BookUser, Settings2, Users as UsersIcon, ListChecks, FileCheck2, FileSignature, MapPin, Mail, Palette, Globe, Languages, LayoutTemplate, KeyRound, Gauge, Tags, ToggleRight, AppWindow, MessagesSquare, type LucideIcon } from "lucide-react";
+import { ArrowLeft, BookUser, Settings2, Users as UsersIcon, ListChecks, FileCheck2, FileSignature, MapPin, Mail, Palette, Globe, Languages, LayoutTemplate, KeyRound, Gauge, Tags, ToggleRight, AppWindow, MessagesSquare, MessageCircleQuestion, type LucideIcon } from "lucide-react";
 import { Card, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { EmptyState } from "@/components/shared/EmptyState";
@@ -15,6 +15,7 @@ import { BrandingSection } from "@/features/organizations/BrandingSection";
 import { DomainsSection } from "@/features/organizations/DomainsSection";
 import { LanguagesSection } from "@/features/languages/LanguagesSection";
 import { AgentGuidanceSection } from "@/features/organizations/AgentGuidanceSection";
+import { UserInfoSection } from "@/features/organizations/UserInfoSection";
 import { ApiKeysSection } from "@/features/superadmin/organizations/sections/ApiKeysSection";
 import { AiUsageSection } from "@/features/superadmin/organizations/sections/AiUsageSection";
 import { PortalAssistantSection } from "@/features/superadmin/organizations/sections/PortalAssistantSection";
@@ -30,6 +31,7 @@ type Section =
   | "general"
   | "charte"
   | "langues"
+  | "usagers"
   | "agents"
   | "domaines"
   | "utilisateurs"
@@ -49,6 +51,7 @@ const SECTIONS: { key: Exclude<Section, "menu">; title: string; description: str
   { key: "general", title: "Informations générales", description: "Nom, coordonnées, slug, organisation parente", icon: Settings2 },
   { key: "charte", title: "Charte graphique", description: "Logos et couleurs repris par les applications de la gamme", icon: Palette },
   { key: "langues", title: "Langues", description: "Langues activées pour les libellés des démarches et des catégories", icon: Languages },
+  { key: "usagers", title: "Informations usagers", description: "Descriptif, horaires d'accueil et FAQ publiés sur le site de démarches — repris par son assistant IA", icon: MessageCircleQuestion },
   { key: "agents", title: "Recommandations aux agents", description: "Rôle des agents, accueil physique, consignes, FAQ et sources — repris par Iris et son assistant IA", icon: BookUser },
   { key: "domaines", title: "Domaines du portail", description: "Adresses par lesquelles les usagers atteignent les démarches en ligne", icon: Globe },
   { key: "utilisateurs", title: "Utilisateurs", description: "Membres et rôles de cette organisation", icon: UsersIcon },
@@ -153,6 +156,7 @@ export function OrgSettingsPage() {
         {activeSection === "charte" && <BrandingSection organization={organization} />}
         {/* Le composant dit lui-même qu'une sous-organisation suit sa racine. */}
         {activeSection === "langues" && <LanguagesSection organization={organization} />}
+        {activeSection === "usagers" && <UserInfoSection organization={organization} />}
         {/* Idem : la doctrine de la collectivité se règle sur sa racine. */}
         {activeSection === "agents" && <AgentGuidanceSection organization={organization} />}
         {activeSection === "domaines" && <DomainsSection organizationId={organization.id} />}

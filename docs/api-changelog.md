@@ -1,7 +1,7 @@
 # Journal des évolutions des API publiques
 
 > **Public** : équipes consommatrices (Ariane, Clara, Iris, partenaires) · **Question traitée** :
-> quand un contrat d'API a-t-il changé, et comment ? · **Dernière mise à jour** : 2026-09-22
+> quand un contrat d'API a-t-il changé, et comment ? · **Dernière mise à jour** : 2026-09-24
 
 Journal **append-only** : chaque évolution de la surface de contrat des API publiques
 (`public-api`, `contacts-api`, `ai-api`, `audience-api`) — endpoint, paramètre, champ de réponse,
@@ -10,6 +10,47 @@ réécrite ; une correction s'ajoute sous une nouvelle date. Politique de compat
 consommateur : [integration.md](./integration.md#politique-de-compatibilité-v1).
 
 Format d'une entrée : `## AAAA-MM-JJ — <api> — ajout|correctif|rupture`
+
+---
+
+## 2026-09-24 — public-api — ajout (informations usagers des organismes)
+
+**Chaque organisme peut dire au public qui il est, quand il ouvre, et répondre aux questions
+fréquentes** — onglet « Informations usagers » du Socle, sur toute organisation (racine comme
+sous-organisation). Nouvelle route **`GET /v1/portal/organizations?tenant_id=`**, tag « Portail »,
+scope `read`. Version du contrat : **1.30.0**. Ajout **additif** : rien d'autre ne change.
+
+```json
+[
+  {
+    "id": "d5227d25-f327-493a-a9a2-278397531e33",
+    "name": "Mairie de Plounéour",
+    "slug": "plouneour",
+    "is_tenant": true,
+    "updated_at": "2026-09-24T08:00:00+00:00",
+    "info": {
+      "description": "La mairie vous accueille pour l'état civil, l'urbanisme et les élections.",
+      "openingHours": "Lundi au vendredi : 8 h 30 – 12 h et 13 h 30 – 17 h\nSamedi : 9 h – 12 h",
+      "faq": [{ "question": "Faut-il prendre rendez-vous ?", "answer": "Seulement pour les passeports." }]
+    }
+  }
+]
+```
+
+- **Public** : fait pour être affiché, et c'est le **corpus de l'assistant du portail** pour
+  « à quelle heure ouvre la mairie ? ». Pendant usager de `/v1/organizations/{id}/agent-guidance`,
+  qui reste interne — ne composez jamais l'un avec l'autre.
+- Collectivité **en tête** (`is_tenant: true`), puis les autres organismes par nom. Ne sont listés
+  que les organismes **affichés** (actifs, pas service interne) qui ont **écrit** quelque chose.
+- ⚠️ **Pas d'héritage** : un organisme absent de la liste n'a rien dit. Ne lui prêtez pas les
+  horaires de son parent.
+- `openingHours` est un **texte libre** en Markdown, pas un format structuré : lisez-le, ne le
+  calculez pas (pas de « ouvert maintenant »). Textes en français ; pas de `translations` pour
+  l'instant.
+- Enregistré = publié (pas de brouillon). Rien d'écrit ⇒ `200 []` ; collectivité hors périmètre
+  ⇒ `404`.
+- **Consommateur** : **Nora** — page d'accueil ou d'organisme, et **assistant du portail**, qui doit
+  ajouter cette route à son corpus. **Iris** peut la lire aussi pour répondre au guichet.
 
 ---
 

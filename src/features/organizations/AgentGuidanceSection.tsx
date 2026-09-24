@@ -152,7 +152,7 @@ export function AgentGuidanceSection({ organization }: { organization: Organizat
           <MarkdownField
             id="agent-guidance-reception"
             label="Spécificités de l'accueil physique"
-            hint="Accueil au guichet : horaires, orientation, confidentialité, cas particuliers…"
+            hint="Accueil au guichet : orientation, confidentialité, cas particuliers… Interne : les horaires à donner au public se renseignent dans « Informations usagers »."
             value={draft.physicalReception}
             onChange={(physicalReception) => patch({ physicalReception })}
             maxLength={MAX_GUIDANCE_TEXT_LENGTH}

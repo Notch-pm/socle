@@ -118,6 +118,22 @@ garde sa modale (`OrganizationsManager` reçoit `onEditOrganization` seulement c
   déjà les démarches et `proceduresText`. ⚠️ **Interne** : aucune route du portail ne le sert.
   ⚠️ **Une table et non une colonne** : `organizations` se lit en `select("*")` partout.
   Côté superadmin, la même section est une carte d'`OrgSettingsPage` (`?section=agents`).
+- **Onglet « Informations usagers »** (`UserInfoSection`, 2026-09-24, **toute organisation**,
+  sous-organisation comprise — chaque annexe a ses horaires) : ce que l'organisme dit **au public**
+  — un **descriptif**, ses **horaires d'accueil** (texte libre en Markdown, pas de format
+  structuré) et une **FAQ usagers**. Table `organization_user_info` (une ligne par organisation,
+  RLS calquée sur `organizations` : écriture `is_admin_of_self_or_ancestor`), contrat pur
+  `userInfo.ts` (testé, miroir edge `public-api/_shared/userInfo.ts` testé contre lui), servi par
+  `GET /v1/portal/organizations?tenant_id=` (1.30.0) — donc au **corpus de l'assistant du
+  portail** (voir [`assistant-usager.md`](assistant-usager.md)).
+  ⚠️ **Public, tout entier, dès l'enregistrement** : pas de brouillon (comme l'adresse de la
+  fiche) ; l'écran le dit. C'est le **pendant usager** des recommandations aux agents, qui restent
+  internes : les deux ne se fusionnent jamais, et le champ « accueil physique » des
+  recommandations renvoie ici pour les horaires. ⚠️ **Pas d'héritage** : un organisme qui n'a rien
+  écrit n'est pas listé, il n'emprunte pas les horaires de son parent. ⚠️ La route ne sert que les
+  organismes **affichés** (actifs, pas service interne) — l'écran prévient sur un service
+  interne. Français seulement pour l'instant (pas de `translations`). Côté superadmin, même
+  composant en carte d'`OrgSettingsPage` (`?section=usagers`).
 - **Onglet « Langues »** (`LanguagesSection`, **organisation principale uniquement** — une
   sous-organisation y lit qu'elle suit sa racine) : quelles langues la collectivité active pour
   s'adresser à ses usagers. Voir feature « Langues et libellés traduits ».

@@ -7,6 +7,7 @@ import {
   Languages,
   ListChecks,
   Mail,
+  MessageCircleQuestion,
   Palette,
   Settings2,
   type LucideIcon,
@@ -22,8 +23,9 @@ import { BrandingSection } from "@/features/organizations/BrandingSection";
 import { DomainsSection } from "@/features/organizations/DomainsSection";
 import { LanguagesSection } from "@/features/languages/LanguagesSection";
 import { AgentGuidanceSection } from "@/features/organizations/AgentGuidanceSection";
+import { UserInfoSection } from "@/features/organizations/UserInfoSection";
 
-type TabKey = "infos" | "charte" | "langues" | "agents" | "domaines" | "demarches" | "smtp";
+type TabKey = "infos" | "charte" | "langues" | "usagers" | "agents" | "domaines" | "demarches" | "smtp";
 
 const TABS: { key: TabKey; label: string; icon: LucideIcon }[] = [
   { key: "infos", label: "Informations de base", icon: Settings2 },
@@ -33,6 +35,10 @@ const TABS: { key: TabKey; label: string; icon: LucideIcon }[] = [
   // Les langues, elles, ne se découpent pas par service : le réglage n'existe
   // que sur l'organisation principale, l'onglet le dit sur les autres.
   { key: "langues", label: "Langues", icon: Languages },
+  // Ce que l'organisme dit au PUBLIC — sur toute organisation, sous-organisation
+  // comprise : chaque mairie annexe a ses horaires. Pendant public de l'onglet
+  // suivant, qui reste interne.
+  { key: "usagers", label: "Informations usagers", icon: MessageCircleQuestion },
   // Même parti que les langues : la doctrine de la collectivité ne se découpe
   // pas par service, l'onglet renvoie une sous-organisation à sa racine.
   { key: "agents", label: "Recommandations aux agents", icon: BookUser },
@@ -119,6 +125,7 @@ export function OrganizationEditorPage() {
         {activeTab === "infos" && <OrganizationInfoTab organization={organization} />}
         {activeTab === "charte" && <BrandingSection organization={organization} />}
         {activeTab === "langues" && <LanguagesSection organization={organization} />}
+        {activeTab === "usagers" && <UserInfoSection organization={organization} />}
         {activeTab === "agents" && <AgentGuidanceSection organization={organization} />}
         {activeTab === "domaines" && <DomainsSection organizationId={organization.id} />}
         {activeTab === "demarches" && (

@@ -30,7 +30,7 @@ export function buildOpenApiDocument(serverUrl: string): Record<string, unknown>
     openapi: "3.1.0",
     info: {
       title: "API Socle — Référentiel de la gamme",
-      version: "1.29.0",
+      version: "1.30.0",
       description: [
         "API **en lecture seule** exposant le référentiel central de la gamme : les",
         "**organisations** (et sous-organisations) avec l'intégralité de leur configuration,",
@@ -132,7 +132,8 @@ export function buildOpenApiDocument(serverUrl: string): Record<string, unknown>
         description:
           "Résolution `domaine → collectivité` pour le portail usagers. Une instance unique " +
           "de portail sert toutes les collectivités : elle ne connaît que le nom d'hôte visité, " +
-          "le Socle lui dit à qui il appartient.",
+          "le Socle lui dit à qui il appartient. Tout ce que ces routes servent est public — " +
+          "c'est aussi le corpus de l'assistant du portail.",
       },
     ],
     paths: {
@@ -388,6 +389,49 @@ export function buildOpenApiDocument(serverUrl: string): Record<string, unknown>
               description: "Contenu publié.",
               content: {
                 "application/json": { schema: { $ref: "#/components/schemas/PortalContent" } },
+              },
+            },
+            ...errorResponses("400", "401", "404", "500"),
+          },
+        },
+      },
+      "/v1/portal/organizations": {
+        get: {
+          tags: ["Portail"],
+          summary: "Organismes du portail et leurs informations usagers (descriptif, horaires, FAQ)",
+          description: [
+            "Ce que chaque organisme de la collectivité dit **à ses usagers** : un descriptif, ses",
+            "**horaires d'accueil** et une FAQ, rédigés dans l'onglet « Informations usagers » du",
+            "Socle. Toute l'arborescence du tenant en un appel : la collectivité **en tête**",
+            "(`is_tenant: true`), puis les autres organismes par nom.",
+            "",
+            "**Public** : c'est fait pour être affiché, et c'est ce que l'**assistant du portail**",
+            "lit pour répondre à « à quelle heure ouvre la mairie ? ». Pendant usager de",
+            "`GET /v1/organizations/{id}/agent-guidance`, qui reste interne et ne se sert jamais ici.",
+            "",
+            "Ne sont listés que les organismes **affichés** (actifs, pas service interne) qui ont",
+            "**écrit** quelque chose. **Pas d'héritage** : un organisme absent n'a rien dit — ne lui",
+            "prêtez pas les horaires de son parent. Enregistré = publié : il n'y a pas de brouillon.",
+            "",
+            "Textes en **Markdown**, en français (pas de traduction pour l'instant). Rien d'écrit ⇒",
+            "`200` avec `[]` ; collectivité hors périmètre de la clé ⇒ `404`.",
+          ].join("\n"),
+          parameters: [
+            {
+              name: "tenant_id",
+              in: "query",
+              required: true,
+              description: "Identifiant de la collectivité, tel que rendu par `GET /v1/portal/tenant`.",
+              schema: { type: "string", format: "uuid" },
+            },
+          ],
+          responses: {
+            "200": {
+              description: "Organismes qui ont écrit quelque chose, la collectivité en tête.",
+              content: {
+                "application/json": {
+                  schema: { type: "array", items: { $ref: "#/components/schemas/PortalOrganizationInfo" } },
+                },
               },
             },
             ...errorResponses("400", "401", "404", "500"),
@@ -1677,6 +1721,68 @@ export function buildOpenApiDocument(serverUrl: string): Record<string, unknown>
             favicon_url: "https://exemple.fr/favicon.png",
             primary_color: "#1f8a5b",
             secondary_color: "#ffd166",
+          },
+        },
+        PortalOrganizationInfo: {
+          type: "object",
+          description:
+            "Un organisme du portail et ce qu'il dit à ses usagers. **Public.** Textes en Markdown, " +
+            "en français.",
+          required: ["id", "name", "slug", "is_tenant", "updated_at", "info"],
+          properties: {
+            id: { type: "string", format: "uuid" },
+            name: { type: "string", description: "Nom de l'organisme." },
+            slug: {
+              type: ["string", "null"],
+              description: "Adresse de l'organisme sur le portail (`/<slug>`), ou `null`.",
+            },
+            is_tenant: {
+              type: "boolean",
+              description: "C'est la collectivité du domaine elle-même (toujours en tête de liste).",
+            },
+            updated_at: {
+              type: ["string", "null"],
+              format: "date-time",
+              description: "Dernier enregistrement.",
+            },
+            info: {
+              type: "object",
+              description:
+                "Les trois rubriques, toujours présentes (vides plutôt qu'absentes). Les questions " +
+                "entièrement vides sont écartées ; l'ordre de la FAQ est un ordre de lecture.",
+              required: ["description", "openingHours", "faq"],
+              properties: {
+                description: { type: "string", description: "Présentation de l'organisme (Markdown)." },
+                openingHours: {
+                  type: "string",
+                  description:
+                    "Horaires d'accueil, décrits librement : jours, plages, permanences, fermetures " +
+                    "(Markdown). Pas de format structuré : lisez-le, ne le calculez pas.",
+                },
+                faq: {
+                  type: "array",
+                  description:
+                    "FAQ usager de l'organisme — distincte de la FAQ usager de chaque démarche " +
+                    "(`user_communication`) et de la FAQ des agents.",
+                  items: {
+                    type: "object",
+                    properties: { question: { type: "string" }, answer: { type: "string" } },
+                  },
+                },
+              },
+            },
+          },
+          example: {
+            id: "d5227d25-f327-493a-a9a2-278397531e33",
+            name: "Mairie de Plounéour",
+            slug: "plouneour",
+            is_tenant: true,
+            updated_at: "2026-09-24T08:00:00+00:00",
+            info: {
+              description: "La mairie vous accueille pour l'état civil, l'urbanisme et les élections.",
+              openingHours: "Lundi au vendredi : 8 h 30 – 12 h et 13 h 30 – 17 h\nSamedi : 9 h – 12 h",
+              faq: [{ question: "Faut-il prendre rendez-vous ?", answer: "Seulement pour les passeports." }],
+            },
           },
         },
         AgentGuidance: {

@@ -35,6 +35,7 @@ import { buildOpenApiDocument } from "./_shared/openapi.ts";
 import { isoDay } from "./_shared/publication.ts";
 import { serializePortalPage } from "./_shared/portalPage.ts";
 import { serializeAgentGuidance } from "./_shared/agentGuidance.ts";
+import { serializePortalOrganizationsInfo, type UserInfoOrganization } from "./_shared/userInfo.ts";
 import {
   ACCESSIBILITY_STATEMENT_SLUG,
   hasPublishedContent,
@@ -629,6 +630,57 @@ Deno.serve(async (req: Request) => {
         return errorResponse("not_found", "Aucun contenu publié.", corsHeaders);
       }
       return jsonResponse(200, dto, corsHeaders);
+    }
+
+    // --- /v1/portal/organizations ---
+    // Les organismes du portail et ce qu'ils disent à leurs usagers :
+    // descriptif, horaires d'accueil, FAQ (onglet « Informations usagers »,
+    // 2026-09-24). Public par construction — c'est le corpus de l'assistant du
+    // portail pour « à quelle heure ouvre la mairie ? », qui ne compose qu'à
+    // partir des routes `/v1/portal/*`.
+    //
+    // Toute l'arborescence du tenant en une lecture : l'assistant ne sait pas
+    // d'avance quel organisme l'usager a en tête. Ne sortent que les organismes
+    // AFFICHÉS (actifs, pas service interne) qui ont écrit quelque chose —
+    // `serializePortalOrganizationsInfo` en décide. Rien d'écrit ⇒ `[]`, pas un
+    // 404 ; hors périmètre ⇒ 404, comme les autres routes du portail.
+    if (segments[0] === "v1" && segments[1] === "portal" && segments[2] === "organizations") {
+      if (segments.length !== 3) {
+        return errorResponse("not_found", "Endpoint inconnu.", corsHeaders);
+      }
+      const tenantId = url.searchParams.get("tenant_id") ?? "";
+      if (!isUuid(tenantId)) {
+        return errorResponse("bad_request", "Paramètre tenant_id invalide.", corsHeaders);
+      }
+      if (!inScope(tenantId)) {
+        return errorResponse("not_found", "Collectivité introuvable.", corsHeaders);
+      }
+      const { data: subtree, error: subtreeError } = await admin.rpc("org_subtree_ids", { root: tenantId });
+      if (subtreeError) throw subtreeError;
+      const treeIds = Array.isArray(subtree) ? (subtree as string[]) : [];
+      if (treeIds.length === 0) return jsonResponse(200, [], corsHeaders);
+
+      const { data: organizations, error: organizationsError } = await admin
+        .from("organizations")
+        .select("id, name, slug, parent_id, status, is_internal_service")
+        .in("id", treeIds);
+      if (organizationsError) throw organizationsError;
+
+      const { data: infoRows, error: infoError } = await admin
+        .from("organization_user_info")
+        .select("organization_id, info, updated_at")
+        .in("organization_id", treeIds);
+      if (infoError) throw infoError;
+
+      return jsonResponse(
+        200,
+        serializePortalOrganizationsInfo(
+          tenantId,
+          (organizations ?? []) as UserInfoOrganization[],
+          (infoRows ?? []) as Array<{ organization_id: unknown; info: unknown; updated_at: unknown }>,
+        ),
+        corsHeaders,
+      );
     }
 
     // --- /v1/organizations ---

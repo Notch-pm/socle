@@ -232,6 +232,11 @@ démarches ». Ajouter une collectivité au portail = une ligne de domaine, aucu
   `GET /v1/organizations/{id}/branding` (résolue). ⚠️ `supabase/config.toml` déclare
   `verify_jwt = false` pour `public-api` : un déploiement sans ce fichier remet le défaut `true`
   et coupe **tous** les consommateurs (incident du 2026-09-05).
+- **Informations usagers des organismes** (2026-09-24, contrat 1.30.0) :
+  `GET /v1/portal/organizations?tenant_id=` sert, pour chaque organisme **affiché** de l'arbre
+  (collectivité en tête), le descriptif, les **horaires d'accueil** et la FAQ rédigés dans
+  l'onglet « Informations usagers » de l'organisation — public, sans brouillon, sans héritage ;
+  rien d'écrit = `[]`. Lu par Nora et par son assistant. Détail : [`organisations.md`](organisations.md).
 - Code : `src/features/portal/` — `portalPage.ts` (+ `fieldsForKind`, `sectionText`,
   `setSectionTranslation`, `hasTranslations`), `portalReorder.ts`, `catalogue.ts` (purs,
   **testés** — `catalogue.ts` porte aussi `audiences` par entrée, `catalogueAudiences` et

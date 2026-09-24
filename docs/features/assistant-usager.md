@@ -35,7 +35,12 @@ crédit** (déjà compté).
   collectivité. ⚠️ `TenantDto` est lu par tout visiteur : **deux booléens, rien d'autre** — ni
   prompt, ni alias d'agent, ni plafond (tests sur le sérialiseur et sur l'OpenAPI).
 - ⚠️ **Le corpus est ce que `/v1/portal/*` sert déjà, et rien d'autre** : `user_description`,
-  `user_communication`, `form_schema`, `requester_config`, page et contenus publiés.
+  `user_communication`, `form_schema`, `requester_config`, page et contenus publiés, et — depuis
+  le 2026-09-24 — les **informations usagers des organismes** (descriptif, **horaires
+  d'accueil**, FAQ : `GET /v1/portal/organizations`, onglet « Informations usagers »). C'est là
+  qu'une collectivité écrit ce que l'assistant doit savoir d'elle-même ; ⚠️ le champ « accueil
+  physique » des recommandations aux agents, lui, n'y entre jamais (incident du 2026-09-24 :
+  l'assistant disait ne pas connaître des horaires qui n'étaient écrits que là).
   `knowledge_base`, `agent_description` et les recommandations aux agents **ne doivent jamais**
   entrer dans le prompt de l'assistant — la clé `read` de Nora peut techniquement lire
   `GET /v1/procedures/{id}`, qui les sert : c'est à Nora de ne composer qu'à partir des routes
