@@ -90,7 +90,16 @@ démarches ». Ajouter une collectivité au portail = une ligne de domaine, aucu
   autorise le guillemet, et une déclaration cassée ferait disparaître le fond sans rien dire.
   ⚠️ `imageFixed` est un **ornement** : plusieurs navigateurs mobiles ignorent `fixed` et y font
   défiler l'image — le bloc reste entier, l'inspecteur le dit.
-  **En aval** (contrat 1.20.0) : `image_url`, `image_full_width`, `image_fixed` sur
+  **Textes sur l'image** (`textColor` `theme`/`white` + `textShadow`, 2026-09-24, contrat 1.32.0) :
+  la réponse de l'agent au voile retiré — c'est lui qui choisit, photo par photo, un titre et un
+  sous-titre **blancs** et/ou une **ombre portée**. ⚠️ L'ombre est un **halo sans décalage** (elle
+  part de tous les côtés) et prend le **contre-pied** du texte : sombre sous le blanc, claire sous
+  l'encre (`imageTextStyle` dans `themeStyle.ts`, miroir chez Nora, testé des deux côtés).
+  ⚠️ Même régime que les options de l'image : proposées **seulement sous une image**, conservées
+  quand l'adresse est effacée, éteintes par la frontière de Nora. Les puces de raccourci et le
+  champ ne changent pas (déjà en blanc plein). Aucune garantie de contraste n'est rendue : c'est
+  un outil, pas un filet.
+  **En aval** (contrat 1.20.0, puis 1.32.0 pour `text_color` / `text_shadow`) : `image_url`, `image_full_width`, `image_fixed` sur
   `PortalRechercheSection`, **consommés par Nora**. Code : `imageBackdropStyle` dans
   `themeStyle.ts` (pur, testé des deux côtés — la garantie de contraste EST le test), rendu dans
   `editor/sections/RechercheSection.tsx` ; côté Nora, `HomeComposition` rend le bandeau pleine

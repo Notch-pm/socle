@@ -121,6 +121,11 @@ function serializeSection(raw: unknown, publishedIds: Set<string>): PortalSectio
         // rendu de les ignorer tant qu'il n'y a rien à habiller.
         image_full_width: bool(row.imageFullWidth, false),
         image_fixed: bool(row.imageFixed, false),
+        // Habillage des textes posés sur l'image — même régime : servi tel
+        // quel, sans objet sans image. Une couleur inconnue retombe sur
+        // l'encre du thème, le rendu d'avant l'option.
+        text_color: row.textColor === "white" ? "white" : "theme",
+        text_shadow: bool(row.textShadow, false),
         translations: translations(row.translations, ["title", "subtitle", "placeholder"]),
       };
     }

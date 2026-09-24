@@ -60,6 +60,10 @@ describe("createSection", () => {
     });
   });
 
+  it("recherche : textes à l'encre du thème, sans ombre", () => {
+    expect(createSection("recherche")).toMatchObject({ textColor: "theme", textShadow: false });
+  });
+
   it("démarches : trois colonnes, rien d'épinglé", () => {
     expect(createSection("demarches")).toMatchObject({ columns: 3, pinnedFirst: false, pinned: [] });
   });
@@ -325,10 +329,25 @@ describe("image de fond du bloc de recherche", () => {
           imageUrl: "https://medias.ville.fr/hotel-de-ville.jpg",
           imageFullWidth: true,
           imageFixed: true,
+          textColor: "white",
+          textShadow: true,
         },
       ],
     };
     expect(parsePortalPage(built)).toEqual(built);
+  });
+
+  it("lit une page composée avant l'habillage des textes comme l'encre du thème, sans ombre", () => {
+    const page = parsePortalPage({ version: 1, sections: [{ id: "r", kind: "recherche", title: "T" }] });
+    expect(page.sections[0]).toMatchObject({ textColor: "theme", textShadow: false });
+  });
+
+  it("ramène une couleur inconnue à l'encre du thème, sans perdre le bloc", () => {
+    const page = parsePortalPage({
+      version: 1,
+      sections: [{ id: "r", kind: "recherche", title: "Gardé", textColor: "rouge", textShadow: true }],
+    });
+    expect(page.sections[0]).toMatchObject({ title: "Gardé", textColor: "theme", textShadow: true });
   });
 
   it("écarte une adresse qui n'en est pas, sans perdre le bloc", () => {

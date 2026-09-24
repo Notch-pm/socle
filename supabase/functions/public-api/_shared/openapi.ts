@@ -30,7 +30,7 @@ export function buildOpenApiDocument(serverUrl: string): Record<string, unknown>
     openapi: "3.1.0",
     info: {
       title: "API Socle — Référentiel de la gamme",
-      version: "1.31.0",
+      version: "1.32.0",
       description: [
         "API **en lecture seule** exposant le référentiel central de la gamme : les",
         "**organisations** (et sous-organisations) avec l'intégralité de leur configuration,",
@@ -1419,6 +1419,8 @@ export function buildOpenApiDocument(serverUrl: string): Record<string, unknown>
             "image_url",
             "image_full_width",
             "image_fixed",
+            "text_color",
+            "text_shadow",
             "translations",
           ],
           properties: {
@@ -1464,6 +1466,23 @@ export function buildOpenApiDocument(serverUrl: string): Record<string, unknown>
                 "(`background-attachment: fixed`). ⚠️ Sans objet sans image, comme ci-dessus. " +
                 "⚠️ C'est un **ornement** : les navigateurs mobiles qui ignorent `fixed` " +
                 "affichent le bloc entier, image comprise, simplement sans l'effet.",
+            },
+            text_color: {
+              type: "string",
+              enum: ["theme", "white"],
+              description:
+                "Couleur du titre et du sous-titre posés sur l'image : `theme` = l'encre du " +
+                "thème (le rendu d'avant l'option), `white` = blanc. ⚠️ Sans objet sans image — " +
+                "à ignorer alors, un titre blanc disparaîtrait sur la page. Valeur conservée " +
+                "telle quelle par le Socle.",
+            },
+            text_shadow: {
+              type: "boolean",
+              description:
+                "Ombre portée sous le titre et le sous-titre, **sans décalage** : un halo qui " +
+                "part de tous les côtés (`text-shadow: 0 0 …`). Elle prend le contre-pied du " +
+                "texte — sombre sous `white`, claire sous l'encre du thème. ⚠️ Sans objet sans " +
+                "image, comme ci-dessus.",
             },
             translations: { $ref: "#/components/schemas/PortalSectionTranslations" },
           },

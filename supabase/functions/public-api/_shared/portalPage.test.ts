@@ -85,6 +85,8 @@ describe("serializePortalPage — tolérance, comme l'éditeur", () => {
             imageUrl: "https://medias.ville.fr/hotel-de-ville.jpg",
             imageFullWidth: true,
             imageFixed: true,
+            textColor: "white",
+            textShadow: true,
           },
         ],
       },
@@ -96,6 +98,8 @@ describe("serializePortalPage — tolérance, comme l'éditeur", () => {
       image_url: "https://medias.ville.fr/hotel-de-ville.jpg",
       image_full_width: true,
       image_fixed: true,
+      text_color: "white",
+      text_shadow: true,
     });
   });
 
@@ -119,8 +123,19 @@ describe("serializePortalPage — tolérance, comme l'éditeur", () => {
       image_url: "",
       image_full_width: false,
       image_fixed: false,
+      text_color: "theme",
+      text_shadow: false,
       translations: {},
     });
+  });
+
+  it("ramène une couleur de texte inconnue à l'encre du thème", () => {
+    const dto = serializePortalPage(
+      { sections: [{ id: "r", kind: "recherche", title: "T", textColor: "rouge" }] },
+      META,
+      PUBLISHED,
+    );
+    expect(dto.sections[0]).toMatchObject({ text_color: "theme" });
   });
 
   it("ÉCARTE un fond de recherche qui n'est pas une adresse, sans emporter le bloc", () => {

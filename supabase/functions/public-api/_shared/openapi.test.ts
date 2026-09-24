@@ -293,8 +293,8 @@ describe("contrat — traduction de la communication usager (1.26.0)", () => {
 describe("contrat — documents et courriers", () => {
   const doc = buildOpenApiDocument("https://example.supabase.co/functions/v1/public-api") as any;
 
-  it("annonce la version 1.31.0 du contrat", () => {
-    expect(doc.info.version).toBe("1.31.0");
+  it("annonce la version 1.32.0 du contrat", () => {
+    expect(doc.info.version).toBe("1.32.0");
   });
 
   it("le lieu d'intervention est un type de champ structurel, à réponse objet (1.29.0)", () => {
@@ -681,6 +681,18 @@ describe("contrat — page publiée du portail", () => {
     expect(schema.properties.image_fixed.description).toContain("Sans objet");
     // L'effet fixe est un ornement : personne ne doit le croire nécessaire.
     expect(schema.properties.image_fixed.description).toContain("ornement");
+  });
+
+  it("décrit l'habillage des textes du bloc de recherche : couleur, halo, sans objet sans image (1.32.0)", () => {
+    const schema = doc.components.schemas.PortalRechercheSection;
+    expect(schema.required).toContain("text_color");
+    expect(schema.required).toContain("text_shadow");
+    expect(schema.properties.text_color.enum).toEqual(["theme", "white"]);
+    // Un titre blanc sur la page blanche disparaîtrait : le consommateur doit
+    // savoir qu'il ignore ces deux champs sans image.
+    expect(schema.properties.text_color.description).toContain("Sans objet");
+    expect(schema.properties.text_shadow.description).toContain("Sans objet");
+    expect(schema.properties.text_shadow.description).toContain("tous les côtés");
   });
 
   it("décrit le bloc texte et image : un ORDRE, une URL libre, un alt qui se traduit", () => {

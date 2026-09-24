@@ -18,6 +18,7 @@ import {
   type ActusSection,
   type ContactSource,
   type DemarchesSection,
+  type RechercheTextColor,
   type FooterColumns,
   type FooterSection,
   type PortalSection,
@@ -267,9 +268,10 @@ function RechercheFields({
 }
 
 /**
- * L'image de fond du bloc de recherche, et ses deux options.
+ * L'image de fond du bloc de recherche, ses deux options, et l'habillage des
+ * textes posés dessus (couleur, ombre portée).
  *
- * ⚠️ Les deux commutateurs n'apparaissent **qu'une fois une adresse saisie** :
+ * ⚠️ Ces réglages n'apparaissent **qu'une fois une adresse saisie** :
  * ils n'habillent rien tant qu'il n'y a pas d'image, et un réglage sans effet
  * visible se lit comme un réglage cassé (motif `header.color`, masqué tant que
  * le bandeau est blanc). Ils sont masqués, pas remis à zéro : effacer l'adresse
@@ -290,7 +292,7 @@ function RechercheImageFields({
       <Field
         label="Image de fond"
         htmlFor="insp-recherche-image"
-        hint="Lien https vers un fichier déjà en ligne. L'image recouvre tout le bloc ; un voile clair est posé dessus pour que les textes restent lisibles."
+        hint="Lien https vers un fichier déjà en ligne. L'image recouvre tout le bloc, telle quelle : réglez ensuite la couleur et l'ombre des textes pour qu'ils restent lisibles."
         error={urlError ? "Adresse attendue : https://…" : undefined}
       >
         <Input
@@ -316,6 +318,24 @@ function RechercheImageFields({
             checked={section.imageFixed}
             onCheckedChange={(checked) => onChange({ ...section, imageFixed: checked })}
             hint="L'image ne bouge pas quand l'usager fait défiler la page. Effet ignoré par certains navigateurs mobiles, où l'image défile normalement."
+          />
+          <Field label="Couleur du titre et du sous-titre">
+            <SegmentedControl
+              aria-label="Couleur du titre et du sous-titre"
+              value={section.textColor}
+              onChange={(value) => onChange({ ...section, textColor: value as RechercheTextColor })}
+              options={[
+                { value: "theme", label: "Couleur du thème" },
+                { value: "white", label: "Blanc" },
+              ]}
+            />
+          </Field>
+          <ToggleField
+            id="insp-recherche-text-shadow"
+            label="Ombre portée"
+            checked={section.textShadow}
+            onCheckedChange={(checked) => onChange({ ...section, textShadow: checked })}
+            hint="Un halo autour du titre et du sous-titre, pour qu'ils se détachent d'une image aux couleurs variées."
           />
         </>
       ) : null}

@@ -167,7 +167,25 @@ export interface RechercheSection extends SectionCommon {
    * entier partout.
    */
   imageFixed: boolean;
+  /**
+   * Couleur du titre et du sous-titre posés sur l'image : l'encre du thème, ou
+   * du blanc pour une photo sombre.
+   *
+   * ⚠️ Sans effet sans image (un titre blanc sur la page blanche disparaîtrait)
+   * et conservée comme les deux options ci-dessus.
+   */
+  textColor: RechercheTextColor;
+  /**
+   * Ombre portée sous le titre et le sous-titre, **sans décalage** : un halo
+   * qui part de tous les côtés, pour détacher le texte d'une photo aux
+   * couleurs variées. Sombre sous un texte blanc, claire sous l'encre — voir
+   * `imageTextStyle`. Sans effet sans image, conservée de même.
+   */
+  textShadow: boolean;
 }
+
+/** Couleur des textes du bloc de recherche posés sur une image. */
+export type RechercheTextColor = "theme" | "white";
 
 export interface DemarchesSection extends SectionCommon {
   kind: "demarches";
@@ -313,6 +331,8 @@ const BUILDERS: { [K in SectionKind]: (id: string) => SectionOf<K> } = {
     imageUrl: "",
     imageFullWidth: false,
     imageFixed: false,
+    textColor: "theme",
+    textShadow: false,
   }),
   demarches: (id) => ({
     id,
@@ -561,6 +581,10 @@ const rechercheSchema = z.object({
   imageUrl: z.string().regex(IMAGE_URL).catch("").default(""),
   imageFullWidth: z.boolean().default(false),
   imageFixed: z.boolean().default(false),
+  // Une valeur inconnue retombe sur l'encre du thème : c'est le rendu d'avant
+  // l'option, jamais un texte illisible sur la page blanche.
+  textColor: z.enum(["theme", "white"]).catch("theme").default("theme"),
+  textShadow: z.boolean().default(false),
 });
 
 const demarchesSchema = z.object({

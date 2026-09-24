@@ -13,6 +13,29 @@ Format d'une entrée : `## AAAA-MM-JJ — <api> — ajout|correctif|rupture`
 
 ---
 
+## 2026-09-24 — public-api — ajout (couleur et ombre des textes du bloc de recherche)
+
+Chaque section **`recherche`** de `GET /v1/portal/page` porte deux champs de plus, qui habillent
+le **titre et le sous-titre posés sur l'image de fond** — pour qu'ils restent lisibles sur une
+photo aux couleurs variées. Version du contrat : **1.32.0**. Ajout **additif**.
+
+| Champ | Type | Sens |
+|---|---|---|
+| `text_color` | `"theme"` \| `"white"` | Encre du thème (rendu d'avant l'option) ou blanc |
+| `text_shadow` | booléen | Ombre portée **sans décalage** : un halo qui part de tous les côtés |
+
+- ⚠️ **Sans objet quand `image_url` est vide**, et à ignorer alors : un titre blanc sur la page
+  blanche disparaîtrait. La valeur est conservée telle quelle (motif `image_full_width`).
+- ⚠️ **L'ombre prend le contre-pied du texte** : sombre sous `white`, claire sous l'encre du
+  thème — une ombre noire sous une encre presque noire épaissit les lettres sans rien détacher.
+  Rendu du Socle : `text-shadow: 0 0 2px, 0 0 8px, 0 0 18px` (noir à 70/55/40 %, ou blanc à
+  85/70/50 %), aucune composante décalée.
+- Toujours présents, y compris sur une page publiée avant l'option (`"theme"`, `false`) ; une
+  valeur inconnue retombe sur `"theme"`.
+- **Consommateur** : **Nora** (page d'accueil du portail).
+
+---
+
 ## 2026-09-24 — public-api — ajout (téléphone et courriel des organismes du portail)
 
 Chaque élément de **`GET /v1/portal/organizations`** porte désormais le **téléphone** et le

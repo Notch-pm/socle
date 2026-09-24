@@ -798,6 +798,21 @@ export interface PortalRechercheSectionDto {
    * image, simplement sans l'effet. Aucune information n'en dépend.
    */
   image_fixed: boolean;
+  /**
+   * Couleur du titre et du sous-titre posés sur l'image : `theme` (l'encre du
+   * thème, comme sans l'option) ou `white`.
+   *
+   * ⚠️ **Sans objet quand `image_url` est vide** — et à ignorer alors : un titre
+   * blanc sur une page blanche disparaîtrait. Valeur conservée telle quelle,
+   * comme `image_full_width`.
+   */
+  text_color: "theme" | "white";
+  /**
+   * Ombre portée sous le titre et le sous-titre, **sans décalage** : un halo
+   * qui part de tous les côtés. Elle prend le contre-pied du texte — sombre
+   * sous un texte blanc, claire sous l'encre du thème. Sans objet sans image.
+   */
+  text_shadow: boolean;
   translations: PortalSectionTranslationsDto;
 }
 

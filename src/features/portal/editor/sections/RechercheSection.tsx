@@ -1,7 +1,7 @@
 import { Search } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { MAX_SHORTCUTS, type RechercheSection as RechercheSectionData } from "@/features/portal/portalPage";
-import { imageBackdropStyle } from "@/features/portal/themeStyle";
+import { imageBackdropStyle, imageTextStyle } from "@/features/portal/themeStyle";
 import type { PortalCatalogueEntry } from "@/features/portal/catalogue";
 import type { Device } from "../device";
 
@@ -41,6 +41,9 @@ export function RechercheSection({
   // l'adresse est effacée (le réglage gouverne l'usage, pas la donnée), il
   // revient donc au rendu de les ignorer tant qu'il n'y a rien à habiller.
   const fullWidth = hasImage && section.imageFullWidth;
+  // Couleur et ombre des textes : mêmes règles, conservées sans image et
+  // ignorées ici — un titre blanc disparaîtrait sur la page blanche.
+  const textStyle = hasImage ? imageTextStyle(section.textColor, section.textShadow) : undefined;
 
   return (
     <div
@@ -58,13 +61,17 @@ export function RechercheSection({
         fullWidth && (device === "mobile" ? "-mx-[32px]" : "-mx-[42px]"),
       )}
     >
-      <h2 className="text-center text-[length:var(--pt-h1)] font-extrabold leading-tight tracking-tight text-[color:var(--pt-ink)]">
+      <h2
+        style={textStyle}
+        className="text-center text-[length:var(--pt-h1)] font-extrabold leading-tight tracking-tight text-[color:var(--pt-ink)]"
+      >
         {section.title}
       </h2>
       {/* ⚠️ Le gris de texte passe à l'encre pleine sur une image : il ne tient
           sur aucun fond photographique, et le voile clair qui l'aidait a été
           retiré le 2026-09-12 (voir `imageBackdropStyle`). */}
       <p
+        style={textStyle}
         className={cn(
           "text-center text-[length:var(--pt-body)]",
           hasImage ? "text-[color:var(--pt-ink)]" : "text-[color:var(--pt-muted)]",

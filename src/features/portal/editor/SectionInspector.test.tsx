@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import { describe, it, expect, vi } from "vitest";
-import { render, screen, fireEvent } from "@testing-library/react";
+import { cleanup, render, screen, fireEvent } from "@testing-library/react";
 import { SectionInspector } from "./SectionInspector";
 
 const h = { remove: vi.fn() };
@@ -218,6 +218,25 @@ describe("SectionInspector — image de fond du bloc de recherche", () => {
     expect(onChange).toHaveBeenCalledWith(
       expect.objectContaining({ imageFixed: true, imageFullWidth: true }),
     );
+  });
+
+  it("habille les textes posés sur l'image : blanc, puis ombre portée", () => {
+    // Sans image, pas de réglage : un titre blanc disparaîtrait sur la page.
+    renderInspector(createSection("recherche"));
+    expect(screen.queryByLabelText("Ombre portée")).toBeNull();
+    cleanup();
+
+    const section = {
+      ...createSection("recherche"),
+      imageUrl: "https://medias.ville.fr/a.jpg",
+    } as PortalSection;
+    const { onChange } = renderInspector(section);
+
+    fireEvent.click(screen.getByRole("tab", { name: "Blanc" }));
+    expect(onChange).toHaveBeenCalledWith(expect.objectContaining({ textColor: "white" }));
+
+    fireEvent.click(screen.getByLabelText("Ombre portée"));
+    expect(onChange).toHaveBeenCalledWith(expect.objectContaining({ textShadow: true }));
   });
 
   it("prévient que l'effet fixe n'est pas rendu partout", () => {
