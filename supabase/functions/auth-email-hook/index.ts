@@ -9,6 +9,7 @@ import {
   type SmtpConfig,
   type SmtpRow,
 } from "./_shared/smtp.ts";
+import { renderBrandedEmail } from "./_shared/emailLayout.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -17,46 +18,13 @@ const corsHeaders = {
 };
 
 function buildBrandedEmail(siteName: string, heading: string, bodyHtml: string, ctaLabel: string, ctaUrl: string, isOtp = false) {
-  const primary = "#0aaa6b"; // Edilumen primary green — matches src/index.css --primary
-  const otpBg = "#f4f4f5";
-
-  const ctaBlock = isOtp
-    ? `<div style="text-align:center;padding:16px;background:${otpBg};border-radius:8px;font-size:28px;font-weight:700;letter-spacing:4px;color:#18181b;">${ctaUrl}</div>`
-    : `<table role="presentation" cellpadding="0" cellspacing="0" style="margin:0 auto;">
-        <tr><td style="background-color:${primary};border-radius:8px;">
-          <a href="${ctaUrl}" target="_blank" style="display:inline-block;padding:14px 32px;color:#ffffff;font-size:14px;font-weight:600;text-decoration:none;">${ctaLabel}</a>
-        </td></tr>
-      </table>`;
-
-  const fallbackLink = isOtp
-    ? ""
-    : `<p style="margin:20px 0 0;font-size:12px;color:#a1a1aa;word-break:break-all;">Si le bouton ne fonctionne pas, copiez ce lien : ${ctaUrl}</p>`;
-
-  return `<!DOCTYPE html>
-<html lang="fr">
-<head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"></head>
-<body style="margin:0;padding:0;background-color:#ffffff;font-family:Arial,Helvetica,sans-serif;">
-  <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background-color:#ffffff;padding:40px 20px;">
-    <tr><td align="center">
-      <table role="presentation" width="520" cellpadding="0" cellspacing="0" style="background-color:#ffffff;border:1px solid ${primary};border-radius:12px;overflow:hidden;">
-        <tr><td style="background-color:#ffffff;border-bottom:1px solid ${primary};padding:24px 32px;text-align:center;">
-          <h2 style="margin:0;color:#18181b;font-size:20px;font-weight:700;">${siteName}</h2>
-        </td></tr>
-        <tr><td style="padding:32px 32px 24px;">
-          <h1 style="margin:0 0 16px;font-size:22px;font-weight:700;color:#18181b;">${heading}</h1>
-          ${bodyHtml}
-          ${ctaBlock}
-        </td></tr>
-        <tr><td style="padding:0 32px 28px;">
-          ${fallbackLink}
-          <hr style="border:none;border-top:1px solid #e4e4e7;margin:20px 0;" />
-          <p style="margin:0;font-size:12px;color:#a1a1aa;text-align:center;">${siteName}</p>
-        </td></tr>
-      </table>
-    </td></tr>
-  </table>
-</body>
-</html>`;
+  return renderBrandedEmail({
+    primary: "#0aaa6b", // Edilumen primary green — matches src/index.css --primary
+    siteName,
+    heading,
+    bodyHtml,
+    action: isOtp ? { code: ctaUrl } : { label: ctaLabel, url: ctaUrl },
+  });
 }
 
 async function sendViaSMTP(smtp: SmtpConfig, to: string, subject: string, html: string, text: string) {

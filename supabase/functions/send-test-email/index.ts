@@ -1,5 +1,6 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import nodemailer from "npm:nodemailer@6";
+import { escapeHtml, renderBrandedEmail } from "./_shared/emailLayout.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -107,28 +108,14 @@ Deno.serve(async (req: Request) => {
       to,
       subject: `Test SMTP — ${siteName}`,
       text: `Ceci est un email de test envoyé depuis ${siteName}.\n\nVotre configuration SMTP fonctionne correctement.`,
-      html: `<!DOCTYPE html>
-<html lang="fr">
-<head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"></head>
-<body style="margin:0;padding:0;background-color:#ffffff;font-family:Arial,Helvetica,sans-serif;">
-  <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background-color:#ffffff;padding:40px 20px;">
-    <tr><td align="center">
-      <table role="presentation" width="520" cellpadding="0" cellspacing="0" style="background-color:#ffffff;border:1px solid ${primary};border-radius:12px;overflow:hidden;">
-        <tr><td style="background-color:#ffffff;border-bottom:1px solid ${primary};padding:24px 32px;text-align:center;">
-          <h2 style="margin:0;color:#18181b;font-size:20px;font-weight:700;">${siteName}</h2>
-        </td></tr>
-        <tr><td style="padding:32px;">
-          <h1 style="margin:0 0 16px;font-size:22px;font-weight:700;color:#18181b;">Test SMTP réussi</h1>
-          <p style="margin:0 0 8px;font-size:14px;line-height:1.6;color:#52525b;">Ceci est un email de test envoyé depuis <strong>${siteName}</strong>.</p>
-          <p style="margin:0 0 24px;font-size:14px;line-height:1.6;color:#52525b;">Votre configuration SMTP fonctionne correctement.</p>
-          <hr style="border:none;border-top:1px solid #e4e4e7;margin:20px 0;" />
-          <p style="margin:0;font-size:12px;color:#a1a1aa;">Serveur : ${smtp.host}:${smtp.port} — TLS : ${smtp.use_tls ? "Oui" : "Non"}</p>
-        </td></tr>
-      </table>
-    </td></tr>
-  </table>
-</body>
-</html>`,
+      html: renderBrandedEmail({
+        primary,
+        siteName,
+        heading: "Test SMTP réussi",
+        bodyHtml: `<p style="margin:0 0 8px;font-size:14px;line-height:1.6;color:#52525b;">Ceci est un email de test envoyé depuis <strong>${escapeHtml(siteName)}</strong>.</p>
+          <p style="margin:0 0 16px;font-size:14px;line-height:1.6;color:#52525b;">Votre configuration SMTP fonctionne correctement.</p>
+          <p style="margin:0;font-size:12px;color:#a1a1aa;">Serveur : ${escapeHtml(`${smtp.host}:${smtp.port}`)} — TLS : ${smtp.use_tls ? "Oui" : "Non"}</p>`,
+      }),
     });
 
     return new Response(JSON.stringify({ success: true }), {
