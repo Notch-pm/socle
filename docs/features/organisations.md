@@ -118,6 +118,29 @@ garde sa modale (`OrganizationsManager` reçoit `onEditOrganization` seulement c
   déjà les démarches et `proceduresText`. ⚠️ **Interne** : aucune route du portail ne le sert.
   ⚠️ **Une table et non une colonne** : `organizations` se lit en `select("*")` partout.
   Côté superadmin, la même section est une carte d'`OrgSettingsPage` (`?section=agents`).
+- **Onglet « Attributions »** (`AttributionsSection`, 2026-10-01, **toute organisation, service
+  interne compris** — jamais filtré, juste après « Informations de base ») : ce que l'organisme
+  **traite et ne traite pas** (sujets, publics, exemples de demandes), un texte Markdown de
+  **2 000 caractères** au plus (`MAX_ATTRIBUTIONS_LENGTH`, compteur à l'écran, CHECK en base).
+  Table `organization_attributions` (une ligne par organisation, RLS calquée sur
+  `organization_user_info`), contrat pur `attributions.ts` (miroir edge `_shared/attributions.ts`,
+  borne épinglée par test), servi par `GET /v1/organizations/attributions?tenant_id=` (1.33.0).
+  Premier consommateur : **Clara**, dont l'IA propose le service instructeur d'un courrier — d'où
+  les services internes, qui instruisent souvent et dont elle ne connaissait que le nom.
+  ⚠️ **Interne** : aucune route du portail ne le sert, l'écran le dit. ⚠️ **Pas d'héritage**.
+  ⚠️ Saisie non trimée (champ contrôlé) ; le `trim` se fait à l'écriture (`cleanAttributions`).
+  Côté superadmin, carte d'`OrgSettingsPage` (`?section=attributions`).
+
+  **Trois textes, trois publics — jamais fusionnés :**
+
+  | | Informations usagers | Recommandations aux agents | Attributions |
+  |---|---|---|---|
+  | Pour qui | le public (portail, son assistant) | les agents et leur IA | les agents et leur IA |
+  | Quoi | descriptif, horaires, FAQ | rôle, accueil, consignes, FAQ, sources | ce que l'organisme traite / ne traite pas |
+  | Où | toute organisation **sauf service interne** | **racine seule** | **toute** organisation, service interne compris |
+  | Table | `organization_user_info` | `organization_agent_guidance` | `organization_attributions` |
+  | Route | `GET /v1/portal/organizations` | `GET /v1/organizations/{id}/agent-guidance` | `GET /v1/organizations/attributions` |
+
 - **Onglet « Informations usagers »** (`UserInfoSection`, 2026-09-24, **toute organisation**,
   sous-organisation comprise — chaque annexe a ses horaires — **sauf un service interne**, où
   l'onglet et la carte superadmin sont retirés : `hasUserInfoTab`) : ce que l'organisme dit **au public**

@@ -42,7 +42,8 @@ crédit** (déjà compté).
   qu'une collectivité écrit ce que l'assistant doit savoir d'elle-même ; ⚠️ le champ « accueil
   physique » des recommandations aux agents, lui, n'y entre jamais (incident du 2026-09-24 :
   l'assistant disait ne pas connaître des horaires qui n'étaient écrits que là).
-  `knowledge_base`, `agent_description` et les recommandations aux agents **ne doivent jamais**
+  `knowledge_base`, `agent_description`, les recommandations aux agents et les **attributions**
+  des organismes (`GET /v1/organizations/attributions`, internes) **ne doivent jamais**
   entrer dans le prompt de l'assistant — la clé `read` de Nora peut techniquement lire
   `GET /v1/procedures/{id}`, qui les sert : c'est à Nora de ne composer qu'à partir des routes
   portail, et un test l'y épingle.

@@ -162,6 +162,7 @@ exécutables par `authenticated` : le RLS les évalue avec les droits de l'appel
 - `portal_themes` (apparence du site de démarches — une ligne par racine, `draft`/`published` comme `portal_pages` ; **aucune couleur** : elles vivent dans la charte — voir feature « thème du site »).
 - `portal_contents` (pages de **texte** du site, une par `(racine, slug)`, `draft`/`published` ; aujourd'hui la **déclaration d'accessibilité** — voir feature « site de démarches »).
 - `organization_agent_guidance` (**recommandations aux agents**, une ligne par racine — version globale de `knowledge_base`, **interne** — voir feature « Organisations »).
+- `organization_attributions` (**attributions** — ce que traite l'organisme —, une ligne par organisation, **service interne compris**, **interne**, 2 000 caractères, servi par `GET /v1/organizations/attributions` — voir feature « Organisations »).
 - `organization_user_info` (**informations usagers** — descriptif, horaires d'accueil, FAQ —, une ligne par organisation, racine ou non, **public** et sans brouillon, servi par `GET /v1/portal/organizations` au portail et à son assistant — voir feature « Organisations »).
 - `portal_assistant_settings` (**interrupteur de l'assistant du portail**, une ligne par racine, écriture **super admin** seule — voir feature « Assistant du portail usagers »).
 
@@ -190,7 +191,7 @@ Trois motifs reviennent dans presque toutes les fiches — les connaître évite
   des deux côtés et **testée des deux côtés** (motif `readDocumentIds`).
 
 ### [Organisations](docs/features/organisations.md)
-Hiérarchie, édition en pleine page (onglets Informations, Charte graphique, Langues,
+Hiérarchie, édition en pleine page (onglets Informations, Attributions, Charte graphique, Langues,
 Informations usagers, Recommandations aux agents, Démarches, Emails, Domaines), gestion
 superadmin (`OrgSettingsPage`, menu latéral par client).
 - ⚠️ **Recommandations aux agents** (2026-09-19) : version **globale** de `knowledge_base`, sur la
@@ -200,6 +201,10 @@ superadmin (`OrgSettingsPage`, menu latéral par client).
   FAQ), sur toute organisation **sauf un service interne** (onglet retiré), sans héritage ni
   brouillon, servi par `GET /v1/portal/organizations` avec le téléphone et le courriel de la fiche
   — c'est là que l'assistant du portail trouve horaires et coordonnées.
+- ⚠️ **Attributions** (2026-10-01) : ce que **chaque** organisme traite et ne traite pas,
+  **services internes compris**, **interne** (agents, IA de Clara), servi par
+  `GET /v1/organizations/attributions?tenant_id=` — ni le descriptif usager, ni les
+  recommandations (tableau des trois textes dans la fiche).
 - Arbre `parent_id`, **10 niveaux max** (`enforce_org_depth`, bloque aussi les cycles). Le super
   admin seul crée les racines et supprime (jamais une racine) ; un admin d'org gère tout son
   sous-arbre, sans suppression. Les racines sont les **clients** : aucune vue n'en fond plusieurs.

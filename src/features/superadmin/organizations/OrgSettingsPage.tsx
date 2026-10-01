@@ -1,6 +1,6 @@
 import * as React from "react";
 import { useParams, useNavigate, useSearchParams } from "react-router-dom";
-import { ArrowLeft, BookUser, Settings2, Users as UsersIcon, ListChecks, FileCheck2, FileSignature, MapPin, Mail, Palette, Globe, Languages, LayoutTemplate, KeyRound, Gauge, Tags, ToggleRight, AppWindow, MessagesSquare, MessageCircleQuestion, type LucideIcon } from "lucide-react";
+import { ArrowLeft, BookUser, Briefcase, Settings2, Users as UsersIcon, ListChecks, FileCheck2, FileSignature, MapPin, Mail, Palette, Globe, Languages, LayoutTemplate, KeyRound, Gauge, Tags, ToggleRight, AppWindow, MessagesSquare, MessageCircleQuestion, type LucideIcon } from "lucide-react";
 import { Card, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { EmptyState } from "@/components/shared/EmptyState";
@@ -16,6 +16,7 @@ import { DomainsSection } from "@/features/organizations/DomainsSection";
 import { LanguagesSection } from "@/features/languages/LanguagesSection";
 import { AgentGuidanceSection } from "@/features/organizations/AgentGuidanceSection";
 import { UserInfoSection } from "@/features/organizations/UserInfoSection";
+import { AttributionsSection } from "@/features/organizations/AttributionsSection";
 import { hasUserInfoTab } from "@/features/organizations/userInfo";
 import { ApiKeysSection } from "@/features/superadmin/organizations/sections/ApiKeysSection";
 import { AiUsageSection } from "@/features/superadmin/organizations/sections/AiUsageSection";
@@ -30,6 +31,7 @@ import { QuartiersManager } from "@/features/quartiers/QuartiersManager";
 type Section =
   | "menu"
   | "general"
+  | "attributions"
   | "charte"
   | "langues"
   | "usagers"
@@ -50,6 +52,7 @@ type Section =
 
 const SECTIONS: { key: Exclude<Section, "menu">; title: string; description: string; icon: LucideIcon }[] = [
   { key: "general", title: "Informations générales", description: "Nom, coordonnées, slug, organisation parente", icon: Settings2 },
+  { key: "attributions", title: "Attributions", description: "Ce que traite cet organisme et ce qu'il ne traite pas — interne, repris par Clara pour orienter les courriers", icon: Briefcase },
   { key: "charte", title: "Charte graphique", description: "Logos et couleurs repris par les applications de la gamme", icon: Palette },
   { key: "langues", title: "Langues", description: "Langues activées pour les libellés des démarches et des catégories", icon: Languages },
   { key: "usagers", title: "Informations usagers", description: "Descriptif, horaires d'accueil et FAQ publiés sur le site de démarches — repris par son assistant IA", icon: MessageCircleQuestion },
@@ -157,6 +160,8 @@ export function OrgSettingsPage() {
         </div>
 
         {activeSection === "general" && <GeneralInfoSection organization={organization} />}
+        {/* Toute organisation, service interne compris. */}
+        {activeSection === "attributions" && <AttributionsSection organization={organization} />}
         {activeSection === "charte" && <BrandingSection organization={organization} />}
         {/* Le composant dit lui-même qu'une sous-organisation suit sa racine. */}
         {activeSection === "langues" && <LanguagesSection organization={organization} />}

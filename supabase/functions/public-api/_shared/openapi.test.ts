@@ -28,6 +28,7 @@ describe("buildOpenApiDocument", () => {
         "/v1/portal/content",
         "/v1/portal/organizations",
         "/v1/organizations",
+        "/v1/organizations/attributions",
         "/v1/organizations/{id}",
         "/v1/organizations/{id}/smtp",
         "/v1/organizations/{id}/branding",
@@ -293,8 +294,8 @@ describe("contrat — traduction de la communication usager (1.26.0)", () => {
 describe("contrat — documents et courriers", () => {
   const doc = buildOpenApiDocument("https://example.supabase.co/functions/v1/public-api") as any;
 
-  it("annonce la version 1.32.0 du contrat", () => {
-    expect(doc.info.version).toBe("1.32.0");
+  it("annonce la version 1.33.0 du contrat", () => {
+    expect(doc.info.version).toBe("1.33.0");
   });
 
   it("le lieu d'intervention est un type de champ structurel, à réponse objet (1.29.0)", () => {
@@ -819,5 +820,42 @@ describe("contrat — informations à destination des usagers (1.30.0)", () => {
     expect(schema.properties.phone.type).toEqual(["string", "null"]);
     expect(schema.properties.email.type).toEqual(["string", "null"]);
     expect(route.description).toContain("**courriel**");
+  });
+});
+
+describe("contrat — attributions des organisations (1.33.0)", () => {
+  const doc = buildOpenApiDocument("https://example.supabase.co/functions/v1/public-api") as any;
+  const route = doc.paths["/v1/organizations/attributions"].get;
+  const schema = doc.components.schemas.OrganizationAttributions;
+
+  it("sert un tableau nu d'attributions, borné par tenant_id", () => {
+    expect(route.parameters).toEqual([
+      expect.objectContaining({ name: "tenant_id", in: "query", required: true }),
+    ]);
+    expect(route.responses["200"].content["application/json"].schema).toEqual({
+      type: "array",
+      items: { $ref: "#/components/schemas/OrganizationAttributions" },
+    });
+    expect(Object.keys(route.responses).sort()).toEqual(["200", "400", "401", "404", "500"]);
+  });
+
+  it("porte exactement cinq champs, services internes signalés", () => {
+    expect(Object.keys(schema.properties)).toEqual([
+      "id",
+      "name",
+      "is_internal_service",
+      "attributions",
+      "updated_at",
+    ]);
+    expect(schema.required).toEqual(Object.keys(schema.properties));
+    expect(schema.properties.attributions.maxLength).toBe(2000);
+    expect(route.description).toContain("services internes compris");
+  });
+
+  it("⚠️ aucune route du portail ne sert les attributions — elles sont internes", () => {
+    const portalRefs = Object.entries(doc.paths)
+      .filter(([path]) => path.startsWith("/v1/portal/"))
+      .map(([, spec]) => JSON.stringify(spec));
+    for (const spec of portalRefs) expect(spec).not.toContain("OrganizationAttributions");
   });
 });

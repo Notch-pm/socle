@@ -1,7 +1,7 @@
 # Journal des évolutions des API publiques
 
 > **Public** : équipes consommatrices (Ariane, Clara, Iris, partenaires) · **Question traitée** :
-> quand un contrat d'API a-t-il changé, et comment ? · **Dernière mise à jour** : 2026-09-24
+> quand un contrat d'API a-t-il changé, et comment ? · **Dernière mise à jour** : 2026-10-01
 
 Journal **append-only** : chaque évolution de la surface de contrat des API publiques
 (`public-api`, `contacts-api`, `ai-api`, `audience-api`) — endpoint, paramètre, champ de réponse,
@@ -10,6 +10,40 @@ réécrite ; une correction s'ajoute sous une nouvelle date. Politique de compat
 consommateur : [integration.md](./integration.md#politique-de-compatibilité-v1).
 
 Format d'une entrée : `## AAAA-MM-JJ — <api> — ajout|correctif|rupture`
+
+---
+
+## 2026-10-01 — public-api — ajout (attributions des organisations)
+
+Nouvelle route **`GET /v1/organizations/attributions?tenant_id=<uuid>`** (scope `read`) : ce que
+chaque organisme de la collectivité **traite et ne traite pas**, rédigé dans l'onglet
+« Attributions » du Socle — pour orienter une demande ou un courrier vers le bon service. Version
+du contrat : **1.33.0**. Ajout **additif**.
+
+Réponse : un **tableau nu**, une entrée par organisme **actif** du sous-arbre qui a écrit un texte.
+
+```json
+[
+  {
+    "id": "6f1c…",
+    "name": "Services techniques",
+    "is_internal_service": true,
+    "attributions": "Traite : voirie, éclairage public, propreté.
+Ne traite pas : stationnement.",
+    "updated_at": "2026-10-01T08:00:00Z"
+  }
+]
+```
+
+- ⚠️ **Services internes compris**, contrairement à `GET /v1/portal/organizations` : ce sont
+  souvent eux qui instruisent.
+- ⚠️ **Interne** : destiné aux agents et à leurs outils IA, jamais à un usager ; aucune route
+  `/v1/portal/*` ne le sert. Distinct du descriptif public des informations usagers et des
+  recommandations aux agents (racine seule).
+- Markdown, en français, 2 000 caractères au plus, jamais vide. **Pas d'héritage** : un organisme
+  absent n'a rien écrit. La collectivité en tête si elle a écrit, puis les autres par nom.
+- `tenant_id` invalide ⇒ `400` ; hors périmètre de la clé ⇒ `404` ; rien d'écrit ⇒ `200 []`.
+- **Consommateur** : **Clara** (proposition du service instructeur d'un courrier).
 
 ---
 

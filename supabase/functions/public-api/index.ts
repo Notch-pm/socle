@@ -36,6 +36,7 @@ import { isoDay } from "./_shared/publication.ts";
 import { serializePortalPage } from "./_shared/portalPage.ts";
 import { serializeAgentGuidance } from "./_shared/agentGuidance.ts";
 import { serializePortalOrganizationsInfo, type UserInfoOrganization } from "./_shared/userInfo.ts";
+import { serializeOrganizationAttributions, type AttributionsOrganization } from "./_shared/attributions.ts";
 import {
   ACCESSIBILITY_STATEMENT_SLUG,
   hasPublishedContent,
@@ -678,6 +679,53 @@ Deno.serve(async (req: Request) => {
           tenantId,
           (organizations ?? []) as UserInfoOrganization[],
           (infoRows ?? []) as Array<{ organization_id: unknown; info: unknown; updated_at: unknown }>,
+        ),
+        corsHeaders,
+      );
+    }
+
+    // --- /v1/organizations/attributions?tenant_id= ---
+    // Ce que traite chaque organisme du sous-arbre — INTERNE (agents et outils
+    // IA, Clara d'abord), services internes COMPRIS. ⚠️ Avant la branche
+    // `/v1/organizations/{id}`, qui lirait « attributions » comme un
+    // identifiant invalide (400). Même forme que `/v1/portal/organizations` :
+    // tableau nu, rien d'écrit ⇒ `[]`, hors périmètre ⇒ 404.
+    if (
+      segments.length === 3 &&
+      segments[0] === "v1" &&
+      segments[1] === "organizations" &&
+      segments[2] === "attributions"
+    ) {
+      const tenantId = url.searchParams.get("tenant_id") ?? "";
+      if (!isUuid(tenantId)) {
+        return errorResponse("bad_request", "Paramètre tenant_id invalide.", corsHeaders);
+      }
+      if (!inScope(tenantId)) {
+        return errorResponse("not_found", "Collectivité introuvable.", corsHeaders);
+      }
+      const { data: subtree, error: subtreeError } = await admin.rpc("org_subtree_ids", { root: tenantId });
+      if (subtreeError) throw subtreeError;
+      const treeIds = Array.isArray(subtree) ? (subtree as string[]) : [];
+      if (treeIds.length === 0) return jsonResponse(200, [], corsHeaders);
+
+      const { data: organizations, error: organizationsError } = await admin
+        .from("organizations")
+        .select("id, name, status, is_internal_service")
+        .in("id", treeIds);
+      if (organizationsError) throw organizationsError;
+
+      const { data: rows, error: rowsError } = await admin
+        .from("organization_attributions")
+        .select("organization_id, attributions, updated_at")
+        .in("organization_id", treeIds);
+      if (rowsError) throw rowsError;
+
+      return jsonResponse(
+        200,
+        serializeOrganizationAttributions(
+          tenantId,
+          (organizations ?? []) as AttributionsOrganization[],
+          (rows ?? []) as Array<{ organization_id: unknown; attributions: unknown; updated_at: unknown }>,
         ),
         corsHeaders,
       );

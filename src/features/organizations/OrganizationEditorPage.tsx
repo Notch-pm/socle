@@ -3,6 +3,7 @@ import { useParams, useNavigate } from "react-router-dom";
 import {
   ArrowLeft,
   BookUser,
+  Briefcase,
   Globe,
   Languages,
   ListChecks,
@@ -24,12 +25,17 @@ import { DomainsSection } from "@/features/organizations/DomainsSection";
 import { LanguagesSection } from "@/features/languages/LanguagesSection";
 import { AgentGuidanceSection } from "@/features/organizations/AgentGuidanceSection";
 import { UserInfoSection } from "@/features/organizations/UserInfoSection";
+import { AttributionsSection } from "@/features/organizations/AttributionsSection";
 import { hasUserInfoTab } from "@/features/organizations/userInfo";
 
-type TabKey = "infos" | "charte" | "langues" | "usagers" | "agents" | "domaines" | "demarches" | "smtp";
+type TabKey = "infos" | "attributions" | "charte" | "langues" | "usagers" | "agents" | "domaines" | "demarches" | "smtp";
 
 const TABS: { key: TabKey; label: string; icon: LucideIcon }[] = [
   { key: "infos", label: "Informations de base", icon: Settings2 },
+  // Ce que l'organisme traite — INTERNE, pour les agents et leurs outils IA.
+  // Sur toute organisation, ⚠️ service interne COMPRIS : ce sont souvent eux
+  // qui instruisent. Jamais filtré, contrairement aux informations usagers.
+  { key: "attributions", label: "Attributions", icon: Briefcase },
   // Comme le relais SMTP, la charte se règle sur TOUTE organisation : une
   // sous-organisation y choisit entre celle de son parent et la sienne.
   { key: "charte", label: "Charte graphique", icon: Palette },
@@ -126,6 +132,7 @@ export function OrganizationEditorPage() {
       {/* `key` force le remontage (et la réinitialisation des formulaires) au changement d'org. */}
       <div key={organization.id}>
         {activeTab === "infos" && <OrganizationInfoTab organization={organization} />}
+        {activeTab === "attributions" && <AttributionsSection organization={organization} />}
         {activeTab === "charte" && <BrandingSection organization={organization} />}
         {activeTab === "langues" && <LanguagesSection organization={organization} />}
         {activeTab === "usagers" && <UserInfoSection organization={organization} />}

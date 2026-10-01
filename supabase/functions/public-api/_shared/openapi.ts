@@ -30,7 +30,7 @@ export function buildOpenApiDocument(serverUrl: string): Record<string, unknown>
     openapi: "3.1.0",
     info: {
       title: "API Socle — Référentiel de la gamme",
-      version: "1.32.0",
+      version: "1.33.0",
       description: [
         "API **en lecture seule** exposant le référentiel central de la gamme : les",
         "**organisations** (et sous-organisations) avec l'intégralité de leur configuration,",
@@ -481,6 +481,51 @@ export function buildOpenApiDocument(serverUrl: string): Record<string, unknown>
               },
             },
             ...errorResponses("401", "500"),
+          },
+        },
+      },
+      "/v1/organizations/attributions": {
+        get: {
+          tags: ["Organisations"],
+          summary: "Attributions des organismes d'une collectivité (ce que chacun traite)",
+          description: [
+            "Ce que chaque organisme de la collectivité **traite et ne traite pas** — sujets, publics,",
+            "exemples de demandes —, rédigé dans l'onglet « Attributions » du Socle. Fait pour",
+            "**orienter** une demande ou un courrier vers le bon service (1.33.0).",
+            "",
+            "⚠️ **Interne** : destiné aux agents et à leurs outils IA, **jamais** à un usager ni au",
+            "portail (aucune route `/v1/portal/*` ne le sert). Distinct du descriptif public de",
+            "`GET /v1/portal/organizations` et des consignes de",
+            "`GET /v1/organizations/{id}/agent-guidance`.",
+            "",
+            "Toute l'arborescence du tenant en un appel, **services internes compris**",
+            "(`is_internal_service: true`) — ce sont souvent eux qui instruisent. La collectivité en",
+            "tête si elle a écrit quelque chose, puis les autres organismes par nom. Ne sont listés",
+            "que les organismes **actifs** qui ont écrit un texte. **Pas d'héritage** : un organisme",
+            "absent n'a rien dit, ne lui prêtez pas les attributions de son parent.",
+            "",
+            "Texte en **Markdown**, en français, 2 000 caractères au plus. Rien d'écrit ⇒ `200` avec",
+            "`[]` ; `tenant_id` invalide ⇒ `400` ; collectivité hors périmètre de la clé ⇒ `404`.",
+          ].join("\n"),
+          parameters: [
+            {
+              name: "tenant_id",
+              in: "query",
+              required: true,
+              description: "Identifiant de la collectivité (organisation du périmètre de la clé).",
+              schema: { type: "string", format: "uuid" },
+            },
+          ],
+          responses: {
+            "200": {
+              description: "Organismes actifs qui ont écrit leurs attributions, la collectivité en tête.",
+              content: {
+                "application/json": {
+                  schema: { type: "array", items: { $ref: "#/components/schemas/OrganizationAttributions" } },
+                },
+              },
+            },
+            ...errorResponses("400", "401", "404", "500"),
           },
         },
       },
@@ -1859,6 +1904,31 @@ export function buildOpenApiDocument(serverUrl: string): Record<string, unknown>
               description: "Début d'après-midi (fin de la pause), ou `null`.",
             },
             afternoonClose: { type: "string", pattern: "^([01]\\d|2[0-3]):[0-5]\\d$", description: "Fermeture." },
+          },
+        },
+        OrganizationAttributions: {
+          type: "object",
+          description:
+            "Attributions d'un organisme : ce qu'il traite et ce qu'il ne traite pas. **Interne** " +
+            "(agents et outils IA), jamais au portail. Services internes compris ; pas d'héritage.",
+          required: ["id", "name", "is_internal_service", "attributions", "updated_at"],
+          properties: {
+            id: { type: "string", format: "uuid" },
+            name: { type: "string" },
+            is_internal_service: {
+              type: "boolean",
+              description: "`true` = service interne : il instruit, mais le portail ne l'affiche pas.",
+            },
+            attributions: {
+              type: "string",
+              maxLength: 2000,
+              description: "Texte en **Markdown**, en français, jamais vide.",
+            },
+            updated_at: {
+              type: ["string", "null"],
+              format: "date-time",
+              description: "Dernier enregistrement.",
+            },
           },
         },
         AgentGuidance: {

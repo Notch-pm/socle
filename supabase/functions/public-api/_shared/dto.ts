@@ -37,6 +37,26 @@ export interface OrganizationDto {
   created_at: string | null;
 }
 
+/**
+ * Attributions d'un organisme — élément de
+ * `GET /v1/organizations/attributions?tenant_id=` (contrat 1.33.0) : ce qu'il
+ * traite et ce qu'il ne traite pas, pour orienter demandes et courriers.
+ *
+ * ⚠️ **Interne** : destiné aux agents et à leurs outils IA, jamais au portail
+ * (ni aux usagers, ni à l'assistant du portail). ⚠️ Services internes
+ * **compris**. Seuls les organismes actifs qui ont écrit quelque chose sont
+ * listés ; pas d'héritage.
+ */
+export interface OrganizationAttributionsDto {
+  id: string;
+  name: string;
+  is_internal_service: boolean;
+  /** Markdown, en français, 2 000 caractères au plus, jamais vide. */
+  attributions: string;
+  /** Dernier enregistrement (ISO 8601). */
+  updated_at: string | null;
+}
+
 /** Catégorie de démarches (libellé + icône). */
 export interface CategoryDto {
   id: string;

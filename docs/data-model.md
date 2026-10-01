@@ -271,6 +271,24 @@ aucun endpoint, il décrit ce qui existe **en base**.
 
 ---
 
+### `organization_attributions` — attributions des organismes (2026-10-01)
+
+- `organization_id` **clé primaire**, FK **CASCADE** vers `organizations` (une ligne par
+  organisation, **service interne compris**) ; `attributions` text NOT NULL défaut `''` (CHECK
+  `char_length <= 2000`, borne miroir de `MAX_ATTRIBUTIONS_LENGTH`) ; `created_at` / `updated_at`
+  (trigger `set_updated_at`).
+- Ce que l'organisme **traite et ne traite pas**, en Markdown : pour les agents et leurs outils IA
+  (Clara oriente les courriers avec). ⚠️ **Interne**, jamais au portail ; ni le descriptif
+  d'`organization_user_info` (public), ni `organization_agent_guidance` (racine seule).
+  ⚠️ **Pas d'héritage**. Chaîne vide = rien d'écrit.
+- **RLS** (calquée sur `organization_user_info`) : lecture `has_org_access OR
+  is_admin_of_self_or_ancestor` · INSERT/UPDATE `is_admin_of_self_or_ancestor` · pas de DELETE
+  client (vider le texte suffit).
+- Servi par `GET /v1/organizations/attributions?tenant_id=` (contrat 1.33.0), organismes **actifs**
+  seulement, textes blancs écartés.
+
+---
+
 ### `organization_user_info` — informations à destination des usagers (2026-09-24)
 
 - `organization_id` **clé primaire**, FK **CASCADE** vers `organizations` (une ligne par

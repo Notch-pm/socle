@@ -1001,6 +1001,35 @@ export type Database = {
           },
         ]
       }
+      organization_attributions: {
+        Row: {
+          attributions: string
+          created_at: string
+          organization_id: string
+          updated_at: string
+        }
+        Insert: {
+          attributions?: string
+          created_at?: string
+          organization_id: string
+          updated_at?: string
+        }
+        Update: {
+          attributions?: string
+          created_at?: string
+          organization_id?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "organization_attributions_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: true
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       organization_domains: {
         Row: {
           created_at: string
