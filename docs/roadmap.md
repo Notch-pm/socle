@@ -2,7 +2,7 @@
 
 > **Public** : tous (devs Socle, équipes consommatrices) · **Question traitée** : quelles
 > évolutions sont envisagées, et lesquelles ont déjà été livrées ? · **Dernière mise à jour** :
-> 2026-09-18
+> 2026-10-01
 
 Liste d'**intentions**, pas d'engagements — sauf mention explicite d'une date de livraison.
 Née du chantier « Clara délègue ses usagers au Socle » (2026-07-16), enrichie depuis. Pour ce qui
@@ -103,6 +103,14 @@ existe réellement aujourd'hui : [architecture.md](./architecture.md),
   brutes restent volontairement **hors** de `OrganizationDto` : une sous-organisation
   qui hérite les a nulles, et le consommateur peindrait du vide au lieu de la charte de sa
   collectivité.
+- **Attributions des organisations** : **livré le 2026-10-01** —
+  `GET /v1/organizations/attributions?tenant_id=` (contrat 1.33.0) sert ce que traite chaque
+  organisme, **services internes compris**, texte interne. Reste :
+  - **consommation par Clara** (synchronisation nocturne, catalogue du modèle qui propose le
+    service instructeur d'un courrier) — prompt transmis à l'équipe le 2026-10-01 ;
+  - **rédaction des textes** par les collectivités (table vide à la livraison), en commençant
+    par les services internes ;
+  - Iris pourrait s'en servir de même pour orienter une demande (non demandé).
 - **Publication du guide d'intégration hors du repo** : `docs/integration.md` est aujourd'hui
   interne au repo Socle ; à publier ailleurs (portail, section in-app) si les équipes
   Ariane/Clara/Iris n'y ont pas accès.
