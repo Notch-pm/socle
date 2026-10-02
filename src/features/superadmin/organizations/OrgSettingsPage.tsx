@@ -1,6 +1,6 @@
 import * as React from "react";
 import { useParams, useNavigate, useSearchParams } from "react-router-dom";
-import { ArrowLeft, BookUser, Briefcase, Settings2, Users as UsersIcon, ListChecks, FileCheck2, FileSignature, MapPin, Mail, Palette, Globe, Languages, LayoutTemplate, KeyRound, Gauge, Tags, ToggleRight, AppWindow, MessagesSquare, MessageCircleQuestion, type LucideIcon } from "lucide-react";
+import { ArrowLeft, BookUser, Briefcase, Settings2, Users as UsersIcon, ListChecks, FileCheck2, FileSignature, MapPin, Mail, Palette, Globe, Languages, LayoutTemplate, KeyRound, Gauge, Tags, ToggleRight, AppWindow, MessagesSquare, MessageCircleQuestion, Plug, type LucideIcon } from "lucide-react";
 import { Card, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { EmptyState } from "@/components/shared/EmptyState";
@@ -18,6 +18,7 @@ import { AgentGuidanceSection } from "@/features/organizations/AgentGuidanceSect
 import { UserInfoSection } from "@/features/organizations/UserInfoSection";
 import { AttributionsSection } from "@/features/organizations/AttributionsSection";
 import { hasUserInfoTab } from "@/features/organizations/userInfo";
+import { IntegrationsSection } from "@/features/integrations/IntegrationsSection";
 import { ApiKeysSection } from "@/features/superadmin/organizations/sections/ApiKeysSection";
 import { AiUsageSection } from "@/features/superadmin/organizations/sections/AiUsageSection";
 import { PortalAssistantSection } from "@/features/superadmin/organizations/sections/PortalAssistantSection";
@@ -39,6 +40,7 @@ type Section =
   | "domaines"
   | "utilisateurs"
   | "applications"
+  | "integrations"
   | "categories"
   | "demarches"
   | "activations"
@@ -60,6 +62,7 @@ const SECTIONS: { key: Exclude<Section, "menu">; title: string; description: str
   { key: "domaines", title: "Domaines du portail", description: "Adresses par lesquelles les usagers atteignent les démarches en ligne", icon: Globe },
   { key: "utilisateurs", title: "Utilisateurs", description: "Membres et rôles de cette organisation", icon: UsersIcon },
   { key: "applications", title: "Applications souscrites", description: "Nora, Iris, Clara… — ce que cette collectivité a souscrit, et donc ce que chaque application voit", icon: AppWindow },
+  { key: "integrations", title: "Intégrations", description: "Partenaires connectés aux applications de la gamme (Arpège…) : paramètres, test de connexion, activation", icon: Plug },
   { key: "categories", title: "Catégories", description: "Thématiques qui regroupent les démarches — obligatoires pour en créer", icon: Tags },
   { key: "demarches", title: "Catalogue de démarches", description: "Démarches de l'organisation principale", icon: ListChecks },
   { key: "activations", title: "Démarches activées", description: "Quel organisme de l'arbre propose quelle démarche", icon: ToggleRight },
@@ -172,6 +175,8 @@ export function OrgSettingsPage() {
         {activeSection === "utilisateurs" && <UsersManagementPage organizationId={organization.id} />}
         {activeSection === "applications" &&
           rootOnly(<ApplicationsSection organizationId={organization.id} />, "Les applications se souscrivent")}
+        {activeSection === "integrations" &&
+          rootOnly(<IntegrationsSection organizationId={organization.id} />, "Les intégrations se configurent")}
         {activeSection === "categories" &&
           rootOnly(<CategoriesManager organizationId={organization.id} />, "Les catégories se paramètrent")}
         {activeSection === "demarches" &&

@@ -66,3 +66,10 @@ verify_jwt = true
 # plateforme du Socle (`SOCLE_AI_API_KEY`).
 [functions.translate-labels]
 verify_jwt = true
+
+# Test de connexion d'une intégration partenaire (Arpège…), déclenché depuis la
+# fiche client du super administrateur. Appelée avec le JWT de session ;
+# l'autorisation fine (`is_super_admin`) est vérifiée dans le code. Seul
+# endroit du Socle qui lit les secrets d'intégration (service role).
+[functions.integration-test]
+verify_jwt = true

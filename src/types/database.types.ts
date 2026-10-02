@@ -12,6 +12,31 @@ export type Database = {
   __InternalSupabase: {
     PostgrestVersion: "14.5"
   }
+  graphql_public: {
+    Tables: {
+      [_ in never]: never
+    }
+    Views: {
+      [_ in never]: never
+    }
+    Functions: {
+      graphql: {
+        Args: {
+          extensions?: Json
+          operationName?: string
+          query?: string
+          variables?: Json
+        }
+        Returns: Json
+      }
+    }
+    Enums: {
+      [_ in never]: never
+    }
+    CompositeTypes: {
+      [_ in never]: never
+    }
+  }
   public: {
     Tables: {
       ai_usage_consumer_counters: {
@@ -929,6 +954,104 @@ export type Database = {
           },
         ]
       }
+      integration_applications: {
+        Row: {
+          application_id: string
+          integration_id: string
+        }
+        Insert: {
+          application_id: string
+          integration_id: string
+        }
+        Update: {
+          application_id?: string
+          integration_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "integration_applications_application_id_fkey"
+            columns: ["application_id"]
+            isOneToOne: false
+            referencedRelation: "applications"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "integration_applications_integration_id_fkey"
+            columns: ["integration_id"]
+            isOneToOne: false
+            referencedRelation: "integrations"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      integration_types: {
+        Row: {
+          created_at: string
+          id: string
+          name: string
+          position: number
+        }
+        Insert: {
+          created_at?: string
+          id: string
+          name: string
+          position?: number
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          name?: string
+          position?: number
+        }
+        Relationships: []
+      }
+      integrations: {
+        Row: {
+          adapter: string | null
+          created_at: string
+          description: string
+          id: string
+          is_available: boolean
+          logo_url: string | null
+          name: string
+          slug: string
+          type_id: string
+          updated_at: string
+        }
+        Insert: {
+          adapter?: string | null
+          created_at?: string
+          description?: string
+          id?: string
+          is_available?: boolean
+          logo_url?: string | null
+          name: string
+          slug: string
+          type_id: string
+          updated_at?: string
+        }
+        Update: {
+          adapter?: string | null
+          created_at?: string
+          description?: string
+          id?: string
+          is_available?: boolean
+          logo_url?: string | null
+          name?: string
+          slug?: string
+          type_id?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "integrations_type_id_fkey"
+            columns: ["type_id"]
+            isOneToOne: false
+            referencedRelation: "integration_types"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       organization_agent_guidance: {
         Row: {
           created_at: string
@@ -1055,6 +1178,86 @@ export type Database = {
         Relationships: [
           {
             foreignKeyName: "organization_domains_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      organization_integration_secrets: {
+        Row: {
+          organization_integration_id: string
+          secrets: Json
+          updated_at: string
+        }
+        Insert: {
+          organization_integration_id: string
+          secrets?: Json
+          updated_at?: string
+        }
+        Update: {
+          organization_integration_id?: string
+          secrets?: Json
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "organization_integration_secre_organization_integration_id_fkey"
+            columns: ["organization_integration_id"]
+            isOneToOne: true
+            referencedRelation: "organization_integrations"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      organization_integrations: {
+        Row: {
+          created_at: string
+          id: string
+          integration_id: string
+          is_active: boolean
+          last_test_error: string | null
+          last_test_ok: boolean | null
+          last_tested_at: string | null
+          organization_id: string
+          settings: Json
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          integration_id: string
+          is_active?: boolean
+          last_test_error?: string | null
+          last_test_ok?: boolean | null
+          last_tested_at?: string | null
+          organization_id: string
+          settings?: Json
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          integration_id?: string
+          is_active?: boolean
+          last_test_error?: string | null
+          last_test_ok?: boolean | null
+          last_tested_at?: string | null
+          organization_id?: string
+          settings?: Json
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "organization_integrations_integration_id_fkey"
+            columns: ["integration_id"]
+            isOneToOne: false
+            referencedRelation: "integrations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "organization_integrations_organization_id_fkey"
             columns: ["organization_id"]
             isOneToOne: false
             referencedRelation: "organizations"
@@ -1871,6 +2074,13 @@ export type Database = {
       normalize_phone: { Args: { raw: string }; Returns: string }
       org_subtree_ids: { Args: { root: string }; Returns: string[] }
       organization_dashboard: { Args: { p_org_id: string }; Returns: Json }
+      organization_integration_secret_keys: {
+        Args: { p_organization_id: string }
+        Returns: {
+          organization_integration_id: string
+          secret_keys: string[]
+        }[]
+      }
       parent_branding: {
         Args: { p_org_id: string }
         Returns: {
@@ -2034,6 +2244,10 @@ export type Database = {
         }
         Returns: Json
       }
+      set_organization_integration_secrets: {
+        Args: { p_organization_integration_id: string; p_patch: Json }
+        Returns: undefined
+      }
       settle_ai_usage: {
         Args: { p_actual_tokens: number; p_event_id: string; p_status: string }
         Returns: undefined
@@ -2175,6 +2389,9 @@ export type CompositeTypes<
     : never
 
 export const Constants = {
+  graphql_public: {
+    Enums: {},
+  },
   public: {
     Enums: {},
   },

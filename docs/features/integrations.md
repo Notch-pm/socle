@@ -1,0 +1,114 @@
+# Feature : intégrations partenaires (`integrations`, `organization_integrations`)
+
+> Fiche de feature — l'index est dans [CLAUDE.md](../../CLAUDE.md). Invariants, pièges (⚠️)
+> et pointeurs de code : **à lire avant de toucher la feature, à mettre à jour dans la même PR.**
+
+**Le catalogue des partenaires auxquels la gamme sait se connecter, et leur configuration par
+collectivité** (lot 1, 2026-10-02). Première intégration réelle : **Arpège**.
+
+## Catalogue ≠ configuration
+
+| | Catalogue (ce que propose Edilumen) | Configuration (ce qu'en fait une collectivité) |
+|---|---|---|
+| Tables | `integration_types`, `integrations`, `integration_applications` | `organization_integrations` + `organization_integration_secrets` |
+| Contenu | partenaire, type, applications concernées, logo, description, proposée ou non | paramètres, secrets, activation, dernier test |
+| Lecture | tout `authenticated` | **super admin seul** |
+| Écriture | super admin | super admin (secrets : par RPC) |
+
+- **Types** : table `integration_types` (`parapheur_electronique`, `signature_electronique`,
+  `application_services_techniques`, `application_gru`) — ajouter un type = insérer une ligne,
+  sans toucher au code. Le code est un **contrat**, le libellé français vit dans `name`.
+- **Une ligne `integrations` = un partenaire et son offre** (une seule table : un partenaire, une
+  offre, aujourd'hui ; on extraira `partners` le jour où un éditeur en proposera deux — le contrat
+  sort par `slug`). `adapter` NULL ⇒ « Bientôt disponible », non configurable.
+- **Plusieurs applications par intégration** : `integration_applications` (FK `applications`).
+- ⚠️ **Pas de partenaire fictif** : seule Arpège est posée. iXBus, Maarch, Yousign… s'ajouteront
+  quand ils seront réels.
+
+## Arpège
+
+- ⚠️ **Arpège n'est pas un parapheur** : c'est la plateforme GRU / démarches en ligne
+  **Espace Citoyens** (« Interop.Api v2 ») — type `application_gru`.
+- Application rattachée : **Clara seule** (décision du 2026-10-02). Ariane s'y connecte aussi
+  (rendez-vous, file d'attente), mais elle ne consomme pas encore le Socle et n'est pas au
+  registre `applications` : elle y entrera ce jour-là.
+- **Le connecteur vit dans Clara** (`clara-mailflow-hub/supabase/functions/_shared/arpege.ts`,
+  `create-arpege-demande`, `check-arpege-ticket-status`, `sync-arpege-services`,
+  `test-arpege-connection`). ⚠️ **Le Socle configure, l'application exécute** : le Socle ne
+  crée aucune demande, ne synchronise rien ; il ne fait qu'un **test de connexion**.
+- Paramètres = ceux du formulaire de Clara, **clés = ses colonnes** (la bascule sera une recopie,
+  pas une traduction) : `api_base_url` (requis), `api_url_ticketingapp`, `client_id` (non
+  secrets) ; `client_secret`, `access_token` (secrets ; le jeton, « ancien mode », est replié en
+  paramètres avancés). Complète si URL + (identifiant **ou** jeton) + (secret **ou** jeton) —
+  règle de `resolveHawkCredentials`.
+- Authentification **Hawk (HMAC-SHA256)**, test `GET /v2/Hello`. `hawk.ts` est **porté tel quel**
+  de Clara, son test aussi (oracle `node:crypto`). Seul ajout : l'URL doit être en `https`.
+
+## Secrets
+
+- ⚠️ **Aucun navigateur ne lit jamais un secret — super admin compris.**
+  `organization_integration_secrets` : RLS **sans policy** et privilèges **révoqués** pour
+  `anon`/`authenticated` (erreur franche 42501, pas un résultat vide). Lecture par le **service
+  role seul** : la fonction `integration-test`, et demain la route public-api.
+  ⚠️ C'est l'inverse de `smtp_settings` (mot de passe lisible par l'admin) et des tables
+  `organization_integrations` de Clara et d'Ariane (`select("*")`) : **ne pas recopier ces
+  modèles**.
+- Écriture : `set_organization_integration_secrets(id, patch)` — valeur = remplace, **chaîne vide
+  = conserve** (un champ secret n'est jamais prérempli), `null` = efface. Présence :
+  `organization_integration_secret_keys(org)` → noms des secrets renseignés, jamais leur valeur.
+- En clair au repos (comme partout dans la gamme aujourd'hui) ; Vault est installé et le
+  chiffrement viendra sans changer cette frontière (roadmap).
+- ⚠️ `integration-test` ne journalise **qu'un libellé fixe et un code d'erreur Postgres** — test
+  sur le source (Ariane journalisait le début de l'en-tête Hawk).
+
+## Statut (dérivé, jamais stocké)
+
+`integrationStatus.ts` (pur, testé). Catalogue : *Disponible*, *Bientôt disponible* (sans
+adaptateur), *Désactivée* (`is_available = false`). Collectivité : *Non configurée* (rien, ou
+incomplet), *Configurée*, *Active*, *En erreur* (dernier test en échec — prime sur les deux
+précédents), *Désactivée* (offre retirée — configuration **conservée**).
+
+- ⚠️ **Activer exige un test réussi** — tenu par la base (trigger
+  `guard_organization_integration_test`), pas seulement par l'écran : règle `canActivate` de
+  Clara. Modifier les paramètres **ou** un secret **invalide** le test (`last_test_*` remis à
+  NULL) sans désactiver ; un test en échec ne désactive pas non plus (le statut passe « En
+  erreur », au super admin de suspendre).
+- Racine seule (trigger `enforce_organization_integration_root_org`, motif applications).
+
+## Adaptateurs — miroir front / edge
+
+Un adaptateur = la liste des champs (secret, requis, avancé), la règle de complétude, et (côté
+edge seulement) le test de connexion. **Pas un framework.** Ajouter un partenaire configurable :
+une ligne de catalogue (migration) + un adaptateur **des deux côtés** —
+`src/features/integrations/adapters.ts` et
+`supabase/functions/integration-test/_shared/adapters.ts` ; `adapters.mirror.test.ts` vérifie
+qu'ils disent la même chose. Un partenaire non configurable : la ligne seule, `adapter` NULL.
+
+## Écrans
+
+- `/superadmin/integrations` (`IntegrationsCataloguePage`) : cartes par type ; les types sans
+  partenaire sont **nommés sur une ligne, en bas** (ils ne doivent pas repousser Arpège sous trois
+  blocs vides), « Modifier » → description, URL du logo (`https`, sinon l'initiale), « Proposée ».
+- Fiche client → section **« Intégrations »** (`?section=integrations`, racine seule) :
+  `IntegrationsSection` — mêmes cartes avec le statut de la collectivité ; « Configurer » →
+  `IntegrationConfigDialog` (formulaire généré, test, activation). Aucun écran côté administrateur
+  de collectivité (décision du 2026-10-02 : super admin seul, comme le verrou de Clara).
+- Badges : variantes `success` / `destructive` ajoutées à `Badge`, sur les jetons existants.
+
+## Hors lot 1 (roadmap)
+
+- **Route public-api** `GET /v1/organizations/{id}/integrations/{slug}` (scope `integrations`,
+  secrets compris, motif `organizations/{id}/smtp`) + `GET /v1/integrations` (catalogue).
+- **Bascule de Clara** : recopie de ses identifiants (correspondance organisation Clara → racine
+  Socle), lecture depuis le Socle dans `_shared/arpege.ts`, retrait de sa table **après**.
+- ⚠️ **Double vérité en attendant** : la configuration Arpège de Clara reste dans Clara ; celle du
+  Socle n'est lue par personne. Le dire à qui configure.
+
+## Code et tests
+
+`supabase/migrations/20261002090000_integrations_catalogue.sql`,
+`supabase/tests/integrations.test.sql` (à blanc : `supabase db query --linked -f`),
+`supabase/functions/integration-test/` (`index.ts`, `_shared/{hawk,adapters}.ts` + tests),
+`src/features/integrations/` (`useIntegrations.ts`, `integrationStatus.ts`, `adapters.ts`,
+`IntegrationCard`, `IntegrationGrid`, `IntegrationsSection`, `IntegrationConfigDialog`),
+`src/features/superadmin/integrations/IntegrationsCataloguePage.tsx`.

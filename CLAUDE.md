@@ -152,6 +152,7 @@ exécutables par `authenticated` : le RLS les évalue avec les droits de l'appel
   voir feature).
 - `api_keys` (clés d'API rattachées à une racine — partenaires —, ou **clé plateforme** — `organization_id` NULL, rattachée à une **application** du registre et bornée aux collectivités **abonnées** à celle-ci — voir feature « Applications et abonnements » ; `consumer` = l'application, FK `applications`, et l'imputation des appels facturés).
 - `applications` (registre des applications de la gamme : `nora`, `iris`, `clara`, `socle`), `organization_applications` (abonnements par racine), `platform_settings` (ligne unique : zone des sous-domaines fournis, cible CNAME, plafond IA par défaut — voir feature « Mise en service d'un client »).
+- `integration_types`, `integrations`, `integration_applications` (catalogue des intégrations partenaires — Arpège…), `organization_integrations` (configuration par racine, super admin) + `organization_integration_secrets` (**illisible par tout client** — voir feature « Intégrations partenaires »).
 - `ai_usage_quotas` / `ai_usage_counters` / `ai_usage_events` (plafond mensuel de jetons, compteur et journal ; `ai_usage_consumer_quotas` / `_counters` = sous-plafond par application — voir feature « guichet IA »).
 - `contacts`, `contact_roles`, `contact_role_assignments`, `contact_external_references`,
   `contact_relations` (référentiel des usagers — voir feature).
@@ -294,6 +295,18 @@ superadmin (`OrgSettingsPage`, menu latéral par client).
   racines abonnées (`application_scope_ids`) ; sans application → **403**.
 - ⚠️ Décision d'auth dans `_shared/apiKeyAuth.ts`, **identique dans les quatre fonctions** (test
   d'identité). ⚠️ Ordre de déploiement : migration → abonnements et clés dans l'UI → fonctions.
+
+### [Intégrations partenaires](docs/features/integrations.md)
+- **Catalogue** (`integrations`, types en table, plusieurs applications par intégration) ≠
+  **configuration** d'une racine (`organization_integrations`, super admin seul). Seule Arpège
+  est posée — ⚠️ pas de partenaire fictif. ⚠️ Arpège est une **GRU** (Espace Citoyens), pas un
+  parapheur ; son connecteur vit dans **Clara** : le Socle configure et teste, il n'exécute rien.
+- ⚠️ Secrets dans `organization_integration_secrets` : aucune policy, privilèges révoqués —
+  **aucun navigateur ne les lit**, super admin compris (l'inverse de `smtp_settings`). Écriture
+  par RPC (vide = conserver), lecture par le service role (`integration-test`).
+- ⚠️ Activer exige un test réussi (trigger) ; modifier paramètres ou secret invalide le test.
+  Adaptateurs en **miroir** front / edge (`adapters.mirror.test.ts`). Route public-api et bascule
+  de Clara : lot 2.
 
 ### [Site de démarches — portail usagers](docs/features/site-de-demarches.md)
 - Le portail est **Nora** (dépôt `Notch-pm/Nora`, sans base) ; le Socle détient le domaine

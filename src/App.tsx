@@ -21,6 +21,7 @@ import { UtilisateursPage } from "@/pages/UtilisateursPage";
 import { SuperAdminDashboardPage } from "@/features/superadmin/SuperAdminDashboardPage";
 import { OrgSettingsPage } from "@/features/superadmin/organizations/OrgSettingsPage";
 import { ApplicationsPage } from "@/features/superadmin/applications/ApplicationsPage";
+import { IntegrationsCataloguePage } from "@/features/superadmin/integrations/IntegrationsCataloguePage";
 import { PlatformSettingsPage } from "@/features/superadmin/platform/PlatformSettingsPage";
 import { SuperAdminAiUsagePage } from "@/features/superadmin/SuperAdminAiUsagePage";
 import { ApiDocsPage } from "@/features/public-api-docs/ApiDocsPage";
@@ -45,6 +46,7 @@ export function App() {
             <Route element={<SuperAdminLayout />}>
               <Route path="/superadmin" index element={<SuperAdminDashboardPage />} />
               <Route path="/superadmin/applications" element={<ApplicationsPage />} />
+              <Route path="/superadmin/integrations" element={<IntegrationsCataloguePage />} />
               {/* Les clés plateforme sont rangées par application depuis le registre. */}
               <Route
                 path="/superadmin/cles-plateforme"

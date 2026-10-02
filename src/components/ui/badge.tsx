@@ -10,6 +10,9 @@ const badgeVariants = cva(
         outline: "border-input bg-transparent text-foreground",
         secondary: "border-transparent bg-secondary text-secondary-foreground",
         muted: "border-transparent bg-muted text-muted-foreground",
+        // Statuts (intégrations) — jetons `--success` / `--destructive` existants.
+        success: "border-transparent bg-success/10 text-success",
+        destructive: "border-transparent bg-destructive/10 text-destructive",
       },
     },
     defaultVariants: { variant: "outline" },

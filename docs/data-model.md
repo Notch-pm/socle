@@ -632,6 +632,35 @@ La **preuve** du consentement, et pas seulement son état. Une ligne par recueil
 - `applications` : `id text PK` (CHECK `~ '^[a-z][a-z0-9_-]{1,31}
 
 
+### Intégrations partenaires — catalogue et configuration (2026-10-02)
+
+Détail et pièges : [fiche de feature](features/integrations.md).
+
+- `integration_types` : `id text PK` (code de contrat, CHECK `^[a-z][a-z0-9_]{1,63}$`), `name`
+  (libellé français), `position`. Seed : `parapheur_electronique`, `signature_electronique`,
+  `application_services_techniques`, `application_gru`.
+- `integrations` (catalogue) : `id uuid`, `slug` unique (`^[a-z][a-z0-9-]{1,63}$`), `name`,
+  `description` (≤ 1 000), `logo_url` (`https` ou NULL), `type_id` → `integration_types`,
+  `adapter` (clé de l'adaptateur dans le code, NULL = non configurable), `is_available`,
+  `created_at`, `updated_at`. Seed : `arpege` (`application_gru`, adaptateur `arpege`).
+- `integration_applications (integration_id, application_id)` → `applications`. Seed :
+  `arpege` → `clara`.
+- **RLS du catalogue** : lecture `authenticated`, écriture `is_super_admin()`.
+- `organization_integrations` (configuration) : `id`, `organization_id` (**racine**, trigger
+  `enforce_organization_integration_root_org`), `integration_id`, unique `(organization_id,
+  integration_id)`, `settings jsonb` (objet, paramètres **non secrets**), `is_active`,
+  `last_tested_at`, `last_test_ok`, `last_test_error` (≤ 500, jamais de secret), horodatage.
+  Trigger `guard_organization_integration_test` : activer exige `last_test_ok = true` ; changer
+  `settings` remet `last_test_*` à NULL. **RLS** : tout `is_super_admin()`.
+- `organization_integration_secrets` : `organization_integration_id PK` (cascade), `secrets jsonb`
+  (objet clé → chaîne), `updated_at`. ⚠️ RLS **sans policy** + `revoke all` pour
+  `anon`/`authenticated` : service role seul.
+- RPC (SECURITY DEFINER, garde `is_super_admin()`, EXECUTE `authenticated`) :
+  `set_organization_integration_secrets(id, patch jsonb)` — chaîne = remplace, `''` = conserve,
+  `null` = efface ; remet `last_test_*` à NULL si quelque chose change.
+  `organization_integration_secret_keys(org)` → `(organization_integration_id, secret_keys[])`,
+  noms seulement.
+
 ### Plafond et journal d'utilisation IA
 
 Trois tables (`20260829100100`), portées depuis Iris quand la clé du fournisseur LLM et sa

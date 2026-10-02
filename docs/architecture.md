@@ -41,11 +41,13 @@ Trois grandes zones, une seule base de données :
                        (RLS `storage.objects`, même motif que les tables)
 ```
 
-Quatre autres Edge Functions ne sont **pas** des APIs de gamme, uniquement des besoins internes à
+Cinq autres Edge Functions ne sont **pas** des APIs de gamme, uniquement des besoins internes à
 l'UI Socle ou à Supabase Auth : `send-test-email` et `invite-user` (JWT utilisateur +
 `is_org_admin`), `translate-labels` (JWT utilisateur + `is_org_admin` ; traduction automatique
 des textes d'une démarche ou d'une catégorie, **par `ai-api`** — le Socle y est sa propre
-application consommatrice, jamais un second appelant du fournisseur), `auth-email-hook` (webhook Supabase Auth, signature Standard
+application consommatrice, jamais un second appelant du fournisseur), `integration-test` (JWT utilisateur +
+`is_super_admin` ; test de connexion d'une intégration partenaire, seul lecteur des secrets
+d'intégration), `auth-email-hook` (webhook Supabase Auth, signature Standard
 Webhooks). Détail des fonctions → [`./operations.md`](./operations.md).
 
 ## 2. Principe fondateur : la sécurité vit dans le RLS
@@ -103,6 +105,7 @@ Il n'y a **pas** de route catch-all `*` (constat en §7).
 |---|---|
 | `/superadmin` (index) | `SuperAdminDashboardPage` |
 | `/superadmin/applications` | `ApplicationsPage` — registre des applications de la gamme, **une clé plateforme par application** (périmètre = collectivités abonnées) |
+| `/superadmin/integrations` | `IntegrationsCataloguePage` — catalogue des intégrations partenaires (Arpège…), par type ; la configuration d'un client est une section de son `OrgSettingsPage` |
 | `/superadmin/cles-plateforme` | `<Navigate to="/superadmin/applications" replace />` — redirection de compatibilité |
 | `/superadmin/plateforme` | `PlatformSettingsPage` — réglages de plateforme (zone des sous-domaines, cible CNAME, plafond IA par défaut) et rejeu du provisioning |
 | `/superadmin/organisations` | `<Navigate to="/superadmin" replace />` — redirection de compatibilité |
@@ -273,6 +276,7 @@ ignore toute section qu'il ne sait pas rendre — le Socle peut apprendre un blo
 | 2026-09-08 | **Une racine naît équipée** : trigger `provision_root_organization` (rôles de contact, plafond IA par défaut, sous-domaine fourni `<slug>.<zone>`), réglages de plateforme dans `platform_settings`, check-list de mise en service (`root_onboarding_status`) en tête de la page d'un client, catégories et activations accessibles au super administrateur. | Trois pièges silencieux à chaque client (rôles jamais seedés, plafond absent = illimité, SMTP absent à l'invitation) et deux écrans interdits au super administrateur (catégories, activations) obligeaient à du SQL. Le provisioning est idempotent et jamais bloquant : la création de l'organisation reste l'acte principal. |
 | 2026-09-08 | **Relais de plateforme en repli** (`PLATFORM_SMTP_*`) pour les seuls courriels d'authentification ; les courriels métier restent sur le relais de la collectivité. Les domaines du portail s'écrivent par le super administrateur seul ; les administrateurs les lisent et voient la cible CNAME. | Poule et œuf : inviter le premier administrateur exigeait un SMTP que seul un administrateur pouvait saisir. Un domaine personnalisé suppose un CNAME chez le client et un enregistrement chez l'hébergeur — un travail de l'éditeur, et l'unicité globale permettait de réserver par erreur le domaine d'un autre client. |
 | 2026-10-01 | Les **attributions** d'un organisme (ce qu'il traite) ont leur table (`organization_attributions`) et leur route (`GET /v1/organizations/attributions?tenant_id=`), au lieu d'une colonne d'`organizations` ou d'un champ d'`OrganizationDto`. | Trois textes, trois publics : le descriptif usager est public et absent des services internes, les recommandations aux agents ne vivent que sur la racine. Une colonne aurait alourdi chaque `select("*")` des organisations ; une route « sous-arbre en un appel » est le motif que Clara consomme déjà. |
+| 2026-10-02 | **Intégrations partenaires : le Socle configure, l'application exécute.** Catalogue (`integrations`, types en table) séparé de la configuration par racine (`organization_integrations`) ; secrets dans une table illisible par tout client, lus par le service role seul ; le Socle ne fait qu'un test de connexion. Arpège (connecteur Clara) est la première ; Clara continue de lire sa propre table jusqu'à la bascule (lot 2, route public-api). | Clara et Ariane tenaient chacune leur table `organization_integrations`, secrets en clair et lus par le navigateur, sans catalogue. Le Socle est le référentiel : la configuration y vit une fois, et l'exécution reste là où est le métier — réécrire le connecteur au Socle aurait dupliqué un code en service. |
 | 2026-09-18 | `CLAUDE.md` devient un **index** : le détail de chaque feature (invariants, pièges, pointeurs de code) part, tel quel, dans une fiche `docs/features/*.md` ; `CLAUDE.md` garde les règles transverses et, par feature, ce qu'il faut savoir avant d'ouvrir la fiche. Un test (`src/claudeMd.test.ts`) le tient sous 40 000 caractères et vérifie que fiches et index se citent. | Chargé en entier à chaque session d'agent, il avait atteint 150 000 caractères, près de quatre fois la limite au-delà de laquelle Claude Code le signale. Une fiche par feature se lit quand on touche la feature — et seulement alors. |
 
 ## 7. Risques acceptés & dette
