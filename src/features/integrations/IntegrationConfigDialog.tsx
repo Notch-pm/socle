@@ -1,5 +1,5 @@
 import * as React from "react";
-import { ChevronDown, ChevronRight, CircleCheck, CircleX, Loader2, PlugZap } from "lucide-react";
+import { ChevronDown, ChevronRight, CircleCheck, CircleX, Download, Loader2, PlugZap } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
@@ -10,6 +10,7 @@ import { getAdapter, readValues, type AdapterField } from "./adapters";
 import { applicationNames, IntegrationLogo, StatusBadge } from "./IntegrationCard";
 import { organizationStatus } from "./integrationStatus";
 import {
+  useImportPartnerProcedures,
   useSaveOrganizationIntegration,
   useSetOrganizationIntegrationActive,
   useTestOrganizationIntegration,
@@ -44,6 +45,7 @@ export function IntegrationConfigDialog({
   const save = useSaveOrganizationIntegration(organizationId);
   const setActive = useSetOrganizationIntegrationActive(organizationId);
   const test = useTestOrganizationIntegration(organizationId);
+  const importProcedures = useImportPartnerProcedures();
 
   const savedSettings = React.useMemo(() => readValues(config?.settings), [config?.settings]);
   const [settings, setSettings] = React.useState<Record<string, string>>(savedSettings);
@@ -280,6 +282,46 @@ export function IntegrationConfigDialog({
               ) : null}
               {setActive.error ? (
                 <p className="text-sm text-destructive">{(setActive.error as Error).message}</p>
+              ) : null}
+
+              {config?.is_active && integration.adapter === "arpege" ? (
+                <div className="flex flex-col gap-2 rounded-lg border border-border p-3">
+                  <div className="flex items-center justify-between gap-3">
+                    <div>
+                      <p className="text-sm font-medium">Démarches {integration.name}</p>
+                      <p className="text-xs text-muted-foreground">
+                        Importées dans le catalogue de la collectivité (catégorie « Démarches{" "}
+                        {integration.name} »), puis à activer organisation par organisation dans
+                        « Démarches activées ».
+                      </p>
+                    </div>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => importProcedures.mutate(config.id)}
+                      disabled={importProcedures.isPending}
+                    >
+                      {importProcedures.isPending ? (
+                        <Loader2 className="size-4 animate-spin" />
+                      ) : (
+                        <Download className="size-4" />
+                      )}
+                      Récupérer les démarches
+                    </Button>
+                  </div>
+                  {importProcedures.data ? (
+                    <p role="status" className="text-sm">
+                      {importProcedures.data.created} créée(s), {importProcedures.data.updated} mise(s) à
+                      jour, {importProcedures.data.unchanged} inchangée(s).
+                      {importProcedures.data.missing.length > 0
+                        ? ` Plus proposées par ${integration.name} (conservées) : ${importProcedures.data.missing.join(", ")}.`
+                        : ""}
+                    </p>
+                  ) : null}
+                  {importProcedures.error ? (
+                    <p className="text-sm text-destructive">{(importProcedures.error as Error).message}</p>
+                  ) : null}
+                </div>
               ) : null}
             </section>
           )}

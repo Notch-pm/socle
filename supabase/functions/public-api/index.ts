@@ -37,7 +37,13 @@ import { serializePortalPage } from "./_shared/portalPage.ts";
 import { serializeAgentGuidance } from "./_shared/agentGuidance.ts";
 import { serializePortalOrganizationsInfo, type UserInfoOrganization } from "./_shared/userInfo.ts";
 import { serializeOrganizationAttributions, type AttributionsOrganization } from "./_shared/attributions.ts";
-import { serializeIntegration, serializeOrganizationIntegration } from "./_shared/integrations.ts";
+import {
+  partnerDirectory,
+  procedureVisibleTo,
+  serializeIntegration,
+  serializeOrganizationIntegration,
+  type PartnerDirectory,
+} from "./_shared/integrations.ts";
 import {
   ACCESSIBILITY_STATEMENT_SLUG,
   hasPublishedContent,
@@ -88,6 +94,24 @@ async function loadTemplates(
   return new Map(
     ((data ?? []) as Array<Record<string, unknown>>).map((row) => [String(row.id), row]),
   );
+}
+
+/**
+ * Intégrations nécessaires pour décider de la visibilité des démarches
+ * partenaires et les nommer. Aucune requête si aucune démarche partenaire.
+ */
+async function loadPartnerDirectory(
+  admin: ReturnType<typeof createClient>,
+  rows: Array<Record<string, unknown>>,
+): Promise<PartnerDirectory> {
+  const ids = [...new Set(rows.map((row) => row.integration_id).filter((id): id is string => typeof id === "string"))];
+  if (ids.length === 0) return partnerDirectory([]);
+  const { data, error } = await admin
+    .from("integrations")
+    .select("id, slug, integration_applications(application_id)")
+    .in("id", ids);
+  if (error) throw error;
+  return partnerDirectory((data ?? []) as Array<Record<string, unknown>>);
 }
 
 /**
@@ -158,7 +182,10 @@ async function loadPortalCatalogue(
         "status, type, communication_config, order_index, translations, requester_config, " +
         // `access_mode` dit à quelles conditions l'usager dépose ; il ne filtre
         // RIEN — une démarche réservée reste au catalogue.
-        "access_mode",
+        "access_mode, " +
+        // `integration_id` EXCLUT : une démarche partenaire (Arpège…) n'est
+        // jamais au portail (`isPubliclyPublished`).
+        "integration_id",
     )
     .eq("organization_id", rootId);
   if (proceduresError) throw proceduresError;
@@ -994,10 +1021,14 @@ Deno.serve(async (req: Request) => {
         }
         const { data, error } = await query.order("order_index", { ascending: true });
         if (error) throw error;
+        // Démarches partenaires (Arpège…) : servies aux seules applications
+        // de leur intégration — `procedureVisibleTo`.
+        const directory = await loadPartnerDirectory(admin, data ?? []);
+        const visible = (data ?? []).filter((row) => procedureVisibleTo(row, apiKey.consumer, directory));
         const templates = await loadTemplates(admin, scopeIds);
         return jsonResponse(
           200,
-          (data ?? []).map((row) => serializeProcedure(row, templates)),
+          visible.map((row) => serializeProcedure(row, templates, directory.slugs)),
           corsHeaders,
         );
       }
@@ -1011,8 +1042,13 @@ Deno.serve(async (req: Request) => {
         if (!data || !inScope(data.organization_id)) {
           return errorResponse("not_found", "Démarche introuvable.", corsHeaders);
         }
+        // Démarche partenaire hors de l'application de la clé : elle n'existe pas.
+        const directory = await loadPartnerDirectory(admin, [data]);
+        if (!procedureVisibleTo(data, apiKey.consumer, directory)) {
+          return errorResponse("not_found", "Démarche introuvable.", corsHeaders);
+        }
         const templates = await loadTemplates(admin, [data.organization_id]);
-        return jsonResponse(200, serializeProcedure(data, templates), corsHeaders);
+        return jsonResponse(200, serializeProcedure(data, templates, directory.slugs), corsHeaders);
       }
     }
 

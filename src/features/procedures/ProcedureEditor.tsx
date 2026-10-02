@@ -1,5 +1,5 @@
 import * as React from "react";
-import { ArrowLeft } from "lucide-react";
+import { ArrowLeft, Plug } from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button, buttonVariants } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -233,6 +233,24 @@ export function ProcedureEditor({
           <p className="mb-4 rounded-lg border border-destructive/30 bg-destructive/5 px-4 py-2 text-sm text-destructive">
             {error.message}
           </p>
+        ) : null}
+
+        {procedure?.integration_id ? (
+          <div
+            role="note"
+            className="mb-4 flex items-start gap-2 rounded-lg border border-border bg-muted/40 px-4 py-3 text-sm"
+          >
+            <Plug className="mt-0.5 size-4 shrink-0 text-primary" />
+            <p>
+              <strong>Démarche partenaire</strong> (code {procedure.external_reference}) : elle se
+              dépose chez le partenaire, depuis Clara, et n'apparaît ni au portail ni dans Iris. Son
+              nom et sa description viennent du partenaire et seront remplacés au prochain import ;
+              ses informations demandeur et son formulaire sont ceux du partenaire — les étapes
+              Demandeur, Formulaire, Communication usager et Publication sont sans effet. La
+              catégorie et la base de connaissances se règlent ici, l'activation dans « Démarches
+              activées ».
+            </p>
+          </div>
         ) : null}
 
         <Card>

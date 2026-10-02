@@ -26,6 +26,10 @@ export function ProcedurePickList({
   activeLabel = "À la une",
   inactiveLabel = "Épingler",
 }: ProcedurePickListProps) {
+  // Exception à « jamais masquée » : une démarche partenaire (Arpège…) ne peut
+  // JAMAIS paraître au portail, quel que soit son paramétrage — la proposer
+  // serait un piège. Restée épinglée, elle reste listée pour qu'on la retire.
+  entries = entries.filter((entry) => entry.visibility !== "partenaire" || selected.includes(entry.id));
   if (entries.length === 0) {
     return <p className="text-sm text-muted-foreground">Aucune démarche dans le catalogue.</p>;
   }

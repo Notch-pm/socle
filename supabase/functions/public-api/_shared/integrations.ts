@@ -46,6 +46,52 @@ const IS_COMPLETE: Record<string, (present: ReadonlySet<string>) => boolean> = {
     (present.has("client_secret") || present.has("access_token")),
 };
 
+// ── Démarches partenaires : qui les voit ────────────────────────────────────
+
+/** Le catalogue des intégrations, réduit à ce que la visibilité demande. */
+export interface PartnerDirectory {
+  /** Slug par identifiant d'intégration. */
+  slugs: Map<string, string>;
+  /** Applications rattachées, par identifiant d'intégration. */
+  applications: Map<string, string[]>;
+}
+
+/** Lignes `integrations` avec `integration_applications(application_id)`. */
+export function partnerDirectory(rows: Row[]): PartnerDirectory {
+  const slugs = new Map<string, string>();
+  const applications = new Map<string, string[]>();
+  for (const row of rows) {
+    const id = str(row.id);
+    if (!id) continue;
+    slugs.set(id, String(row.slug));
+    const links = Array.isArray(row.integration_applications) ? (row.integration_applications as Row[]) : [];
+    applications.set(
+      id,
+      links.map((link) => str(link.application_id)).filter((v): v is string => v !== null),
+    );
+  }
+  return { slugs, applications };
+}
+
+/**
+ * Une démarche est-elle servie à cette clé ?
+ *   • démarche du Socle (`integration_id` nul) : oui ;
+ *   • démarche PARTENAIRE : seulement si l'application de la clé
+ *     (`api_keys.consumer`) est rattachée à son intégration. Une clé sans
+ *     application (partenaire, clé d'organisation) ne la voit jamais ; une
+ *     intégration inconnue non plus.
+ *
+ * Pour les autres, la démarche N'EXISTE PAS : retirée des listes, 404 par
+ * identifiant. C'est ce qui empêche Iris d'y déposer une demande et Nora de
+ * l'afficher (le portail l'écarte de surcroît : `isPubliclyPublished`).
+ */
+export function procedureVisibleTo(row: Row, consumer: string | null, directory: PartnerDirectory): boolean {
+  const integrationId = str(row.integration_id);
+  if (!integrationId) return true;
+  if (!consumer) return false;
+  return directory.applications.get(integrationId)?.includes(consumer) ?? false;
+}
+
 export interface IntegrationTypeDto {
   id: string;
   name: string;

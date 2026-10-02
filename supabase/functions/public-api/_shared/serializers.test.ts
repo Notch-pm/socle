@@ -125,6 +125,20 @@ describe("serializers — whitelist stricte (aucune fuite)", () => {
     expect(Object.keys(dto)).toContain("communication_config");
   });
 
+  it("partner : null pour une démarche du Socle, renseigné pour une démarche partenaire", () => {
+    expect(serializeProcedure({ id: "p1", name: "Socle" }, new Map()).partner).toBeNull();
+    const config = { CodeQualificationMetier: "M1", FormComponents: [{ id: "lieu" }] };
+    const dto = serializeProcedure(
+      { id: "p2", name: "Voirie", integration_id: "i-arpege", external_reference: "VOIRIE", partner_config: config },
+      new Map(),
+      new Map([["i-arpege", "arpege"]]),
+    );
+    expect(dto.partner).toEqual({ integration: "arpege", reference: "VOIRIE", config });
+    // Intégration inconnue : la démarche reste marquée partenaire, jamais prise pour une démarche du Socle.
+    const unknown = serializeProcedure({ id: "p3", name: "X", integration_id: "i-x", external_reference: "X" }, new Map());
+    expect(unknown.partner).toEqual({ integration: null, reference: "X", config: null });
+  });
+
   it("statut : seule « production » l'est ; le doute ne publie rien", () => {
     expect(serializeProcedure({ status: "production" }, new Map()).status).toBe("production");
     expect(serializeProcedure({ status: "brouillon" }, new Map()).status).toBe("brouillon");

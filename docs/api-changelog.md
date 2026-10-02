@@ -13,6 +13,25 @@ Format d'une entrée : `## AAAA-MM-JJ — <api> — ajout|correctif|rupture`
 
 ---
 
+## 2026-10-02 — public-api — ajout (démarches partenaires)
+
+Version du contrat **1.35.0**, ajout **additif**.
+
+- **`Procedure.partner`** : `null` pour une démarche du Socle ; sinon
+  `{ integration, reference, config }` — démarche d'un **partenaire** (Arpège) : `integration`
+  = slug (`arpege`), `reference` = code chez le partenaire (`CodeQualificationTypeDemande`),
+  `config` = données du partenaire, **opaques** (`CodeQualificationMetier`,
+  `ConfigInfoUsagerObligs`, `FormComponents`).
+- ⚠️ **Visibilité** : une démarche partenaire n'est servie qu'aux clés dont l'application est
+  rattachée à l'intégration (aujourd'hui `clara` pour `arpege`). Pour toute autre clé — Iris,
+  Nora, clé d'organisation — elle **n'existe pas** : absente de `GET /v1/procedures` (y compris
+  `?enabled_for=`), **404** sur `GET /v1/procedures/{id}`. Elle n'est **jamais** au catalogue du
+  portail (`/v1/portal/*`).
+- ⚠️ Consommateur concerné (Clara) : une démarche dont `partner` est non nul se dépose **chez le
+  partenaire**, jamais dans Iris.
+
+---
+
 ## 2026-10-02 — public-api — ajout (intégrations partenaires)
 
 Deux routes, version du contrat **1.34.0**, ajout **additif** :

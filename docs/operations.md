@@ -39,6 +39,7 @@ quand la valeur voulue est le défaut.
 | `send-test-email` | `true` | Idem : JWT utilisateur + `is_org_admin(organization_id)` |
 | `translate-labels` | `true` | Idem : JWT utilisateur + `is_org_admin(organization_id)`. Traduit les textes d'une ligne (libellé, descriptif court) **en appelant `ai-api`** avec la clé plateforme du Socle (`SOCLE_AI_API_KEY`) — elle n'appelle jamais le fournisseur directement |
 | `integration-test` | `true` | JWT utilisateur + `is_super_admin()`. Test de connexion d'une intégration partenaire (Arpège : Hawk, `GET /v2/Hello`) ; **seul lecteur des secrets d'intégration** (service role), écrit `last_test_*`. Ne journalise qu'un libellé et un code d'erreur |
+| `integration-procedures` | `true` | JWT utilisateur + `is_super_admin()`. Importe les démarches d'un partenaire (Arpège) dans le catalogue de la racine (catégorie « Démarches Arpège ») ; lit les secrets d'intégration (service role). Ne supprime jamais une démarche, ne touche ni catégorie ni activations. Ne journalise qu'un libellé et un code d'erreur |
 
 ⚠️ **Piège de déploiement** : le tableau `files` passé à `deploy_edge_function` doit inclure
 `index.ts` **et tout `_shared/*.ts`** de la fonction. `public-api` et `contacts-api` colocalisent

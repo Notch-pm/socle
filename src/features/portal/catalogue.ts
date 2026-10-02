@@ -31,6 +31,7 @@ import {
 /** Pourquoi une démarche épinglée n'apparaîtrait pas sur le portail — ou `visible`. */
 export type CatalogueVisibility =
   | "visible"
+  | "partenaire"
   | "brouillon"
   | "interne"
   | "masquee"
@@ -40,6 +41,7 @@ export type CatalogueVisibility =
 /** Libellé du badge ; `null` pour le cas ordinaire, qui n'en porte pas. */
 export const CATALOGUE_VISIBILITY_LABELS: Record<CatalogueVisibility, string | null> = {
   visible: null,
+  partenaire: "Démarche partenaire",
   brouillon: "Brouillon",
   interne: "Interne",
   masquee: "Non visible portail",
@@ -209,6 +211,9 @@ export function catalogueVisibility(
   today: string,
   organizations: CatalogueOrganization[],
 ): CatalogueVisibility {
+  // Miroir de `isPubliclyPublished` : une démarche partenaire (Arpège…) se
+  // dépose chez le partenaire, jamais au portail.
+  if (procedure.integration_id != null) return "partenaire";
   if (parseProcedureStatus(procedure.status) !== "production") return "brouillon";
   if (procedure.type !== "externe") return "interne";
   const { visibility } = parseCommunicationConfig(procedure.communication_config);

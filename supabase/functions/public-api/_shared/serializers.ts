@@ -184,13 +184,31 @@ export function readAccessMode(raw: unknown): "libre" | "authentifie" {
  * champ `documents` serait vide alors que la démarche en propose. Tout appelant
  * doit donc le fournir — d'où le paramètre requis.
  */
-export function serializeProcedure(row: Row, templatesById: Map<string, Row>): ProcedureDto {
+/**
+ * `integrationSlugs` : slug de chaque intégration du catalogue, par identifiant
+ * — pour nommer le partenaire d'une démarche partenaire. Absent ou incomplet,
+ * `partner.integration` vaut `null` (la démarche reste marquée partenaire : le
+ * consommateur ne doit jamais la prendre pour une démarche du Socle).
+ */
+export function serializeProcedure(
+  row: Row,
+  templatesById: Map<string, Row>,
+  integrationSlugs: Map<string, string> = new Map(),
+): ProcedureDto {
+  const integrationId = nullableStr(row.integration_id);
   return {
     id: str(row.id),
     organization_id: nullableStr(row.organization_id),
     category_id: nullableStr(row.category_id),
     name: str(row.name),
     type: str(row.type),
+    partner: integrationId
+      ? {
+        integration: integrationSlugs.get(integrationId) ?? null,
+        reference: str(row.external_reference),
+        config: row.partner_config ?? null,
+      }
+      : null,
     // Colonne `text` + CHECK en base ; au moindre doute on sert « brouillon »,
     // le statut qui ne fait rien publier.
     status: row.status === "production" ? "production" : "brouillon",

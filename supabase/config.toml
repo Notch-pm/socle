@@ -73,3 +73,10 @@ verify_jwt = true
 # endroit du Socle qui lit les secrets d'intégration (service role).
 [functions.integration-test]
 verify_jwt = true
+
+# Import des démarches d'un partenaire (Arpège) dans le catalogue de la
+# collectivité, déclenché depuis la fiche client du super administrateur.
+# JWT de session ; `is_super_admin` vérifié dans le code. Lit les secrets
+# d'intégration (service role), comme `integration-test`.
+[functions.integration-procedures]
+verify_jwt = true

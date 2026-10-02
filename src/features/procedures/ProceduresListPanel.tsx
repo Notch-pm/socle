@@ -16,6 +16,7 @@ import {
   AlertDialogAction,
 } from "@/components/ui/alert-dialog";
 import { useCategoriesQuery } from "@/features/categories/useCategories";
+import { useIntegrationsCatalogue } from "@/features/integrations/useIntegrations";
 import { TranslatedIn } from "@/features/languages/TranslatedIn";
 import {
   useProceduresForOrg,
@@ -47,6 +48,9 @@ export function ProceduresListPanel({
   const [deleting, setDeleting] = React.useState<Procedure | null>(null);
 
   const categoryName = new Map((categories ?? []).map((c) => [c.id, c.name]));
+  // Démarches partenaires (Arpège…) : le badge porte le nom du partenaire.
+  const { data: integrations } = useIntegrationsCatalogue();
+  const partnerName = new Map((integrations ?? []).map((i) => [i.id, i.name]));
 
   // Le droit d'écrire est porté par le RLS (l'UI ne masque pas le commutateur) :
   // un membre non administrateur reçoit un refus de la base, pas un écran menteur.
@@ -110,6 +114,11 @@ export function ProceduresListPanel({
                         {isDraftProcedure(proc.status) ? (
                           <Badge variant="outline" className="font-medium">
                             Brouillon
+                          </Badge>
+                        ) : null}
+                        {proc.integration_id ? (
+                          <Badge variant="secondary" title="Démarche partenaire : se dépose chez le partenaire, depuis Clara">
+                            {partnerName.get(proc.integration_id) ?? "Partenaire"}
                           </Badge>
                         ) : null}
                         <TranslatedIn translations={proc.translations} />

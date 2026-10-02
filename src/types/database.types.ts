@@ -1696,15 +1696,18 @@ export type Database = {
           category_id: string | null
           communication_config: Json | null
           created_at: string | null
+          external_reference: string | null
           form_schema: Json | null
           id: string
           input_duration_minutes: number | null
+          integration_id: string | null
           is_active_global: boolean | null
           keywords: string[] | null
           knowledge_base: Json | null
           name: string
           order_index: number | null
           organization_id: string | null
+          partner_config: Json | null
           requester_config: Json | null
           short_description: string | null
           status: string
@@ -1720,15 +1723,18 @@ export type Database = {
           category_id?: string | null
           communication_config?: Json | null
           created_at?: string | null
+          external_reference?: string | null
           form_schema?: Json | null
           id?: string
           input_duration_minutes?: number | null
+          integration_id?: string | null
           is_active_global?: boolean | null
           keywords?: string[] | null
           knowledge_base?: Json | null
           name: string
           order_index?: number | null
           organization_id?: string | null
+          partner_config?: Json | null
           requester_config?: Json | null
           short_description?: string | null
           status?: string
@@ -1744,15 +1750,18 @@ export type Database = {
           category_id?: string | null
           communication_config?: Json | null
           created_at?: string | null
+          external_reference?: string | null
           form_schema?: Json | null
           id?: string
           input_duration_minutes?: number | null
+          integration_id?: string | null
           is_active_global?: boolean | null
           keywords?: string[] | null
           knowledge_base?: Json | null
           name?: string
           order_index?: number | null
           organization_id?: string | null
+          partner_config?: Json | null
           requester_config?: Json | null
           short_description?: string | null
           status?: string
@@ -1768,6 +1777,13 @@ export type Database = {
             columns: ["category_id"]
             isOneToOne: false
             referencedRelation: "categories"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "procedures_integration_id_fkey"
+            columns: ["integration_id"]
+            isOneToOne: false
+            referencedRelation: "integrations"
             referencedColumns: ["id"]
           },
           {

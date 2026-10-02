@@ -114,3 +114,25 @@ describe("miroir des champs avec integration-test", () => {
     }
   });
 });
+
+describe("procedureVisibleTo — démarches partenaires", () => {
+  // Import local : ce bloc s'ajoute au fichier existant.
+  it("démarche du Socle : visible de tous ; partenaire : des seules applications rattachées", async () => {
+    const { partnerDirectory, procedureVisibleTo } = await import("./integrations");
+    const directory = partnerDirectory([
+      { id: "i-arpege", slug: "arpege", integration_applications: [{ application_id: "clara" }] },
+    ]);
+    const socle = { id: "p1", integration_id: null };
+    const arpege = { id: "p2", integration_id: "i-arpege" };
+    expect(procedureVisibleTo(socle, null, directory)).toBe(true);
+    expect(procedureVisibleTo(socle, "iris", directory)).toBe(true);
+    expect(procedureVisibleTo(arpege, "clara", directory)).toBe(true);
+    expect(procedureVisibleTo(arpege, "iris", directory)).toBe(false);
+    expect(procedureVisibleTo(arpege, "nora", directory)).toBe(false);
+    // Clé sans application (partenaire, clé d'organisation) : jamais.
+    expect(procedureVisibleTo(arpege, null, directory)).toBe(false);
+    // Intégration inconnue de l'annuaire : jamais.
+    expect(procedureVisibleTo({ id: "p3", integration_id: "i-x" }, "clara", directory)).toBe(false);
+    expect(directory.slugs.get("i-arpege")).toBe("arpege");
+  });
+});

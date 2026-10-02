@@ -128,12 +128,43 @@ qu'ils disent la même chose. Un partenaire non configurable : la ligne seule, `
 - Reste : Ariane (pas encore consommatrice du Socle), chiffrement au repos (Vault), retrait du
   formulaire Arpège de Clara une fois toutes les collectivités passées par le Socle.
 
+## Démarches partenaires (2026-10-02, contrat 1.35.0)
+
+L'API Arpège ne dit rien de **quel service propose quelle démarche** : l'activation par
+organisation ne peut venir que du Socle. Les démarches Arpège y vivent donc comme les autres.
+
+- **Import** : bouton « Récupérer les démarches » de la fiche Arpège (intégration **active**),
+  fonction `integration-procedures` (super admin). Lecture **portée de Clara**
+  (`sync-arpege-services`) : formulaires par type, `TypesDemandes` avec repli, filtre
+  `ENLIGNE` ou vide. Les démarches entrent au catalogue de la **racine**, catégorie
+  « Démarches Arpège » (créée au besoin), `status = production`, marquées `integration_id` +
+  `external_reference` (code) + `partner_config` (opaque : `CodeQualificationMetier`,
+  `ConfigInfoUsagerObligs`, `FormComponents` — exactement l'`arpege_config_fields` de Clara).
+- ⚠️ Un nouvel import ne met à jour que **nom, description courte, `partner_config`** — jamais
+  la catégorie, le statut ni les activations — et ne **supprime jamais** une démarche disparue
+  d'Arpège (elle est signalée).
+- **Activation** : écran existant « Démarches activées » (`organization_procedures`) ; la
+  colonne catégorie (« Démarches Arpège ») les distingue.
+- ⚠️ **Visibilité** (`procedureVisibleTo`, public-api) : une démarche partenaire n'est servie
+  qu'aux clés dont l'application est rattachée à l'intégration (`clara`) — pour Iris, Nora, une
+  clé d'organisation, **elle n'existe pas** (absente des listes, 404). Le portail l'écarte en plus
+  (`isPubliclyPublished`, miroir front `catalogueVisibility` → « partenaire »), et l'éditeur du
+  site ne la propose pas à l'épinglage.
+- `ProcedureDto.partner` : `{ integration, reference, config } | null`.
+- Éditeur : bandeau « Démarche partenaire » ; les étapes Demandeur, Formulaire, Communication
+  usager et Publication restent affichées mais sont **sans effet** pour elle. Liste : badge au
+  nom du partenaire.
+- ⚠️ **Ordre** : importer est sans risque, mais **n'activer qu'après le déploiement de Clara** —
+  sinon Clara, qui ne lit pas encore `partner`, la routerait vers Iris.
+
 ## Code et tests
 
 `supabase/migrations/20261002090000_integrations_catalogue.sql`,
 `supabase/tests/integrations.test.sql` (à blanc : `supabase db query --linked -f`),
 `supabase/functions/integration-test/` (`index.ts`, `_shared/{hawk,adapters}.ts` + tests),
 `supabase/functions/public-api/_shared/integrations.ts` (+ test),
+`supabase/functions/integration-procedures/` (`index.ts`, `_shared/{arpegeCatalogue,importPlan,hawk}.ts` + test),
+`supabase/migrations/20261002190000_procedures_partenaires.sql`,
 `supabase/migrations/20261002160000_api_keys_scope_integrations.sql`,
 `src/features/integrations/` (`useIntegrations.ts`, `integrationStatus.ts`, `adapters.ts`,
 `IntegrationCard`, `IntegrationGrid`, `IntegrationsSection`, `IntegrationConfigDialog`),

@@ -307,8 +307,11 @@ superadmin (`OrgSettingsPage`, menu latéral par client).
 - ⚠️ Activer exige un test réussi (trigger) ; modifier paramètres ou secret invalide le test.
   Adaptateurs en **miroir** front / edge / public-api (trois copies, épinglées par test).
 - Servie par `GET /v1/organizations/{id}/integrations/{slug}` (scope **`integrations`**, secrets
-  compris, `is_active` effectif) ; Clara en tient un **miroir** (sync du référentiel) — ⚠️ et
-  garde sa configuration locale tant que le Socle n'en déclare pas de complète.
+  compris, `is_active` effectif) ; Clara en tient un **miroir** (sync du référentiel).
+- **Démarches partenaires** (1.35.0) : importées au catalogue de la racine
+  (`integration-procedures`, `procedures.integration_id`/`external_reference`/`partner_config`),
+  activées dans « Démarches activées ». ⚠️ Servies aux **seules applications de l'intégration**
+  (`procedureVisibleTo`), jamais au portail (`isPubliclyPublished`), jamais à Iris.
 
 ### [Site de démarches — portail usagers](docs/features/site-de-demarches.md)
 - Le portail est **Nora** (dépôt `Notch-pm/Nora`, sans base) ; le Socle détient le domaine

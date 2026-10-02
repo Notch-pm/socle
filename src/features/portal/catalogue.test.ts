@@ -73,6 +73,10 @@ describe("catalogueVisibility — les règles du Socle, dans leur ordre", () => 
     expect(catalogueVisibility(procedure({ communication_config: null }), TODAY, [ACCM])).toBe("visible");
   });
 
+  it("partenaire (Arpège…) passe avant tout : jamais au portail — miroir de isPubliclyPublished", () => {
+    expect(catalogueVisibility(procedure({ integration_id: "i-arpege" }), TODAY, [ACCM])).toBe("partenaire");
+  });
+
   it("brouillon passe avant tout le reste", () => {
     expect(catalogueVisibility(procedure({ status: "brouillon", type: "interne" }), TODAY, [])).toBe("brouillon");
     // Fail closed : un statut inattendu est un brouillon.

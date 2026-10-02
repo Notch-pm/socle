@@ -395,6 +395,12 @@ aucun endpoint, il décrit ce qui existe **en base**.
 - `category_id` sans `ON DELETE` : supprimer une catégorie utilisée par une démarche est **bloqué**
   par Postgres (pas de CASCADE, pas de SET NULL).
 
+- **Démarches partenaires** (2026-10-02) : `integration_id` (FK `integrations`, `on delete
+  restrict`), `external_reference` (code chez le partenaire), `partner_config jsonb` (opaque).
+  CHECK `(integration_id is null) = (external_reference is null)`, index unique
+  `(organization_id, integration_id, external_reference)`. Écrites par `integration-procedures`
+  (service role). Jamais au portail ; servies aux seules applications de l'intégration.
+
 ### `organization_procedures` — activation par organisation
 
 - `organization_id`, `procedure_id` nullables, FK **CASCADE** des deux côtés ; **UNIQUE

@@ -98,6 +98,11 @@ describe("isPubliclyPublished — la définition complète de « publiée »", (
     expect(isPubliclyPublished({ ...published, status: undefined }, "2027-06-15")).toBe(false);
   });
 
+  it("refuse une démarche partenaire (Arpège…) — elle se dépose chez le partenaire, jamais au portail", () => {
+    expect(isPubliclyPublished({ ...published, integration_id: "i-arpege" }, "2027-06-15")).toBe(false);
+    expect(isPubliclyPublished({ ...published, integration_id: null }, "2027-06-15")).toBe(true);
+  });
+
   it("refuse une démarche interne — pas de guichet en ligne", () => {
     expect(isPubliclyPublished({ ...published, type: "interne" }, "2027-06-15")).toBe(false);
   });

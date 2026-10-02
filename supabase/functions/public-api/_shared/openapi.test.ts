@@ -76,6 +76,13 @@ describe("buildOpenApiDocument", () => {
     expect(doc.paths["/v1/integrations"].get.description).toContain("aucun secret");
   });
 
+  it("documente les démarches partenaires : champ partner, servi aux seules applications de l'intégration", () => {
+    const partner = doc.components.schemas.Procedure.properties.partner;
+    expect(partner.type).toEqual(["object", "null"]);
+    expect(partner.description).toContain("n'existe pas");
+    expect(partner.properties.config.description).toContain("opaques");
+  });
+
   it("documente les erreurs 401 sur les listes et 400/404 sur les accès par id", () => {
     expect(doc.paths["/v1/organizations"].get.responses).toHaveProperty("401");
     const byId = doc.paths["/v1/organizations/{id}"].get.responses;
@@ -308,8 +315,8 @@ describe("contrat — traduction de la communication usager (1.26.0)", () => {
 describe("contrat — documents et courriers", () => {
   const doc = buildOpenApiDocument("https://example.supabase.co/functions/v1/public-api") as any;
 
-  it("annonce la version 1.34.0 du contrat", () => {
-    expect(doc.info.version).toBe("1.34.0");
+  it("annonce la version 1.35.0 du contrat", () => {
+    expect(doc.info.version).toBe("1.35.0");
   });
 
   it("le lieu d'intervention est un type de champ structurel, à réponse objet (1.29.0)", () => {

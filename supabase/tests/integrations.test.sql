@@ -193,6 +193,41 @@ begin
   if v_bool is not true then v_fail := v_fail || 'I6e: un correctif vide a invalidé le test'; end if;
 
   -- ==========================================================================
+  -- I7. Démarches partenaires : code ⇔ intégration, une par (racine, code)
+  -- ==========================================================================
+  begin
+    insert into public.procedures (organization_id, name, integration_id) values (org_a, 'Sans code', v_arpege);
+    v_fail := v_fail || 'I7a: démarche partenaire sans code acceptée';
+  exception when check_violation then null;
+  end;
+  begin
+    insert into public.procedures (organization_id, name, external_reference) values (org_a, 'Code seul', 'X1');
+    v_fail := v_fail || 'I7b: code sans intégration accepté';
+  exception when check_violation then null;
+  end;
+  insert into public.procedures (organization_id, name, integration_id, external_reference, partner_config)
+    values (org_a, 'Voirie', v_arpege, 'VOIRIE', '{"CodeQualificationMetier": "M1"}');
+  begin
+    insert into public.procedures (organization_id, name, integration_id, external_reference)
+      values (org_a, 'Voirie bis', v_arpege, 'VOIRIE');
+    v_fail := v_fail || 'I7c: doublon (racine, intégration, code) accepté';
+  exception when unique_violation then null;
+  end;
+  -- Même code chez une autre racine : légitime.
+  begin
+    insert into public.procedures (organization_id, name, integration_id, external_reference)
+      values (org_b, 'Voirie', v_arpege, 'VOIRIE');
+  exception when others then
+    v_fail := v_fail || format('I7d: même code sur une autre racine refusé (%s)', sqlerrm);
+  end;
+  begin
+    insert into public.procedures (organization_id, name, integration_id, external_reference, partner_config)
+      values (org_a, 'Tableau', v_arpege, 'TAB', '[]');
+    v_fail := v_fail || 'I7e: partner_config non objet accepté';
+  exception when check_violation then null;
+  end;
+
+  -- ==========================================================================
   -- VERDICT — puis annulation volontaire
   -- ==========================================================================
   if array_length(v_fail, 1) > 0 then

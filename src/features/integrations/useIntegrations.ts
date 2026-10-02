@@ -160,6 +160,46 @@ export function useSetOrganizationIntegrationActive(organizationId: string) {
   });
 }
 
+export interface ProcedureImportResult {
+  created: number;
+  updated: number;
+  unchanged: number;
+  /** Démarches présentes au Socle mais plus chez le partenaire (jamais supprimées). */
+  missing: string[];
+}
+
+/**
+ * Import des démarches du partenaire dans le catalogue de la racine
+ * (`integration-procedures`) — elles s'activent ensuite dans « Démarches
+ * activées », comme les autres.
+ */
+export function useImportPartnerProcedures() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async (configId: string): Promise<ProcedureImportResult> => {
+      const { data, error } = await supabase.functions.invoke<ProcedureImportResult>("integration-procedures", {
+        body: { organization_integration_id: configId },
+      });
+      if (error) {
+        let message = error.message;
+        try {
+          const body = await (error as { context?: Response }).context?.json();
+          if (body?.error && typeof body.error.message === "string") message = body.error.message;
+        } catch {
+          // corps illisible : on garde le message générique
+        }
+        throw new Error(message);
+      }
+      if (!data || typeof data.created !== "number") throw new Error("Réponse invalide du serveur");
+      return data;
+    },
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: ["procedures"] });
+      void queryClient.invalidateQueries({ queryKey: ["categories"] });
+    },
+  });
+}
+
 export interface ConnectionTestResult {
   ok: boolean;
   message: string;

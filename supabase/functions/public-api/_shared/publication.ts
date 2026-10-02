@@ -110,6 +110,11 @@ export function isPublishedOn(publication: ProcedurePublication, day: string): b
  * portail n'a rien à en montrer.
  */
 export function isPubliclyPublished(row: Record<string, unknown>, day: string): boolean {
+  // Démarche PARTENAIRE (Arpège…) : elle se dépose chez le partenaire, par
+  // l'application de la gamme qui l'exécute (Clara) — jamais au portail. Le
+  // lecteur doit donc sélectionner `integration_id` ; absente, la colonne vaut
+  // `undefined` et la démarche passe pour une démarche du Socle.
+  if (row.integration_id != null) return false;
   if (row.status !== "production") return false;
   if (row.type !== "externe") return false;
   const publication = parsePublication(row.communication_config);

@@ -74,6 +74,24 @@ export interface CategoryDto {
   created_at: string | null;
 }
 
+/**
+ * Démarche d'un PARTENAIRE (Arpège…) : elle se dépose chez le partenaire, par
+ * l'application de la gamme qui exécute l'intégration. Servie aux seules
+ * applications rattachées à l'intégration ; jamais au portail.
+ */
+export interface ProcedurePartnerDto {
+  /** Slug de l'intégration au catalogue (`arpege`). */
+  integration: string | null;
+  /** Code de la démarche chez le partenaire (Arpège : CodeQualificationTypeDemande). */
+  reference: string;
+  /**
+   * Données du partenaire, **opaques pour le Socle**, transmises telles quelles
+   * (Arpège : `CodeQualificationMetier`, `ConfigInfoUsagerObligs`,
+   * `FormComponents` — le formulaire à présenter).
+   */
+  config: unknown;
+}
+
 /** Démarche — configuration intégrale (descriptif + JSON possédés). */
 export interface ProcedureDto {
   id: string;
@@ -81,6 +99,12 @@ export interface ProcedureDto {
   category_id: string | null;
   name: string;
   type: string;
+  /**
+   * `null` = démarche du Socle. Sinon démarche PARTENAIRE : elle se dépose chez
+   * le partenaire, jamais dans Iris ni au portail — et seules les applications
+   * rattachées à son intégration la reçoivent.
+   */
+  partner: ProcedurePartnerDto | null;
   /**
    * Cycle de vie du paramétrage : `brouillon` (en cours d'écriture) ou
    * `production` (déclarée prête). ⚠️ Distinct de la visibilité : `status` dit

@@ -30,7 +30,7 @@ export function buildOpenApiDocument(serverUrl: string): Record<string, unknown>
     openapi: "3.1.0",
     info: {
       title: "API Socle — Référentiel de la gamme",
-      version: "1.34.0",
+      version: "1.35.0",
       description: [
         "API **en lecture seule** exposant le référentiel central de la gamme : les",
         "**organisations** (et sous-organisations) avec l'intégralité de leur configuration,",
@@ -2322,6 +2322,31 @@ export function buildOpenApiDocument(serverUrl: string): Record<string, unknown>
             category_id: { type: ["string", "null"], format: "uuid" },
             name: { type: "string" },
             type: { type: "string", enum: ["interne", "externe"] },
+            partner: {
+              type: ["object", "null"],
+              description:
+                "`null` = démarche du Socle. Sinon démarche **partenaire** (Arpège…) : elle se " +
+                "dépose **chez le partenaire**, par l'application qui exécute l'intégration — " +
+                "jamais dans Iris, jamais au portail. ⚠️ Elle n'est servie qu'aux clés dont " +
+                "l'application est rattachée à l'intégration (aujourd'hui `clara` pour " +
+                "`arpege`) ; pour toute autre clé elle n'existe pas (absente des listes, 404).",
+              required: ["integration", "reference", "config"],
+              properties: {
+                integration: {
+                  type: ["string", "null"],
+                  description: "Slug de l'intégration (`arpege`) — voir `GET /v1/integrations`.",
+                },
+                reference: {
+                  type: "string",
+                  description: "Code de la démarche chez le partenaire (Arpège : `CodeQualificationTypeDemande`).",
+                },
+                config: {
+                  description:
+                    "Données du partenaire, **opaques pour le Socle**, transmises telles quelles. " +
+                    "Arpège : `CodeQualificationMetier`, `ConfigInfoUsagerObligs`, `FormComponents`.",
+                },
+              },
+            },
             status: {
               type: "string",
               enum: ["brouillon", "production"],

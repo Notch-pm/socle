@@ -41,6 +41,9 @@ vi.mock("@/features/procedures/useProcedures", () => ({
 vi.mock("@/features/categories/useCategories", () => ({
   useCategoriesQuery: () => ({ data: [], isLoading: false }),
 }));
+vi.mock("@/features/integrations/useIntegrations", () => ({
+  useIntegrationsCatalogue: () => ({ data: [], isLoading: false }),
+}));
 
 // Radix Switch : polyfills absents de jsdom.
 if (!Element.prototype.hasPointerCapture) {
