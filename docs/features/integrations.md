@@ -120,8 +120,11 @@ qu'ils disent la même chose. Un partenaire non configurable : la ligne seule, `
 - **2026-10-02, à la demande du PO** : la configuration d'ACCM a été **dupliquée** chez **SNA** et
   **Rosny** (« Mairie de Saint Laurent ») — copie de base à base, tests réussis, activées,
   recopiées dans Clara. ⚠️ Mêmes identifiants : les trois collectivités parlent au **même espace
-  Arpège**. « Marie d'Arles » (tenant Clara sur une sous-organisation d'ACCM) reçoit celle d'ACCM,
-  comme pour le SMTP.
+  Arpège**.
+- Un tenant Clara rattaché à une **sous-organisation** recevrait la configuration de sa racine
+  (comme pour le SMTP). Le seul cas (« Marie d'Arles », tenant de test d'avant le miroir des
+  organisations) a été supprimé le 2026-10-02 : les sous-organisations d'ACCM sont des
+  organisations du tenant ACCM, pas des tenants.
 - Reste : Ariane (pas encore consommatrice du Socle), chiffrement au repos (Vault), retrait du
   formulaire Arpège de Clara une fois toutes les collectivités passées par le Socle.
 
