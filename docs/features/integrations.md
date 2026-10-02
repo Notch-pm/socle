@@ -117,6 +117,11 @@ qu'ils disent la même chose. Un partenaire non configurable : la ligne seule, `
   affichés), testée au Socle (`GET /v2/Hello` réussi) et activée ; première sync : valeurs
   identiques dans Clara, toujours active, désormais en lecture seule là-bas. ACCM était la seule
   collectivité configurée.
+- **2026-10-02, à la demande du PO** : la configuration d'ACCM a été **dupliquée** chez **SNA** et
+  **Rosny** (« Mairie de Saint Laurent ») — copie de base à base, tests réussis, activées,
+  recopiées dans Clara. ⚠️ Mêmes identifiants : les trois collectivités parlent au **même espace
+  Arpège**. « Marie d'Arles » (tenant Clara sur une sous-organisation d'ACCM) reçoit celle d'ACCM,
+  comme pour le SMTP.
 - Reste : Ariane (pas encore consommatrice du Socle), chiffrement au repos (Vault), retrait du
   formulaire Arpège de Clara une fois toutes les collectivités passées par le Socle.
 
