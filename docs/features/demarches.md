@@ -283,5 +283,6 @@ l'isolation est portée par le **RLS de `storage.objects`**, pas par une colonne
 Une démarche peut appartenir à un **partenaire** (`procedures.integration_id`,
 `external_reference`, `partner_config`) : importée depuis l'intégration, elle se dépose chez le
 partenaire (depuis Clara), **jamais au portail ni dans Iris**. Ses informations demandeur et
-son formulaire sont ceux du partenaire ; le stepper l'annonce par un bandeau. Détail, règles de
+son formulaire sont ceux du partenaire : le stepper ne montre que Descriptif et Base de
+connaissances, et l'annonce par un bandeau. Détail, règles de
 visibilité et d'import : [intégrations partenaires](integrations.md).

@@ -47,6 +47,17 @@ const CONNAISSANCES_FORM_ID = "procedure-connaissances-form";
 const LAST_STEP = PROCEDURE_STEPS.length - 1;
 
 /** Formulaire soumis depuis le pied de page, par rang d'étape (cf. PROCEDURE_STEPS). */
+/**
+ * Rangs des étapes montrées. Une démarche partenaire n'a que le descriptif et la
+ * base de connaissances : le reste (demandeur, formulaire, communication usager,
+ * publication) appartient au partenaire.
+ */
+export function visibleStepIndices(isPartner: boolean): number[] {
+  const all = PROCEDURE_STEPS.map((_, index) => index);
+  if (!isPartner) return all;
+  return [0, LAST_STEP];
+}
+
 const STEP_FORM_IDS: readonly string[] = [
   DESCRIPTIF_FORM_ID,
   DEMANDEUR_FORM_ID,
@@ -107,7 +118,18 @@ export function ProcedureEditor({
     );
   }
 
-  const enabledUpTo = isEdit ? LAST_STEP : 0;
+  // Démarche PARTENAIRE (Arpège…) : demandeur, formulaire, communication usager et
+  // publication sont ceux du partenaire — ces étapes n'auraient aucun effet, on ne
+  // les montre pas. Restent le descriptif et la base de connaissances. Les rangs
+  // gardent leur valeur (l'URL `?step=5` vise toujours la base de connaissances).
+  const stepIndices = visibleStepIndices(procedure?.integration_id != null);
+  const shownCurrent = stepIndices.includes(current) ? current : stepIndices[0];
+  const position = stepIndices.indexOf(shownCurrent);
+  const nextStep = stepIndices[position + 1];
+  const previousStep = stepIndices[position - 1];
+  const isLastShown = nextStep === undefined;
+
+  const enabledUpTo = isEdit ? stepIndices.length - 1 : 0;
   const submitting = createProc.isPending || updateProc.isPending;
   const error = (createProc.error || updateProc.error) as Error | null;
 
@@ -119,7 +141,7 @@ export function ProcedureEditor({
   /** Après un enregistrement : avance ou confirme sur place, selon le bouton cliqué. */
   function afterSave() {
     if (advanceRef.current) {
-      goToStep(Math.min(current + 1, LAST_STEP));
+      goToStep(nextStep ?? shownCurrent);
       return;
     }
     setJustSaved(true);
@@ -127,7 +149,7 @@ export function ProcedureEditor({
     savedTimer.current = window.setTimeout(() => setJustSaved(false), 2500);
     // Bout du stepper, démarche encore en brouillon : c'est le moment où la
     // question se pose d'elle-même — le paramétrage vient d'être bouclé.
-    if (current === LAST_STEP && isDraftProcedure(procedure?.status)) setAskProduction(true);
+    if (isLastShown && isDraftProcedure(procedure?.status)) setAskProduction(true);
   }
 
   function goToProduction() {
@@ -198,7 +220,7 @@ export function ProcedureEditor({
   }
 
   // Chaque étape a un formulaire soumis depuis le pied de page.
-  const currentFormId = STEP_FORM_IDS[current] ?? null;
+  const currentFormId = STEP_FORM_IDS[shownCurrent] ?? null;
 
   return (
     <div className="flex h-full min-h-0 flex-col overflow-hidden">
@@ -219,10 +241,10 @@ export function ProcedureEditor({
         </div>
         <div className="mt-5">
           <Stepper
-            steps={PROCEDURE_STEPS}
-            current={current}
+            steps={stepIndices.map((index) => PROCEDURE_STEPS[index])}
+            current={position}
             enabledUpTo={enabledUpTo}
-            onSelect={goToStep}
+            onSelect={(shownIndex) => goToStep(stepIndices[shownIndex])}
           />
         </div>
       </div>
@@ -245,55 +267,54 @@ export function ProcedureEditor({
               <strong>Démarche partenaire</strong> (code {procedure.external_reference}) : elle se
               dépose chez le partenaire, depuis Clara, et n'apparaît ni au portail ni dans Iris. Son
               nom et sa description viennent du partenaire et seront remplacés au prochain import ;
-              ses informations demandeur et son formulaire sont ceux du partenaire — les étapes
-              Demandeur, Formulaire, Communication usager et Publication sont sans effet. La
-              catégorie et la base de connaissances se règlent ici, l'activation dans « Démarches
-              activées ».
+              ses informations demandeur, son formulaire et sa publication sont ceux du partenaire,
+              d'où les seules étapes Descriptif et Base de connaissances. La catégorie et la base
+              de connaissances se règlent ici, l'activation dans « Démarches activées ».
             </p>
           </div>
         ) : null}
 
         <Card>
           <CardContent className="p-6">
-            {current === 0 ? (
+            {shownCurrent === 0 ? (
               <DescriptifStep
                 formId={DESCRIPTIF_FORM_ID}
                 organizationId={resolvedOrgId}
                 procedure={procedure ?? null}
                 onSubmit={handleDescriptifSubmit}
               />
-            ) : current === 1 && procedure ? (
+            ) : shownCurrent === 1 && procedure ? (
               <DemandeurStep
                 formId={DEMANDEUR_FORM_ID}
                 procedure={procedure}
                 onSubmit={handleDemandeurSubmit}
               />
-            ) : current === 2 && procedure ? (
+            ) : shownCurrent === 2 && procedure ? (
               <FormulaireStep
                 formId={FORMULAIRE_FORM_ID}
                 procedure={procedure}
                 onSubmit={handleFormulaireSubmit}
               />
-            ) : current === 3 && procedure ? (
+            ) : shownCurrent === 3 && procedure ? (
               <UserCommunicationStep
                 formId={USAGER_FORM_ID}
                 procedure={procedure}
                 onSubmit={handleUsagerSubmit}
               />
-            ) : current === 4 && procedure ? (
+            ) : shownCurrent === 4 && procedure ? (
               <CommunicationStep
                 formId={COMMUNICATION_FORM_ID}
                 procedure={procedure}
                 onSubmit={handleCommunicationSubmit}
               />
-            ) : current === 5 && procedure ? (
+            ) : shownCurrent === 5 && procedure ? (
               <KnowledgeBaseStep
                 formId={CONNAISSANCES_FORM_ID}
                 procedure={procedure}
                 onSubmit={handleConnaissancesSubmit}
               />
             ) : (
-              <PlaceholderStep label={PROCEDURE_STEPS[current].label} />
+              <PlaceholderStep label={PROCEDURE_STEPS[shownCurrent].label} />
             )}
           </CardContent>
         </Card>
@@ -312,8 +333,8 @@ export function ProcedureEditor({
           ) : null}
           <Button
             variant="outline"
-            disabled={current === 0}
-            onClick={() => goToStep(Math.max(current - 1, 0))}
+            disabled={previousStep === undefined}
+            onClick={() => previousStep !== undefined && goToStep(previousStep)}
           >
             Précédent
           </Button>
@@ -322,7 +343,7 @@ export function ProcedureEditor({
               <Button
                 type="submit"
                 form={currentFormId}
-                variant={current === LAST_STEP ? "primary" : "outline"}
+                variant={isLastShown ? "primary" : "outline"}
                 disabled={submitting}
                 onClick={() => {
                   advanceRef.current = false;
@@ -330,7 +351,7 @@ export function ProcedureEditor({
               >
                 {submitting && !advanceRef.current ? "Enregistrement…" : "Enregistrer"}
               </Button>
-              {current < LAST_STEP ? (
+              {!isLastShown ? (
                 <Button
                   type="submit"
                   form={currentFormId}
@@ -343,8 +364,8 @@ export function ProcedureEditor({
                 </Button>
               ) : null}
             </>
-          ) : current < LAST_STEP ? (
-            <Button onClick={() => goToStep(Math.min(current + 1, LAST_STEP))}>Suivant</Button>
+          ) : !isLastShown ? (
+            <Button onClick={() => goToStep(nextStep)}>Suivant</Button>
           ) : (
             <Button onClick={onClose}>Terminer</Button>
           )}

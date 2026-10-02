@@ -248,3 +248,51 @@ describe("ProcedureEditor — pied de page du stepper", () => {
     expect(onStepChange).toHaveBeenCalledWith(0);
   });
 });
+
+describe("ProcedureEditor — démarche partenaire (Arpège…)", () => {
+  function asPartner(run: () => void) {
+    const procedure = h.procedure as Record<string, unknown>;
+    procedure.integration_id = "i-arpege";
+    procedure.external_reference = "VOIRIE";
+    try {
+      run();
+    } finally {
+      procedure.integration_id = null;
+      procedure.external_reference = null;
+    }
+  }
+
+  it("ne montre que Descriptif et Base de connaissances", () => {
+    asPartner(() => {
+      renderEditor(0);
+      const steps = screen.getAllByRole("listitem").map((li) => li.textContent);
+      expect(steps).toHaveLength(2);
+      expect(steps[0]).toContain("Descriptif");
+      expect(steps[1]).toContain("Base de connaissances");
+      expect(screen.queryByText("Formulaire")).toBeNull();
+    });
+  });
+
+  it("« Précédent » saute de la base de connaissances au descriptif ; le stepper vise le bon rang", () => {
+    asPartner(() => {
+      const { onStepChange } = renderEditor(5);
+      fireEvent.click(screen.getByRole("button", { name: "Précédent" }));
+      expect(onStepChange).toHaveBeenLastCalledWith(0);
+      fireEvent.click(screen.getByRole("button", { name: "Base de connaissances" }));
+      expect(onStepChange).toHaveBeenLastCalledWith(5);
+    });
+  });
+
+  it("une URL visant une étape masquée retombe sur le descriptif", () => {
+    asPartner(() => {
+      renderEditor(2);
+      expect(screen.getByRole("button", { name: "Précédent" }).hasAttribute("disabled")).toBe(true);
+      expect(screen.getByRole("button", { name: "Enregistrer et continuer" })).toBeTruthy();
+    });
+  });
+
+  it("une démarche du Socle garde ses six étapes", () => {
+    renderEditor(0);
+    expect(screen.getAllByRole("listitem")).toHaveLength(6);
+  });
+});

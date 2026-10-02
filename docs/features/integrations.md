@@ -151,8 +151,10 @@ organisation ne peut venir que du Socle. Les démarches Arpège y vivent donc co
   (`isPubliclyPublished`, miroir front `catalogueVisibility` → « partenaire »), et l'éditeur du
   site ne la propose pas à l'épinglage.
 - `ProcedureDto.partner` : `{ integration, reference, config } | null`.
-- Éditeur : bandeau « Démarche partenaire » ; les étapes Demandeur, Formulaire, Communication
-  usager et Publication restent affichées mais sont **sans effet** pour elle. Liste : badge au
+- Éditeur : bandeau « Démarche partenaire » ; le stepper ne montre que **Descriptif** et **Base
+  de connaissances** (`visibleStepIndices`) — demandeur, formulaire, communication usager et
+  publication sont ceux du partenaire. Les rangs ne changent pas (`?step=5` reste la base de
+  connaissances ; une URL visant une étape masquée retombe sur le descriptif). Liste : badge au
   nom du partenaire.
 - ⚠️ **Ordre** : importer est sans risque, mais **n'activer qu'après le déploiement de Clara** —
   sinon Clara, qui ne lit pas encore `partner`, la routerait vers Iris.
