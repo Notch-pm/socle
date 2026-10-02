@@ -111,20 +111,17 @@ existe réellement aujourd'hui : [architecture.md](./architecture.md),
   - **rédaction des textes** par les collectivités (table vide à la livraison), en commençant
     par les services internes ;
   - Iris pourrait s'en servir de même pour orienter une demande (non demandé).
-- **Intégrations partenaires** : **lot 1 livré le 2026-10-02** — catalogue, configuration par
-  collectivité (super admin), secrets illisibles par tout client, test de connexion Arpège
-  ([fiche](features/integrations.md)). Reste :
-  - **lot 2, contrat public** : `GET /v1/organizations/{id}/integrations/{slug}` (scope
-    `integrations`, secrets compris, motif `organizations/{id}/smtp`) et `GET /v1/integrations`
-    (catalogue) — nouveau scope à ajouter à `api_keys_scopes_known` **sans oublier** les existants ;
-  - **bascule de Clara** : recopier ses identifiants Arpège vers le Socle (organisation Clara →
-    racine Socle), lire le Socle dans `_shared/arpege.ts`, retirer sa table **après** ; d'ici là,
-    double vérité assumée ;
+- **Intégrations partenaires** : **lots 1 et 2 livrés le 2026-10-02** — catalogue, configuration
+  par collectivité (super admin), secrets illisibles par tout client, test de connexion Arpège,
+  route `GET /v1/organizations/{id}/integrations/{slug}` (scope `integrations`, contrat 1.34.0)
+  et miroir dans Clara ([fiche](features/integrations.md)). Reste :
+  - **retrait du formulaire Arpège de Clara** (et de la règle de transition « garder la
+    configuration locale ») une fois toutes les collectivités configurées au Socle ;
   - **Ariane** : au registre `applications` le jour où elle consommera le Socle, puis rattachée à
     Arpège ; ses `notify-arpege-*` (Bearer, URL vraisemblablement inventées) sont à revoir ;
   - **chiffrement des secrets au repos** (Vault, installé et inutilisé) sans changer la frontière ;
   - autres partenaires (iXBus, Maarch, iParapheur, Yousign, Docaposte, Universign…) quand ils
-    seront réels — une ligne de catalogue, et un adaptateur des deux côtés s'ils sont
+    seront réels — une ligne de catalogue, et un adaptateur aux trois endroits s'ils sont
     configurables.
 - **Publication du guide d'intégration hors du repo** : `docs/integration.md` est aujourd'hui
   interne au repo Socle ; à publier ailleurs (portail, section in-app) si les équipes

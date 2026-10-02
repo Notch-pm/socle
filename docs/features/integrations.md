@@ -95,20 +95,33 @@ qu'ils disent la même chose. Un partenaire non configurable : la ligne seule, `
   de collectivité (décision du 2026-10-02 : super admin seul, comme le verrou de Clara).
 - Badges : variantes `success` / `destructive` ajoutées à `Badge`, sur les jetons existants.
 
-## Hors lot 1 (roadmap)
+## Consommation par les applications (lot 2, 2026-10-02)
 
-- **Route public-api** `GET /v1/organizations/{id}/integrations/{slug}` (scope `integrations`,
-  secrets compris, motif `organizations/{id}/smtp`) + `GET /v1/integrations` (catalogue).
-- **Bascule de Clara** : recopie de ses identifiants (correspondance organisation Clara → racine
-  Socle), lecture depuis le Socle dans `_shared/arpege.ts`, retrait de sa table **après**.
-- ⚠️ **Double vérité en attendant** : la configuration Arpège de Clara reste dans Clara ; celle du
-  Socle n'est lue par personne. Le dire à qui configure.
+- **`GET /v1/integrations`** (scope `read`) : le catalogue, sans secret.
+- **`GET /v1/organizations/{id}/integrations/{slug}`** (scope **`integrations`**, contrat
+  1.34.0) : la configuration de la racine, **secrets compris** — motif `organizations/{id}/smtp`,
+  mêmes gardes (scope explicite → 403, hors périmètre → 404). Rien de complet → 200
+  `configured: false`, valeurs vides. ⚠️ `is_active` y est **effectif** (activée **et** offre
+  proposée).
+- ⚠️ Sérialisation en **whitelist par adaptateur** (`public-api/_shared/integrations.ts`) : troisième
+  copie des champs, épinglée sur `integration-test` par `integrations.test.ts`. Un partenaire
+  configurable s'ajoute donc à **trois** endroits (front, `integration-test`, `public-api`).
+- **Clara** recopie la configuration dans sa propre table `organization_integrations` à chaque
+  synchronisation du référentiel (`sync-socle-referentiel`, motif du miroir SMTP) : ses fonctions
+  Arpège n'ont pas changé. ⚠️ **Transition** : tant que le Socle ne déclare rien de complet pour
+  une collectivité, Clara **garde** sa configuration locale (au lieu de l'effacer comme pour le
+  SMTP) ; dès qu'il en déclare une, le Socle fait foi, et l'écran de Clara la montre en lecture
+  seule. La clé de Clara doit porter le scope `integrations`.
+- Reste : Ariane (pas encore consommatrice du Socle), chiffrement au repos (Vault), retrait du
+  formulaire Arpège de Clara une fois toutes les collectivités passées par le Socle.
 
 ## Code et tests
 
 `supabase/migrations/20261002090000_integrations_catalogue.sql`,
 `supabase/tests/integrations.test.sql` (à blanc : `supabase db query --linked -f`),
 `supabase/functions/integration-test/` (`index.ts`, `_shared/{hawk,adapters}.ts` + tests),
+`supabase/functions/public-api/_shared/integrations.ts` (+ test),
+`supabase/migrations/20261002160000_api_keys_scope_integrations.sql`,
 `src/features/integrations/` (`useIntegrations.ts`, `integrationStatus.ts`, `adapters.ts`,
 `IntegrationCard`, `IntegrationGrid`, `IntegrationsSection`, `IntegrationConfigDialog`),
 `src/features/superadmin/integrations/IntegrationsCataloguePage.tsx`.

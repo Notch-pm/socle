@@ -1153,8 +1153,10 @@ Constats du 2026-08-12, à traiter ou à surveiller — non masqués :
 - **Absence de policy UPDATE sur `user_organizations`** : changer le rôle d'un membre en place est
   impossible côté client ; l'UI doit supprimer puis recréer la ligne.
 - **`api_keys.scopes`** : borné par CHECK depuis le 2026-09-08 (`read`, `contacts`, `smtp`,
-  `ai`) ; les fonctions vérifient le scope requis (`read` par `public-api`, `contacts` par
-  `contacts-api`, `ai` par `ai-api`). Un cinquième scope s'ajoute au CHECK ET aux fonctions.
+  `ai`, `audience` le 2026-09-12, `integrations` le 2026-10-02) ; les fonctions vérifient le scope
+  requis (`read` par `public-api`, `smtp` et `integrations` en plus sur leurs routes, `contacts`
+  par `contacts-api`, `ai` par `ai-api`, `audience` par `audience-api`). Un nouveau scope s'ajoute
+  au CHECK ET aux fonctions, en reprenant **tous** les existants.
 - **`provision_root_organization`** a des effets de bord sur l'insert d'une racine (rôles, plafond,
   domaine) : un script qui insère des racines les subit — neutraliser `platform_settings` en tête
   de transaction (`plafond-ia.test.sql`).
@@ -1184,8 +1186,8 @@ Constats du 2026-08-12, à traiter ou à surveiller — non masqués :
   de parent ne ramène rien, donc la clé plateforme passe le trigger sans déclencher l'erreur de
   non-racine).
 - `name`, `key_prefix`, `key_hash` **UNIQUE** (SHA-256, jamais stocké en clair), `scopes text[]`
-  NOT NULL défaut `{read}`, **CHECK `scopes <@ '{read,contacts,smtp,ai}'`** (2026-09-08 — un
-  cinquième scope s'ajoute ici ET dans les fonctions), `last_used_at`/`expires_at`/`revoked_at`/
+  NOT NULL défaut `{read}`, **CHECK `scopes <@ '{read,contacts,smtp,ai,audience,integrations}'`** (2026-09-08, élargi
+  depuis — un nouveau scope s'ajoute ici ET dans les fonctions), `last_used_at`/`expires_at`/`revoked_at`/
   `created_at` timestamptz, `created_by` FK `users(id)` **sans `ON DELETE`** (bloque la suppression
   d'un utilisateur ayant créé une clé).
 - `consumer text` NULLABLE, **FK `applications(id)`** (2026-09-08 ; CHECK de forme depuis le

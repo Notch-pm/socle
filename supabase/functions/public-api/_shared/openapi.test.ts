@@ -31,6 +31,8 @@ describe("buildOpenApiDocument", () => {
         "/v1/organizations/attributions",
         "/v1/organizations/{id}",
         "/v1/organizations/{id}/smtp",
+        "/v1/organizations/{id}/integrations/{slug}",
+        "/v1/integrations",
         "/v1/organizations/{id}/branding",
         "/v1/organizations/{id}/agent-guidance",
         "/v1/categories",
@@ -60,6 +62,18 @@ describe("buildOpenApiDocument", () => {
     // Héritage : la réponse dit quelle organisation porte réellement le relais.
     expect(doc.components.schemas.SmtpSettings.properties.source_organization_id).toBeDefined();
     expect(smtp.description).toContain("Héritage");
+  });
+
+  it("documente les intégrations : scope integrations, secrets en clair, is_active effectif", () => {
+    const config = doc.paths["/v1/organizations/{id}/integrations/{slug}"].get;
+    expect(config.tags).toEqual(["Intégrations"]);
+    expect(config.responses).toHaveProperty("403");
+    expect(config.responses).toHaveProperty("404");
+    expect(doc.info.description).toContain("`integrations`");
+    const schema = doc.components.schemas.OrganizationIntegration;
+    expect(schema.properties.secrets.description).toContain("clair");
+    expect(schema.properties.is_active.description).toContain("Effectif");
+    expect(doc.paths["/v1/integrations"].get.description).toContain("aucun secret");
   });
 
   it("documente les erreurs 401 sur les listes et 400/404 sur les accès par id", () => {
@@ -294,8 +308,8 @@ describe("contrat — traduction de la communication usager (1.26.0)", () => {
 describe("contrat — documents et courriers", () => {
   const doc = buildOpenApiDocument("https://example.supabase.co/functions/v1/public-api") as any;
 
-  it("annonce la version 1.33.0 du contrat", () => {
-    expect(doc.info.version).toBe("1.33.0");
+  it("annonce la version 1.34.0 du contrat", () => {
+    expect(doc.info.version).toBe("1.34.0");
   });
 
   it("le lieu d'intervention est un type de champ structurel, à réponse objet (1.29.0)", () => {

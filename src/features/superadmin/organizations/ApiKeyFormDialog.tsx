@@ -35,6 +35,13 @@ const SCOPE_OPTIONS = [
       + "une application de la gamme qui expédie les mails de la collectivité (Iris…).",
   },
   {
+    scope: "integrations",
+    label: "Intégrations partenaires (identifiants)",
+    description:
+      "Configuration des intégrations de l'organisation principale (Arpège…), secrets compris — "
+      + "à ne cocher que pour l'application de la gamme qui exécute l'intégration (Clara…).",
+  },
+  {
     scope: "ai",
     label: "Assistant IA (jetons facturés)",
     description:

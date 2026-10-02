@@ -30,7 +30,7 @@ export function buildOpenApiDocument(serverUrl: string): Record<string, unknown>
     openapi: "3.1.0",
     info: {
       title: "API Socle — Référentiel de la gamme",
-      version: "1.33.0",
+      version: "1.34.0",
       description: [
         "API **en lecture seule** exposant le référentiel central de la gamme : les",
         "**organisations** (et sous-organisations) avec l'intégralité de leur configuration,",
@@ -60,6 +60,12 @@ export function buildOpenApiDocument(serverUrl: string): Record<string, unknown>
         "**`smtp`**, à demander explicitement à la création de la clé : c'est la seule ressource",
         "de cette API qui sert des **identifiants** (mot de passe du relais de la collectivité).",
         "Elle est servie pour toute organisation du périmètre de la clé, héritage résolu.",
+        "",
+        "La **configuration d'une intégration partenaire**",
+        "(`GET /v1/organizations/{id}/integrations/{slug}`) exige de même le scope",
+        "**`integrations`** : elle sert les **identifiants** du partenaire (Arpège…). Le",
+        "**catalogue** des intégrations (`GET /v1/integrations`), lui, ne sert aucun secret et se",
+        "lit avec `read`.",
         "",
         "## Formats",
         "Réponses en **JSON** (`application/json`, UTF-8). Les dates sont au format ISO 8601.",
@@ -112,6 +118,13 @@ export function buildOpenApiDocument(serverUrl: string): Record<string, unknown>
         description:
           "Serveur d'envoi (SMTP) de l'organisation principale, consommé par les applications " +
           "de la gamme qui expédient les mails de la collectivité. Scope `smtp` requis.",
+      },
+      {
+        name: "Intégrations",
+        description:
+          "Intégrations partenaires (Arpège…) : le catalogue proposé par Edilumen (scope `read`), " +
+          "et la configuration d'une collectivité, identifiants compris (scope `integrations`). " +
+          "Le Socle configure, l'application de la gamme exécute.",
       },
       {
         name: "Charte graphique",
@@ -551,6 +564,83 @@ export function buildOpenApiDocument(serverUrl: string): Record<string, unknown>
               },
             },
             ...errorResponses("400", "401", "404", "500"),
+          },
+        },
+      },
+      "/v1/integrations": {
+        get: {
+          tags: ["Intégrations"],
+          summary: "Catalogue des intégrations partenaires",
+          description: [
+            "Les partenaires auxquels les applications de la gamme savent se connecter, avec le",
+            "type de connexion et les applications concernées. **Aucune donnée de collectivité,",
+            "aucun secret** : scope `read`.",
+            "",
+            "`available: false` ⇒ l'offre est retirée (les configurations existantes sont",
+            "conservées) ; `configurable: false` ⇒ annoncée, pas encore configurable.",
+          ].join("\n"),
+          responses: {
+            "200": {
+              description: "Le catalogue, trié par nom.",
+              content: {
+                "application/json": {
+                  schema: { type: "array", items: { $ref: "#/components/schemas/Integration" } },
+                },
+              },
+            },
+            ...errorResponses("401", "403", "500"),
+          },
+        },
+      },
+      "/v1/organizations/{id}/integrations/{slug}": {
+        get: {
+          tags: ["Intégrations"],
+          summary: "Configuration d'une intégration partenaire pour une collectivité",
+          description: [
+            "Paramètres **et identifiants** d'une intégration (ex. `arpege`) pour la collectivité",
+            "de l'organisation demandée, pour que l'application de la gamme qui l'exécute s'y",
+            "connecte. Comme `/smtp`, **ressource sensible** — deux gardes cumulatives :",
+            "",
+            "- la clé porte le scope **`integrations`** (sinon `403`) ;",
+            "- l'organisation est dans le **périmètre** de la clé (sinon `404`).",
+            "",
+            "Une intégration se configure sur l'**organisation principale** : interroger une",
+            "sous-organisation est légitime, la réponse est celle de sa racine",
+            "(`source_organization_id`).",
+            "",
+            "Rien de configuré (ou configuration incomplète) ⇒ **200** avec `configured: false`,",
+            "`settings` et `secrets` vides. Slug absent du catalogue ⇒ **404**.",
+            "",
+            "⚠️ `is_active: false` ⇒ l'intégration est **suspendue** (ou l'offre retirée) : ses",
+            "valeurs restent servies, mais le consommateur ne doit pas l'utiliser pour de",
+            "nouvelles opérations.",
+          ].join("\n"),
+          parameters: [
+            {
+              name: "id",
+              in: "path",
+              required: true,
+              description: "Identifiant UUID de l'organisation (principale ou sous-organisation).",
+              schema: { type: "string", format: "uuid" },
+            },
+            {
+              name: "slug",
+              in: "path",
+              required: true,
+              description: "Identifiant de l'intégration au catalogue (ex. `arpege`).",
+              schema: { type: "string" },
+            },
+          ],
+          responses: {
+            "200": {
+              description: "La configuration, ou son absence.",
+              content: {
+                "application/json": {
+                  schema: { $ref: "#/components/schemas/OrganizationIntegration" },
+                },
+              },
+            },
+            ...errorResponses("400", "401", "403", "404", "500"),
           },
         },
       },
@@ -2009,6 +2099,118 @@ export function buildOpenApiDocument(serverUrl: string): Record<string, unknown>
           properties: {
             title: { type: "string", description: "Titre de la consigne (peut être vide)." },
             text: { type: "string", description: "Texte de la consigne (Markdown)." },
+          },
+        },
+        Integration: {
+          type: "object",
+          description: "Une intégration partenaire du catalogue Edilumen.",
+          required: ["slug", "name", "type", "applications", "available", "configurable"],
+          properties: {
+            slug: { type: "string", description: "Identifiant stable (contrat) : `arpege`…" },
+            name: { type: "string" },
+            description: { type: "string" },
+            logo_url: { type: ["string", "null"], format: "uri", description: "URL https du logo." },
+            type: {
+              type: "object",
+              required: ["id", "name"],
+              properties: {
+                id: {
+                  type: "string",
+                  description:
+                    "Code stable : `parapheur_electronique`, `signature_electronique`, " +
+                    "`application_services_techniques`, `application_gru` — d'autres peuvent s'ajouter.",
+                },
+                name: { type: "string", description: "Libellé français." },
+              },
+            },
+            applications: {
+              type: "array",
+              items: { type: "string" },
+              description: "Applications de la gamme concernées (`clara`, `iris`…).",
+            },
+            available: { type: "boolean", description: "Proposée par Edilumen." },
+            configurable: { type: "boolean", description: "Configurable au Socle." },
+          },
+          example: {
+            slug: "arpege",
+            name: "Arpège",
+            description: "Connexion entre Clara et la plateforme de démarches en ligne Arpège…",
+            logo_url: null,
+            type: { id: "application_gru", name: "Application GRU" },
+            applications: ["clara"],
+            available: true,
+            configurable: true,
+          },
+        },
+        OrganizationIntegration: {
+          type: "object",
+          description:
+            "Configuration d'une intégration pour une collectivité. `configured: false` ⇒ " +
+            "`settings` et `secrets` vides.",
+          required: [
+            "organization_id",
+            "source_organization_id",
+            "integration",
+            "type",
+            "configured",
+            "is_active",
+            "settings",
+            "secrets",
+          ],
+          properties: {
+            organization_id: { type: "string", format: "uuid", description: "Organisation demandée." },
+            source_organization_id: {
+              type: "string",
+              format: "uuid",
+              description: "Organisation principale qui porte la configuration.",
+            },
+            integration: { type: "string", description: "Slug de l'intégration." },
+            type: { type: "string", description: "Code du type d'intégration." },
+            configured: { type: "boolean", description: "Une configuration complète existe." },
+            is_active: {
+              type: "boolean",
+              description:
+                "**Effectif** : activée pour la collectivité ET offre proposée. `false` ⇒ ne pas " +
+                "l'utiliser, même si des valeurs sont servies.",
+            },
+            settings: {
+              type: "object",
+              additionalProperties: { type: "string" },
+              description:
+                "Paramètres non secrets. Arpège : `api_base_url`, `api_url_ticketingapp`, `client_id`.",
+            },
+            secrets: {
+              type: "object",
+              additionalProperties: { type: "string" },
+              description:
+                "Identifiants **en clair** : à ranger côté consommateur dans un coffre, jamais " +
+                "dans une colonne lisible, un journal ni un bundle client. Arpège : " +
+                "`client_secret`, `access_token` (ancien mode).",
+            },
+            last_test_ok: {
+              type: ["boolean", "null"],
+              description:
+                "Dernier test de connexion fait au Socle ; `null` : pas testé depuis la dernière modification.",
+            },
+            last_tested_at: { type: ["string", "null"], format: "date-time" },
+            updated_at: {
+              type: ["string", "null"],
+              format: "date-time",
+              description: "Dernière modification des paramètres ou des identifiants.",
+            },
+          },
+          example: {
+            organization_id: "d5227d25-f327-493a-a9a2-278397531e33",
+            source_organization_id: "d5227d25-f327-493a-a9a2-278397531e33",
+            integration: "arpege",
+            type: "application_gru",
+            configured: true,
+            is_active: true,
+            settings: { api_base_url: "https://api.espace-citoyens.net/accm", client_id: "accm-clara" },
+            secrets: { client_secret: "••••" },
+            last_test_ok: true,
+            last_tested_at: "2026-10-02T15:00:00Z",
+            updated_at: "2026-10-02T14:58:00Z",
           },
         },
         SmtpSettings: {

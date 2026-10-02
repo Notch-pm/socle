@@ -12,7 +12,7 @@ n'étant en production).
   de `translate-labels` sert toute racine). `api_keys.consumer` est une **FK** vers ce registre
   (plus de texte libre : une faute de frappe ne crée plus un consommateur fantôme dans le journal
   IA) ; CHECK `api_keys_platform_requires_consumer` (une clé plateforme vivante porte une
-  application ; révoquée, dispensée) ; CHECK `scopes <@ '{read,contacts,smtp,ai,audience}'`.
+  application ; révoquée, dispensée) ; CHECK `scopes <@ '{read,contacts,smtp,ai,audience,integrations}'`.
 - `organization_applications (racine, application)` = l'**abonnement**, coché par le super admin
   dans la section « Applications souscrites » (`ApplicationsSection`). C'est **tout** l'onboarding
   côté clés : aucun secret ne circule. RLS écriture super admin (décision commerciale), lecture

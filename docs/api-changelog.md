@@ -1,7 +1,7 @@
 # Journal des évolutions des API publiques
 
 > **Public** : équipes consommatrices (Ariane, Clara, Iris, partenaires) · **Question traitée** :
-> quand un contrat d'API a-t-il changé, et comment ? · **Dernière mise à jour** : 2026-10-01
+> quand un contrat d'API a-t-il changé, et comment ? · **Dernière mise à jour** : 2026-10-02
 
 Journal **append-only** : chaque évolution de la surface de contrat des API publiques
 (`public-api`, `contacts-api`, `ai-api`, `audience-api`) — endpoint, paramètre, champ de réponse,
@@ -12,6 +12,47 @@ consommateur : [integration.md](./integration.md#politique-de-compatibilité-v1)
 Format d'une entrée : `## AAAA-MM-JJ — <api> — ajout|correctif|rupture`
 
 ---
+
+## 2026-10-02 — public-api — ajout (intégrations partenaires)
+
+Deux routes, version du contrat **1.34.0**, ajout **additif** :
+
+- **`GET /v1/integrations`** (scope `read`) — le catalogue des intégrations partenaires proposées
+  par Edilumen : `slug`, `name`, `description`, `logo_url`, `type` (`{ id, name }`, codes
+  `parapheur_electronique`, `signature_electronique`, `application_services_techniques`,
+  `application_gru` — liste **ouverte**), `applications` (identifiants du registre : `clara`…),
+  `available`, `configurable`. Aucune donnée de collectivité, aucun secret.
+- **`GET /v1/organizations/{id}/integrations/{slug}`** (nouveau scope **`integrations`**) — la
+  configuration d'une intégration pour la collectivité, **identifiants compris** :
+
+```json
+{
+  "organization_id": "d5227d25-…",
+  "source_organization_id": "d5227d25-…",
+  "integration": "arpege",
+  "type": "application_gru",
+  "configured": true,
+  "is_active": true,
+  "settings": { "api_base_url": "https://…", "api_url_ticketingapp": "https://…", "client_id": "…" },
+  "secrets": { "client_secret": "…", "access_token": "…" },
+  "last_test_ok": true,
+  "last_tested_at": "2026-10-02T15:00:00Z",
+  "updated_at": "2026-10-02T14:58:00Z"
+}
+```
+
+- ⚠️ **Scope `integrations` explicite** (403 sinon), comme `smtp` : `read` ne suffit pas.
+  Organisation hors périmètre → 404 ; slug absent du catalogue → 404 ; rien de configuré (ou
+  configuration incomplète) → **200** `configured: false`, `settings` et `secrets` vides.
+- ⚠️ Configurée sur l'**organisation principale** : une sous-organisation reçoit celle de sa
+  racine (`source_organization_id`).
+- ⚠️ **`is_active` est effectif** (activée pour la collectivité **et** offre toujours proposée).
+  `false` ⇒ ne pas l'utiliser pour de nouvelles opérations ; les valeurs restent servies.
+- ⚠️ `secrets` arrivent **en clair** : à ranger dans un coffre, jamais dans un journal, une
+  colonne lisible par un client ou un bundle navigateur. Seules les clés déclarées par
+  l'intégration sortent (Arpège : `settings` = `api_base_url`, `api_url_ticketingapp`,
+  `client_id` ; `secrets` = `client_secret`, `access_token`) — mêmes noms que les colonnes du
+  connecteur de Clara.
 
 ## 2026-10-01 — public-api — ajout (attributions des organisations)
 

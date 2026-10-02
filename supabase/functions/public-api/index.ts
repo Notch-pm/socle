@@ -37,6 +37,7 @@ import { serializePortalPage } from "./_shared/portalPage.ts";
 import { serializeAgentGuidance } from "./_shared/agentGuidance.ts";
 import { serializePortalOrganizationsInfo, type UserInfoOrganization } from "./_shared/userInfo.ts";
 import { serializeOrganizationAttributions, type AttributionsOrganization } from "./_shared/attributions.ts";
+import { serializeIntegration, serializeOrganizationIntegration } from "./_shared/integrations.ts";
 import {
   ACCESSIBILITY_STATEMENT_SLUG,
   hasPublishedContent,
@@ -684,6 +685,20 @@ Deno.serve(async (req: Request) => {
       );
     }
 
+    // --- /v1/integrations ---
+    // Le CATALOGUE des intégrations partenaires (ce que propose Edilumen) —
+    // aucune donnée de collectivité, aucun secret : scope `read` suffit. La
+    // configuration d'une collectivité est une autre route, gardée par le
+    // scope `integrations`.
+    if (segments.length === 2 && segments[0] === "v1" && segments[1] === "integrations") {
+      const { data, error } = await admin
+        .from("integrations")
+        .select("*, integration_types(id, name), integration_applications(application_id)")
+        .order("name");
+      if (error) throw error;
+      return jsonResponse(200, (data ?? []).map(serializeIntegration), corsHeaders);
+    }
+
     // --- /v1/organizations/attributions?tenant_id= ---
     // Ce que traite chaque organisme du sous-arbre — INTERNE (agents et outils
     // IA, Clara d'abord), services internes COMPRIS. ⚠️ Avant la branche
@@ -796,6 +811,82 @@ Deno.serve(async (req: Request) => {
         if (smtpError) throw smtpError;
         const smtp = Array.isArray(smtpRows) ? smtpRows[0] : smtpRows;
         return jsonResponse(200, serializeSmtpSettings(id, smtp ?? null), corsHeaders);
+      }
+      // --- /v1/organizations/{id}/integrations/{slug} ---
+      // Configuration d'une intégration partenaire pour la collectivité de
+      // l'organisation demandée, **secrets compris** — avec `/smtp`, la seule
+      // sortie sensible de l'API. Mêmes gardes, dans le même ordre :
+      //   1. scope `integrations` explicite (403) — `read` ne suffit pas ;
+      //   2. organisation dans le périmètre (404, existence non révélée).
+      // Une intégration se configure sur la RACINE : on la retrouve en
+      // remontant l'arbre, `source_organization_id` la nomme.
+      // Slug inconnu du catalogue → 404 ; rien de configuré → 200 et
+      // `configured: false` (à ne pas confondre avec « hors périmètre »).
+      if (segments.length === 5 && segments[3] === "integrations") {
+        const id = segments[2];
+        const slug = segments[4];
+        if (!isUuid(id)) {
+          return errorResponse("bad_request", "Identifiant d'organisation invalide.", corsHeaders);
+        }
+        if (!Array.isArray(apiKey.scopes) || !apiKey.scopes.includes("integrations")) {
+          return errorResponse(
+            "forbidden",
+            "Cette clé ne porte pas le scope « integrations » requis pour la configuration des intégrations.",
+            corsHeaders,
+          );
+        }
+        if (!inScope(id)) {
+          return errorResponse("not_found", "Organisation introuvable.", corsHeaders);
+        }
+        if (!/^[a-z][a-z0-9-]{1,63}$/.test(slug)) {
+          return errorResponse("not_found", "Intégration introuvable.", corsHeaders);
+        }
+
+        // Racine : on remonte `parent_id` (10 niveaux au plus, `enforce_org_depth`).
+        let rootId = id;
+        for (let depth = 0; depth < 12; depth++) {
+          const { data: org, error: orgError } = await admin
+            .from("organizations")
+            .select("parent_id")
+            .eq("id", rootId)
+            .maybeSingle();
+          if (orgError) throw orgError;
+          if (!org?.parent_id) break;
+          rootId = org.parent_id as string;
+        }
+
+        const { data: integration, error: integrationError } = await admin
+          .from("integrations")
+          .select("id, slug, type_id, adapter, is_available")
+          .eq("slug", slug)
+          .maybeSingle();
+        if (integrationError) throw integrationError;
+        if (!integration) return errorResponse("not_found", "Intégration introuvable.", corsHeaders);
+
+        const { data: config, error: configError } = await admin
+          .from("organization_integrations")
+          .select("id, settings, is_active, last_test_ok, last_tested_at, updated_at")
+          .eq("organization_id", rootId)
+          .eq("integration_id", integration.id)
+          .maybeSingle();
+        if (configError) throw configError;
+
+        let secrets: Record<string, unknown> | null = null;
+        if (config) {
+          const { data: secretRow, error: secretError } = await admin
+            .from("organization_integration_secrets")
+            .select("secrets, updated_at")
+            .eq("organization_integration_id", config.id)
+            .maybeSingle();
+          if (secretError) throw secretError;
+          secrets = secretRow;
+        }
+
+        return jsonResponse(
+          200,
+          serializeOrganizationIntegration({ organizationId: id, rootId, integration, config, secrets }),
+          corsHeaders,
+        );
       }
       // --- /v1/organizations/{id}/branding ---
       // Charte graphique **applicable** : celle de l'organisation, ou celle de

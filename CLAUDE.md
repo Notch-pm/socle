@@ -305,8 +305,10 @@ superadmin (`OrgSettingsPage`, menu latéral par client).
   **aucun navigateur ne les lit**, super admin compris (l'inverse de `smtp_settings`). Écriture
   par RPC (vide = conserver), lecture par le service role (`integration-test`).
 - ⚠️ Activer exige un test réussi (trigger) ; modifier paramètres ou secret invalide le test.
-  Adaptateurs en **miroir** front / edge (`adapters.mirror.test.ts`). Route public-api et bascule
-  de Clara : lot 2.
+  Adaptateurs en **miroir** front / edge / public-api (trois copies, épinglées par test).
+- Servie par `GET /v1/organizations/{id}/integrations/{slug}` (scope **`integrations`**, secrets
+  compris, `is_active` effectif) ; Clara en tient un **miroir** (sync du référentiel) — ⚠️ et
+  garde sa configuration locale tant que le Socle n'en déclare pas de complète.
 
 ### [Site de démarches — portail usagers](docs/features/site-de-demarches.md)
 - Le portail est **Nora** (dépôt `Notch-pm/Nora`, sans base) ; le Socle détient le domaine
