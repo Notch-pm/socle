@@ -112,6 +112,11 @@ qu'ils disent la même chose. Un partenaire non configurable : la ligne seule, `
   une collectivité, Clara **garde** sa configuration locale (au lieu de l'effacer comme pour le
   SMTP) ; dès qu'il en déclare une, le Socle fait foi, et l'écran de Clara la montre en lecture
   seule. La clé de Clara doit porter le scope `integrations`.
+- **Bascule faite le 2026-10-02** : scope `integrations` posé sur la clé « Clara avec IA » ;
+  configuration Arpège d'**ACCM** reprise de Clara (identifiants passés de base à base, jamais
+  affichés), testée au Socle (`GET /v2/Hello` réussi) et activée ; première sync : valeurs
+  identiques dans Clara, toujours active, désormais en lecture seule là-bas. ACCM était la seule
+  collectivité configurée.
 - Reste : Ariane (pas encore consommatrice du Socle), chiffrement au repos (Vault), retrait du
   formulaire Arpège de Clara une fois toutes les collectivités passées par le Socle.
 
