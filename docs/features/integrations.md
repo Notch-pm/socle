@@ -165,7 +165,11 @@ organisation ne peut venir que du Socle. Les démarches Arpège y vivent donc co
   connaissances ; une URL visant une étape masquée retombe sur le descriptif). Liste : badge au
   nom du partenaire.
 - ⚠️ **Ordre** : importer est sans risque, mais **n'activer qu'après le déploiement de Clara** —
-  sinon Clara, qui ne lit pas encore `partner`, la routerait vers Iris.
+  sinon Clara, qui ne lit pas encore `partner`, la routerait vers Iris. Clara lit `partner` depuis
+  le 2026-10-03 (commit Clara `72daa99`) : activer est désormais sans risque.
+- **SNA, 2026-10-03** : les 41 démarches Arpège activées sur l'organisation principale (pas ses
+  mairies) ; sync Clara vérifiée — 41 démarches prêtes (code + configuration Arpège), 41
+  activations, aucun avertissement. Reste la première demande réelle depuis « Actions liées ».
 
 ## Code et tests
 
