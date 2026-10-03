@@ -74,3 +74,31 @@ export function useSetProcedureEnabled() {
     },
   });
 }
+
+/**
+ * Active plusieurs démarches d'un coup pour une organisation (« Tout activer »,
+ * global ou par catégorie). Un seul upsert : tout passe ou rien — si le trigger
+ * `enforce_single_offer_per_bearer` refuse une ligne, aucune n'est écrite.
+ * L'appelant écarte donc d'avance les démarches tenues par le groupe
+ * (`procedureIdsToEnable`).
+ */
+export function useEnableProcedures() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async ({ organizationId, procedureIds }: { organizationId: string; procedureIds: string[] }) => {
+      if (procedureIds.length === 0) return;
+      const { error } = await supabase.from("organization_procedures").upsert(
+        procedureIds.map((procedureId) => ({
+          organization_id: organizationId,
+          procedure_id: procedureId,
+          is_enabled: true,
+        })),
+        { onConflict: "organization_id,procedure_id" },
+      );
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: [KEY] });
+    },
+  });
+}

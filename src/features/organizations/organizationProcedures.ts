@@ -69,3 +69,60 @@ export function offersHeldBySiblings(
   }
   return held;
 }
+
+/** Un groupe de l'écran « Démarches activées » : une catégorie et ses démarches. */
+export interface ProcedureCategoryGroup<P> {
+  /** `null` = démarches sans catégorie. */
+  categoryId: string | null;
+  name: string;
+  procedures: P[];
+}
+
+export const UNCATEGORIZED_LABEL = "Sans catégorie";
+
+const collator = new Intl.Collator("fr", { sensitivity: "base", numeric: true });
+
+/**
+ * Les démarches rangées par catégorie, catégories par ordre alphabétique,
+ * « Sans catégorie » en dernier ; l'ordre des démarches est celui reçu (le rang
+ * du catalogue). Une catégorie inconnue (supprimée, illisible) tombe dans
+ * « Sans catégorie » plutôt que de disparaître.
+ */
+export function groupProceduresByCategory<P extends { category_id: string | null }>(
+  procedures: P[],
+  categories: { id: string; name: string }[],
+): ProcedureCategoryGroup<P>[] {
+  const nameById = new Map(categories.map((category) => [category.id, category.name]));
+  const groups = new Map<string | null, ProcedureCategoryGroup<P>>();
+  for (const procedure of procedures) {
+    const known = procedure.category_id !== null && nameById.has(procedure.category_id);
+    const key = known ? procedure.category_id : null;
+    let group = groups.get(key);
+    if (!group) {
+      group = { categoryId: key, name: key === null ? UNCATEGORIZED_LABEL : nameById.get(key)!, procedures: [] };
+      groups.set(key, group);
+    }
+    group.procedures.push(procedure);
+  }
+  return [...groups.values()].sort((a, b) => {
+    if (a.categoryId === null) return 1;
+    if (b.categoryId === null) return -1;
+    return collator.compare(a.name, b.name);
+  });
+}
+
+/**
+ * Ce que « Tout activer » activera vraiment : les démarches pas encore
+ * activées ICI et qu'aucune organisation du même porteur ne tient déjà. Les
+ * secondes sont écartées d'avance : le trigger `enforce_single_offer_per_bearer`
+ * refuserait le lot entier pour une seule d'entre elles.
+ */
+export function procedureIdsToEnable(
+  procedures: { id: string }[],
+  enabledIds: Set<string>,
+  heldBySiblings: Map<string, string>,
+): string[] {
+  return procedures
+    .filter((procedure) => !enabledIds.has(procedure.id) && !heldBySiblings.has(procedure.id))
+    .map((procedure) => procedure.id);
+}

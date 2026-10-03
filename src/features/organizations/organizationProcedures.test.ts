@@ -2,7 +2,10 @@ import { describe, it, expect } from "vitest";
 import {
   bearerGroupSiblings,
   buildEnabledProcedureIds,
+  groupProceduresByCategory,
   offersHeldBySiblings,
+  procedureIdsToEnable,
+  UNCATEGORIZED_LABEL,
   type BearerGroupOrganization,
   type OrganizationProcedure,
 } from "./organizationProcedures";
@@ -114,5 +117,46 @@ describe("offersHeldBySiblings — ce qui est déjà pris ailleurs dans le group
 
   it("ignore les liaisons sans identifiant", () => {
     expect(offersHeldBySiblings([held(null, "p1", true), held("ec", null, true)], siblings).size).toBe(0);
+  });
+});
+
+describe("groupProceduresByCategory — l'écran « Démarches activées »", () => {
+  const categories = [
+    { id: "c-urba", name: "urbanisme (Arpège)" },
+    { id: "c-etat", name: "Actes d'état civil (Arpège)" },
+  ];
+
+  it("catégories par ordre alphabétique (casse ignorée), « Sans catégorie » en dernier", () => {
+    const groups = groupProceduresByCategory(
+      [
+        { id: "p1", category_id: "c-urba" },
+        { id: "p2", category_id: null },
+        { id: "p3", category_id: "c-etat" },
+        { id: "p4", category_id: "c-urba" },
+      ],
+      categories,
+    );
+    expect(groups.map((g) => [g.name, g.procedures.map((p) => p.id)])).toEqual([
+      ["Actes d'état civil (Arpège)", ["p3"]],
+      ["urbanisme (Arpège)", ["p1", "p4"]],
+      [UNCATEGORIZED_LABEL, ["p2"]],
+    ]);
+  });
+
+  it("une catégorie inconnue rejoint « Sans catégorie » au lieu de disparaître", () => {
+    const groups = groupProceduresByCategory([{ id: "p1", category_id: "c-supprimee" }], categories);
+    expect(groups).toEqual([{ categoryId: null, name: UNCATEGORIZED_LABEL, procedures: [{ id: "p1", category_id: "c-supprimee" }] }]);
+  });
+});
+
+describe("procedureIdsToEnable — ce que « Tout activer » active", () => {
+  it("écarte les démarches déjà activées ici et celles tenues par le groupe", () => {
+    expect(
+      procedureIdsToEnable(
+        [{ id: "a" }, { id: "b" }, { id: "c" }],
+        new Set(["a"]),
+        new Map([["c", "Services techniques"]]),
+      ),
+    ).toEqual(["b"]);
   });
 });

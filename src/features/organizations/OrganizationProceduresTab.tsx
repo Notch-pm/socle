@@ -1,8 +1,19 @@
 import * as React from "react";
-import { ListChecks } from "lucide-react";
+import { CheckCheck, ListChecks } from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
+import { Button, buttonVariants } from "@/components/ui/button";
 import { Switch } from "@/components/ui/switch";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 import { EmptyState } from "@/components/shared/EmptyState";
 import {
   useAllOrganizations,
@@ -14,9 +25,12 @@ import { useCategoriesQuery } from "@/features/categories/useCategories";
 import {
   bearerGroupSiblings,
   buildEnabledProcedureIds,
+  groupProceduresByCategory,
   offersHeldBySiblings,
+  procedureIdsToEnable,
 } from "./organizationProcedures";
 import {
+  useEnableProcedures,
   useEnabledProcedureBindings,
   useOrganizationProcedureBindings,
   useSetProcedureEnabled,
@@ -24,8 +38,10 @@ import {
 
 /**
  * Activation des démarches pour l'organisation éditée. Le catalogue affiché est
- * celui de son organisation principale (ancêtre racine) ; chaque démarche peut
- * être rendue active ou non pour cette organisation.
+ * celui de son organisation principale (ancêtre racine), rangé par catégorie ;
+ * chaque démarche peut être rendue active ou non pour cette organisation, et
+ * « Tout activer » active d'un geste tout le catalogue ou une catégorie — en
+ * écartant ce qu'une autre organisation du même porteur tient déjà.
  */
 export function OrganizationProceduresTab({ organizationId }: { organizationId: string }) {
   const { data: allOrgs, isLoading: orgsLoading } = useAllOrganizations();
@@ -38,6 +54,8 @@ export function OrganizationProceduresTab({ organizationId }: { organizationId: 
   const { data: bindings } = useOrganizationProcedureBindings(organizationId);
   const { data: categories } = useCategoriesQuery();
   const setEnabled = useSetProcedureEnabled();
+  const enableMany = useEnableProcedures();
+  const [confirmAll, setConfirmAll] = React.useState(false);
 
   const enabledIds = React.useMemo(() => buildEnabledProcedureIds(bindings ?? []), [bindings]);
 
@@ -61,8 +79,15 @@ export function OrganizationProceduresTab({ organizationId }: { organizationId: 
     self?.is_internal_service && self.parent_id
       ? bearerByOrganization(allOrgs ?? []).get(self.parent_id)
       : undefined;
-  const categoryName = new Map((categories ?? []).map((c) => [c.id, c.name]));
   const activeCount = (procedures ?? []).filter((p) => enabledIds.has(p.id)).length;
+  const groups = React.useMemo(
+    () => groupProceduresByCategory(procedures ?? [], categories ?? []),
+    [procedures, categories],
+  );
+  const allToEnable = procedureIdsToEnable(procedures ?? [], enabledIds, heldBySiblings);
+  const enable = (procedureIds: string[], onSuccess?: () => void) =>
+    enableMany.mutate({ organizationId, procedureIds }, { onSuccess });
+  const error = (setEnabled.error ?? enableMany.error) as Error | null;
 
   return (
     <div className="flex flex-col gap-4">
@@ -79,9 +104,20 @@ export function OrganizationProceduresTab({ organizationId }: { organizationId: 
           )}
         </p>
         {procedures?.length ? (
-          <Badge variant="secondary">
-            {activeCount} / {procedures.length} activée{activeCount > 1 ? "s" : ""}
-          </Badge>
+          <div className="flex items-center gap-2">
+            <Badge variant="secondary">
+              {activeCount} / {procedures.length} activée{activeCount > 1 ? "s" : ""}
+            </Badge>
+            <Button
+              variant="outline"
+              size="sm"
+              disabled={allToEnable.length === 0 || enableMany.isPending}
+              onClick={() => setConfirmAll(true)}
+            >
+              <CheckCheck className="size-4" />
+              Tout activer
+            </Button>
+          </div>
         ) : null}
       </div>
 
@@ -93,90 +129,137 @@ export function OrganizationProceduresTab({ organizationId }: { organizationId: 
         </p>
       ) : null}
 
-      {setEnabled.error ? (
+      {error ? (
         <p className="rounded-lg border border-destructive/30 bg-destructive/5 px-4 py-2 text-sm text-destructive">
-          {(setEnabled.error as Error).message}
+          {error.message}
         </p>
       ) : null}
 
-      <Card>
-        <CardContent className="p-0">
-          {isLoading ? (
-            <div className="p-4">
-              {[0, 1, 2].map((i) => (
-                <div
-                  key={i}
-                  className="h-12 animate-pulse border-b border-border bg-muted/40 last:border-b-0"
-                />
-              ))}
-            </div>
-          ) : isError ? (
-            <p className="p-4 text-sm text-destructive">Impossible de charger les démarches.</p>
-          ) : !procedures?.length ? (
-            <div className="p-4">
-              <EmptyState message="Aucune démarche dans le catalogue de l'organisation principale." />
-            </div>
-          ) : (
-            <table className="w-full text-sm">
-              <thead className="bg-muted/50 text-left text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-                <tr>
-                  <th className="px-4 py-3">Libellé</th>
-                  <th className="px-4 py-3">Catégorie</th>
-                  <th className="px-4 py-3">Type</th>
-                  <th className="w-32 px-4 py-3 text-right">Activée</th>
-                </tr>
-              </thead>
-              <tbody>
-                {procedures.map((proc) => {
-                  const checked = enabledIds.has(proc.id);
-                  // Déjà prise ailleurs dans le groupe. On ne verrouille jamais
-                  // une démarche déjà activée ici : il faut pouvoir la relâcher.
-                  const heldBy = checked ? undefined : heldBySiblings.get(proc.id);
-                  return (
-                    <tr key={proc.id} className="border-t border-border hover:bg-muted/30">
-                      <td className="px-4 py-3 font-medium">
-                        <div className="flex items-center gap-2">
-                          <ListChecks className="size-4 text-muted-foreground" />
-                          {proc.name}
-                        </div>
-                      </td>
-                      <td className="px-4 py-3 text-muted-foreground">
-                        {proc.category_id ? (categoryName.get(proc.category_id) ?? "—") : "—"}
-                      </td>
-                      <td className="px-4 py-3">
-                        <Badge variant={proc.type === "interne" ? "muted" : "secondary"}>
-                          {proc.type === "interne" ? "Interne" : "Externe"}
-                        </Badge>
-                      </td>
-                      <td className="px-4 py-3">
-                        <div className="flex flex-col items-end gap-1">
-                          <Switch
-                            checked={checked}
-                            disabled={Boolean(heldBy)}
-                            aria-label={`Activer « ${proc.name} »`}
-                            onCheckedChange={(next) =>
-                              setEnabled.mutate({
-                                organizationId,
-                                procedureId: proc.id,
-                                enabled: next,
-                              })
-                            }
-                          />
-                          {heldBy ? (
-                            <span className="text-right text-xs text-muted-foreground">
-                              Déjà activée par « {heldBy} »
-                            </span>
-                          ) : null}
-                        </div>
-                      </td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
-          )}
-        </CardContent>
-      </Card>
+      {isLoading ? (
+        <Card>
+          <CardContent className="p-4">
+            {[0, 1, 2].map((i) => (
+              <div
+                key={i}
+                className="h-12 animate-pulse border-b border-border bg-muted/40 last:border-b-0"
+              />
+            ))}
+          </CardContent>
+        </Card>
+      ) : isError ? (
+        <p className="p-4 text-sm text-destructive">Impossible de charger les démarches.</p>
+      ) : !procedures?.length ? (
+        <EmptyState message="Aucune démarche dans le catalogue de l'organisation principale." />
+      ) : (
+        groups.map((group) => {
+          const groupActive = group.procedures.filter((p) => enabledIds.has(p.id)).length;
+          const groupToEnable = procedureIdsToEnable(group.procedures, enabledIds, heldBySiblings);
+          return (
+            <section key={group.categoryId ?? "sans-categorie"} className="flex flex-col gap-2">
+              <div className="flex flex-wrap items-center justify-between gap-2">
+                <h3 className="text-sm font-semibold">
+                  {group.name}{" "}
+                  <span className="font-normal text-muted-foreground">
+                    · {groupActive} / {group.procedures.length}
+                  </span>
+                </h3>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  disabled={groupToEnable.length === 0 || enableMany.isPending}
+                  onClick={() => enable(groupToEnable)}
+                  aria-label={`Tout activer dans « ${group.name} »`}
+                >
+                  <CheckCheck className="size-4" />
+                  Tout activer
+                </Button>
+              </div>
+              <Card>
+                <CardContent className="p-0">
+                  <table className="w-full text-sm">
+                    <tbody>
+                      {group.procedures.map((proc) => {
+                        const checked = enabledIds.has(proc.id);
+                        // Déjà prise ailleurs dans le groupe. On ne verrouille jamais
+                        // une démarche déjà activée ici : il faut pouvoir la relâcher.
+                        const heldBy = checked ? undefined : heldBySiblings.get(proc.id);
+                        return (
+                          <tr
+                            key={proc.id}
+                            className="border-t border-border first:border-t-0 hover:bg-muted/30"
+                          >
+                            <td className="px-4 py-3 font-medium">
+                              <div className="flex items-center gap-2">
+                                <ListChecks className="size-4 text-muted-foreground" />
+                                {proc.name}
+                              </div>
+                            </td>
+                            <td className="w-28 px-4 py-3">
+                              <Badge variant={proc.type === "interne" ? "muted" : "secondary"}>
+                                {proc.type === "interne" ? "Interne" : "Externe"}
+                              </Badge>
+                            </td>
+                            <td className="w-48 px-4 py-3">
+                              <div className="flex flex-col items-end gap-1">
+                                <Switch
+                                  checked={checked}
+                                  disabled={Boolean(heldBy)}
+                                  aria-label={`Activer « ${proc.name} »`}
+                                  onCheckedChange={(next) =>
+                                    setEnabled.mutate({
+                                      organizationId,
+                                      procedureId: proc.id,
+                                      enabled: next,
+                                    })
+                                  }
+                                />
+                                {heldBy ? (
+                                  <span className="text-right text-xs text-muted-foreground">
+                                    Déjà activée par « {heldBy} »
+                                  </span>
+                                ) : null}
+                              </div>
+                            </td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                </CardContent>
+              </Card>
+            </section>
+          );
+        })
+      )}
+
+      <AlertDialog open={confirmAll} onOpenChange={setConfirmAll}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Activer toutes les démarches ?</AlertDialogTitle>
+            <AlertDialogDescription>
+              {allToEnable.length > 1
+                ? `${allToEnable.length} démarches seront activées pour cette organisation.`
+                : "1 démarche sera activée pour cette organisation."}{" "}
+              Celles qu'une autre organisation du même porteur propose déjà sont laissées de côté.
+              Chacune reste désactivable une à une.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Annuler</AlertDialogCancel>
+            <AlertDialogAction
+              className={buttonVariants({ variant: "primary", size: "md" })}
+              disabled={enableMany.isPending}
+              onClick={(e) => {
+                // Fermée sur succès : un refus de la base doit rester visible.
+                e.preventDefault();
+                enable(allToEnable, () => setConfirmAll(false));
+              }}
+            >
+              {enableMany.isPending ? "Activation…" : "Tout activer"}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }

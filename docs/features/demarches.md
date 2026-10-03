@@ -286,3 +286,13 @@ partenaire (depuis Clara), **jamais au portail ni dans Iris**. Ses informations 
 son formulaire sont ceux du partenaire : le stepper ne montre que Descriptif et Base de
 connaissances, et l'annonce par un bandeau. Détail, règles de
 visibilité et d'import : [intégrations partenaires](integrations.md).
+
+## Écran « Démarches activées » — par catégorie (2026-10-03)
+
+`OrganizationProceduresTab` (super admin et onglet de l'administrateur) range le catalogue par
+catégorie (`groupProceduresByCategory` : alphabétique, « Sans catégorie » en dernier), avec un
+compteur et un bouton **« Tout activer »** par catégorie, et un « Tout activer » global (avec
+confirmation). ⚠️ Un seul upsert (`useEnableProcedures`) : tout passe ou rien. Les démarches
+qu'une autre organisation du même porteur tient déjà sont donc écartées d'avance
+(`procedureIdsToEnable`), sinon `enforce_single_offer_per_bearer` refuserait le lot entier. Pas
+de « tout désactiver » : on relâche une démarche à la fois.
