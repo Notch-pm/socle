@@ -348,6 +348,12 @@ aucun endpoint, il décrit ce qui existe **en base**.
   transverses (voir Points de vigilance).
 - **RLS** : lecture `has_org_access(organization_id)` · écriture (ALL) `is_org_admin(organization_id)`.
 
+- **Catégories partenaires** (2026-10-03) : `categories.integration_id` (FK `integrations`) +
+  `external_reference` (Arpège : `CodeQualificationMetier`), CHECK « les deux ou aucun », index
+  unique `(organization_id, integration_id, external_reference)`. Écrites par
+  `integration-procedures`, nommées « <Libellé> (Arpège) » ; servies aux seules applications
+  de l'intégration.
+
 ### `procedures` — cœur métier
 
 | Colonne | Type / contrainte |

@@ -84,6 +84,9 @@ export function partnerDirectory(rows: Row[]): PartnerDirectory {
  * Pour les autres, la démarche N'EXISTE PAS : retirée des listes, 404 par
  * identifiant. C'est ce qui empêche Iris d'y déposer une demande et Nora de
  * l'afficher (le portail l'écarte de surcroît : `isPubliclyPublished`).
+ *
+ * Même règle pour une CATÉGORIE partenaire (`categories.integration_id`,
+ * « Actes d'état civil (Arpège) ») : la fonction ne lit que `integration_id`.
  */
 export function procedureVisibleTo(row: Row, consumer: string | null, directory: PartnerDirectory): boolean {
   const integrationId = str(row.integration_id);

@@ -290,9 +290,9 @@ export function IntegrationConfigDialog({
                     <div>
                       <p className="text-sm font-medium">Démarches {integration.name}</p>
                       <p className="text-xs text-muted-foreground">
-                        Importées dans le catalogue de la collectivité (catégorie « Démarches{" "}
-                        {integration.name} »), puis à activer organisation par organisation dans
-                        « Démarches activées ».
+                        Importées dans le catalogue de la collectivité, chacune dans sa catégorie{" "}
+                        {integration.name} (« … ({integration.name}) »), puis à activer organisation
+                        par organisation dans « Démarches activées ».
                       </p>
                     </div>
                     <Button
@@ -312,7 +312,14 @@ export function IntegrationConfigDialog({
                   {importProcedures.data ? (
                     <p role="status" className="text-sm">
                       {importProcedures.data.created} créée(s), {importProcedures.data.updated} mise(s) à
-                      jour, {importProcedures.data.unchanged} inchangée(s).
+                      jour, {importProcedures.data.unchanged} inchangée(s)
+                      {importProcedures.data.categories_created
+                        ? ` ; ${importProcedures.data.categories_created} catégorie(s) créée(s)`
+                        : ""}
+                      {importProcedures.data.recategorized
+                        ? ` ; ${importProcedures.data.recategorized} démarche(s) rangée(s) dans leur catégorie`
+                        : ""}
+                      .
                       {importProcedures.data.missing.length > 0
                         ? ` Plus proposées par ${integration.name} (conservées) : ${importProcedures.data.missing.join(", ")}.`
                         : ""}

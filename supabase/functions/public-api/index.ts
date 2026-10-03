@@ -978,7 +978,14 @@ Deno.serve(async (req: Request) => {
         .in("organization_id", scopeIds)
         .order("name", { ascending: true });
       if (error) throw error;
-      return jsonResponse(200, (data ?? []).map(serializeCategory), corsHeaders);
+      // Catégories partenaires (« Actes d'état civil (Arpège) ») : même règle
+      // que leurs démarches — servies aux seules applications de l'intégration.
+      const directory = await loadPartnerDirectory(admin, data ?? []);
+      return jsonResponse(
+        200,
+        (data ?? []).filter((row) => procedureVisibleTo(row, apiKey.consumer, directory)).map(serializeCategory),
+        corsHeaders,
+      );
     }
 
     // --- /v1/procedures ---

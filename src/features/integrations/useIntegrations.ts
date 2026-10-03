@@ -164,6 +164,10 @@ export interface ProcedureImportResult {
   created: number;
   updated: number;
   unchanged: number;
+  /** Démarches rangées dans (ou déplacées vers) la catégorie de leur partenaire. */
+  recategorized?: number;
+  categories_created?: number;
+  categories_renamed?: number;
   /** Démarches présentes au Socle mais plus chez le partenaire (jamais supprimées). */
   missing: string[];
 }

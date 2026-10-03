@@ -12,12 +12,22 @@ import { buildHawkHeader, resolveArpegeUrl, resolveHawkCredentials } from "./haw
 
 export type Values = Record<string, string | undefined>;
 
+/** Une catégorie Arpège (« métier », `GET /v2/Metiers`). */
+export interface ArpegeCategory {
+  /** CodeQualificationMetier. */
+  reference: string;
+  /** LibelleQualificationMetier (repli : le code). */
+  name: string;
+}
+
 /** Une démarche Arpège telle que le Socle la range au catalogue. */
 export interface ArpegeProcedure {
   /** CodeQualificationTypeDemande (repli : IdTypeDemande, Id). */
   reference: string;
   name: string;
   description: string | null;
+  /** Code de sa catégorie Arpège (CodeQualificationMetier) ; `null` si absent. */
+  categoryReference: string | null;
   /** Opaque pour le Socle — `arpege_config_fields` de Clara. */
   config: {
     CodeQualificationMetier: unknown;
@@ -27,7 +37,7 @@ export interface ArpegeProcedure {
 }
 
 export type CatalogueResult =
-  | { ok: true; procedures: ArpegeProcedure[] }
+  | { ok: true; procedures: ArpegeProcedure[]; categories: ArpegeCategory[] }
   | { ok: false; message: string };
 
 export const FETCH_TIMEOUT_MS = 20_000;
@@ -90,10 +100,12 @@ export function parseCatalogue(formData: Any, typesData: Any, fallbackData: Any)
         ? td.description.trim()
         : null;
 
+    const metier = typeof td?.CodeQualificationMetier === "string" ? td.CodeQualificationMetier.trim() : "";
     procedures.push({
       reference,
       name,
       description,
+      categoryReference: metier || null,
       config: {
         CodeQualificationMetier: td?.CodeQualificationMetier || null,
         ConfigInfoUsagerObligs: (Array.isArray(td?.ConfigInfoUsagerObligs) ? td.ConfigInfoUsagerObligs : []).filter(
@@ -104,6 +116,24 @@ export function parseCatalogue(formData: Any, typesData: Any, fallbackData: Any)
     });
   }
   return procedures;
+}
+
+/**
+ * Catégories Arpège (`/v2/Metiers`) — seules celles qu'emploie au moins une
+ * démarche du catalogue : une catégorie vide n'aurait rien à ranger. Un métier
+ * employé mais absent de `/v2/Metiers` prend son code pour libellé.
+ */
+export function parseCategories(metiersData: Any, procedures: ArpegeProcedure[]): ArpegeCategory[] {
+  const labels = new Map<string, string>();
+  for (const m of extractArray(metiersData)) {
+    const code = typeof m?.CodeQualificationMetier === "string" ? m.CodeQualificationMetier.trim() : "";
+    const label = typeof m?.LibelleQualificationMetier === "string" ? m.LibelleQualificationMetier.trim() : "";
+    if (code && !labels.has(code)) labels.set(code, label || code);
+  }
+  const used = [...new Set(procedures.map((p) => p.categoryReference).filter((c): c is string => c !== null))];
+  return used
+    .map((reference) => ({ reference, name: labels.get(reference) ?? reference }))
+    .sort((a, b) => a.name.localeCompare(b.name, "fr"));
 }
 
 /** GET signé Hawk ; `null` sur échec HTTP, réseau, ou `IsSuccess: false` (règle de Clara). */
@@ -155,5 +185,8 @@ export async function fetchArpegeCatalogue(
   if (typesData === null && fallbackData === null) {
     return { ok: false, message: "Arpège n'a pas renvoyé de liste de démarches (connexion ou droits)." };
   }
-  return { ok: true, procedures: parseCatalogue(formData, typesData, fallbackData) };
+  const procedures = parseCatalogue(formData, typesData, fallbackData);
+  // Sans `/v2/Metiers`, les catégories prennent leur code pour libellé.
+  const metiersData = await fetchSigned(`${base}/v2/Metiers`, hawkId, hawkKey, fetchImpl);
+  return { ok: true, procedures, categories: parseCategories(metiersData, procedures) };
 }

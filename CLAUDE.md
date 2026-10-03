@@ -310,6 +310,7 @@ superadmin (`OrgSettingsPage`, menu latéral par client).
   compris, `is_active` effectif) ; Clara en tient un **miroir** (sync du référentiel).
 - **Démarches partenaires** (1.35.0) : importées au catalogue de la racine
   (`integration-procedures`, `procedures.integration_id`/`external_reference`/`partner_config`),
+  rangées dans les catégories Arpège importées (« … (Arpège) », `categories.integration_id`),
   activées dans « Démarches activées ». ⚠️ Servies aux **seules applications de l'intégration**
   (`procedureVisibleTo`), jamais au portail (`isPubliclyPublished`), jamais à Iris.
 

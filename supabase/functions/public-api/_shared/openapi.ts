@@ -30,7 +30,7 @@ export function buildOpenApiDocument(serverUrl: string): Record<string, unknown>
     openapi: "3.1.0",
     info: {
       title: "API Socle — Référentiel de la gamme",
-      version: "1.35.0",
+      version: "1.36.0",
       description: [
         "API **en lecture seule** exposant le référentiel central de la gamme : les",
         "**organisations** (et sous-organisations) avec l'intégralité de leur configuration,",
@@ -780,7 +780,10 @@ export function buildOpenApiDocument(serverUrl: string): Record<string, unknown>
         get: {
           tags: ["Catégories"],
           summary: "Lister les catégories",
-          description: "Catégories (libellé + icône) du périmètre de la clé.",
+          description:
+            "Catégories (libellé + icône) du périmètre de la clé. ⚠️ Une catégorie importée d'un " +
+            "partenaire (« Actes d'état civil (Arpège) ») n'est servie qu'aux applications " +
+            "rattachées à son intégration, comme ses démarches (`Procedure.partner`).",
           responses: {
             "200": {
               description: "Liste des catégories.",

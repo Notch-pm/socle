@@ -228,6 +228,23 @@ begin
   end;
 
   -- ==========================================================================
+  -- I8. Catégories partenaires : code ⇔ intégration, une par (racine, code)
+  -- ==========================================================================
+  begin
+    insert into public.categories (organization_id, name, integration_id) values (org_a, 'Sans code', v_arpege);
+    v_fail := v_fail || 'I8a: catégorie partenaire sans code acceptée';
+  exception when check_violation then null;
+  end;
+  insert into public.categories (organization_id, name, integration_id, external_reference)
+    values (org_a, 'Actes d''état civil (Arpège)', v_arpege, 'ETATCIVIL');
+  begin
+    insert into public.categories (organization_id, name, integration_id, external_reference)
+      values (org_a, 'Doublon', v_arpege, 'ETATCIVIL');
+    v_fail := v_fail || 'I8b: doublon de catégorie partenaire accepté';
+  exception when unique_violation then null;
+  end;
+
+  -- ==========================================================================
   -- VERDICT — puis annulation volontaire
   -- ==========================================================================
   if array_length(v_fail, 1) > 0 then

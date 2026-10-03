@@ -134,5 +134,9 @@ describe("procedureVisibleTo — démarches partenaires", () => {
     // Intégration inconnue de l'annuaire : jamais.
     expect(procedureVisibleTo({ id: "p3", integration_id: "i-x" }, "clara", directory)).toBe(false);
     expect(directory.slugs.get("i-arpege")).toBe("arpege");
+    // Même règle pour une catégorie partenaire.
+    const categorie = { id: "c1", name: "Actes d'état civil (Arpège)", integration_id: "i-arpege" };
+    expect(procedureVisibleTo(categorie, "clara", directory)).toBe(true);
+    expect(procedureVisibleTo(categorie, "iris", directory)).toBe(false);
   });
 });

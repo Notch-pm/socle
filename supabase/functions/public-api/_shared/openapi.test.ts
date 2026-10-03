@@ -315,8 +315,8 @@ describe("contrat — traduction de la communication usager (1.26.0)", () => {
 describe("contrat — documents et courriers", () => {
   const doc = buildOpenApiDocument("https://example.supabase.co/functions/v1/public-api") as any;
 
-  it("annonce la version 1.35.0 du contrat", () => {
-    expect(doc.info.version).toBe("1.35.0");
+  it("annonce la version 1.36.0 du contrat", () => {
+    expect(doc.info.version).toBe("1.36.0");
   });
 
   it("le lieu d'intervention est un type de champ structurel, à réponse objet (1.29.0)", () => {

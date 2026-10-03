@@ -1,8 +1,8 @@
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { describe, expect, it, vi } from "vitest";
-import { extractArray, fetchArpegeCatalogue, parseCatalogue } from "./arpegeCatalogue";
-import { partnerCategoryName, planImport } from "./importPlan";
+import { extractArray, fetchArpegeCatalogue, parseCatalogue, parseCategories } from "./arpegeCatalogue";
+import { partnerCategoryLabel, partnerCategoryName, planCategories, planImport } from "./importPlan";
 
 // Réponses Arpège à la forme lue par Clara (sync-arpege-services).
 const FORMS = {
@@ -42,6 +42,24 @@ const TYPES = {
   ],
 };
 
+const METIERS = {
+  Data: [
+    { CodeQualificationMetier: "M_VOIRIE", LibelleQualificationMetier: "Voirie et réseaux" },
+    { CodeQualificationMetier: "M_VIDE", LibelleQualificationMetier: "Sans démarche publiée" },
+  ],
+};
+
+describe("parseCategories — les métiers d'Arpège employés", () => {
+  it("garde les seuls métiers employés ; un métier inconnu prend son code pour libellé", () => {
+    const procedures = parseCatalogue(FORMS, TYPES, null);
+    procedures.push({ ...procedures[0], reference: "X", categoryReference: "M_INCONNU" });
+    expect(parseCategories(METIERS, procedures)).toEqual([
+      { reference: "M_INCONNU", name: "M_INCONNU" },
+      { reference: "M_VOIRIE", name: "Voirie et réseaux" },
+    ]);
+  });
+});
+
 describe("parseCatalogue — règles portées de Clara", () => {
   const procedures = parseCatalogue(FORMS, TYPES, null);
 
@@ -54,6 +72,7 @@ describe("parseCatalogue — règles portées de Clara", () => {
       reference: "VOIRIE",
       name: "Signaler un problème de voirie",
       description: "Nids-de-poule, trottoirs",
+      categoryReference: "M_VOIRIE",
       config: {
         CodeQualificationMetier: "M_VOIRIE",
         ConfigInfoUsagerObligs: [{ Code: "EMAIL", Etat: "ENLIGNE" }],
@@ -85,7 +104,10 @@ describe("fetchArpegeCatalogue", () => {
 
   it("trois appels signés Hawk, sur l'URL normalisée", async () => {
     const fetchImpl = vi.fn(async (url: string) =>
-      new Response(JSON.stringify(url.includes("TypesDemandes") ? TYPES : FORMS), { status: 200 }),
+      new Response(
+        JSON.stringify(url.includes("TypesDemandes") ? TYPES : url.endsWith("/v2/Metiers") ? METIERS : FORMS),
+        { status: 200 },
+      ),
     ) as unknown as typeof fetch;
     const result = await fetchArpegeCatalogue(SETTINGS, SECRETS, fetchImpl);
     expect(result.ok).toBe(true);
@@ -93,7 +115,9 @@ describe("fetchArpegeCatalogue", () => {
     expect(calls.map(([url]) => url)).toEqual([
       "https://api.test/accm/v2/Demandes?scope=data_formulaire,data_administratives&TypeDemarches=DEMANDE&pageSize=200",
       "https://api.test/accm/v2/TypesDemandes",
+      "https://api.test/accm/v2/Metiers",
     ]);
+    expect(result.ok && result.categories).toEqual([{ reference: "M_VOIRIE", name: "Voirie et réseaux" }]);
     expect(calls[0][1].headers.Authorization).toMatch(/^Hawk id="cid"/);
   });
 
@@ -112,20 +136,66 @@ describe("fetchArpegeCatalogue", () => {
   });
 });
 
+describe("planCategories", () => {
+  it("crée « <Libellé> (Arpège) », renomme si le libellé change", () => {
+    const plan = planCategories(
+      [
+        { id: "c1", external_reference: "ETATCIVIL", name: "Ancien libellé (Arpège)" },
+        { id: "c2", external_reference: "M_PM", name: "Police Municipale (Arpège)" },
+      ],
+      [
+        { reference: "ETATCIVIL", name: "Actes d'état civil" },
+        { reference: "M_PM", name: "Police Municipale" },
+        { reference: "URBANISME", name: "urbanisme" },
+      ],
+      "Arpège",
+    );
+    expect(plan.toInsert).toEqual([{ reference: "URBANISME", name: "urbanisme (Arpège)" }]);
+    expect(plan.toRename).toEqual([{ id: "c1", name: "Actes d'état civil (Arpège)" }]);
+    expect(plan.unchanged).toBe(1);
+  });
+});
+
 describe("planImport", () => {
   const catalogue = parseCatalogue(FORMS, TYPES, null);
+  const categories = {
+    idByReference: new Map([["M_VOIRIE", "cat-voirie"]]),
+    managedIds: new Set(["cat-voirie", "cat-fourre-tout"]),
+    fallbackId: "cat-fourre-tout",
+  };
 
-  it("crée ce qui manque, met à jour ce qui a changé, signale ce qui a disparu", () => {
+  it("crée ce qui manque (rangé dans sa catégorie, ou le repli), signale ce qui a disparu", () => {
     const plan = planImport(
-      [
-        { id: "a", external_reference: "VOIRIE", name: "Ancien nom", short_description: null, partner_config: {} },
-        { id: "b", external_reference: "GONE", name: "Disparue", short_description: null, partner_config: {} },
-      ],
+      [{ id: "b", external_reference: "GONE", name: "Disparue", short_description: null, partner_config: {}, category_id: null }],
       catalogue,
+      categories,
     );
-    expect(plan.toInsert.map((p) => p.reference)).toEqual(["42"]);
-    expect(plan.toUpdate.map((u) => u.id)).toEqual(["a"]);
+    expect(plan.toInsert.map((p) => [p.reference, p.category_id])).toEqual([
+      ["VOIRIE", "cat-voirie"],
+      ["42", "cat-fourre-tout"],
+    ]);
     expect(plan.missing).toEqual(["Disparue"]);
+  });
+
+  it("sort une démarche de la fourre-tout vers sa catégorie", () => {
+    const voirie = catalogue[0];
+    const plan = planImport(
+      [{ id: "a", external_reference: "VOIRIE", name: voirie.name, short_description: voirie.description, partner_config: voirie.config, category_id: "cat-fourre-tout" }],
+      [voirie],
+      categories,
+    );
+    expect(plan.toUpdate).toEqual([expect.objectContaining({ id: "a", category_id: "cat-voirie" })]);
+    expect(plan.recategorized).toBe(1);
+  });
+
+  it("une démarche déplacée à la main dans une catégorie du Socle y reste", () => {
+    const voirie = catalogue[0];
+    const plan = planImport(
+      [{ id: "a", external_reference: "VOIRIE", name: voirie.name, short_description: voirie.description, partner_config: voirie.config, category_id: "cat-du-socle" }],
+      [voirie],
+      categories,
+    );
+    expect(plan).toMatchObject({ toUpdate: [], unchanged: 1, recategorized: 0 });
   });
 
   it("un second import identique ne change rien (ordre des clés jsonb indifférent)", () => {
@@ -136,13 +206,15 @@ describe("planImport", () => {
       CodeQualificationMetier: voirie.config.CodeQualificationMetier,
     };
     const plan = planImport(
-      [{ id: "a", external_reference: "VOIRIE", name: voirie.name, short_description: voirie.description, partner_config: reordered }],
+      [{ id: "a", external_reference: "VOIRIE", name: voirie.name, short_description: voirie.description, partner_config: reordered, category_id: "cat-voirie" }],
       [voirie],
+      categories,
     );
-    expect(plan).toEqual({ toInsert: [], toUpdate: [], unchanged: 1, missing: [] });
+    expect(plan).toEqual({ toInsert: [], toUpdate: [], unchanged: 1, recategorized: 0, missing: [] });
   });
 
-  it("nom de la catégorie", () => {
+  it("noms des catégories", () => {
+    expect(partnerCategoryLabel("Actes d'état civil", "Arpège")).toBe("Actes d'état civil (Arpège)");
     expect(partnerCategoryName("Arpège")).toBe("Démarches Arpège");
   });
 });
@@ -158,6 +230,6 @@ describe("garde-fous", () => {
     const source = readFileSync(join(__dirname, "..", "index.ts"), "utf8");
     const logs = source.match(/console\.\w+\([^;]*\);/g) ?? [];
     expect(logs.length).toBeGreaterThan(0);
-    for (const line of logs) expect(line).toMatch(/^console\.error\("[^"`$]*", \w+\.code\);$/);
+    for (const line of logs) expect(line).toMatch(/^console\.error\("[^"`$]*", (\w+\.)?code\);$/);
   });
 });

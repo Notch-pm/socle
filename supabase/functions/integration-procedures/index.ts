@@ -3,16 +3,19 @@
  * collectivité — appelé par l'écran du super administrateur (fiche client,
  * section « Intégrations », bouton « Récupérer les démarches »).
  *
- * Les démarches arrivent dans le catalogue de la RACINE, rangées dans la
- * catégorie « Démarches <partenaire> » (créée au besoin), marquées
- * `integration_id` + `external_reference`, avec la configuration du partenaire
- * (`partner_config`, opaque). Elles s'activent ensuite organisation par
- * organisation dans l'écran « Démarches activées », comme les autres — l'API
- * Arpège ne dit rien de quel service propose quoi.
+ * Les démarches arrivent dans le catalogue de la RACINE, chacune rangée dans la
+ * catégorie de son partenaire (Arpège : son « métier », `/v2/Metiers`, importé
+ * en catégorie « <Libellé> (Arpège) »), marquées `integration_id` +
+ * `external_reference`, avec la configuration du partenaire (`partner_config`,
+ * opaque). Elles s'activent ensuite organisation par organisation dans l'écran
+ * « Démarches activées », comme les autres — l'API Arpège ne dit rien de quel
+ * service propose quoi.
  *
- * Un nouvel import ne touche ni la catégorie, ni le statut, ni les activations,
- * et ne supprime jamais une démarche disparue du partenaire (voir
- * `_shared/importPlan.ts`).
+ * Un nouvel import ne touche ni le statut ni les activations, ne déplace pas
+ * une démarche rangée à la main dans une catégorie du Socle, et ne supprime
+ * jamais une démarche disparue du partenaire (voir `_shared/importPlan.ts`).
+ * L'ancienne catégorie fourre-tout « Démarches <partenaire> » est vidée puis
+ * retirée.
  *
  * ⚠️ AUCUN SECRET DANS LES JOURNAUX NI DANS LA RÉPONSE — `index.test.ts`
  * (dans `_shared/`) lit ce fichier pour le vérifier.
@@ -23,7 +26,13 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 
 import { fetchArpegeCatalogue, type Values } from "./_shared/arpegeCatalogue.ts";
-import { partnerCategoryName, planImport, type ExistingPartnerProcedure } from "./_shared/importPlan.ts";
+import {
+  partnerCategoryName,
+  planCategories,
+  planImport,
+  type ExistingPartnerCategory,
+  type ExistingPartnerProcedure,
+} from "./_shared/importPlan.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -117,53 +126,94 @@ Deno.serve(async (req: Request) => {
   if (!catalogue.ok) return errorResponse(502, catalogue.message);
 
   const rootId = config.organization_id as string;
-  const { data: existingRows, error: existingError } = await admin
-    .from("procedures")
-    .select("id, external_reference, name, short_description, partner_config")
+  const fail = (what: string, code: string | undefined) => {
+    console.error("integration-procedures: écriture impossible", code);
+    return errorResponse(500, `Erreur interne (${what}).`);
+  };
+
+  // ── 1. Catégories du partenaire (« <Libellé> (<Partenaire>) ») ──
+  const { data: categoryRows, error: categoryError } = await admin
+    .from("categories")
+    .select("id, external_reference, name")
     .eq("organization_id", rootId)
     .eq("integration_id", config.integration_id);
-  if (existingError) {
-    console.error("integration-procedures: lecture du catalogue impossible", existingError.code);
-    return errorResponse(500, "Erreur interne.");
-  }
+  if (categoryError) return fail("catégories", categoryError.code);
 
-  const plan = planImport((existingRows ?? []) as ExistingPartnerProcedure[], catalogue.procedures);
-
-  // Catégorie « Démarches <partenaire> » de la racine — seulement s'il y a à créer.
-  let categoryId: string | null = null;
-  if (plan.toInsert.length > 0) {
-    const categoryName = partnerCategoryName(integration.name);
-    const { data: category, error: categoryError } = await admin
+  const categoryPlan = planCategories(
+    (categoryRows ?? []) as ExistingPartnerCategory[],
+    catalogue.categories,
+    integration.name,
+  );
+  const idByReference = new Map(
+    ((categoryRows ?? []) as ExistingPartnerCategory[]).map((row) => [row.external_reference, row.id]),
+  );
+  if (categoryPlan.toInsert.length > 0) {
+    const { data: created, error } = await admin
       .from("categories")
-      .select("id")
-      .eq("organization_id", rootId)
-      .eq("name", categoryName)
-      .limit(1)
-      .maybeSingle();
-    if (categoryError) {
-      console.error("integration-procedures: lecture de la catégorie impossible", categoryError.code);
-      return errorResponse(500, "Erreur interne.");
-    }
-    categoryId = category?.id ?? null;
-    if (!categoryId) {
-      const { data: created, error: createError } = await admin
-        .from("categories")
-        .insert({ organization_id: rootId, name: categoryName })
-        .select("id")
-        .single();
-      if (createError) {
-        console.error("integration-procedures: création de la catégorie impossible", createError.code);
-        return errorResponse(500, "Erreur interne.");
-      }
-      categoryId = created.id;
-    }
+      .insert(
+        categoryPlan.toInsert.map((category) => ({
+          organization_id: rootId,
+          name: category.name,
+          integration_id: config.integration_id,
+          external_reference: category.reference,
+        })),
+      )
+      .select("id, external_reference");
+    if (error) return fail("catégories", error.code);
+    for (const row of created ?? []) idByReference.set(row.external_reference as string, row.id as string);
   }
+  for (const rename of categoryPlan.toRename) {
+    const { error } = await admin.from("categories").update({ name: rename.name }).eq("id", rename.id);
+    if (error) return fail("catégories", error.code);
+  }
+
+  // Ancienne catégorie fourre-tout « Démarches <partenaire> » (import du
+  // 2026-10-02, non marquée) : gérée, donc ses démarches rejoignent leur vraie
+  // catégorie ; supprimée ensuite si elle est vide.
+  const legacyName = partnerCategoryName(integration.name);
+  const { data: legacyRows, error: legacyError } = await admin
+    .from("categories")
+    .select("id")
+    .eq("organization_id", rootId)
+    .is("integration_id", null)
+    .eq("name", legacyName);
+  if (legacyError) return fail("catégories", legacyError.code);
+  const legacyIds = (legacyRows ?? []).map((row) => row.id as string);
+  const managedIds = new Set<string>([...idByReference.values(), ...legacyIds]);
+
+  // ── 2. Démarches ──
+  const { data: existingRows, error: existingError } = await admin
+    .from("procedures")
+    .select("id, external_reference, name, short_description, partner_config, category_id")
+    .eq("organization_id", rootId)
+    .eq("integration_id", config.integration_id);
+  if (existingError) return fail("démarches", existingError.code);
+
+  // Repli d'une démarche sans catégorie chez le partenaire : la fourre-tout,
+  // créée seulement si une telle démarche est à créer.
+  let fallbackId: string | null = legacyIds[0] ?? null;
+  const needsFallback = catalogue.procedures.some((p) => !p.categoryReference || !idByReference.has(p.categoryReference));
+  if (!fallbackId && needsFallback) {
+    const { data: created, error } = await admin
+      .from("categories")
+      .insert({ organization_id: rootId, name: legacyName })
+      .select("id")
+      .single();
+    if (error) return fail("catégories", error.code);
+    fallbackId = created.id;
+  }
+
+  const plan = planImport((existingRows ?? []) as ExistingPartnerProcedure[], catalogue.procedures, {
+    idByReference,
+    managedIds,
+    fallbackId,
+  });
 
   if (plan.toInsert.length > 0) {
     const { error: insertError } = await admin.from("procedures").insert(
       plan.toInsert.map((procedure) => ({
         organization_id: rootId,
-        category_id: categoryId,
+        category_id: procedure.category_id,
         name: procedure.name,
         short_description: procedure.description,
         integration_id: config.integration_id,
@@ -174,20 +224,33 @@ Deno.serve(async (req: Request) => {
         type: "externe",
       })),
     );
-    if (insertError) {
-      console.error("integration-procedures: création des démarches impossible", insertError.code);
-      return errorResponse(500, "Erreur interne.");
-    }
+    if (insertError) return fail("démarches", insertError.code);
   }
 
   for (const update of plan.toUpdate) {
     const { error: updateError } = await admin
       .from("procedures")
-      .update({ name: update.name, short_description: update.short_description, partner_config: update.partner_config })
+      .update({
+        name: update.name,
+        short_description: update.short_description,
+        partner_config: update.partner_config,
+        category_id: update.category_id,
+      })
       .eq("id", update.id);
-    if (updateError) {
-      console.error("integration-procedures: mise à jour d'une démarche impossible", updateError.code);
-      return errorResponse(500, "Erreur interne.");
+    if (updateError) return fail("démarches", updateError.code);
+  }
+
+  // ── 3. Fourre-tout vidée : on la retire (jamais si une démarche y reste) ──
+  for (const legacyId of legacyIds) {
+    if (legacyId === fallbackId && needsFallback) continue;
+    const { count, error } = await admin
+      .from("procedures")
+      .select("id", { count: "exact", head: true })
+      .eq("category_id", legacyId);
+    if (error) return fail("catégories", error.code);
+    if ((count ?? 0) === 0) {
+      const { error: deleteError } = await admin.from("categories").delete().eq("id", legacyId);
+      if (deleteError) return fail("catégories", deleteError.code);
     }
   }
 
@@ -195,6 +258,9 @@ Deno.serve(async (req: Request) => {
     created: plan.toInsert.length,
     updated: plan.toUpdate.length,
     unchanged: plan.unchanged,
+    recategorized: plan.recategorized,
+    categories_created: categoryPlan.toInsert.length,
+    categories_renamed: categoryPlan.toRename.length,
     missing: plan.missing,
   });
 });

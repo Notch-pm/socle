@@ -494,29 +494,42 @@ export type Database = {
       categories: {
         Row: {
           created_at: string | null
+          external_reference: string | null
           icon: string | null
           id: string
+          integration_id: string | null
           name: string
           organization_id: string | null
           translations: Json
         }
         Insert: {
           created_at?: string | null
+          external_reference?: string | null
           icon?: string | null
           id?: string
+          integration_id?: string | null
           name: string
           organization_id?: string | null
           translations?: Json
         }
         Update: {
           created_at?: string | null
+          external_reference?: string | null
           icon?: string | null
           id?: string
+          integration_id?: string | null
           name?: string
           organization_id?: string | null
           translations?: Json
         }
         Relationships: [
+          {
+            foreignKeyName: "categories_integration_id_fkey"
+            columns: ["integration_id"]
+            isOneToOne: false
+            referencedRelation: "integrations"
+            referencedColumns: ["id"]
+          },
           {
             foreignKeyName: "categories_organization_id_fkey"
             columns: ["organization_id"]

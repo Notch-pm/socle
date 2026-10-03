@@ -13,6 +13,19 @@ Format d'une entrée : `## AAAA-MM-JJ — <api> — ajout|correctif|rupture`
 
 ---
 
+## 2026-10-03 — public-api — ajout (catégories partenaires)
+
+Version du contrat **1.36.0**. Les catégories d'Arpège (« métiers ») sont importées au Socle
+sous le nom « <Libellé> (Arpège) », et chaque démarche Arpège y est rangée (`category_id`).
+
+- ⚠️ `GET /v1/categories` applique aux catégories partenaires la règle des démarches
+  partenaires : servies aux **seules** applications rattachées à l'intégration (`clara`) ; pour
+  Iris, Nora ou une clé d'organisation, elles n'existent pas. Aucun champ ne change.
+- Clara : une démarche Arpège arrive désormais avec la `category_id` de sa catégorie Arpège, qui
+  figure dans `GET /v1/categories` pour sa clé.
+
+---
+
 ## 2026-10-02 — public-api — ajout (démarches partenaires)
 
 Version du contrat **1.35.0**, ajout **additif**.

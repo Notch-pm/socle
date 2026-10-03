@@ -136,21 +136,29 @@ organisation ne peut venir que du Socle. Les démarches Arpège y vivent donc co
 - **Import** : bouton « Récupérer les démarches » de la fiche Arpège (intégration **active**),
   fonction `integration-procedures` (super admin). Lecture **portée de Clara**
   (`sync-arpege-services`) : formulaires par type, `TypesDemandes` avec repli, filtre
-  `ENLIGNE` ou vide. Les démarches entrent au catalogue de la **racine**, catégorie
-  « Démarches Arpège » (créée au besoin), `status = production`, marquées `integration_id` +
-  `external_reference` (code) + `partner_config` (opaque : `CodeQualificationMetier`,
-  `ConfigInfoUsagerObligs`, `FormComponents` — exactement l'`arpege_config_fields` de Clara).
-- ⚠️ Un nouvel import ne met à jour que **nom, description courte, `partner_config`** — jamais
-  la catégorie, le statut ni les activations — et ne **supprime jamais** une démarche disparue
-  d'Arpège (elle est signalée).
+  `ENLIGNE` ou vide. Les démarches entrent au catalogue de la **racine**, `status =
+  production`, marquées `integration_id` + `external_reference` (code) + `partner_config`
+  (opaque : `CodeQualificationMetier`, `ConfigInfoUsagerObligs`, `FormComponents` — exactement
+  l'`arpege_config_fields` de Clara).
+- **Catégories** (2026-10-03) : les « métiers » d'Arpège (`GET /v2/Metiers`, code + libellé)
+  deviennent des catégories « <Libellé> (Arpège) » (`categories.integration_id` +
+  `external_reference` = `CodeQualificationMetier`) — **seulement celles qu'emploie une
+  démarche** ; chaque démarche est rangée dans la sienne. Un libellé changé chez Arpège renomme
+  la catégorie. L'ancienne fourre-tout « Démarches Arpège » (import du 2026-10-02) est vidée puis
+  retirée ; elle ne sert plus que de repli à une démarche sans métier.
+- ⚠️ Un nouvel import ne met à jour que **nom, description courte, `partner_config`** et la
+  **catégorie tant qu'elle est gérée** (catégorie Arpège, fourre-tout ou aucune) : une démarche
+  rangée à la main dans une catégorie du Socle y reste. Statut et activations jamais touchés ;
+  une démarche disparue d'Arpège n'est **jamais supprimée** (elle est signalée).
 - **Activation** : écran existant « Démarches activées » (`organization_procedures`) ; la
-  colonne catégorie (« Démarches Arpège ») les distingue.
+  colonne catégorie (« … (Arpège) ») les distingue.
 - ⚠️ **Visibilité** (`procedureVisibleTo`, public-api) : une démarche partenaire n'est servie
   qu'aux clés dont l'application est rattachée à l'intégration (`clara`) — pour Iris, Nora, une
   clé d'organisation, **elle n'existe pas** (absente des listes, 404). Le portail l'écarte en plus
   (`isPubliclyPublished`, miroir front `catalogueVisibility` → « partenaire »), et l'éditeur du
   site ne la propose pas à l'épinglage.
-- `ProcedureDto.partner` : `{ integration, reference, config } | null`.
+- `ProcedureDto.partner` : `{ integration, reference, config } | null`. Les **catégories**
+  partenaires suivent la même règle de visibilité (`GET /v1/categories`, contrat 1.36.0).
 - Éditeur : bandeau « Démarche partenaire » ; le stepper ne montre que **Descriptif** et **Base
   de connaissances** (`visibleStepIndices`) — demandeur, formulaire, communication usager et
   publication sont ceux du partenaire. Les rangs ne changent pas (`?step=5` reste la base de
