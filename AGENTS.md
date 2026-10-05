@@ -94,7 +94,7 @@ Projet Supabase : `qhrokbkyxgcvkbpmbmna`.
    utilisateurs et **administrateurs d'organisation**. Routes : `/` (tableau de bord —
    voir feature), `/organisations`,
    `/demarches`, `/categories`, `/types-pieces`, `/quartiers`, `/utilisateurs`,
-   `/consommation-ia` (consultation seule), `/documents`, `/site-de-demarches` (éditeur du
+   `/integrations` et `/consommation-ia` (consultation seule), `/documents`, `/site-de-demarches` (éditeur du
    portail usagers — voir feature).
 2. **Zone super admin** (`SuperAdminLayout`, protégée par `SuperAdminRoute`) — routes
    `/superadmin/*`. Réservée à `global_role = 'super_admin'`.
@@ -306,6 +306,8 @@ superadmin (`OrgSettingsPage`, menu latéral par client).
   par RPC (vide = conserver), lecture par le service role (`integration-test`).
 - ⚠️ Activer exige un test réussi (trigger) ; modifier paramètres ou secret invalide le test.
   Adaptateurs en **miroir** front / edge / public-api (trois copies, épinglées par test).
+- Admin de collectivité : `/integrations`, **consultation seule**, état par la RPC
+  `organization_integration_overview` (noms des champs, jamais une valeur) — la table reste fermée.
 - Servie par `GET /v1/organizations/{id}/integrations/{slug}` (scope **`integrations`**, secrets
   compris, `is_active` effectif) ; Clara en tient un **miroir** (sync du référentiel).
 - **Démarches partenaires** (1.35.0) : importées au catalogue de la racine

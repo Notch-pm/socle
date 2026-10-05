@@ -1,5 +1,5 @@
 import { NavLink } from "react-router-dom";
-import { House, Network, ListChecks, LayoutTemplate, Tags, FileCheck2, FileSignature, MapPin, Users, Sparkles } from "lucide-react";
+import { House, Network, ListChecks, LayoutTemplate, Tags, FileCheck2, FileSignature, MapPin, Users, Plug, Sparkles } from "lucide-react";
 import { API_DOC_LINKS, apiDocLinkTitle, type ApiDocLink } from "@/features/public-api-docs/apiDocLinks";
 import { cn } from "@/lib/utils";
 
@@ -43,7 +43,9 @@ const ITEMS: NavItem[] = [
   { to: "/documents", title: "Documents", icon: FileSignature },
   { to: "/quartiers", title: "Quartiers", icon: MapPin },
   { to: "/utilisateurs", title: "Utilisateurs & rôles", icon: Users },
-  // Consultation, pas paramétrage : d'où sa place en fin de rail.
+  // Consultation, pas paramétrage : d'où leur place en fin de rail. Les
+  // intégrations se configurent chez le super admin ; ici, on les voit.
+  { to: "/integrations", title: "Intégrations", icon: Plug },
   { to: "/consommation-ia", title: "Consommation IA", icon: Sparkles },
 ];
 

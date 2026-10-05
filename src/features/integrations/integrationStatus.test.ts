@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { catalogueStatus, organizationStatus, STATUS_LABELS } from "./integrationStatus";
+import { catalogueStatus, organizationStatus, overviewStatus, STATUS_LABELS } from "./integrationStatus";
 
 const ARPEGE = { adapter: "arpege", is_available: true };
 const COMPLETE = { settings: { api_base_url: "https://x.test", client_id: "cid" }, is_active: false, last_test_ok: null };
@@ -42,5 +42,16 @@ describe("organizationStatus", () => {
   });
   it("tout statut a un libellé français", () => {
     for (const label of Object.values(STATUS_LABELS)) expect(label).toMatch(/^[A-ZÉ]/);
+  });
+});
+
+describe("overviewStatus (vue de l'administrateur, noms de champs seulement)", () => {
+  it("rend le même statut que la fiche du super admin", () => {
+    expect(overviewStatus(ARPEGE, null)).toBe("not_configured");
+    expect(overviewStatus(ARPEGE, { is_active: false, last_test_ok: null, present_keys: ["api_base_url", "client_id"] })).toBe("not_configured");
+    expect(overviewStatus(ARPEGE, { is_active: false, last_test_ok: null, present_keys: ["api_base_url", "client_id", "client_secret"] })).toBe("configured");
+    expect(overviewStatus(ARPEGE, { is_active: true, last_test_ok: true, present_keys: [] })).toBe("active");
+    expect(overviewStatus(ARPEGE, { is_active: true, last_test_ok: false, present_keys: [] })).toBe("error");
+    expect(overviewStatus({ ...ARPEGE, is_available: false }, { is_active: true, last_test_ok: true, present_keys: [] })).toBe("disabled");
   });
 });

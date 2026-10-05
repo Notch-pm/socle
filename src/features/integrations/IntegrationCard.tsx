@@ -60,10 +60,13 @@ export function IntegrationCard({
   integration,
   status,
   action,
+  showDescription = false,
 }: {
   integration: CatalogueIntegration;
   status: IntegrationStatus;
   action?: React.ReactNode;
+  /** La description de l'offre — utile à la collectivité qui découvre le catalogue. */
+  showDescription?: boolean;
 }) {
   const applications = applicationNames(integration);
   return (
@@ -76,6 +79,9 @@ export function IntegrationCard({
         </div>
       </CardHeader>
       <CardContent className="flex flex-1 flex-col gap-4">
+        {showDescription && integration.description.trim() !== "" ? (
+          <p className="text-sm">{integration.description}</p>
+        ) : null}
         <div className="flex flex-col gap-1.5">
           <p className="text-xs font-medium text-muted-foreground">Applications</p>
           <div className="flex flex-wrap gap-1.5">

@@ -67,13 +67,38 @@ export function organizationStatus(
   config: ConfigFacts | null | undefined,
   secretKeys: readonly string[] = [],
 ): IntegrationStatus {
+  return overviewStatus(
+    integration,
+    config
+      ? {
+          is_active: config.is_active,
+          last_test_ok: config.last_test_ok,
+          present_keys: [...presentKeys(readValues(config.settings), secretKeys)],
+        }
+      : null,
+  );
+}
+
+/**
+ * Les faits d'état tels que les rend `organization_integration_overview` à
+ * l'administrateur de la collectivité : les NOMS des champs renseignés, jamais
+ * leur valeur. Même statut que la fiche du super admin, par la même règle.
+ */
+export interface OverviewFacts {
+  is_active: boolean;
+  last_test_ok: boolean | null;
+  present_keys: readonly string[];
+}
+
+export function overviewStatus(
+  integration: CatalogueFacts,
+  facts: OverviewFacts | null | undefined,
+): IntegrationStatus {
   const catalogue = catalogueStatus(integration);
   if (catalogue !== "available") return catalogue;
-  if (!config) return "not_configured";
-  if (config.last_test_ok === false) return "error";
-  if (config.is_active) return "active";
+  if (!facts) return "not_configured";
+  if (facts.last_test_ok === false) return "error";
+  if (facts.is_active) return "active";
   const adapter = getAdapter(integration.adapter)!;
-  return adapter.isComplete(presentKeys(readValues(config.settings), secretKeys))
-    ? "configured"
-    : "not_configured";
+  return adapter.isComplete(new Set(facts.present_keys)) ? "configured" : "not_configured";
 }

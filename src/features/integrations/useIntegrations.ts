@@ -96,6 +96,34 @@ export function useOrganizationIntegrations(organizationId: string | undefined) 
   });
 }
 
+export interface IntegrationOverviewRow {
+  integration_id: string;
+  is_active: boolean;
+  last_test_ok: boolean | null;
+  last_tested_at: string | null;
+  present_keys: string[];
+}
+
+/**
+ * L'ÉTAT des intégrations d'une racine, pour son administrateur — lecture
+ * seule. La table de configuration lui reste fermée : la RPC
+ * `organization_integration_overview` ne rend que l'activation, le dernier
+ * test et les NOMS des champs renseignés, jamais une valeur.
+ */
+export function useOrganizationIntegrationOverview(organizationId: string | null | undefined) {
+  return useQuery({
+    queryKey: ["organization-integration-overview", organizationId],
+    enabled: Boolean(organizationId),
+    queryFn: async (): Promise<IntegrationOverviewRow[]> => {
+      const { data, error } = await supabase.rpc("organization_integration_overview", {
+        p_organization_id: organizationId!,
+      });
+      if (error) throw error;
+      return (data ?? []).map((row) => ({ ...row, present_keys: row.present_keys ?? [] }));
+    },
+  });
+}
+
 /**
  * Enregistre une configuration : les paramètres sur la ligne, les secrets par
  * la RPC (chaîne vide = conserver, `null` = effacer). Renvoie l'id de la

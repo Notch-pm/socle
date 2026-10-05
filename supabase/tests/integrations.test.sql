@@ -18,6 +18,9 @@
 --      non-super-admin.
 --   6. ACTIVER EXIGE UN TEST RÉUSSI — et modifier les paramètres ou un secret
 --      invalide le test.
+--   9. L'ADMINISTRATEUR VOIT L'ÉTAT DE SA COLLECTIVITÉ — par
+--      `organization_integration_overview` : noms des champs renseignés,
+--      jamais une valeur ; la table reste fermée ; ni une autre collectivité.
 --
 -- Exécution : contexte postgres en lecture-écriture (SQL editor, ou
 -- `execute_sql` — l'échec final VOLONTAIRE annule la transaction).
@@ -243,6 +246,36 @@ begin
     v_fail := v_fail || 'I8b: doublon de catégorie partenaire accepté';
   exception when unique_violation then null;
   end;
+
+  -- ==========================================================================
+  -- I9. L'administrateur de la collectivité voit l'ÉTAT, jamais une valeur
+  -- ==========================================================================
+  -- À ce stade : api_base_url renseignée, client_secret présent, test invalidé.
+  perform set_config('request.jwt.claims',
+    jsonb_build_object('sub', u_admin, 'role', 'authenticated')::text, true);
+  execute 'set local role authenticated';
+  select count(*) into v_int from public.organization_integration_overview(org_a);
+  if v_int <> 1 then v_fail := v_fail || format('I9a: %s ligne(s) au lieu d''une', v_int); end if;
+  select present_keys into v_keys from public.organization_integration_overview(org_a)
+  where integration_id = v_arpege;
+  if v_keys is distinct from array['api_base_url', 'client_secret'] then
+    v_fail := v_fail || format('I9b: champs renseignés inattendus (%s)', v_keys);
+  end if;
+  -- La table, elle, reste fermée à l'administrateur.
+  select count(*) into v_int from public.organization_integrations;
+  if v_int <> 0 then v_fail := v_fail || 'I9c: la table de configuration s''ouvre à l''administrateur'; end if;
+  -- Ni l'autre collectivité, ni une sous-organisation dont il n'est pas admin direct.
+  begin
+    perform public.organization_integration_overview(org_b);
+    v_fail := v_fail || 'I9d: état d''une autre collectivité lisible';
+  exception when insufficient_privilege then null;
+  end;
+  begin
+    perform public.organization_integration_overview(org_a_sub);
+    v_fail := v_fail || 'I9e: sous-organisation lisible sans en être admin direct';
+  exception when insufficient_privilege then null;
+  end;
+  execute 'reset role';
 
   -- ==========================================================================
   -- VERDICT — puis annulation volontaire

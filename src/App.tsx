@@ -17,6 +17,7 @@ import { ProcedureEditorPage } from "@/features/procedures/ProcedureEditorPage";
 import { PortalEditorPage } from "@/features/portal/PortalEditorPage";
 import { QuartiersPage } from "@/features/quartiers/QuartiersPage";
 import { AiUsagePage } from "@/features/ai-usage/AiUsagePage";
+import { IntegrationsPage } from "@/features/integrations/IntegrationsPage";
 import { UtilisateursPage } from "@/pages/UtilisateursPage";
 import { SuperAdminDashboardPage } from "@/features/superadmin/SuperAdminDashboardPage";
 import { OrgSettingsPage } from "@/features/superadmin/organizations/OrgSettingsPage";
@@ -93,6 +94,7 @@ export function App() {
               <Route path="quartiers" element={<QuartiersPage />} />
               <Route path="utilisateurs" element={<UtilisateursPage />} />
               {/* Consultation seule — le plafond se règle côté superadmin. */}
+              <Route path="integrations" element={<IntegrationsPage />} />
               <Route path="consommation-ia" element={<AiUsagePage />} />
             </Route>
           </Route>

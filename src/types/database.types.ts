@@ -2103,6 +2103,16 @@ export type Database = {
       normalize_phone: { Args: { raw: string }; Returns: string }
       org_subtree_ids: { Args: { root: string }; Returns: string[] }
       organization_dashboard: { Args: { p_org_id: string }; Returns: Json }
+      organization_integration_overview: {
+        Args: { p_organization_id: string }
+        Returns: {
+          integration_id: string
+          is_active: boolean
+          last_test_ok: boolean
+          last_tested_at: string
+          present_keys: string[]
+        }[]
+      }
       organization_integration_secret_keys: {
         Args: { p_organization_id: string }
         Returns: {

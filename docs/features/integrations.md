@@ -91,8 +91,18 @@ qu'ils disent la même chose. Un partenaire non configurable : la ligne seule, `
   blocs vides), « Modifier » → description, URL du logo (`https`, sinon l'initiale), « Proposée ».
 - Fiche client → section **« Intégrations »** (`?section=integrations`, racine seule) :
   `IntegrationsSection` — mêmes cartes avec le statut de la collectivité ; « Configurer » →
-  `IntegrationConfigDialog` (formulaire généré, test, activation). Aucun écran côté administrateur
-  de collectivité (décision du 2026-10-02 : super admin seul, comme le verrou de Clara).
+  `IntegrationConfigDialog` (formulaire généré, test, activation).
+- `/integrations` (`IntegrationsPage`, entrée « Intégrations » du rail, 2026-10-04) : la vue de
+  l'**administrateur de collectivité**, en **consultation seule** — le catalogue (description
+  comprise) avec le statut de sa collectivité, et la liste des intégrations actives. Aucune
+  action : configurer, tester, activer restent au super admin (décision du 2026-10-02 maintenue).
+  ⚠️ La table `organization_integrations` lui reste **fermée** ; il lit l'état par la RPC
+  `organization_integration_overview(org)` (garde `is_org_admin`, racine) : activation, dernier
+  test (réussi ou non, date) et **noms** des champs renseignés — jamais une valeur, ni le
+  message d'erreur du test. Le statut se dérive par `overviewStatus`, même règle que la fiche du
+  super admin (`organizationStatus` y délègue). Sélecteur des racines administrées, motif
+  `/consommation-ia` ; un admin de sous-organisation lit « réservée aux administrateurs d'une
+  organisation principale ».
 - Badges : variantes `success` / `destructive` ajoutées à `Badge`, sur les jetons existants.
 
 ## Consommation par les applications (lot 2, 2026-10-02)
@@ -180,6 +190,8 @@ organisation ne peut venir que du Socle. Les démarches Arpège y vivent donc co
 `supabase/functions/integration-procedures/` (`index.ts`, `_shared/{arpegeCatalogue,importPlan,hawk}.ts` + test),
 `supabase/migrations/20261002190000_procedures_partenaires.sql`,
 `supabase/migrations/20261002160000_api_keys_scope_integrations.sql`,
+`supabase/migrations/20261004090000_organization_integration_overview.sql`,
 `src/features/integrations/` (`useIntegrations.ts`, `integrationStatus.ts`, `adapters.ts`,
-`IntegrationCard`, `IntegrationGrid`, `IntegrationsSection`, `IntegrationConfigDialog`),
+`IntegrationCard`, `IntegrationGrid`, `IntegrationsSection`, `IntegrationConfigDialog`,
+`IntegrationsPage` + test),
 `src/features/superadmin/integrations/IntegrationsCataloguePage.tsx`.

@@ -672,6 +672,10 @@ Détail et pièges : [fiche de feature](features/integrations.md).
   `null` = efface ; remet `last_test_*` à NULL si quelque chose change.
   `organization_integration_secret_keys(org)` → `(organization_integration_id, secret_keys[])`,
   noms seulement.
+- RPC `organization_integration_overview(org)` (SECURITY DEFINER, garde **`is_org_admin`**, EXECUTE
+  `authenticated`, `20261004090000`) → `(integration_id, is_active, last_test_ok, last_tested_at,
+  present_keys[])` : l'état pour l'administrateur de la racine (page `/integrations`), noms des
+  paramètres non vides et des secrets présents, **aucune valeur**. La table reste super admin.
 
 ### Plafond et journal d'utilisation IA
 
