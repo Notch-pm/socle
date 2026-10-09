@@ -40,8 +40,11 @@ dossier, et n'a pas à le savoir — il ne compose aucun prompt.
   caractère prononcé**. La transcription réserve sur la plus longue de l'annonce et de ce que le
   fichier prouve (en-tête WAV, sinon un plancher de 4 000 octets/s), et solde sur la durée
   mesurée par le fournisseur ; la synthèse réserve exactement (le texte est connu). ⚠️ **La
-  synthèse coûte plus que la conversation qu'elle lit** (≈ 5 600 jetons pour 350 caractères,
-  contre ≈ 3 250 pour l'appel au modèle) : à dire avant d'ouvrir la voix à une collectivité.
+  synthèse se paie au caractère** : 350 caractères prononcés ≈ 5 600 jetons, plus que l'appel au
+  modèle qui les a écrits — d'où les réponses courtes du mode dialogue. Mesuré le 2026-10-09 sur
+  l'assistant du portail (réponses d'≈ 120 caractères) : un tour vocal ≈ 4 740 (modèle) + 2 090
+  (synthèse) + 475 (transcription) jetons, soit **≈ 1,5 fois un tour écrit**. À dire avant
+  d'ouvrir la voix à une collectivité.
   ⚠️ **L'appelant donne une langue, le Socle choisit la voix** — un préréglage, jamais une voix
   clonée (`voice`, `voice_id`, `ref_audio` refusés). Le fournisseur n'a de préréglages qu'en
   **français** (`fr_marie_curious`, choix PO) et en **anglais** (`en_paul_neutral`) ; une voix

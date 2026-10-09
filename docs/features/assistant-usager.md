@@ -50,13 +50,35 @@ crédit** (déjà compté).
   `GET /v1/procedures/{id}`, qui les sert : c'est à Nora de ne composer qu'à partir des routes
   portail, et un test l'y épingle.
 - ⚠️ **La voix est un interrupteur à part** (contrat **1.37.0**), et non un effet de
-  l'ouverture : elle coûte plusieurs fois le texte (une réponse prononcée coûte plus que l'appel
-  qui l'a écrite — ≈ 5 fois plus par conversation) et fait traiter la **voix de l'usager** par le
+  l'ouverture : elle coûte davantage que le texte (chaque tour est aussi transcrit et prononcé —
+  **≈ 1,5 fois un tour écrit**, mesuré le 2026-10-09 : 4 740 + 2 090 + 475 jetons ; l'estimation
+  « ≈ 5 fois » du plan supposait des réponses de 350 caractères) et fait traiter la **voix de l'usager** par le
   fournisseur (AIPD et DPA à vérifier avant ouverture au public). Elle ne dépend pas du recueil :
   on peut parler à un assistant qui ne fait que renseigner. L'écran avertit du coût dès qu'elle
   est ouverte. La transcription et la synthèse passent par `ai-api` (`/v1/transcriptions`,
   `/v1/speech` — voir [`ai-api.md`](ai-api.md)) ; seuls le **français et l'anglais** se
   prononcent, les autres langues restent en texte — c'est au portail de le savoir, pas au booléen.
+- ⚠️ **Conformité de la voix, à régler AVANT toute ouverture au public** (relevé du 2026-10-09,
+  à confirmer sur le DPA signé — ce ne sont pas des avis juridiques) :
+  - **Conservation chez le fournisseur.** Sans option, Mistral garderait les entrées et sorties
+    de l'API **30 jours** pour la lutte contre les abus (sources tierces — sa page officielle ne
+    chiffre pas le défaut). La **conservation nulle** (« zero data retention ») s'obtient sur
+    demande motivée, plans payants, et couvre `/v1/audio/transcriptions`, `/v1/audio/speech` et
+    `/v1/chat/completions` — ⚠️ **pas les agents** (`/v1/agents/completions`). Or l'assistant passe
+    par l'agent `assistant-usager` quand `MISTRAL_AGENT_ASSISTANT_USAGER` est posé. Pour couvrir
+    TOUT le fil, il faudrait retirer ce secret : `ai-api` retombe alors sur `chat/completions`
+    (modèle par défaut, température 0,2), et le prompt de Nora porte déjà `BASE_RULES` en entier
+    — on perd seulement le pilotage du modèle depuis la console.
+  - **Ce qu'on dit à l'usager** : « ni la collectivité ni ce site n'enregistrent » sa voix — vrai
+    chez nous, et rien de plus. Ne jamais écrire « rien n'est enregistré » tant que la
+    conservation nulle n'est pas acquise (texte corrigé le 2026-10-09, Nora et Socle).
+  - **AIPD** : la voix est une donnée personnelle (pas biométrique : aucune identification) ;
+    finalité (déposer ou se renseigner à la voix), base légale de la collectivité, sous-traitant
+    (Mistral, UE), durée (aucune chez Edilumen ; 30 jours ou zéro chez Mistral), information
+    (mention sous le bouton, permanente pendant le dialogue), et le droit de ne pas l'utiliser
+    (le texte reste toujours possible).
+  - **DPA Mistral** : vérifier qu'il couvre l'audio, la localisation UE et la liste des
+    sous-traitants ultérieurs.
 - **Le crédit** : Nora appelle `ai-api` avec une **clé dédiée** (scope `ai` seul, application
   `nora` — précédent `SOCLE_AI_API_KEY`), alias d'agent **`assistant-usager`** →
   secret `MISTRAL_AGENT_ASSISTANT_USAGER` (voir [`docs/operations.md`](../operations.md) ; absent,

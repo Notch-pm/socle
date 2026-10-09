@@ -13,6 +13,16 @@ Format d'une entrée : `## AAAA-MM-JJ — <api> — ajout|correctif|rupture`
 
 ---
 
+## 2026-10-09 — ai-api — correctif (documentation du coût de la voix)
+
+Aucun changement de comportement. La description de l'OpenAPI disait que « la synthèse coûte
+bien plus que la conversation qu'elle lit » : vrai pour un long texte, faux pour les réponses
+courtes d'un dialogue. Elle dit désormais que la synthèse se paie au caractère (350 caractères
+≈ 5 600 jetons) — écrire court pour l'oreille. Mesuré sur l'assistant du portail : un tour
+vocal ≈ 1,5 fois un tour écrit.
+
+---
+
 ## 2026-10-09 — public-api — ajout (mode dialogue de l'assistant)
 
 Version du contrat **1.37.0**, ajout **additif**.

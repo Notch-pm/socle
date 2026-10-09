@@ -26,7 +26,8 @@ import {
  * servir, et le rouvrir rend le réglage tel qu'il était.
  *
  * La voix est un interrupteur À PART, et non un effet de l'ouverture : elle
- * coûte plusieurs fois le texte et fait traiter la voix de l'usager par le
+ * coûte davantage que le texte (≈ une fois et demie par tour, mesuré le
+ * 2026-10-09) et fait traiter la voix de l'usager par le
  * fournisseur — deux raisons d'une décision explicite.
  */
 export function PortalAssistantSection({ organizationId }: { organizationId: string }) {
@@ -120,10 +121,11 @@ export function PortalAssistantSection({ organizationId }: { organizationId: str
 
             {flags.enabled && flags.voice_enabled ? (
               <p role="note" className="rounded-lg bg-secondary/40 p-3 text-xs text-foreground">
-                La voix coûte plus cher que le texte : faire prononcer une réponse coûte davantage
-                que de l'écrire, et une conversation vocale consomme environ cinq fois plus de crédit.
+                La voix coûte plus cher que le texte : chaque réponse est aussi transcrite et
+                prononcée, et un échange vocal consomme environ une fois et demie plus de crédit.
                 Vérifiez la part réservée à l'assistant ci-dessous. La voix de l'usager est
-                transcrite par le fournisseur d'IA ; elle n'est pas conservée.
+                transcrite par le fournisseur d'IA : ni le Socle ni le portail ne la conservent, mais
+                le fournisseur peut garder les échanges jusqu'à 30 jours, sauf conservation nulle.
               </p>
             ) : null}
 

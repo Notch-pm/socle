@@ -378,8 +378,8 @@ superadmin (`OrgSettingsPage`, menu latéral par client).
   effet immédiat (⚠️ ni dans le thème, ni sur `organizations`), servi sur `TenantDto.assistant`.
 - ⚠️ Le commutateur s'applique **à la frontière** (`readPortalAssistant`) : couper `enabled`
   conserve les deux autres. Au doute, **fermé**. `TenantDto` est public : trois booléens, rien
-  d'autre. ⚠️ La voix (mode dialogue, 1.37.0) est un interrupteur **à part** : elle coûte ≈ 5 fois
-  le texte.
+  d'autre. ⚠️ La voix (mode dialogue, 1.37.0) est un interrupteur **à part** : un tour vocal coûte
+  ≈ 1,5 fois un tour écrit (mesuré).
 - ⚠️ Corpus = ce que `/v1/portal/*` sert déjà (dont les informations usagers des organismes) ;
   `knowledge_base` et les recommandations aux agents n'entrent **jamais** dans son prompt. ⚠️ Pas d'ouverture au public sans **part de crédit
   réservée** : elle se règle dans la section « Assistant IA » (bouton « Répartir », le seul écran

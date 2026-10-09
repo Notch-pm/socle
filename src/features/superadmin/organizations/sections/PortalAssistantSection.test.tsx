@@ -100,8 +100,11 @@ describe("PortalAssistantSection", () => {
     unmount();
     h.settings = { enabled: true, deposit_enabled: false, voice_enabled: true };
     renderSection();
-    expect(screen.getByRole("note").textContent).toMatch(/environ cinq fois plus de crédit/);
-    expect(screen.getByRole("note").textContent).toMatch(/n'est pas conservée/);
+    expect(screen.getByRole("note").textContent).toMatch(/une fois et demie plus de crédit/);
+    // Ce qui est vrai, et seulement ce qui l'est : ni le Socle ni le portail ne
+    // gardent la voix ; le fournisseur, lui, peut la garder sans conservation nulle.
+    expect(screen.getByRole("note").textContent).toMatch(/ni le Socle ni le portail ne la conservent/);
+    expect(screen.getByRole("note").textContent).toMatch(/jusqu'à 30 jours/);
   });
 
   it("montre le dépôt conservé sous un assistant fermé, et dit qu'il est sans effet", () => {
