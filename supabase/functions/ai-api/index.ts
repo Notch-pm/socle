@@ -36,13 +36,33 @@
  * compteur et le même plafond — sans quoi une collectivité aurait deux
  * crédits, et l'éditeur deux totaux à additionner à la main. La conversion
  * pages → jetons vit dans `_shared/ocr.ts`, à un seul endroit.
+ *
+ * Puis deux de plus, même porte encore (2026-10-09, mode dialogue de
+ * l'assistant du portail) : `POST /v1/transcriptions` (la voix devient texte)
+ * et `POST /v1/speech` (le texte devient voix). Secondes et caractères sont
+ * convertis en jetons dans `_shared/audio.ts`, et nulle part ailleurs.
  */
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 
 import { errorBody, errorResponse, jsonResponse } from "./_shared/errors.ts";
 import { buildOpenApiDocument } from "./_shared/openapi.ts";
-import { callProvider, callProviderOcr, PROVIDER_NAME } from "./_shared/provider.ts";
+import {
+  callProvider,
+  callProviderOcr,
+  callProviderSpeech,
+  callProviderTranscription,
+  PROVIDER_NAME,
+} from "./_shared/provider.ts";
 import { parseOcrPayload, reservationForOcr, tokensForOcrText } from "./_shared/ocr.ts";
+import {
+  MAX_AUDIO_BYTES,
+  parseSpeechPayload,
+  parseTranscriptionForm,
+  speechContentType,
+  tokensForAudioSeconds,
+  tokensForSpeech,
+  voiceIdFor,
+} from "./_shared/audio.ts";
 import {
   callerLimit,
   nextRenewalIso,
@@ -74,6 +94,7 @@ const corsHeaders = {
   "Access-Control-Allow-Headers":
     "authorization, x-client-info, apikey, content-type, x-organization-id",
   "Access-Control-Allow-Methods": "GET, POST, OPTIONS",
+  "Access-Control-Expose-Headers": "x-ai-event-id, x-ai-tokens",
 };
 
 async function sha256Hex(input: string): Promise<string> {
@@ -615,6 +636,219 @@ Deno.serve(async (req: Request) => {
           renews_at: reserved.renews_at,
         },
       }, corsHeaders);
+    }
+
+    // ======================================================================
+    // Les deux routes AUDIO partagent la porte : cadence, part, plafond.
+    // Même RPC que les complétions et l'OCR — une collectivité a UN crédit.
+    // La NATURE (`transcription`, `speech`) est fixée ici, jamais par
+    // l'appelant : c'est elle qui choisit le seau de cadence « audio ».
+    // ======================================================================
+    const reserveAudio = async (
+      resourceType: "transcription" | "speech",
+      estimate: number,
+      meta: { feature: string | null; referenceKind: string | null; referenceId: string | null; actorId: string | null },
+    ): Promise<{ ok: true; reserved: Reservation } | { ok: false; response: Response }> => {
+      const { data: reservation, error: reserveError } = await admin.rpc("reserve_ai_usage", {
+        p_org_id: orgId,
+        p_provider: PROVIDER_NAME,
+        p_resource_type: resourceType,
+        p_estimated_tokens: estimate,
+        p_consumer: consumer,
+        p_api_key_id: apiKey.id,
+        p_feature: meta.feature,
+        p_external_ref_kind: meta.referenceKind,
+        p_external_ref_id: meta.referenceId,
+        p_external_actor_id: meta.actorId,
+      });
+      if (reserveError) {
+        console.error(`${FUNCTION_NAME}: reserve_ai_usage (${resourceType}) en échec`, reserveError.message);
+        return { ok: false, response: errorResponse("internal_error", "Erreur interne du serveur.", corsHeaders) };
+      }
+      const reserved = (Array.isArray(reservation) ? reservation[0] : reservation) as Reservation | null;
+      if (!reserved?.allowed && reserved?.reason === "rate_limited") {
+        console.warn(
+          `${FUNCTION_NAME}: cadence dépassée (${resourceType}) — org=${orgId} consumer=${consumer} ` +
+            `actor=${meta.actorId ?? "-"}`,
+        );
+        return { ok: false, response: rateLimitedResponse(now, corsHeaders) };
+      }
+      if (!reserved?.allowed) return { ok: false, response: quotaExceededResponse(reserved, now, corsHeaders) };
+      return { ok: true, reserved };
+    };
+
+    // ======================================================================
+    // POST /v1/transcriptions — la voix devient texte
+    //
+    // ⚠️ L'AUDIO TRAVERSE LE SOCLE, EN MÉMOIRE : il entre dans la requête,
+    // part chez le fournisseur, et seul le texte revient. Ni l'un ni l'autre
+    // ne touche un journal ou une écriture (tests `passthrough.test.ts`).
+    // ======================================================================
+    if (segments[1] === "transcriptions" && segments.length === 2) {
+      if (req.method !== "POST") {
+        return errorResponse("method_not_allowed", "Seule la méthode POST est autorisée ici.", corsHeaders);
+      }
+      const providerKey = Deno.env.get("MISTRAL_API_KEY");
+      if (!providerKey) {
+        return errorResponse("not_configured", "La transcription n'est pas configurée sur cette plateforme.", corsHeaders);
+      }
+
+      // Refuser AVANT de lire le corps : un fichier démesuré ne doit pas
+      // même entrer en mémoire. La marge couvre l'enveloppe multipart.
+      const declared = Number(req.headers.get("content-length") ?? "0");
+      if (Number.isFinite(declared) && declared > MAX_AUDIO_BYTES + 64 * 1024) {
+        return errorResponse(
+          "payload_too_large",
+          `Fichier audio trop volumineux (maximum ${MAX_AUDIO_BYTES} octets) — découpez l'enregistrement.`,
+          corsHeaders,
+        );
+      }
+      const form = await req.formData().catch(() => null);
+      if (!form) {
+        return errorResponse("bad_request", "Corps multipart/form-data attendu (champ « file »).", corsHeaders);
+      }
+      const parsed = await parseTranscriptionForm(form.entries());
+      if (!parsed.ok) return errorResponse(parsed.code, parsed.message, corsHeaders);
+      const request = parsed.value;
+
+      const estimate = tokensForAudioSeconds(request.reserveSeconds);
+      const gate = await reserveAudio("transcription", estimate, request);
+      if (!gate.ok) return gate.response;
+      const { reserved } = gate;
+
+      const result = await callProviderTranscription({
+        apiKey: providerKey,
+        audio: request.audio,
+        mimeType: request.mimeType,
+        filename: request.filename,
+        language: request.language,
+      });
+      if (!result.ok) {
+        console.error(
+          `${FUNCTION_NAME}: fournisseur de transcription en échec — event=${reserved.event_id} org=${orgId} ` +
+            `consumer=${consumer} kind=${result.kind} status=${result.status ?? "-"} ${result.detail}`,
+        );
+        await admin.rpc("settle_ai_usage", {
+          p_event_id: reserved.event_id, p_actual_tokens: null, p_status: "failed",
+        });
+        return errorResponse(
+          "ai_unavailable",
+          "La transcription est momentanément indisponible — réessayez dans un instant.",
+          corsHeaders,
+        );
+      }
+
+      // La durée MESURÉE par le fournisseur fait foi ; à défaut, ce qu'on a réservé.
+      const actualTokens = tokensForAudioSeconds(result.audioSeconds ?? request.reserveSeconds);
+      const { error: settleError } = await admin.rpc("settle_ai_usage", {
+        p_event_id: reserved.event_id,
+        p_actual_tokens: actualTokens,
+        p_status: "completed",
+      });
+      if (settleError) {
+        console.error(
+          `${FUNCTION_NAME}: settle_ai_usage (transcription) en échec — event=${reserved.event_id}`,
+          settleError.message,
+        );
+      }
+
+      const limit = reserved.limit_tokens ?? null;
+      return jsonResponse(200, {
+        text: result.text,
+        language: result.language ?? request.language,
+        provider: PROVIDER_NAME,
+        event_id: reserved.event_id,
+        usage: {
+          audio_seconds: result.audioSeconds,
+          total_tokens: actualTokens,
+          // Toujours vrai : le fournisseur facture des secondes, la conversion
+          // en jetons est celle du Socle.
+          estimated: true,
+        },
+        quota: {
+          unlimited: limit === null,
+          limit,
+          used_tokens: limit === null ? null : (reserved.used_tokens ?? 0) + actualTokens,
+          period: reserved.usage_period,
+          renews_at: reserved.renews_at,
+        },
+      }, corsHeaders);
+    }
+
+    // ======================================================================
+    // POST /v1/speech — le texte devient voix
+    //
+    // La réponse est l'AUDIO lui-même (pas un JSON) : c'est ce qu'un
+    // consommateur relaie à un navigateur. Le décompte voyage en en-têtes.
+    // ======================================================================
+    if (segments[1] === "speech" && segments.length === 2) {
+      if (req.method !== "POST") {
+        return errorResponse("method_not_allowed", "Seule la méthode POST est autorisée ici.", corsHeaders);
+      }
+      const providerKey = Deno.env.get("MISTRAL_API_KEY");
+      if (!providerKey) {
+        return errorResponse("not_configured", "La synthèse vocale n'est pas configurée sur cette plateforme.", corsHeaders);
+      }
+
+      const raw = await req.json().catch(() => null);
+      const parsed = parseSpeechPayload(raw);
+      if (!parsed.ok) return errorResponse(parsed.code, parsed.message, corsHeaders);
+      const request = parsed.value;
+      const voiceId = voiceIdFor(request.language, (name) => Deno.env.get(name));
+      if (!voiceId) {
+        return errorResponse("bad_request", "Aucune voix pour cette langue.", corsHeaders);
+      }
+
+      // Le fournisseur facture au caractère et le texte est connu : la
+      // réservation est exacte, le règlement la confirme.
+      const tokens = tokensForSpeech(request.text);
+      const gate = await reserveAudio("speech", tokens, request);
+      if (!gate.ok) return gate.response;
+      const { reserved } = gate;
+
+      const result = await callProviderSpeech({
+        apiKey: providerKey,
+        text: request.text,
+        voiceId,
+        format: request.format,
+      });
+      if (!result.ok) {
+        console.error(
+          `${FUNCTION_NAME}: fournisseur de synthèse en échec — event=${reserved.event_id} org=${orgId} ` +
+            `consumer=${consumer} kind=${result.kind} status=${result.status ?? "-"} ${result.detail}`,
+        );
+        await admin.rpc("settle_ai_usage", {
+          p_event_id: reserved.event_id, p_actual_tokens: null, p_status: "failed",
+        });
+        return errorResponse(
+          "ai_unavailable",
+          "La synthèse vocale est momentanément indisponible — réessayez dans un instant.",
+          corsHeaders,
+        );
+      }
+
+      const { error: settleError } = await admin.rpc("settle_ai_usage", {
+        p_event_id: reserved.event_id,
+        p_actual_tokens: tokens,
+        p_status: "completed",
+      });
+      if (settleError) {
+        console.error(
+          `${FUNCTION_NAME}: settle_ai_usage (synthèse) en échec — event=${reserved.event_id}`,
+          settleError.message,
+        );
+      }
+
+      return new Response(result.audio, {
+        status: 200,
+        headers: {
+          ...corsHeaders,
+          "Content-Type": speechContentType(request.format),
+          "Cache-Control": "no-store",
+          "X-AI-Event-Id": reserved.event_id ?? "",
+          "X-AI-Tokens": String(tokens),
+        },
+      });
     }
 
     return errorResponse("not_found", "Endpoint inconnu.", corsHeaders);

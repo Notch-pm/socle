@@ -169,3 +169,53 @@ describe("les deux routes payantes passent par la même porte", () => {
     expect(index.match(/quotaExceededResponse\(/g)?.length).toBeGreaterThanOrEqual(3);
   });
 });
+
+describe("la voix ne laisse aucune trace", () => {
+  // ⚠️ L'AUDIO TRAVERSE LE SOCLE — c'est la seule route où l'octet de
+  // l'usager entre dans la fonction. La garantie ne tient donc plus à une URL
+  // signée : elle tient à ce qu'aucun chemin d'écriture ne voie ni l'audio, ni
+  // le texte transcrit, ni le texte prononcé.
+  const audio = read("./audio.ts");
+
+  it("aucun journal ne mentionne l'audio, le texte transcrit ou le texte prononcé", () => {
+    const calls = index.match(/console\.[a-z]+\([\s\S]*?\);/g) ?? [];
+    for (const call of calls) {
+      for (const forbidden of ["request.audio", "request.text", "result.text", "result.audio", "form", "raw"]) {
+        expect(call).not.toContain(forbidden);
+      }
+    }
+  });
+
+  it("rien n'est écrit dans un stockage, et la réponse audio n'est pas mise en cache", () => {
+    expect(index).not.toMatch(/\.storage\b/);
+    expect(index).toContain(`"Cache-Control": "no-store"`);
+  });
+
+  it("le module audio ne sait rien écrire", () => {
+    expect(audio).not.toContain("createClient");
+    expect(audio).not.toMatch(/console\./);
+    expect(audio).not.toMatch(/\bfetch\s*\(/);
+  });
+
+  it("le module d'appel audio est le même module isolé", () => {
+    expect(provider).toContain("/v1/audio/transcriptions");
+    expect(provider).toContain("/v1/audio/speech");
+    expect(provider).not.toContain("createClient");
+    expect(provider).not.toMatch(/console\./);
+  });
+
+  // Un CRÉDIT par collectivité, encore : la voix réserve et solde par les
+  // mêmes RPC, et sa nature est fixée par le Socle, jamais par l'appelant —
+  // c'est elle qui choisit le seau de cadence.
+  it("la voix passe par la même porte, avec une nature fixée par le Socle", () => {
+    expect(index).toMatch(/p_resource_type:\s*resourceType/);
+    expect(index).toContain(`reserveAudio("transcription"`);
+    expect(index).toContain(`reserveAudio("speech"`);
+    expect(index).not.toMatch(/p_resource_type:\s*(raw|request)\./);
+  });
+
+  it("l'erreur brute du fournisseur n'est pas relayée non plus ici", () => {
+    expect(index).toContain("La transcription est momentanément indisponible");
+    expect(index).toContain("La synthèse vocale est momentanément indisponible");
+  });
+});

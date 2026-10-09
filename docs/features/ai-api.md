@@ -23,8 +23,37 @@ dossier, et n'a pas à le savoir — il ne compose aucun prompt.
   vient de la CLÉ, jamais du corps — sans quoi une application ferait porter sa dépense à une
   autre. Le périmètre suit `contacts-api` (`X-Organization-Id` + `resolveRootOrgId`) : le budget
   étant celui d'une **collectivité**, l'appel d'une sous-organisation débite sa racine.
-- **Routes** : `POST /v1/completions` (l'appel), `GET /v1/usage?period=AAAA-MM` (plafond,
-  consommation, ventilation par application), `/` et `/openapi.json` publiques.
+- **Routes** : `POST /v1/completions` (l'appel), `POST /v1/ocr` (lecture d'un document scanné),
+  `POST /v1/transcriptions` et `POST /v1/speech` (la voix, contrat **1.4.0**),
+  `GET /v1/usage?period=AAAA-MM` (plafond, consommation, ventilation par application), `/` et
+  `/openapi.json` publiques.
+- **La voix** (2026-10-09, mode dialogue de l'assistant du portail — plan et essai du « lot 0 »
+  hors dépôt) : `POST /v1/transcriptions` (multipart : `file`, `duration_ms`, `language`
+  facultatif ; modèle `voxtral-mini-latest`, ⚠️ **jamais un `*-realtime-*`**, qui refuse l'envoi
+  d'un fichier) rend le texte ; `POST /v1/speech` (JSON : `text` ≤ 2 000 caractères, `language`)
+  rend **l'audio lui-même** (`audio/mpeg` par défaut), le décompte en en-têtes `X-AI-Event-Id` /
+  `X-AI-Tokens`. Code : `_shared/audio.ts` (pur, testé), `provider.ts`
+  (`callProviderTranscription`, `callProviderSpeech`).
+  ⚠️ **Même porte, même crédit** : secondes et caractères sont convertis en jetons **au coût**
+  dans `audio.ts` et nulle part ailleurs (motif `ocr.ts`) — 0,003 $/min et 0,016 $/1 000 car.
+  rapportés à 1 $ le million de jetons, soit **50 jetons par seconde transcrite et 16 par
+  caractère prononcé**. La transcription réserve sur la plus longue de l'annonce et de ce que le
+  fichier prouve (en-tête WAV, sinon un plancher de 4 000 octets/s), et solde sur la durée
+  mesurée par le fournisseur ; la synthèse réserve exactement (le texte est connu). ⚠️ **La
+  synthèse coûte plus que la conversation qu'elle lit** (≈ 5 600 jetons pour 350 caractères,
+  contre ≈ 3 250 pour l'appel au modèle) : à dire avant d'ouvrir la voix à une collectivité.
+  ⚠️ **L'appelant donne une langue, le Socle choisit la voix** — un préréglage, jamais une voix
+  clonée (`voice`, `voice_id`, `ref_audio` refusés). Le fournisseur n'a de préréglages qu'en
+  **français** (`fr_marie_curious`, choix PO) et en **anglais** (`en_paul_neutral`) ; une voix
+  française lit l'arabe, le russe ou le chinois en charabia — ces langues ne se prononcent pas.
+  Un secret `MISTRAL_VOICE_FR` / `_EN` remplace le préréglage. La transcription accepte 13
+  langues (pas le turc ni l'ukrainien) ; une langue hors liste est refusée **avant** la
+  réservation.
+  ⚠️ **L'audio traverse le Socle, en mémoire** — l'exception à la règle de l'OCR : il n'existe
+  pas d'URL signée qui ne suppose d'avoir d'abord écrit la voix ailleurs. Ni l'audio, ni le texte
+  transcrit, ni le texte prononcé ne touchent un journal ou un stockage (tests
+  `passthrough.test.ts`, section « la voix ne laisse aucune trace »). Bornes d'un appel : 300 s
+  et 10 Mo par enregistrement (`payload_too_large`).
 - ⚠️ **Ce que l'appelant NE décide PAS** (400, message français) : `model` et `agent_id` — le
   Socle reste l'**autorité sur le coût**, l'appelant passe un **alias** `agent` résolu en secret ;
   `consumer` et `organization_id` (dérivés de la clé) ; `tools`/`tool_choice` (chaque outil est
@@ -104,8 +133,9 @@ dossier, et n'a pas à le savoir — il ne compose aucun prompt.
   rate-limit : il dit *combien*, jamais *à quelle vitesse*, et une boucle brûlerait le mois en
   quelques minutes. `reserve_ai_usage` a donc **deux portes** : la cadence **puis** le plafond.
   Les seuils dépendent de la NATURE de l'appel — conversationnel 20/minute par agent (120 sans
-  agent), lot d'OCR 60 (360) : un humain qui lit 150 mots entre deux questions n'a pas le
-  rythme d'une machine qui enchaîne des documents. Les deux natures ont des compteurs
+  agent), lot d'OCR 60 (360), **audio 40 (240)** depuis le 2026-10-09 : un humain qui lit 150
+  mots entre deux questions n'a pas le rythme d'une machine qui enchaîne des documents, et un
+  tour de dialogue vocal fait trois appels (transcription, réponse, synthèse). Les deux natures ont des compteurs
   **SÉPARÉS** (`bucket` dans la clé) : sans quoi un lot de courrier mangerait le budget de
   questions du même agent. La nature vient de `p_resource_type`, **dérivé côté serveur** —
   un appelant ne peut pas se déclarer « lot ». Type inconnu ⇒ seuil conversationnel, le plus

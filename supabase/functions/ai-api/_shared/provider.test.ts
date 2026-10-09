@@ -1,5 +1,11 @@
 import { describe, expect, it, vi } from "vitest";
-import { callProvider, callProviderOcr, sanitizeDetail } from "./provider.ts";
+import {
+  callProvider,
+  callProviderOcr,
+  callProviderSpeech,
+  callProviderTranscription,
+  sanitizeDetail,
+} from "./provider.ts";
 
 const input = {
   apiKey: "sk-test",
@@ -270,5 +276,131 @@ describe("callProviderOcr", () => {
     const r = await callProviderOcr(ocrInput, fetchImpl);
     expect(r.ok).toBe(false);
     if (!r.ok) expect(r.kind).toBe("network");
+  });
+});
+
+describe("callProviderTranscription", () => {
+  const audio = new Uint8Array([82, 73, 70, 70, 1, 2, 3, 4]);
+  const sttInput = { apiKey: "sk-test", audio, mimeType: "audio/wav", filename: "tour.wav", language: "fr" };
+
+  it("envoie le fichier au modèle de transcription par lots, et rend le texte et la durée", async () => {
+    let sent: FormData | null = null;
+    const fetchImpl = vi.fn(async (u: string, init: any) => {
+      expect(u).toBe("https://api.mistral.ai/v1/audio/transcriptions");
+      sent = init.body as FormData;
+      return jsonResponse(200, {
+        text: "  Il y a un dépôt sauvage devant le 12 rue Jean Jaurès.  ",
+        language: "fr",
+        usage: { prompt_audio_seconds: 5 },
+      });
+    }) as unknown as typeof fetch;
+
+    const r = await callProviderTranscription(sttInput, fetchImpl);
+    expect(r.ok).toBe(true);
+    if (r.ok) {
+      expect(r.text).toBe("Il y a un dépôt sauvage devant le 12 rue Jean Jaurès.");
+      expect(r.language).toBe("fr");
+      expect(r.audioSeconds).toBe(5);
+    }
+    // ⚠️ Jamais un modèle « realtime » : il refuse l'envoi d'un fichier (lot 0).
+    expect(sent!.get("model")).toBe("voxtral-mini-latest");
+    expect(sent!.get("language")).toBe("fr");
+    const file = sent!.get("file") as Blob;
+    expect(file.size).toBe(audio.length);
+  });
+
+  it("laisse la détection de langue au fournisseur quand aucune n'est donnée", async () => {
+    let sent: FormData | null = null;
+    const fetchImpl = vi.fn(async (_u: string, init: any) => {
+      sent = init.body;
+      return jsonResponse(200, { text: "Hello" });
+    }) as unknown as typeof fetch;
+    const r = await callProviderTranscription({ ...sttInput, language: null }, fetchImpl);
+    expect(sent!.has("language")).toBe(false);
+    if (r.ok) expect(r.audioSeconds).toBe(null);
+  });
+
+  // Un silence transcrit en « » n'est pas une panne (motif de la page blanche).
+  it("un enregistrement sans parole n'est pas une erreur", async () => {
+    const fetchImpl = vi.fn(async () => jsonResponse(200, { text: "" })) as unknown as typeof fetch;
+    const r = await callProviderTranscription(sttInput, fetchImpl);
+    expect(r.ok).toBe(true);
+    if (r.ok) expect(r.text).toBe("");
+  });
+
+  it("une réponse sans texte, une erreur HTTP ou l'absence de réponse sont des échecs", async () => {
+    const empty = await callProviderTranscription(
+      sttInput, vi.fn(async () => jsonResponse(200, {})) as unknown as typeof fetch,
+    );
+    expect(empty.ok).toBe(false);
+    const http = await callProviderTranscription(
+      sttInput, vi.fn(async () => new Response("invalid model", { status: 400 })) as unknown as typeof fetch,
+    );
+    expect(http.ok).toBe(false);
+    if (!http.ok) expect(http.status).toBe(400);
+    const network = await callProviderTranscription(
+      sttInput, vi.fn(async () => { throw new Error("timeout"); }) as unknown as typeof fetch,
+    );
+    expect(network.ok).toBe(false);
+    if (!network.ok) expect(network.kind).toBe("network");
+  });
+});
+
+describe("callProviderSpeech", () => {
+  const ttsInput = {
+    apiKey: "sk-test",
+    text: "Pour signaler un dépôt sauvage, j'ai besoin de l'adresse exacte.",
+    voiceId: "e0580ce5-e63c-4cbe-88c8-a983b80c5f1f",
+    format: "mp3" as const,
+  };
+
+  it("demande la voix choisie par le Socle et décode l'audio rendu en base64", async () => {
+    let body: any = null;
+    const fetchImpl = vi.fn(async (u: string, init: any) => {
+      expect(u).toBe("https://api.mistral.ai/v1/audio/speech");
+      body = JSON.parse(init.body);
+      return new Response(JSON.stringify({ audio_data: btoa("ID3abc") }), {
+        status: 200, headers: { "content-type": "application/json" },
+      });
+    }) as unknown as typeof fetch;
+
+    const r = await callProviderSpeech(ttsInput, fetchImpl);
+    expect(r.ok).toBe(true);
+    if (r.ok) expect(new TextDecoder().decode(r.audio)).toBe("ID3abc");
+    expect(body).toEqual({
+      model: "voxtral-mini-tts-2603",
+      input: ttsInput.text,
+      voice_id: ttsInput.voiceId,
+      response_format: "mp3",
+    });
+  });
+
+  it("accepte aussi un audio rendu brut", async () => {
+    const fetchImpl = vi.fn(async () =>
+      new Response(new Uint8Array([1, 2, 3]), { status: 200, headers: { "content-type": "audio/mpeg" } })
+    ) as unknown as typeof fetch;
+    const r = await callProviderSpeech(ttsInput, fetchImpl);
+    expect(r.ok).toBe(true);
+    if (r.ok) expect([...r.audio]).toEqual([1, 2, 3]);
+  });
+
+  it("une réponse sans audio est une erreur", async () => {
+    const fetchImpl = vi.fn(async () =>
+      new Response(JSON.stringify({}), { status: 200, headers: { "content-type": "application/json" } })
+    ) as unknown as typeof fetch;
+    const r = await callProviderSpeech(ttsInput, fetchImpl);
+    expect(r.ok).toBe(false);
+    if (!r.ok) expect(r.kind).toBe("empty");
+  });
+
+  // Le texte prononcé est celui d'un usager ou d'une réponse qui lui est
+  // destinée : renvoyé en écho, il ne doit pas atterrir dans un journal.
+  it("écarte un message d'erreur qui contient le texte à prononcer", async () => {
+    const fetchImpl = vi.fn(async () =>
+      new Response(`restricted content: ${ttsInput.text}`, { status: 403 })
+    ) as unknown as typeof fetch;
+    const r = await callProviderSpeech(ttsInput, fetchImpl);
+    expect(r.ok).toBe(false);
+    if (!r.ok) expect(r.detail).toBe("[réponse du fournisseur écartée : elle contenait la requête]");
   });
 });

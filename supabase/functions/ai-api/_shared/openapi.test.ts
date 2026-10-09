@@ -8,7 +8,7 @@ describe("buildOpenApiDocument", () => {
   it("est un document OpenAPI 3.1 avec le serveur injecté", () => {
     expect(doc.openapi).toBe("3.1.0");
     expect(doc.servers[0].url).toBe("https://ex.supabase.co/functions/v1/ai-api");
-    expect(doc.info.version).toBe("1.3.0");
+    expect(doc.info.version).toBe("1.4.0");
   });
 
   it("déclare la sécurité par clé API bearer", () => {
@@ -18,8 +18,12 @@ describe("buildOpenApiDocument", () => {
     expect(doc.security).toEqual([{ bearerApiKey: [] }]);
   });
 
-  it("expose les trois endpoints, avec la bonne méthode", () => {
-    expect(Object.keys(doc.paths).sort()).toEqual(["/v1/completions", "/v1/ocr", "/v1/usage"]);
+  it("expose les cinq endpoints, avec la bonne méthode", () => {
+    expect(Object.keys(doc.paths).sort()).toEqual([
+      "/v1/completions", "/v1/ocr", "/v1/speech", "/v1/transcriptions", "/v1/usage",
+    ]);
+    expect(Object.keys(doc.paths["/v1/transcriptions"])).toEqual(["post"]);
+    expect(Object.keys(doc.paths["/v1/speech"])).toEqual(["post"]);
     expect(Object.keys(doc.paths["/v1/completions"])).toEqual(["post"]);
     expect(Object.keys(doc.paths["/v1/ocr"])).toEqual(["post"]);
     expect(Object.keys(doc.paths["/v1/usage"])).toEqual(["get"]);
@@ -28,8 +32,8 @@ describe("buildOpenApiDocument", () => {
   // ⚠️ Les DEUX routes payantes doivent annoncer les mêmes refus. Une seule qui
   // documenterait 429 laisserait croire à un consommateur que l'autre ne peut
   // pas manquer de crédit — et il n'écrirait pas le seul cas qu'il doit traiter.
-  it("les deux routes payantes documentent les mêmes refus", () => {
-    for (const route of ["/v1/completions", "/v1/ocr"] as const) {
+  it("les routes payantes documentent les mêmes refus", () => {
+    for (const route of ["/v1/completions", "/v1/ocr", "/v1/transcriptions", "/v1/speech"] as const) {
       const codes = Object.keys(doc.paths[route].post.responses).sort();
       expect(codes).toEqual(["200", "400", "401", "403", "404", "429", "500", "502", "503"]);
     }
@@ -45,6 +49,23 @@ describe("buildOpenApiDocument", () => {
     const description = doc.paths["/v1/ocr"].post.description;
     expect(description).toContain("URL signée");
     expect(description).toContain("ne transite pas par le Socle");
+  });
+
+  // ⚠️ L'audio, lui, TRAVERSE le Socle : le contrat doit le dire aussi
+  // franchement qu'il dit le contraire pour l'OCR — et dire ce qui n'en reste pas.
+  it("dit que l'audio transite en mémoire et n'est pas conservé", () => {
+    const description = doc.paths["/v1/transcriptions"].post.description;
+    expect(description).toContain("transite par le Socle, en mémoire seulement");
+    expect(description).toContain("ni conservé");
+  });
+
+  // La voix est une décision du Socle : un consommateur qui tenterait de la
+  // choisir doit l'apprendre en lisant, pas en recevant un 400.
+  it("dit que la langue choisit la voix, et lesquelles existent", () => {
+    const language = doc.components.schemas.SpeechRequest.properties.language;
+    expect(language.enum).toEqual(["fr", "en"]);
+    expect(language.description).toContain("refusés");
+    expect(Object.keys(doc.paths["/v1/speech"].post.responses["200"].content)).toContain("audio/mpeg");
   });
 
   // ⚠️ Piège réel du mode JSON : sans le mot dans le prompt, le fournisseur

@@ -105,6 +105,12 @@ fichiers casse la fonction en production alors que les tests passent en local.
   fonctionnalité dérape. ⚠️ Elle porte le scope `ai` **et lui seul** : une clé qui porterait aussi
   `read` ou `contacts` donnerait à une fonction de traduction un accès au référentiel et aux
   usagers, que rien dans son travail ne justifie.
+- **`MISTRAL_VOICE_FR`, `MISTRAL_VOICE_EN`** (optionnels, 2026-10-09) : identifiant d'une voix
+  Mistral qui remplace le préréglage de la langue pour `POST /v1/speech` (par défaut
+  `fr_marie_curious` et `en_paul_neutral`, inscrits dans `ai-api/_shared/audio.ts`). Absents, le
+  préréglage s'applique — ne les poser que pour changer de voix sans redéployer. ⚠️ Jamais une
+  voix **clonée** à partir d'un enregistrement dont on n'a pas les droits. Les voix disponibles se
+  listent par `GET https://api.mistral.ai/v1/audio/voices?limit=100` (paginé).
 - **`MISTRAL_AGENT_<ALIAS>`** (optionnel) : identifiant d'un agent Mistral créé en console, pour
   l'alias correspondant (`assistant-instruction` → `MISTRAL_AGENT_ASSISTANT_INSTRUCTION`).
   Absent, `ai-api` retombe sur `chat/completions` avec un modèle par défaut — le service

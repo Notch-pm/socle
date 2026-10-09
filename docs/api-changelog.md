@@ -1,7 +1,7 @@
 # Journal des évolutions des API publiques
 
 > **Public** : équipes consommatrices (Ariane, Clara, Iris, partenaires) · **Question traitée** :
-> quand un contrat d'API a-t-il changé, et comment ? · **Dernière mise à jour** : 2026-10-02
+> quand un contrat d'API a-t-il changé, et comment ? · **Dernière mise à jour** : 2026-10-09
 
 Journal **append-only** : chaque évolution de la surface de contrat des API publiques
 (`public-api`, `contacts-api`, `ai-api`, `audience-api`) — endpoint, paramètre, champ de réponse,
@@ -10,6 +10,31 @@ réécrite ; une correction s'ajoute sous une nouvelle date. Politique de compat
 consommateur : [integration.md](./integration.md#politique-de-compatibilité-v1).
 
 Format d'une entrée : `## AAAA-MM-JJ — <api> — ajout|correctif|rupture`
+
+---
+
+## 2026-10-09 — ai-api — ajout (la voix)
+
+Version du contrat **1.4.0** de `ai-api`, ajout **additif** — aucune route existante ne change.
+
+- **`POST /v1/transcriptions`** (scope `ai`) — la voix devient texte. `multipart/form-data` :
+  `file` (WAV, MP3, FLAC, Ogg/Opus ou M4A ; conseillé : WAV PCM 16 bits, 16 kHz, mono),
+  `duration_ms` (indication pour réserver), `language` facultatif (`ar`, `de`, `en`, `es`, `fr`,
+  `hi`, `it`, `ja`, `ko`, `nl`, `pt`, `ru`, `zh` ; absent ⇒ détection), `feature`, `actor_id`,
+  `reference_kind`, `reference_id`. Réponse : `text`, `language`, `usage` (`audio_seconds`,
+  `total_tokens`, `estimated: true`), `quota`. Au-delà de 300 s ou 10 Mo : `400
+  payload_too_large`.
+- **`POST /v1/speech`** (scope `ai`) — le texte devient voix. JSON : `text` (≤ 2 000
+  caractères), `language` (`fr` ou `en` — **le Socle choisit la voix** ; `voice`, `voice_id`,
+  `ref_audio` refusés), `format` (`mp3` par défaut, `opus`, `wav`), `feature`, `actor_id`,
+  `reference`. Réponse : **l'audio lui-même**, décompte en en-têtes `X-AI-Event-Id`,
+  `X-AI-Tokens`.
+- Les deux routes passent par **le même plafond, la même part et le même journal** que les
+  complétions, convertis en jetons au coût (50 par seconde transcrite, 16 par caractère
+  prononcé). Nouveau seuil de cadence **audio** : 40/minute par `actor_id` (240 sans), compteur
+  séparé de celui des questions. Refus inchangés (`429 ai_quota_exceeded` / `ai_rate_limited`).
+- ⚠️ L'audio transite par le Socle **en mémoire** ; il n'est ni conservé, ni journalisé, pas plus
+  que le texte transcrit ou prononcé.
 
 ---
 

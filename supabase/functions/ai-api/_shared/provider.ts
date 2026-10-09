@@ -313,3 +313,166 @@ export async function callProviderOcr(
     pagesProcessed: usage ? numberOrNull(usage.pages_processed) : null,
   };
 }
+
+// ===========================================================================
+// AUDIO — transcription et synthèse
+// ===========================================================================
+
+/**
+ * ⚠️ LA VOIX DE L'USAGER TRAVERSE CE MODULE, EN MÉMOIRE. Il n'existe pas, pour
+ * l'audio, d'équivalent de l'URL signée de l'OCR qui ne suppose pas d'avoir
+ * d'abord ÉCRIT l'enregistrement quelque part : les octets entrent, partent
+ * chez le fournisseur, et seul le texte revient. Même isolement que le reste
+ * du module — ni client de base, ni logger.
+ *
+ * ⚠️ Jamais un modèle `*-realtime-*` : il refuse l'envoi d'un fichier (lot 0).
+ */
+const TRANSCRIPTION_URL = "https://api.mistral.ai/v1/audio/transcriptions";
+const SPEECH_URL = "https://api.mistral.ai/v1/audio/speech";
+const TRANSCRIPTION_MODEL = "voxtral-mini-latest";
+const SPEECH_MODEL = "voxtral-mini-tts-2603";
+
+export interface TranscriptionInput {
+  apiKey: string;
+  audio: Uint8Array<ArrayBuffer>;
+  mimeType: string;
+  filename: string;
+  /** Code de langue, ou `null` pour la détection automatique. */
+  language: string | null;
+}
+
+export type TranscriptionResult =
+  | {
+    ok: true;
+    text: string;
+    /** Langue détectée ou imposée, quand le fournisseur la rend. */
+    language: string | null;
+    /** Secondes d'audio facturées par le fournisseur, quand il le dit. */
+    audioSeconds: number | null;
+  }
+  | { ok: false; kind: "network" | "http" | "empty"; status: number | null; detail: string };
+
+async function failure(res: Response, echoSources: string[]) {
+  let body = "";
+  try {
+    body = await res.text();
+  } catch (_) {
+    body = "";
+  }
+  return { ok: false as const, kind: "http" as const, status: res.status, detail: sanitizeDetail(body, echoSources) };
+}
+
+export async function callProviderTranscription(
+  input: TranscriptionInput,
+  fetchImpl: typeof fetch = fetch,
+): Promise<TranscriptionResult> {
+  const form = new FormData();
+  form.append("model", TRANSCRIPTION_MODEL);
+  form.append("file", new Blob([input.audio], { type: input.mimeType }), input.filename);
+  if (input.language) form.append("language", input.language);
+
+  let res: Response | null = null;
+  try {
+    res = await fetchImpl(TRANSCRIPTION_URL, {
+      method: "POST",
+      headers: { Authorization: `Bearer ${input.apiKey}` },
+      body: form,
+      signal: AbortSignal.timeout(TIMEOUT_MS),
+    });
+  } catch (_) {
+    return { ok: false, kind: "network", status: null, detail: "aucune réponse du fournisseur" };
+  }
+  if (!res.ok) return failure(res, []);
+
+  let data: unknown = null;
+  try {
+    data = await res.json();
+  } catch (_) {
+    return { ok: false, kind: "empty", status: res.status, detail: "réponse illisible" };
+  }
+  const text = isRecord(data) ? (data as { text?: unknown }).text : null;
+  // Un silence transcrit en « » n'est pas une panne : l'appelant a le droit de
+  // l'apprendre (motif de la page blanche de l'OCR).
+  if (typeof text !== "string") {
+    return { ok: false, kind: "empty", status: res.status, detail: "réponse sans texte" };
+  }
+  const usage = isRecord(data) && isRecord((data as { usage?: unknown }).usage)
+    ? (data as { usage: Record<string, unknown> }).usage
+    : null;
+  const language = isRecord(data) ? (data as { language?: unknown }).language : null;
+
+  return {
+    ok: true,
+    text: text.trim(),
+    language: typeof language === "string" && language !== "" ? language : null,
+    audioSeconds: usage ? numberOrNull(usage.prompt_audio_seconds) : null,
+  };
+}
+
+export interface SpeechInput {
+  apiKey: string;
+  text: string;
+  /** Identifiant de voix préréglée — résolu par le Socle, jamais par l'appelant. */
+  voiceId: string;
+  format: "mp3" | "opus" | "wav";
+}
+
+export type SpeechResult =
+  | { ok: true; audio: Uint8Array<ArrayBuffer> }
+  | { ok: false; kind: "network" | "http" | "empty"; status: number | null; detail: string };
+
+function base64ToBytes(value: string): Uint8Array<ArrayBuffer> {
+  const binary = atob(value);
+  const bytes = new Uint8Array(binary.length);
+  for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
+  return bytes;
+}
+
+/**
+ * La synthèse d'un texte. Le fournisseur rend l'audio encodé en base64 dans un
+ * JSON (`audio_data`) ; un octet brut est aussi accepté, au cas où il en
+ * changerait. Pas de `stream` : le flux du fournisseur sert le PCM, et un
+ * relais en flux reste une optimisation à venir (latence), pas un besoin.
+ */
+export async function callProviderSpeech(
+  input: SpeechInput,
+  fetchImpl: typeof fetch = fetch,
+): Promise<SpeechResult> {
+  let res: Response | null = null;
+  try {
+    res = await fetchImpl(SPEECH_URL, {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${input.apiKey}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        model: SPEECH_MODEL,
+        input: input.text,
+        voice_id: input.voiceId,
+        response_format: input.format,
+      }),
+      signal: AbortSignal.timeout(TIMEOUT_MS),
+    });
+  } catch (_) {
+    return { ok: false, kind: "network", status: null, detail: "aucune réponse du fournisseur" };
+  }
+  if (!res.ok) return failure(res, [input.text]);
+
+  const type = res.headers.get("content-type") ?? "";
+  try {
+    if (type.includes("json")) {
+      const data = await res.json();
+      const encoded = isRecord(data) ? (data as { audio_data?: unknown }).audio_data : null;
+      if (typeof encoded !== "string" || encoded === "") {
+        return { ok: false, kind: "empty", status: res.status, detail: "réponse sans audio" };
+      }
+      return { ok: true, audio: base64ToBytes(encoded) };
+    }
+    const audio = new Uint8Array(await res.arrayBuffer());
+    if (audio.length === 0) return { ok: false, kind: "empty", status: res.status, detail: "réponse sans audio" };
+    return { ok: true, audio };
+  } catch (_) {
+    return { ok: false, kind: "empty", status: res.status, detail: "réponse illisible" };
+  }
+}

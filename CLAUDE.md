@@ -367,6 +367,10 @@ superadmin (`OrgSettingsPage`, menu latéral par client).
   chiffres rendus (appel, `429`, `/v1/usage`) sont ceux de **l'appelant**. Cas limites acceptés
   et inoffensifs (pourcentage sans plafond = sans effet), jamais refusés à la pose. Toute
   retouche se joue d'abord **à blanc** avec `supabase/tests/plafond-ia.test.sql`.
+- **La voix** (2026-10-09) : `POST /v1/transcriptions` et `POST /v1/speech`, même porte, convertis
+  en jetons au coût dans `_shared/audio.ts` seul. ⚠️ L'appelant donne une **langue**, le Socle
+  choisit la voix (fr, en seulement ; jamais de clonage) ; l'audio transite **en mémoire**, rien
+  n'est conservé.
 
 ### [Assistant du portail usagers](docs/features/assistant-usager.md)
 - Assistant conversationnel de Nora. Le Socle n'en tient que **l'interrupteur**

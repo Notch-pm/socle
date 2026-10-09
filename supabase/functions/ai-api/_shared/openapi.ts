@@ -38,7 +38,7 @@ export function buildOpenApiDocument(serverUrl: string): Record<string, unknown>
     openapi: "3.1.0",
     info: {
       title: "API IA Socle — guichet du fournisseur LLM",
-      version: "1.3.0",
+      version: "1.4.0",
       description: [
         "Le Socle détient la clé du fournisseur LLM et **compte ce qu'elle dépense** pour",
         "toute la gamme. Les applications (Iris, Clara…) n'appellent plus le fournisseur :",
@@ -76,13 +76,25 @@ export function buildOpenApiDocument(serverUrl: string): Record<string, unknown>
         "|---|---|---|",
         "| Conversationnel (`/v1/completions`) | 20 / minute | 120 / minute |",
         "| Lot (`/v1/ocr`) | 60 / minute | 360 / minute |",
+        "| Audio (`/v1/transcriptions`, `/v1/speech`) | 40 / minute | 240 / minute |",
         "",
-        "Les deux natures ont des compteurs **SÉPARÉS** : un lot de documents ne consomme pas",
-        "le budget de questions du même agent. Le refus est",
+        "Les natures ont des compteurs **SÉPARÉS** : un lot de documents ne consomme pas",
+        "le budget de questions du même agent, et la voix d'un dialogue (une transcription et",
+        "une synthèse par tour) ne mange pas celui de ses réponses. Le refus est",
         "un `429` de code `ai_rate_limited`, avec un en-tête `Retry-After` : **le crédit est",
         "intact**, seul le rythme est en cause. Le compteur retient les **tentatives**, refus",
         "de plafond compris — sans quoi une boucle déjà refusée continuerait de marteler.",
         "Le seuil n'est pas réglable : c'est un garde-fou, pas un paramètre commercial.",
+        "",
+        "## La voix",
+        "`POST /v1/transcriptions` (la voix devient texte) et `POST /v1/speech` (le texte devient",
+        "voix) passent par **la même porte** : même cadence, même part, même plafond. Le",
+        "fournisseur les facture à la seconde et au caractère ; le Socle les **convertit en",
+        "jetons au coût** (≈ 50 jetons par seconde transcrite, ≈ 16 par caractère prononcé) —",
+        "une collectivité a un crédit, pas trois. ⚠️ **La synthèse coûte bien plus que la",
+        "conversation qu'elle lit** : 350 caractères prononcés ≈ 5 600 jetons, quand l'appel au",
+        "modèle qui les a écrits en coûte ≈ 3 000. **L'audio transite par le Socle en mémoire,",
+        "il n'est ni conservé ni journalisé**, pas plus que le texte transcrit.",
         "",
         "## Authentification",
         "Clé API en `Authorization: Bearer <clé>`, **usage serveur-à-serveur uniquement**",
@@ -181,6 +193,96 @@ export function buildOpenApiDocument(serverUrl: string): Record<string, unknown>
             "200": {
               description: "Texte extrait, avec la consommation et l'état du plafond.",
               content: { "application/json": { schema: { $ref: "#/components/schemas/OcrResponse" } } },
+            },
+            ...errorResponses("400", "401", "403", "404", "429", "500", "502", "503"),
+          },
+        },
+      },
+      "/v1/transcriptions": {
+        post: {
+          summary: "Transcrire un enregistrement",
+          description: [
+            "La voix devient texte. Réserve sur la durée **la plus longue** de l'annonce",
+            "(`duration_ms`) et de ce que le fichier prouve (en-tête WAV, sinon un plancher de",
+            "débit), puis **solde sur la durée mesurée par le fournisseur** : sous-déclarer ne",
+            "fait rien gagner. Un silence rend un texte vide — ce n'est pas une erreur.",
+            "",
+            "⚠️ **L'audio transite par le Socle, en mémoire seulement** : ni conservé, ni",
+            "journalisé, pas plus que le texte rendu. Il n'existe pas d'équivalent de l'URL",
+            "signée de l'OCR qui ne suppose pas d'avoir d'abord écrit l'enregistrement ailleurs.",
+            "",
+            "Format conseillé pour un navigateur : **WAV PCM 16 bits, 16 kHz, mono** (la durée",
+            "se lit alors exactement). Au-delà de 300 secondes ou de 10 Mo : **400",
+            "`payload_too_large`** — découpez.",
+          ].join("\n"),
+          requestBody: {
+            required: true,
+            content: {
+              "multipart/form-data": {
+                schema: { $ref: "#/components/schemas/TranscriptionRequest" },
+              },
+            },
+          },
+          responses: {
+            "200": {
+              description: "Texte transcrit, avec la consommation et l'état du plafond.",
+              content: {
+                "application/json": { schema: { $ref: "#/components/schemas/TranscriptionResponse" } },
+              },
+            },
+            ...errorResponses("400", "401", "403", "404", "429", "500", "502", "503"),
+          },
+        },
+      },
+      "/v1/speech": {
+        post: {
+          summary: "Prononcer un texte",
+          description: [
+            "Le texte devient voix. **La réponse est l'audio lui-même** (`audio/mpeg` par",
+            "défaut), prêt à être relayé ; le décompte voyage dans les en-têtes `X-AI-Event-Id`",
+            "et `X-AI-Tokens`. Le fournisseur facture au caractère et le texte est connu : la",
+            "réservation est exacte.",
+            "",
+            "**L'appelant donne une langue, le Socle choisit la voix** — une voix préréglée,",
+            "jamais une voix clonée. Seuls le **français** et l'**anglais** ont une voix : le",
+            "fournisseur lit les autres langues avec un accent étranger, ou pas du tout.",
+            "",
+            "Écrivez pour l'oreille : ni Markdown, ni liste, ni émoji ; les sigles épelés.",
+            "Au-delà de 2 000 caractères : **400 `payload_too_large`** — découpez.",
+          ].join("\n"),
+          requestBody: {
+            required: true,
+            content: {
+              "application/json": {
+                schema: { $ref: "#/components/schemas/SpeechRequest" },
+                example: {
+                  feature: "assistant-usager",
+                  text: "Pour signaler un dépôt sauvage, j'ai besoin de l'adresse exacte.",
+                  language: "fr",
+                  format: "mp3",
+                  actor_id: "9c21…",
+                },
+              },
+            },
+          },
+          responses: {
+            "200": {
+              description: "L'audio prononcé.",
+              headers: {
+                "X-AI-Event-Id": {
+                  description: "Identifiant de l'événement au journal du Socle.",
+                  schema: { type: "string", format: "uuid" },
+                },
+                "X-AI-Tokens": {
+                  description: "Jetons décomptés du plafond (conversion du Socle).",
+                  schema: { type: "integer" },
+                },
+              },
+              content: {
+                "audio/mpeg": { schema: { type: "string", format: "binary" } },
+                "audio/ogg": { schema: { type: "string", format: "binary" } },
+                "audio/wav": { schema: { type: "string", format: "binary" } },
+              },
             },
             ...errorResponses("400", "401", "403", "404", "429", "500", "502", "503"),
           },
@@ -379,6 +481,77 @@ export function buildOpenApiDocument(serverUrl: string): Record<string, unknown>
               },
             },
             quota: { $ref: "#/components/schemas/QuotaState" },
+          },
+        },
+        TranscriptionRequest: {
+          type: "object",
+          required: ["file", "duration_ms"],
+          additionalProperties: false,
+          properties: {
+            file: {
+              type: "string",
+              format: "binary",
+              description: "L'enregistrement : WAV, MP3, FLAC, Ogg/Opus ou M4A, 10 Mo au plus.",
+            },
+            duration_ms: {
+              type: "integer",
+              minimum: 1,
+              description: "Durée annoncée, en millisecondes. **Indication** servant à réserver, jamais à facturer.",
+            },
+            language: {
+              type: "string",
+              enum: ["ar", "de", "en", "es", "fr", "hi", "it", "ja", "ko", "nl", "pt", "ru", "zh"],
+              description: "Langue parlée. Absente ⇒ détection automatique. Hors liste ⇒ **400**, avant toute dépense.",
+            },
+            feature: {
+              type: "string",
+              description: "Libellé déclaratif, pour le détail du journal. N'influe pas sur l'imputation.",
+            },
+            actor_id: { type: "string", format: "uuid", description: "Identifiant opaque de l'acteur (agent, conversation)." },
+            reference_kind: { type: "string", description: "Nature de la référence OPAQUE de l'appelant." },
+            reference_id: { type: "string", format: "uuid", description: "Référence OPAQUE vers l'objet de l'appelant." },
+          },
+        },
+        TranscriptionResponse: {
+          type: "object",
+          properties: {
+            text: { type: "string", description: "Le texte transcrit. Vide si l'enregistrement ne porte aucune parole." },
+            language: { type: ["string", "null"], description: "Langue détectée ou imposée." },
+            provider: { type: "string", examples: ["mistral"] },
+            event_id: { type: "string", format: "uuid" },
+            usage: {
+              type: "object",
+              properties: {
+                audio_seconds: { type: ["number", "null"], description: "Secondes facturées par le fournisseur, quand il le dit." },
+                total_tokens: { type: "integer", description: "Jetons décomptés du plafond, dérivés de la durée." },
+                estimated: { type: "boolean", description: "Toujours vrai : la conversion en jetons est celle du Socle." },
+              },
+            },
+            quota: { $ref: "#/components/schemas/QuotaState" },
+          },
+        },
+        SpeechRequest: {
+          type: "object",
+          required: ["text", "language"],
+          additionalProperties: false,
+          properties: {
+            text: { type: "string", maxLength: 2000, description: "Le texte à prononcer, écrit pour l'oreille." },
+            language: {
+              type: "string",
+              enum: ["fr", "en"],
+              description: "Langue du texte. Le Socle en déduit la voix ; `voice`, `voice_id` et `ref_audio` sont **refusés**.",
+            },
+            format: { type: "string", enum: ["mp3", "opus", "wav"], default: "mp3" },
+            feature: {
+              type: ["string", "null"],
+              description: "Libellé déclaratif, pour le détail du journal. N'influe pas sur l'imputation.",
+            },
+            reference: {
+              type: ["object", "null"],
+              description: "Référence OPAQUE vers l'objet de l'appelant. Sans signification pour le Socle.",
+              properties: { kind: { type: "string" }, id: { type: "string", format: "uuid" } },
+            },
+            actor_id: { type: ["string", "null"], format: "uuid", description: "Identifiant opaque de l'acteur (agent, conversation)." },
           },
         },
         QuotaState: {

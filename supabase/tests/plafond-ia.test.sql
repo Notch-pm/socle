@@ -460,6 +460,47 @@ begin
   if r.allowed or r.reason is distinct from 'rate_limited' then
     v_fail := v_fail || format('R11e: un type inconnu a obtenu le seuil de lot (%s)', r.reason); end if;
 
+  -- R12 🆕. LA VOIX A SON SEAU (2026-10-09, mode dialogue)
+  --
+  -- Un tour de dialogue vocal fait trois appels : transcription, réponse,
+  -- synthèse. Dans le seau conversationnel, la voix mangerait le budget de
+  -- questions de la même conversation. Les deux natures audio partagent UN
+  -- seau, au seuil de 40 par acteur.
+  -- ==========================================================================
+  -- a_1 a épuisé son seau conversationnel (R11e) : sa voix doit passer.
+  select * into r from public.reserve_ai_usage(org_r, 'mistral', 'transcription', 10, 'clara', key_iris, null, null, null, a_1);
+  if not r.allowed then
+    v_fail := v_fail || format('R12a: une transcription est bloquee par le seau conversationnel (%s)', r.reason); end if;
+  select resource_type into v_text from public.ai_usage_events where id = r.event_id;
+  if v_text is distinct from 'transcription' then
+    v_fail := v_fail || format('R12b: nature journalisee %s, attendu transcription', v_text); end if;
+
+  -- La synthèse puise au MÊME seau, et le seuil est 40.
+  update public.ai_usage_rate set attempts = 39
+   where organization_id = org_r and subject_kind = 'actor' and subject = a_1::text
+     and bucket = 'audio' and window_start = v_win;
+  select * into r from public.reserve_ai_usage(org_r, 'mistral', 'speech', 10, 'clara', key_iris, null, null, null, a_1);
+  if not r.allowed then
+    v_fail := v_fail || format('R12c: la 40e tentative audio est refusee (%s)', r.reason); end if;
+  select * into r from public.reserve_ai_usage(org_r, 'mistral', 'transcription', 10, 'clara', key_iris, null, null, null, a_1);
+  if r.allowed or r.reason is distinct from 'rate_limited' then
+    v_fail := v_fail || format('R12d: la 41e tentative audio est passee (%s)', r.reason); end if;
+
+  -- Trois seaux pour le même agent : chat, batch, audio.
+  select count(*) into v_int from public.ai_usage_rate
+   where organization_id = org_r and subject_kind = 'actor' and subject = a_1::text
+     and window_start = v_win;
+  if v_int <> 3 then
+    v_fail := v_fail || format('R12e: %s seau(x) pour un agent, attendu 3 (chat, batch, audio)', v_int); end if;
+
+  -- Le journal refuse toujours une nature inventée : le CHECK n'a été qu'élargi.
+  begin
+    insert into public.ai_usage_events (organization_id, provider, consumer, resource_type, status, estimated_tokens, period)
+    values (org_r, 'mistral', 'clara', 'video', 'reserved', 1, to_char(now(), 'YYYY-MM'));
+    v_fail := v_fail || 'R12f: une nature inconnue est entree au journal'::text;
+  exception when check_violation then null;
+  end;
+
   -- ==========================================================================
   -- E1. Étanchéité : le super admin voit tout, un utilisateur ordinaire rien
   -- ==========================================================================

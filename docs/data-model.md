@@ -733,7 +733,8 @@ comptabilité ont été centralisées ici (2026-08-29).
   **bucket**, window_start)`, `attempts int` ; pas de colonne `id` — la recherche EST la clé et
   ces lignes sont éphémères, un uuid de substitution serait un second index à tenir sur le
   chemin chaud de chaque appel. Purgée par `purge_ai_usage_rate`, enchaînée au job cron.
-  ⚠️ **`bucket` est DANS LA CLÉ, pas à côté** (`'chat'` | `'batch'`) : différencier le seuil
+  ⚠️ **`bucket` est DANS LA CLÉ, pas à côté** (`'chat'` | `'batch'` | `'audio'`, ce dernier
+  depuis le 2026-10-09 pour `transcription` et `speech`) : différencier le seuil
   sans séparer le compteur laisserait un lot d'OCR manger le budget de QUESTIONS du même agent
   — après vingt documents lus, sa question suivante serait refusée alors qu'il n'en a posé
   aucune.
@@ -760,8 +761,11 @@ que `GET /v1/usage`. `settle_ai_usage` solde le sous-compteur **avant** son reto
 une collectivité sans plafond commun peut tout de même borner une application par une part en
 jetons. Les seuils sont **en dur** (un garde-fou n'est pas
 un paramètre commercial) et dépendent de la NATURE de l'appel — conversationnel 20/minute par
-agent (120 sans agent), lot d'OCR 60 (360 sans agent) : un humain qui lit 150 mots entre deux
-questions n'a pas le rythme d'une machine qui enchaîne des documents.
+agent (120 sans agent), lot d'OCR 60 (360 sans agent), audio 40 (240 sans agent) : un humain
+qui lit 150 mots entre deux questions n'a pas le rythme d'une machine qui enchaîne des documents.
+`resource_type` vaut `chat`, `agent`, `ocr`, et depuis le 2026-10-09 `transcription` et `speech`
+(migration `ai_usage_audio`) — des énumérés courts : le passe-plat tient, aucune colonne n'est
+ajoutée.
 ⚠️ La nature vient de `p_resource_type`, **dérivé côté serveur** par `ai-api` et jamais lu dans
 le corps de la requête : un appelant ne peut pas se déclarer « lot » pour obtenir la limite
 haute. Tout type inconnu retombe sur le seuil conversationnel, le plus strict. Chacune est
