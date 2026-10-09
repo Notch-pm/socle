@@ -137,16 +137,17 @@ export function OrganizationEditorPage() {
         {activeTab === "attributions" && <AttributionsSection organization={organization} />}
         {activeTab === "charte" && <BrandingSection organization={organization} />}
         {activeTab === "langues" && <LanguagesSection organization={organization} />}
-        {activeTab === "usagers" && (
-          <div className="flex flex-col gap-6">
-            <UserInfoSection organization={organization} />
-            <FreeMailSection organization={organization} />
-          </div>
-        )}
+        {activeTab === "usagers" && <UserInfoSection organization={organization} />}
         {activeTab === "agents" && <AgentGuidanceSection organization={organization} />}
         {activeTab === "domaines" && <DomainsSection organizationId={organization.id} />}
         {activeTab === "demarches" && (
-          <OrganizationProceduresTab organizationId={organization.id} />
+          <div className="flex flex-col gap-6">
+            {/* Ce qu'un usager peut adresser à l'organisme depuis le site : ses démarches,
+                et un courrier libre hors démarche — jamais pour un service interne,
+                que le portail n'affiche pas. */}
+            {hasUserInfoTab(organization) && <FreeMailSection organization={organization} />}
+            <OrganizationProceduresTab organizationId={organization.id} />
+          </div>
         )}
         {activeTab === "smtp" && (
           <SmtpSettingsSection

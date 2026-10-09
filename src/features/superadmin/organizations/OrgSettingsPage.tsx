@@ -169,13 +169,7 @@ export function OrgSettingsPage() {
         {activeSection === "charte" && <BrandingSection organization={organization} />}
         {/* Le composant dit lui-même qu'une sous-organisation suit sa racine. */}
         {activeSection === "langues" && <LanguagesSection organization={organization} />}
-        {/* Avec le courrier libre du site (Nora → Clara), offre au public lui aussi. */}
-        {activeSection === "usagers" && (
-          <div className="flex flex-col gap-6">
-            <UserInfoSection organization={organization} />
-            <FreeMailSection organization={organization} />
-          </div>
-        )}
+        {activeSection === "usagers" && <UserInfoSection organization={organization} />}
         {/* Idem : la doctrine de la collectivité se règle sur sa racine. */}
         {activeSection === "agents" && <AgentGuidanceSection organization={organization} />}
         {activeSection === "domaines" && <DomainsSection organizationId={organization.id} />}
@@ -201,7 +195,14 @@ export function OrgSettingsPage() {
             "Les démarches se paramètrent",
           )}
         {/* Sur toute organisation : le sélecteur couvre son sous-arbre. */}
-        {activeSection === "activations" && <ActivationsSection organization={organization} />}
+        {/* Avec ce qu'un organisme propose au site : le courrier libre (Nora → Clara),
+            jamais pour un service interne, que le portail n'affiche pas. */}
+        {activeSection === "activations" && (
+          <div className="flex flex-col gap-6">
+            {hasUserInfoTab(organization) && <FreeMailSection organization={organization} />}
+            <ActivationsSection organization={organization} />
+          </div>
+        )}
         {activeSection === "types-pieces" &&
           rootOnly(<DocumentTypesManager organizationId={organization.id} />, "Les types de pièce se paramètrent")}
         {activeSection === "documents" &&

@@ -166,8 +166,10 @@ garde sa modale (`OrganizationsManager` reçoit `onEditOrganization` seulement c
   interne. Depuis 1.31.0, elle porte aussi le **téléphone** et le **courriel** de la fiche
   (« Informations de base »), et liste un organisme qui n'a que ça (rubriques vides). Français seulement pour l'instant (pas de `translations`). Côté superadmin, même
   composant en carte d'`OrgSettingsPage` (`?section=usagers`).
-- **Courrier libre (site Nora)** (`FreeMailSection`, 2026-10-09, sous les informations usagers —
-  même onglet, même carte superadmin, donc **jamais sur un service interne**) : un interrupteur
+- **Courrier libre (site Nora)** (`FreeMailSection`, 2026-10-09 ; en tête de l'onglet
+  **« Démarches »** de l'éditeur d'organisme, et de la carte superadmin « Démarches activées »
+  (`?section=activations`) — ce qu'un usager peut adresser à l'organisme depuis le site ;
+  **jamais sur un service interne**, que le portail n'affiche pas, `hasUserInfoTab`) : un interrupteur
   « Permettre aux usagers d'envoyer un courrier libre à cet organisme depuis le site » (effet
   immédiat) et un **titre** (80 caractères, vide = « Envoyer un courrier libre », traduit par
   Nora). Le courrier part dans **Clara**. Table `portal_free_mail_settings` (une ligne par
