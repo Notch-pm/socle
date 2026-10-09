@@ -577,37 +577,49 @@ describe("serializeTenant — la whitelist la plus étroite (page publique)", ()
   it("⚠️ l'assistant est FERMÉ tant que rien ne l'ouvre — jamais null, jamais un trou", () => {
     // Rien de réglé, lecture en échec, forme inattendue : au doute, on ne
     // dépense pas le crédit IA d'une collectivité.
-    const closed = { enabled: false, deposit_enabled: false };
+    const closed = { enabled: false, deposit_enabled: false, voice_enabled: false };
     expect(serializeTenant(row, "n.fr", null, null).assistant).toEqual(closed);
-    for (const raw of [null, undefined, [], "oui", 1, { enabled: "true" }, [{ enabled: 1 }]]) {
+    for (const raw of [null, undefined, [], "oui", 1, { enabled: "true" }, [{ enabled: 1 }], { voice_enabled: true }]) {
       expect(readPortalAssistant(raw)).toEqual(closed);
     }
   });
 
   it("lit la ligne de `resolve_portal_assistant`, seule ou en tableau", () => {
-    const open = { source_organization_id: "org-1", enabled: true, deposit_enabled: true };
-    const expected = { enabled: true, deposit_enabled: true };
+    const open = { source_organization_id: "org-1", enabled: true, deposit_enabled: true, voice_enabled: true };
+    const expected = { enabled: true, deposit_enabled: true, voice_enabled: true };
     expect(readPortalAssistant(open)).toEqual(expected);
     expect(readPortalAssistant([open])).toEqual(expected);
     expect(serializeTenant(row, "n.fr", null, null, false, [open]).assistant).toEqual(expected);
-    // Deux booléens, et rien de la ligne : ni la source, ni qui a réglé.
+    // Trois booléens, et rien de la ligne : ni la source, ni qui a réglé.
     expect(Object.keys(readPortalAssistant({ ...open, updated_by: "user-1" })).sort()).toEqual([
       "deposit_enabled",
       "enabled",
+      "voice_enabled",
     ]);
   });
 
   it("⚠️ le commutateur s'applique à la frontière : pas de dépôt sous un assistant fermé", () => {
     // La base CONSERVE `deposit_enabled` quand on coupe l'assistant (le réglage
     // gouverne l'usage, pas la donnée) ; c'est ici qu'il cesse de sortir.
-    expect(readPortalAssistant({ enabled: false, deposit_enabled: true })).toEqual({
+    expect(readPortalAssistant({ enabled: false, deposit_enabled: true, voice_enabled: true })).toEqual({
       enabled: false,
       deposit_enabled: false,
+      voice_enabled: false,
     });
-    expect(readPortalAssistant({ enabled: true, deposit_enabled: false })).toEqual({
+    expect(readPortalAssistant({ enabled: true, deposit_enabled: false, voice_enabled: false })).toEqual({
       enabled: true,
       deposit_enabled: false,
+      voice_enabled: false,
     });
+    // La voix ne dépend que de l'assistant, pas du recueil : on peut parler
+    // à un assistant qui ne fait que renseigner.
+    expect(readPortalAssistant({ enabled: true, deposit_enabled: false, voice_enabled: true })).toEqual({
+      enabled: true,
+      deposit_enabled: false,
+      voice_enabled: true,
+    });
+    // Une ligne d'avant la colonne (lecture d'un ancien déploiement) : fermé.
+    expect(readPortalAssistant({ enabled: true, deposit_enabled: true }).voice_enabled).toBe(false);
   });
 
   it("⚠️ un tenant sans thème publié reçoit les DÉFAUTS, jamais null", () => {

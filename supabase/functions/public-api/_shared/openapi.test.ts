@@ -315,8 +315,8 @@ describe("contrat — traduction de la communication usager (1.26.0)", () => {
 describe("contrat — documents et courriers", () => {
   const doc = buildOpenApiDocument("https://example.supabase.co/functions/v1/public-api") as any;
 
-  it("annonce la version 1.36.0 du contrat", () => {
-    expect(doc.info.version).toBe("1.36.0");
+  it("annonce la version 1.37.0 du contrat", () => {
+    expect(doc.info.version).toBe("1.37.0");
   });
 
   it("le lieu d'intervention est un type de champ structurel, à réponse objet (1.29.0)", () => {
@@ -542,12 +542,12 @@ describe("contrat — portail usagers", () => {
     }
   });
 
-  it("⚠️ l'assistant du portail : deux faits publics, et rien de ce qui le fait parler (1.28.0)", () => {
+  it("⚠️ l'assistant du portail : trois faits publics, et rien de ce qui le fait parler (1.28.0, 1.37.0)", () => {
     // Tout visiteur lit ce DTO. Un prompt, un alias d'agent ou un plafond n'y
     // ont pas leur place — le portail compose son prompt, le guichet le borne.
     const schema = doc.components.schemas.PortalAssistant;
-    expect(Object.keys(schema.properties).sort()).toEqual(["deposit_enabled", "enabled"]);
-    expect(schema.required.sort()).toEqual(["deposit_enabled", "enabled"]);
+    expect(Object.keys(schema.properties).sort()).toEqual(["deposit_enabled", "enabled", "voice_enabled"]);
+    expect(schema.required.sort()).toEqual(["deposit_enabled", "enabled", "voice_enabled"]);
     expect(schema.description).toContain("jamais `null`");
     expect(schema.description).toContain("à la frontière");
   });

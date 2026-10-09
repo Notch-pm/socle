@@ -30,7 +30,7 @@ export function buildOpenApiDocument(serverUrl: string): Record<string, unknown>
     openapi: "3.1.0",
     info: {
       title: "API Socle — Référentiel de la gamme",
-      version: "1.36.0",
+      version: "1.37.0",
       description: [
         "API **en lecture seule** exposant le référentiel central de la gamme : les",
         "**organisations** (et sous-organisations) avec l'intégralité de leur configuration,",
@@ -1154,12 +1154,14 @@ export function buildOpenApiDocument(serverUrl: string): Record<string, unknown>
             "⚠️ **Toujours présent, jamais `null`** : rien de réglé ⇒ tout à `false`. Un " +
             "consommateur d'avant 1.28.0 ne reçoit pas le champ : lisez une absence comme " +
             "un assistant fermé.\n\n" +
-            "⚠️ Le commutateur s'applique **à la frontière** : `deposit_enabled` n'est `true` " +
-            "que si `enabled` l'est. Lisez chaque booléen tel quel, sans les croiser.\n\n" +
+            "⚠️ Le commutateur s'applique **à la frontière** : `deposit_enabled` et " +
+            "`voice_enabled` ne sont `true` que si `enabled` l'est. Lisez chaque booléen tel " +
+            "quel, sans les croiser. Un consommateur d'avant 1.37.0 ne reçoit pas " +
+            "`voice_enabled` : lisez une absence comme `false`.\n\n" +
             "Le Socle ne compose aucun prompt : le portail bâtit le sien à partir de ce que " +
             "`/v1/portal/*` sert déjà — ce que la collectivité écrit **pour l'usager** — et le " +
             "confie au guichet `ai-api`. Ce DTO ne porte ni prompt, ni alias d'agent, ni plafond.",
-          required: ["enabled", "deposit_enabled"],
+          required: ["enabled", "deposit_enabled", "voice_enabled"],
           properties: {
             enabled: {
               type: "boolean",
@@ -1170,6 +1172,15 @@ export function buildOpenApiDocument(serverUrl: string): Record<string, unknown>
               description:
                 "Il peut en outre recueillir les réponses d'un formulaire dans la conversation. " +
                 "Le dépôt lui-même reste un geste de l'usager.",
+            },
+            voice_enabled: {
+              type: "boolean",
+              description:
+                "Il propose un **mode dialogue** : il prononce ses réponses et l'usager peut " +
+                "répondre de vive voix (contrat 1.37.0). La voix passe par le guichet `ai-api` " +
+                "(`/v1/transcriptions`, `/v1/speech`) : les langues prononcées sont celles que ce " +
+                "guichet annonce (aujourd'hui le français et l'anglais), les autres restent en " +
+                "texte. Les cartes de saisie (identité, pièces) restent à l'écran.",
             },
           },
         },

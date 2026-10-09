@@ -14,7 +14,9 @@ conversation. Sa part tient en trois choses : **l'interrupteur**, **le corpus** 
 crédit** (déjà compté).
 
 - **L'interrupteur** : table `portal_assistant_settings`, une ligne par racine — `enabled`
-  (renseigner, orienter) et `deposit_enabled` (recueillir un formulaire). Aucune ligne = fermé.
+  (renseigner, orienter), `deposit_enabled` (recueillir un formulaire) et `voice_enabled`
+  (2026-10-09 : le **mode dialogue** — l'assistant prononce ses réponses, l'usager répond de vive
+  voix). Aucune ligne = fermé.
   Détail : [`docs/data-model.md`](../data-model.md) § « `portal_assistant_settings` ».
 - ⚠️ **Écriture réservée au super admin** (RLS `is_super_admin()`, motif
   `organization_applications`), écran **Organisations › « Assistant du portail usagers »**
@@ -26,13 +28,13 @@ crédit** (déjà compté).
   interrupteur qu'on doit pouvoir couper, non ; l'effet est **immédiat** (borné par le cache de
   60 s du portail). Et une colonne d'`organizations` serait à la portée de l'admin d'organisation.
 - ⚠️ **Le réglage gouverne l'usage, pas la donnée** (motif `email_sender_name`) : couper `enabled`
-  **conserve** `deposit_enabled`. C'est la **frontière** qui l'applique — `readPortalAssistant`
-  (`public-api/_shared/serializers.ts`) ne sert `deposit_enabled: true` que sous un assistant
+  **conserve** `deposit_enabled` et `voice_enabled`. C'est la **frontière** qui l'applique —
+  `readPortalAssistant` (`public-api/_shared/serializers.ts`) ne les sert `true` que sous un assistant
   ouvert. Un consommateur lit donc chaque booléen tel quel (motif `declaration_link`).
 - **Servi** dans `GET /v1/portal/tenant` → `assistant` (contrat **1.28.0**), héritage résolu par
   la RPC `resolve_portal_assistant` (service role seul). ⚠️ **Toujours présent, jamais `null`** ;
   lecture en échec ou forme inattendue ⇒ **fermé** : au doute, on ne dépense pas le crédit d'une
-  collectivité. ⚠️ `TenantDto` est lu par tout visiteur : **deux booléens, rien d'autre** — ni
+  collectivité. ⚠️ `TenantDto` est lu par tout visiteur : **trois booléens, rien d'autre** — ni
   prompt, ni alias d'agent, ni plafond (tests sur le sérialiseur et sur l'OpenAPI).
 - ⚠️ **Le corpus est ce que `/v1/portal/*` sert déjà, et rien d'autre** : `user_description`,
   `user_communication`, `form_schema`, `requester_config`, page et contenus publiés, et — depuis
@@ -47,6 +49,14 @@ crédit** (déjà compté).
   entrer dans le prompt de l'assistant — la clé `read` de Nora peut techniquement lire
   `GET /v1/procedures/{id}`, qui les sert : c'est à Nora de ne composer qu'à partir des routes
   portail, et un test l'y épingle.
+- ⚠️ **La voix est un interrupteur à part** (contrat **1.37.0**), et non un effet de
+  l'ouverture : elle coûte plusieurs fois le texte (une réponse prononcée coûte plus que l'appel
+  qui l'a écrite — ≈ 5 fois plus par conversation) et fait traiter la **voix de l'usager** par le
+  fournisseur (AIPD et DPA à vérifier avant ouverture au public). Elle ne dépend pas du recueil :
+  on peut parler à un assistant qui ne fait que renseigner. L'écran avertit du coût dès qu'elle
+  est ouverte. La transcription et la synthèse passent par `ai-api` (`/v1/transcriptions`,
+  `/v1/speech` — voir [`ai-api.md`](ai-api.md)) ; seuls le **français et l'anglais** se
+  prononcent, les autres langues restent en texte — c'est au portail de le savoir, pas au booléen.
 - **Le crédit** : Nora appelle `ai-api` avec une **clé dédiée** (scope `ai` seul, application
   `nora` — précédent `SOCLE_AI_API_KEY`), alias d'agent **`assistant-usager`** →
   secret `MISTRAL_AGENT_ASSISTANT_USAGER` (voir [`docs/operations.md`](../operations.md) ; absent,

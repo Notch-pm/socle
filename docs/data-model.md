@@ -317,11 +317,13 @@ aucun endpoint, il décrit ce qui existe **en base**.
 - `organization_id` **clé primaire**, FK **CASCADE** vers `organizations` (une ligne par
   collectivité) ; `enabled` bool NOT NULL défaut `false` (l'assistant est proposé sur le site) ;
   `deposit_enabled` bool NOT NULL défaut `false` (il peut recueillir un formulaire dans la
-  conversation) ; `created_at` / `updated_at` (trigger `set_updated_at`) ; `updated_by` FK
+  conversation) ; `voice_enabled` bool NOT NULL défaut `false` (2026-10-09 : mode dialogue
+  vocal) ; `created_at` / `updated_at` (trigger `set_updated_at`) ; `updated_by` FK
   `users` **SET NULL**.
 - **Aucune ligne = assistant fermé.** ⚠️ Le réglage gouverne l'usage, pas la donnée : couper
-  `enabled` **conserve** `deposit_enabled` ; c'est `public-api` qui sert `false` tant que
-  l'assistant est fermé (`readPortalAssistant`).
+  `enabled` **conserve** `deposit_enabled` et `voice_enabled` ; c'est `public-api` qui sert
+  `false` tant que l'assistant est fermé (`readPortalAssistant`). `resolve_portal_assistant`
+  (service role seul) rend les trois booléens de la racine.
 - ⚠️ **Une table, pas une colonne d'`organizations`** : un administrateur d'organisation modifie sa
   ligne `organizations` ; une colonne y serait à sa portée. ⚠️ **Pas dans `portal_themes`** : un
   interrupteur qu'on doit pouvoir couper n'attend pas un « Publier ».

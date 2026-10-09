@@ -484,10 +484,10 @@ export interface TenantDto {
    * principale ; l'héritage est **déjà résolu**.
    *
    * ⚠️ **Toujours présent, jamais `null`** : une collectivité qui n'a rien réglé
-   * reçoit `{ enabled: false, deposit_enabled: false }`.
+   * reçoit `{ enabled: false, deposit_enabled: false, voice_enabled: false }`.
    *
-   * ⚠️ Deux faits publics, rien d'autre : ni prompt, ni alias d'agent, ni
-   * plafond. Tout visiteur du portail peut lire ce DTO.
+   * ⚠️ Trois faits publics, rien d'autre : ni prompt, ni alias d'agent, ni
+   * plafond, ni voix. Tout visiteur du portail peut lire ce DTO.
    */
   assistant: PortalAssistantDto;
 }
@@ -496,14 +496,20 @@ export interface TenantDto {
  * Ce que l'assistant du portail a le droit de faire pour cette collectivité.
  *
  * ⚠️ Le commutateur s'applique **à la frontière** (motif `declaration_link`) :
- * `deposit_enabled` n'est `true` que si `enabled` l'est aussi. Un consommateur
- * lit donc chaque booléen tel quel, sans les croiser.
+ * `deposit_enabled` et `voice_enabled` ne sont `true` que si `enabled` l'est
+ * aussi. Un consommateur lit donc chaque booléen tel quel, sans les croiser.
  */
 export interface PortalAssistantDto {
   /** L'assistant est proposé sur le site : il renseigne et oriente. */
   enabled: boolean;
   /** Il peut en outre recueillir un formulaire dans la conversation. */
   deposit_enabled: boolean;
+  /**
+   * Il propose un mode dialogue : il prononce ses réponses, l'usager répond de
+   * vive voix (contrat 1.37.0). Les langues où c'est possible sont l'affaire du
+   * portail et du guichet `ai-api`, pas de ce booléen.
+   */
+  voice_enabled: boolean;
 }
 
 /**

@@ -10,12 +10,14 @@ export type PortalAssistantSettings = Tables<"portal_assistant_settings">;
 export interface PortalAssistantFlags {
   enabled: boolean;
   deposit_enabled: boolean;
+  voice_enabled: boolean;
 }
 
 /** Aucune ligne = assistant fermé : c'est l'état de toute collectivité avant le premier geste. */
 export const PORTAL_ASSISTANT_CLOSED: PortalAssistantFlags = {
   enabled: false,
   deposit_enabled: false,
+  voice_enabled: false,
 };
 
 /** Le réglage de l'assistant du portail d'une organisation principale, ou `null`. */
@@ -39,9 +41,9 @@ export function usePortalAssistantSettings(organizationId: string | undefined) {
  * Ouvrir ou fermer l'assistant du portail. Réservé au super administrateur —
  * par le RLS (INSERT/UPDATE `is_super_admin()`), pas par cet écran.
  *
- * ⚠️ Les DEUX drapeaux partent à chaque écriture : couper l'assistant conserve
- * `deposit_enabled` (le réglage gouverne l'usage, pas la donnée), et c'est
- * l'API publique qui cesse de le servir.
+ * ⚠️ TOUS les drapeaux partent à chaque écriture : couper l'assistant conserve
+ * `deposit_enabled` et `voice_enabled` (le réglage gouverne l'usage, pas la
+ * donnée), et c'est l'API publique qui cesse de les servir.
  */
 export function useSetPortalAssistant() {
   const queryClient = useQueryClient();
@@ -54,6 +56,7 @@ export function useSetPortalAssistant() {
           organization_id: input.organizationId,
           enabled: input.enabled,
           deposit_enabled: input.deposit_enabled,
+          voice_enabled: input.voice_enabled,
           updated_by: input.updatedBy ?? null,
         },
         { onConflict: "organization_id" },

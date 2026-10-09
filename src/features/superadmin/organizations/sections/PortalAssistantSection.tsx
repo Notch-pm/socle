@@ -1,4 +1,4 @@
-import { MessagesSquare } from "lucide-react";
+import { AudioLines, MessagesSquare } from "lucide-react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Switch } from "@/components/ui/switch";
 import { useAuth } from "@/features/auth/AuthProvider";
@@ -19,10 +19,15 @@ import {
  * et sa répartition — que `PortalAssistantBudget` montre ici et qui se règlent
  * dans la section « Assistant IA ».
  *
- * Deux niveaux, le second sous le premier : renseigner et orienter, puis
- * recueillir un formulaire dans la conversation. ⚠️ Couper le premier CONSERVE
- * le second (le réglage gouverne l'usage, pas la donnée) : l'API publique cesse
- * de le servir, et le rouvrir rend le réglage tel qu'il était.
+ * Trois niveaux, les deux derniers sous le premier : renseigner et orienter ;
+ * recueillir un formulaire dans la conversation ; dialoguer DE VIVE VOIX (le
+ * mode dialogue, 2026-10-09). ⚠️ Couper le premier CONSERVE les deux autres (le
+ * réglage gouverne l'usage, pas la donnée) : l'API publique cesse de les
+ * servir, et le rouvrir rend le réglage tel qu'il était.
+ *
+ * La voix est un interrupteur À PART, et non un effet de l'ouverture : elle
+ * coûte plusieurs fois le texte et fait traiter la voix de l'usager par le
+ * fournisseur — deux raisons d'une décision explicite.
  */
 export function PortalAssistantSection({ organizationId }: { organizationId: string }) {
   const { profile } = useAuth();
@@ -30,7 +35,11 @@ export function PortalAssistantSection({ organizationId }: { organizationId: str
   const setAssistant = useSetPortalAssistant();
 
   const flags: PortalAssistantFlags = settings
-    ? { enabled: settings.enabled, deposit_enabled: settings.deposit_enabled }
+    ? {
+        enabled: settings.enabled,
+        deposit_enabled: settings.deposit_enabled,
+        voice_enabled: settings.voice_enabled,
+      }
     : PORTAL_ASSISTANT_CLOSED;
 
   const save = (next: Partial<PortalAssistantFlags>) =>
@@ -88,6 +97,35 @@ export function PortalAssistantSection({ organizationId }: { organizationId: str
                 onCheckedChange={(deposit_enabled) => save({ deposit_enabled })}
               />
             </label>
+
+            <label className="flex cursor-pointer items-center justify-between gap-3 rounded-lg border p-3">
+              <span className="flex flex-col gap-0.5">
+                <span className="flex items-center gap-1.5 text-sm font-medium">
+                  <AudioLines className="size-4 text-muted-foreground" aria-hidden />
+                  Mode dialogue (voix)
+                </span>
+                <span className="text-xs text-muted-foreground">
+                  {flags.enabled
+                    ? "L'assistant prononce ses réponses et l'usager peut répondre de vive voix — en français et en anglais. Les autres langues restent en texte."
+                    : "Sans effet tant que l'assistant n'est pas proposé — le réglage est conservé."}
+                </span>
+              </span>
+              <Switch
+                checked={flags.voice_enabled}
+                disabled={setAssistant.isPending || !flags.enabled}
+                aria-label="Mode dialogue (voix)"
+                onCheckedChange={(voice_enabled) => save({ voice_enabled })}
+              />
+            </label>
+
+            {flags.enabled && flags.voice_enabled ? (
+              <p role="note" className="rounded-lg bg-secondary/40 p-3 text-xs text-foreground">
+                La voix coûte plus cher que le texte : faire prononcer une réponse coûte davantage
+                que de l'écrire, et une conversation vocale consomme environ cinq fois plus de crédit.
+                Vérifiez la part réservée à l'assistant ci-dessous. La voix de l'usager est
+                transcrite par le fournisseur d'IA ; elle n'est pas conservée.
+              </p>
+            ) : null}
 
             {/* La part de l'assistant, à côté de son interrupteur : on ne devrait
                 pas pouvoir ouvrir l'un sans voir l'autre. Elle se RÈGLE dans la

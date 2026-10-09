@@ -303,7 +303,7 @@ Deno.serve(async (req: Request) => {
       const touch = admin.from("api_keys").update({ last_used_at: new Date().toISOString() })
         .eq("id", apiKey.id)
         .then(() => {}, () => {});
-      (globalThis as { EdgeRuntime?: { waitUntil(p: Promise<unknown>): void } }).EdgeRuntime?.waitUntil(touch);
+      (globalThis as { EdgeRuntime?: { waitUntil(p: Promise<unknown>): void } }).EdgeRuntime?.waitUntil(Promise.resolve(touch));
     }
 
     const segments = path.split("/").filter(Boolean);

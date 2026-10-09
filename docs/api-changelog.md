@@ -13,6 +13,21 @@ Format d'une entrée : `## AAAA-MM-JJ — <api> — ajout|correctif|rupture`
 
 ---
 
+## 2026-10-09 — public-api — ajout (mode dialogue de l'assistant)
+
+Version du contrat **1.37.0**, ajout **additif**.
+
+- **`TenantDto.assistant.voice_enabled`** (booléen, toujours présent) : la collectivité a ouvert
+  le **mode dialogue** — l'assistant prononce ses réponses et l'usager peut répondre de vive voix.
+  Réglé par le super administrateur, sur la racine, effet immédiat.
+- ⚠️ Commutateur appliqué **à la frontière**, comme `deposit_enabled` : `voice_enabled` n'est
+  `true` que si `enabled` l'est. Il ne dépend pas de `deposit_enabled`.
+- Consommateur concerné (Nora) : un portail d'avant 1.37.0 ne lit pas le champ ; une absence se
+  lit comme `false`. La voix passe par `ai-api` 1.4.0 ; seuls le français et l'anglais se
+  prononcent.
+
+---
+
 ## 2026-10-09 — ai-api — ajout (la voix)
 
 Version du contrat **1.4.0** de `ai-api`, ajout **additif** — aucune route existante ne change.

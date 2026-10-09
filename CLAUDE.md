@@ -374,11 +374,12 @@ superadmin (`OrgSettingsPage`, menu latéral par client).
 
 ### [Assistant du portail usagers](docs/features/assistant-usager.md)
 - Assistant conversationnel de Nora. Le Socle n'en tient que **l'interrupteur**
-  (`portal_assistant_settings` : `enabled`, `deposit_enabled`), réglé par le **super admin** seul,
+  (`portal_assistant_settings` : `enabled`, `deposit_enabled`, `voice_enabled`), réglé par le **super admin** seul,
   effet immédiat (⚠️ ni dans le thème, ni sur `organizations`), servi sur `TenantDto.assistant`.
 - ⚠️ Le commutateur s'applique **à la frontière** (`readPortalAssistant`) : couper `enabled`
-  conserve `deposit_enabled`. Au doute, **fermé**. `TenantDto` est public : deux booléens, rien
-  d'autre.
+  conserve les deux autres. Au doute, **fermé**. `TenantDto` est public : trois booléens, rien
+  d'autre. ⚠️ La voix (mode dialogue, 1.37.0) est un interrupteur **à part** : elle coûte ≈ 5 fois
+  le texte.
 - ⚠️ Corpus = ce que `/v1/portal/*` sert déjà (dont les informations usagers des organismes) ;
   `knowledge_base` et les recommandations aux agents n'entrent **jamais** dans son prompt. ⚠️ Pas d'ouverture au public sans **part de crédit
   réservée** : elle se règle dans la section « Assistant IA » (bouton « Répartir », le seul écran

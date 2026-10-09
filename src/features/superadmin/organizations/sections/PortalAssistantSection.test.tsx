@@ -5,7 +5,7 @@ import { MemoryRouter } from "react-router-dom";
 import { PortalAssistantSection } from "./PortalAssistantSection";
 
 const h = vi.hoisted(() => ({
-  settings: null as { enabled: boolean; deposit_enabled: boolean } | null,
+  settings: null as { enabled: boolean; deposit_enabled: boolean; voice_enabled: boolean } | null,
   set: vi.fn(),
 }));
 
@@ -14,7 +14,7 @@ vi.mock("@/features/auth/AuthProvider", () => ({
 }));
 
 vi.mock("@/features/superadmin/organizations/usePortalAssistant", () => ({
-  PORTAL_ASSISTANT_CLOSED: { enabled: false, deposit_enabled: false },
+  PORTAL_ASSISTANT_CLOSED: { enabled: false, deposit_enabled: false, voice_enabled: false },
   usePortalAssistantSettings: () => ({ data: h.settings, isLoading: false }),
   useSetPortalAssistant: () => ({ mutate: h.set, isPending: false, error: null }),
 }));
@@ -35,6 +35,7 @@ if (!Element.prototype.hasPointerCapture) {
 
 const OPEN = "Proposer l'assistant sur le site";
 const DEPOSIT = "Déposer une demande par la conversation";
+const VOICE = "Mode dialogue (voix)";
 
 function renderSection() {
   return render(
@@ -55,15 +56,18 @@ describe("PortalAssistantSection", () => {
     expect(screen.getByLabelText(OPEN).getAttribute("aria-checked")).toBe("false");
     expect(screen.getByLabelText(DEPOSIT).getAttribute("aria-checked")).toBe("false");
     expect(screen.getByLabelText(DEPOSIT).hasAttribute("disabled")).toBe(true);
+    expect(screen.getByLabelText(VOICE).getAttribute("aria-checked")).toBe("false");
+    expect(screen.getByLabelText(VOICE).hasAttribute("disabled")).toBe(true);
   });
 
-  it("ouvre l'assistant d'un geste, en envoyant les DEUX drapeaux", () => {
+  it("ouvre l'assistant d'un geste, en envoyant TOUS les drapeaux", () => {
     renderSection();
     fireEvent.click(screen.getByLabelText(OPEN));
     expect(h.set).toHaveBeenCalledWith({
       organizationId: "org-1",
       enabled: true,
       deposit_enabled: false,
+      voice_enabled: false,
       updatedBy: "user-1",
     });
   });
@@ -71,24 +75,46 @@ describe("PortalAssistantSection", () => {
   it("⚠️ couper l'assistant CONSERVE le réglage du dépôt", () => {
     // Le réglage gouverne l'usage, pas la donnée : c'est l'API publique qui
     // cesse de servir `deposit_enabled`, la base le garde pour la réouverture.
-    h.settings = { enabled: true, deposit_enabled: true };
+    h.settings = { enabled: true, deposit_enabled: true, voice_enabled: true };
     renderSection();
     fireEvent.click(screen.getByLabelText(OPEN));
     expect(h.set).toHaveBeenCalledWith(
-      expect.objectContaining({ enabled: false, deposit_enabled: true }),
+      expect.objectContaining({ enabled: false, deposit_enabled: true, voice_enabled: true }),
     );
   });
 
+  it("ouvre la voix sans toucher au recueil", () => {
+    h.settings = { enabled: true, deposit_enabled: false, voice_enabled: false };
+    renderSection();
+    expect(screen.getByLabelText(VOICE).hasAttribute("disabled")).toBe(false);
+    fireEvent.click(screen.getByLabelText(VOICE));
+    expect(h.set).toHaveBeenCalledWith(
+      expect.objectContaining({ enabled: true, deposit_enabled: false, voice_enabled: true }),
+    );
+  });
+
+  it("⚠️ avertit du coût de la voix dès qu'elle est ouverte, et seulement alors", () => {
+    h.settings = { enabled: true, deposit_enabled: false, voice_enabled: false };
+    const { unmount } = renderSection();
+    expect(screen.queryByRole("note")).toBeNull();
+    unmount();
+    h.settings = { enabled: true, deposit_enabled: false, voice_enabled: true };
+    renderSection();
+    expect(screen.getByRole("note").textContent).toMatch(/environ cinq fois plus de crédit/);
+    expect(screen.getByRole("note").textContent).toMatch(/n'est pas conservée/);
+  });
+
   it("montre le dépôt conservé sous un assistant fermé, et dit qu'il est sans effet", () => {
-    h.settings = { enabled: false, deposit_enabled: true };
+    h.settings = { enabled: false, deposit_enabled: true, voice_enabled: false };
     renderSection();
     expect(screen.getByLabelText(DEPOSIT).getAttribute("aria-checked")).toBe("true");
-    expect(screen.getByText(/Sans effet tant que l'assistant n'est pas proposé/)).toBeTruthy();
+    // Sous le recueil ET sous la voix : les deux dépendent de l'assistant.
+    expect(screen.getAllByText(/Sans effet tant que l'assistant n'est pas proposé/)).toHaveLength(2);
   });
 
   it("⚠️ montre la part de crédit à côté de l'interrupteur, et lui dit s'il est ouvert", () => {
     // On ne devrait pas pouvoir ouvrir l'assistant au public sans voir sa borne.
-    h.settings = { enabled: true, deposit_enabled: false };
+    h.settings = { enabled: true, deposit_enabled: false, voice_enabled: false };
     renderSection();
     expect(screen.getByTestId("budget").getAttribute("data-enabled")).toBe("true");
   });

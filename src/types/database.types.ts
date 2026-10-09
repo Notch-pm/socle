@@ -1475,6 +1475,7 @@ export type Database = {
           organization_id: string
           updated_at: string
           updated_by: string | null
+          voice_enabled: boolean
         }
         Insert: {
           created_at?: string
@@ -1483,6 +1484,7 @@ export type Database = {
           organization_id: string
           updated_at?: string
           updated_by?: string | null
+          voice_enabled?: boolean
         }
         Update: {
           created_at?: string
@@ -1491,6 +1493,7 @@ export type Database = {
           organization_id?: string
           updated_at?: string
           updated_by?: string | null
+          voice_enabled?: boolean
         }
         Relationships: [
           {
@@ -2238,6 +2241,7 @@ export type Database = {
           deposit_enabled: boolean
           enabled: boolean
           source_organization_id: string
+          voice_enabled: boolean
         }[]
       }
       resolve_smtp_settings: {

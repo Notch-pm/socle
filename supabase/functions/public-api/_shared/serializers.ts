@@ -406,15 +406,19 @@ export function serializeTenant(
 /**
  * L'assistant du portail, commutateur appliqué. Rien de réglé, une lecture en
  * échec ou une forme inattendue ⇒ assistant FERMÉ : au doute, on ne dépense pas
- * le crédit IA d'une collectivité. `deposit_enabled` ne sort `true` que sous un
- * assistant ouvert — la base, elle, conserve la valeur (le réglage gouverne
+ * le crédit IA d'une collectivité. `deposit_enabled` et `voice_enabled` ne
+ * sortent `true` que sous un assistant ouvert — la base, elle, conserve la valeur (le réglage gouverne
  * l'usage, pas la donnée).
  */
 export function readPortalAssistant(raw: unknown): PortalAssistantDto {
   const row = Array.isArray(raw) ? raw[0] : raw;
   const source = typeof row === "object" && row !== null ? (row as Row) : {};
   const enabled = source.enabled === true;
-  return { enabled, deposit_enabled: enabled && source.deposit_enabled === true };
+  return {
+    enabled,
+    deposit_enabled: enabled && source.deposit_enabled === true,
+    voice_enabled: enabled && source.voice_enabled === true,
+  };
 }
 
 /**
