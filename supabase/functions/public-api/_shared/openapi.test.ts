@@ -35,6 +35,7 @@ describe("buildOpenApiDocument", () => {
         "/v1/integrations",
         "/v1/organizations/{id}/branding",
         "/v1/organizations/{id}/agent-guidance",
+        "/v1/organizations/{id}/assistant",
         "/v1/categories",
         "/v1/procedures",
         "/v1/procedures/{id}",
@@ -177,6 +178,22 @@ describe("buildOpenApiDocument", () => {
   });
 });
 
+describe("contrat — assistant par organisation (1.39.0)", () => {
+  const doc = buildOpenApiDocument("https://example.supabase.co/functions/v1/public-api") as any;
+  const route = doc.paths["/v1/organizations/{id}/assistant"].get;
+
+  it("scope `read`, même schéma que TenantDto.assistant, héritage résolu", () => {
+    expect(route.tags).toEqual(["Assistant IA"]);
+    expect(route.responses).not.toHaveProperty("403");
+    expect(route.responses).toHaveProperty("404");
+    expect(route.responses["200"].content["application/json"].schema).toEqual({
+      $ref: "#/components/schemas/PortalAssistant",
+    });
+    expect(route.description).toContain("héritage est déjà résolu");
+    expect(route.description).toContain("à la frontière");
+  });
+});
+
 describe("contrat — recommandations aux agents (1.27.0)", () => {
   const doc = buildOpenApiDocument("https://example.supabase.co/functions/v1/public-api") as any;
   const route = doc.paths["/v1/organizations/{id}/agent-guidance"].get;
@@ -316,8 +333,8 @@ describe("contrat — traduction de la communication usager (1.26.0)", () => {
 describe("contrat — documents et courriers", () => {
   const doc = buildOpenApiDocument("https://example.supabase.co/functions/v1/public-api") as any;
 
-  it("annonce la version 1.38.0 du contrat", () => {
-    expect(doc.info.version).toBe("1.38.0");
+  it("annonce la version 1.39.0 du contrat", () => {
+    expect(doc.info.version).toBe("1.39.0");
   });
 
   it("le lieu d'intervention est un type de champ structurel, à réponse objet (1.29.0)", () => {

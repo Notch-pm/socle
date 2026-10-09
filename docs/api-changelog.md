@@ -13,6 +13,19 @@ Format d'une entrée : `## AAAA-MM-JJ — <api> — ajout|correctif|rupture`
 
 ---
 
+## 2026-10-09 — public-api — ajout (assistant par organisation)
+
+Version du contrat **1.39.0**, ajout **additif**.
+
+- **`GET /v1/organizations/{id}/assistant`** (scope `read`) — le même objet que
+  `TenantDto.assistant` (`enabled`, `deposit_enabled`, `voice_enabled`), adressé par identifiant
+  d'organisation et non par domaine de portail. Héritage déjà résolu (`resolve_portal_assistant`),
+  commutateur appliqué à la frontière, lecture en échec ⇒ tout à `false`. 404 hors périmètre.
+- Consommateur concerné (Clara) : la **dictée vocale** d'un courrier n'est proposée que si
+  `voice_enabled` est vrai — même interrupteur que le mode dialogue du portail.
+
+---
+
 ## 2026-10-09 — public-api — ajout (courrier libre des organismes)
 
 Version du contrat **1.38.0**, ajout **additif**.

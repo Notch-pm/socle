@@ -30,7 +30,7 @@ export function buildOpenApiDocument(serverUrl: string): Record<string, unknown>
     openapi: "3.1.0",
     info: {
       title: "API Socle — Référentiel de la gamme",
-      version: "1.38.0",
+      version: "1.39.0",
       description: [
         "API **en lecture seule** exposant le référentiel central de la gamme : les",
         "**organisations** (et sous-organisations) avec l'intégralité de leur configuration,",
@@ -138,6 +138,12 @@ export function buildOpenApiDocument(serverUrl: string): Record<string, unknown>
           "Ce que la collectivité dit à ses agents pour toutes ses démarches à la fois : rôle, " +
           "accueil physique, consignes générales, FAQ, sources recommandées. Version globale de " +
           "`knowledge_base`, même public (l'agent et son assistant IA). Interne : jamais pour un usager.",
+      },
+      {
+        name: "Assistant IA",
+        description:
+          "Ce que la collectivité a ouvert de l'assistant IA (conversation, dépôt, voix), héritage " +
+          "déjà résolu — pour qu'une application ne propose que ce qui se paiera sur un crédit ouvert.",
       },
       { name: "Documents", description: "Accès temporaire aux documents privés." },
       {
@@ -730,6 +736,46 @@ export function buildOpenApiDocument(serverUrl: string): Record<string, unknown>
               description: "La charte applicable, ou l'absence de charte.",
               content: {
                 "application/json": { schema: { $ref: "#/components/schemas/Branding" } },
+              },
+            },
+            ...errorResponses("400", "401", "404", "500"),
+          },
+        },
+      },
+      "/v1/organizations/{id}/assistant": {
+        get: {
+          tags: ["Assistant IA"],
+          summary: "Assistant IA ouvert pour une organisation",
+          description: [
+            "Ce que la collectivité a **ouvert** de l'assistant IA — le même objet que",
+            "`TenantDto.assistant`, mais adressé par identifiant d'organisation : une application",
+            "côté agent ne connaît pas le domaine du portail. Scope `read`.",
+            "",
+            "**L'héritage est déjà résolu** (réglage du super administrateur sur l'organisation",
+            "principale) : interroger une sous-organisation est légitime et suffit.",
+            "",
+            "⚠️ Le commutateur s'applique **à la frontière** : `deposit_enabled` et `voice_enabled`",
+            "ne sont `true` que si `enabled` l'est. Rien de réglé, ou une lecture en échec ⇒ tout",
+            "à `false` — au doute, le crédit IA de la collectivité n'est pas dépensé.",
+            "",
+            "Usage type : une application qui propose la **dictée vocale** à ses agents ne l'affiche",
+            "que si `voice_enabled` est vrai — la voix passe par le guichet `ai-api`",
+            "(`/v1/transcriptions`) et se paie sur le crédit de la collectivité.",
+          ].join("\n"),
+          parameters: [
+            {
+              name: "id",
+              in: "path",
+              required: true,
+              description: "Identifiant UUID de l'organisation (principale ou sous-organisation).",
+              schema: { type: "string", format: "uuid" },
+            },
+          ],
+          responses: {
+            "200": {
+              description: "Ce qui est ouvert (tout à `false` si rien n'est réglé).",
+              content: {
+                "application/json": { schema: { $ref: "#/components/schemas/PortalAssistant" } },
               },
             },
             ...errorResponses("400", "401", "404", "500"),

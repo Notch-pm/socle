@@ -27,6 +27,7 @@ import {
   serializeQuartier,
   serializeSmtpSettings,
   serializeTenant,
+  readPortalAssistant,
 } from "./_shared/serializers.ts";
 import { buildOrganizationTree, isUuid } from "./_shared/scope.ts";
 import { API_KEY_COLUMNS, evaluateApiKey, scopeRequest, shouldTouchKey, type ApiKeyRow } from "./_shared/apiKeyAuth.ts";
@@ -966,6 +967,26 @@ Deno.serve(async (req: Request) => {
         if (brandingError) throw brandingError;
         const branding = Array.isArray(brandingRows) ? brandingRows[0] : brandingRows;
         return jsonResponse(200, serializeBranding(id, branding ?? null), corsHeaders);
+      }
+      // --- /v1/organizations/{id}/assistant ---
+      // L'assistant IA tel que la collectivité l'a OUVERT (contrat 1.39.0) — le
+      // même DTO que `TenantDto.assistant`, mais adressé par identifiant
+      // d'organisation : une application côté agent (Clara) ne connaît pas le
+      // domaine du portail. Héritage résolu en base (`resolve_portal_assistant`),
+      // commutateur appliqué par `readPortalAssistant` : une lecture en échec
+      // rend un assistant FERMÉ — au doute, on ne dépense pas le crédit IA.
+      if (segments.length === 4 && segments[3] === "assistant") {
+        const id = segments[2];
+        if (!isUuid(id)) {
+          return errorResponse("bad_request", "Identifiant d'organisation invalide.", corsHeaders);
+        }
+        if (!inScope(id)) {
+          return errorResponse("not_found", "Organisation introuvable.", corsHeaders);
+        }
+        const { data: assistant } = await admin.rpc("resolve_portal_assistant", {
+          p_org_id: id,
+        });
+        return jsonResponse(200, readPortalAssistant(assistant), corsHeaders);
       }
       // --- /v1/organizations/{id}/agent-guidance ---
       // Recommandations aux agents **applicables** : celles de l'organisation
