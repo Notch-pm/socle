@@ -166,6 +166,7 @@ exécutables par `authenticated` : le RLS les évalue avec les droits de l'appel
 - `organization_attributions` (**attributions** — ce que traite l'organisme —, une ligne par organisation, **service interne compris**, **interne**, 2 000 caractères, servi par `GET /v1/organizations/attributions` — voir feature « Organisations »).
 - `organization_user_info` (**informations usagers** — descriptif, horaires d'accueil, FAQ —, une ligne par organisation, racine ou non, **public** et sans brouillon, servi par `GET /v1/portal/organizations` au portail et à son assistant — voir feature « Organisations »).
 - `portal_assistant_settings` (**interrupteur de l'assistant du portail**, une ligne par racine, écriture **super admin** seule — voir feature « Assistant du portail usagers »).
+- `portal_free_mail_settings` (**courrier libre** du portail, Nora → Clara : interrupteur et titre, une ligne par organisation, servi par `GET /v1/portal/organizations` → `free_mail`, ouvert seulement sous un abonnement Clara — voir feature « Organisations »).
 
 Types TS générés dans `src/types/database.types.ts` — **ne pas éditer à la main**,
 régénérer depuis le schéma live (Supabase MCP `generate_typescript_types` / CLI).

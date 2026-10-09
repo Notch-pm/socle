@@ -38,6 +38,8 @@ describe("slugIssue — ce qu'un agent lit avant que la base refuse", () => {
     for (const reserved of SLUG_RESERVED) {
       expect(slugIssue(reserved), reserved).not.toBeNull();
     }
+    // Miroir de la migration `portal_free_mail_settings` (2026-10-09).
+    expect(SLUG_RESERVED).toContain("courrier");
   });
 });
 

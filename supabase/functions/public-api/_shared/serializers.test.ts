@@ -14,6 +14,7 @@ import {
   serializeBranding,
   serializeSmtpSettings,
   readPortalAssistant,
+  readPortalFreeMail,
   serializeTenant,
 } from "./serializers.ts";
 import { defaultPortalThemeDto } from "./portalTheme.ts";
@@ -620,6 +621,38 @@ describe("serializeTenant — la whitelist la plus étroite (page publique)", ()
     });
     // Une ligne d'avant la colonne (lecture d'un ancien déploiement) : fermé.
     expect(readPortalAssistant({ enabled: true, deposit_enabled: true }).voice_enabled).toBe(false);
+  });
+
+  it("⚠️ courrier libre (1.38.0) : fermé tant que rien ne l'ouvre, et jamais sans Clara", () => {
+    const closed = { enabled: false, title: null };
+    for (const raw of [null, undefined, [], "oui", 1, { enabled: "true" }, [{ enabled: true }]]) {
+      expect(readPortalFreeMail(raw, true)).toEqual(closed);
+    }
+    // Ouvert par l'organisme, mais la collectivité n'est pas abonnée à Clara :
+    // personne ne recevrait le courrier — fermé à la frontière, titre conservé.
+    expect(readPortalFreeMail({ enabled: true, title: "Nous écrire" }, false)).toEqual({
+      enabled: false,
+      title: "Nous écrire",
+    });
+    expect(readPortalFreeMail({ enabled: true, title: null }, true)).toEqual({ enabled: true, title: null });
+  });
+
+  it("courrier libre : le titre sort trimé, vide = null, et rien d'autre de la ligne", () => {
+    expect(readPortalFreeMail({ enabled: true, title: "  Écrire à la mairie  " }, true).title).toBe(
+      "Écrire à la mairie",
+    );
+    expect(readPortalFreeMail({ enabled: true, title: "   " }, true).title).toBeNull();
+    expect(readPortalFreeMail({ enabled: true, title: "x".repeat(81) }, true).title).toBeNull();
+    // Le titre est servi même fermé : le réglage gouverne l'usage, pas la donnée.
+    expect(readPortalFreeMail({ enabled: false, title: "Nous écrire" }, true)).toEqual({
+      enabled: false,
+      title: "Nous écrire",
+    });
+    const dto = readPortalFreeMail(
+      { organization_id: "org-1", enabled: true, title: "T", updated_by: "user-1", updated_at: "2026-10-09" },
+      true,
+    );
+    expect(Object.keys(dto).sort()).toEqual(["enabled", "title"]);
   });
 
   it("⚠️ un tenant sans thème publié reçoit les DÉFAUTS, jamais null", () => {

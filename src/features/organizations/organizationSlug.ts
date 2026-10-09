@@ -34,6 +34,9 @@ export const SLUG_RESERVED: readonly string[] = [
   "accessibilite",
   // L'assistant conversationnel du portail, servi à `/assistant` (2026-09-20).
   "assistant",
+  // Le courrier libre (site Nora → Clara) : `/courrier` pour la collectivité,
+  // `/<slug>/courrier` pour un organisme (2026-10-09).
+  "courrier",
 ];
 
 /**

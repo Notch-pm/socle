@@ -150,4 +150,29 @@ describe("serializePortalOrganizationsInfo", () => {
     );
     expect(out.map((o) => o.id)).toEqual([TENANT]);
   });
+
+  it("chaque organisme porte free_mail — fermé par défaut (1.38.0)", () => {
+    const out = serializePortalOrganizationsInfo(TENANT, [org({})], [row(TENANT, STORED)]);
+    expect(out[0].free_mail).toEqual({ enabled: false, title: null });
+  });
+
+  it("⚠️ liste un organisme qui n'a QUE son courrier libre ouvert, et seulement sous Clara", () => {
+    const orgs = [
+      org({}),
+      org({ id: "annexe", name: "Annexe", parent_id: TENANT }),
+      org({ id: "interne", name: "Service RH", parent_id: TENANT, is_internal_service: true }),
+    ];
+    const freeMail = [
+      { organization_id: "annexe", enabled: true, title: " Écrire à l'annexe " },
+      { organization_id: "interne", enabled: true, title: null },
+    ];
+    const withClara = serializePortalOrganizationsInfo(TENANT, orgs, [row(TENANT, STORED)], freeMail, true);
+    expect(withClara.map((o) => [o.id, o.free_mail])).toEqual([
+      [TENANT, { enabled: false, title: null }],
+      ["annexe", { enabled: true, title: "Écrire à l'annexe" }],
+    ]);
+    // Sans Clara : fermé partout, et l'annexe, qui n'a rien écrit d'autre, disparaît.
+    const withoutClara = serializePortalOrganizationsInfo(TENANT, orgs, [row(TENANT, STORED)], freeMail, false);
+    expect(withoutClara.map((o) => o.id)).toEqual([TENANT]);
+  });
 });

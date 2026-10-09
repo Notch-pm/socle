@@ -26,6 +26,7 @@ import { LanguagesSection } from "@/features/languages/LanguagesSection";
 import { AgentGuidanceSection } from "@/features/organizations/AgentGuidanceSection";
 import { UserInfoSection } from "@/features/organizations/UserInfoSection";
 import { AttributionsSection } from "@/features/organizations/AttributionsSection";
+import { FreeMailSection } from "@/features/organizations/FreeMailSection";
 import { hasUserInfoTab } from "@/features/organizations/userInfo";
 
 type TabKey = "infos" | "attributions" | "charte" | "langues" | "usagers" | "agents" | "domaines" | "demarches" | "smtp";
@@ -45,6 +46,7 @@ const TABS: { key: TabKey; label: string; icon: LucideIcon }[] = [
   // Ce que l'organisme dit au PUBLIC — sur toute organisation, sous-organisation
   // comprise : chaque mairie annexe a ses horaires. Pendant public de l'onglet
   // suivant, qui reste interne. Retiré sur un service interne (`hasUserInfoTab`).
+  // Porte aussi le courrier libre du site (Nora → Clara) : une offre au public.
   { key: "usagers", label: "Informations usagers", icon: MessageCircleQuestion },
   // Même parti que les langues : la doctrine de la collectivité ne se découpe
   // pas par service, l'onglet renvoie une sous-organisation à sa racine.
@@ -135,7 +137,12 @@ export function OrganizationEditorPage() {
         {activeTab === "attributions" && <AttributionsSection organization={organization} />}
         {activeTab === "charte" && <BrandingSection organization={organization} />}
         {activeTab === "langues" && <LanguagesSection organization={organization} />}
-        {activeTab === "usagers" && <UserInfoSection organization={organization} />}
+        {activeTab === "usagers" && (
+          <div className="flex flex-col gap-6">
+            <UserInfoSection organization={organization} />
+            <FreeMailSection organization={organization} />
+          </div>
+        )}
         {activeTab === "agents" && <AgentGuidanceSection organization={organization} />}
         {activeTab === "domaines" && <DomainsSection organizationId={organization.id} />}
         {activeTab === "demarches" && (

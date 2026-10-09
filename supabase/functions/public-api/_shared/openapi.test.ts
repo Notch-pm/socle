@@ -107,6 +107,7 @@ describe("buildOpenApiDocument", () => {
         "Quartier",
         "SignedUrl",
         "Error",
+        "PortalFreeMail",
       ]),
     );
   });
@@ -315,8 +316,8 @@ describe("contrat — traduction de la communication usager (1.26.0)", () => {
 describe("contrat — documents et courriers", () => {
   const doc = buildOpenApiDocument("https://example.supabase.co/functions/v1/public-api") as any;
 
-  it("annonce la version 1.37.0 du contrat", () => {
-    expect(doc.info.version).toBe("1.37.0");
+  it("annonce la version 1.38.0 du contrat", () => {
+    expect(doc.info.version).toBe("1.38.0");
   });
 
   it("le lieu d'intervention est un type de champ structurel, à réponse objet (1.29.0)", () => {
@@ -841,6 +842,29 @@ describe("contrat — informations à destination des usagers (1.30.0)", () => {
     expect(schema.properties.phone.type).toEqual(["string", "null"]);
     expect(schema.properties.email.type).toEqual(["string", "null"]);
     expect(route.description).toContain("**courriel**");
+  });
+});
+
+describe("contrat — courrier libre des organismes du portail (1.38.0)", () => {
+  const doc = buildOpenApiDocument("https://example.supabase.co/functions/v1/public-api") as any;
+  const route = doc.paths["/v1/portal/organizations"].get;
+  const organization = doc.components.schemas.PortalOrganizationInfo;
+  const schema = doc.components.schemas.PortalFreeMail;
+
+  it("chaque organisme porte free_mail, toujours présent", () => {
+    expect(organization.required).toContain("free_mail");
+    expect(organization.properties.free_mail).toEqual({ $ref: "#/components/schemas/PortalFreeMail" });
+    expect(route.description).toContain("**courrier libre**");
+  });
+
+  it("deux champs, exactement : le booléen décidé à la frontière et le titre nullable", () => {
+    expect(Object.keys(schema.properties)).toEqual(["enabled", "title"]);
+    expect(schema.required).toEqual(["enabled", "title"]);
+    expect(schema.properties.enabled.type).toBe("boolean");
+    expect(schema.properties.title.type).toEqual(["string", "null"]);
+    expect(schema.properties.title.maxLength).toBe(80);
+    expect(schema.description).toContain("abonnée à Clara");
+    expect(schema.description).toContain("à la frontière");
   });
 });
 

@@ -670,7 +670,8 @@ Deno.serve(async (req: Request) => {
     //
     // Toute l'arborescence du tenant en une lecture : l'assistant ne sait pas
     // d'avance quel organisme l'usager a en tête. Ne sortent que les organismes
-    // AFFICHÉS (actifs, pas service interne) qui ont écrit quelque chose —
+    // AFFICHÉS (actifs, pas service interne) qui ont écrit quelque chose, ou
+    // dont le courrier libre est ouvert (1.38.0) —
     // `serializePortalOrganizationsInfo` en décide. Rien d'écrit ⇒ `[]`, pas un
     // 404 ; hors périmètre ⇒ 404, comme les autres routes du portail.
     if (segments[0] === "v1" && segments[1] === "portal" && segments[2] === "organizations") {
@@ -701,12 +702,36 @@ Deno.serve(async (req: Request) => {
         .in("organization_id", treeIds);
       if (infoError) throw infoError;
 
+      // Courrier libre (1.38.0) : le réglage de chaque organisme, et l'abonnement
+      // de la RACINE à Clara — sans Clara, personne ne recevrait le courrier. Le
+      // commutateur s'applique ici, à la frontière (`readPortalFreeMail`).
+      // `tenant_id` peut désigner une sous-organisation : on remonte à la racine.
+      // ⚠️ Un échec de lecture ne fait pas tomber la route (c'est aussi le corpus
+      // de l'assistant) : il FERME le courrier libre, comme `resolve_portal_assistant`.
+      const { data: freeMailRows } = await admin
+        .from("portal_free_mail_settings")
+        .select("organization_id, enabled, title")
+        .in("organization_id", treeIds);
+      let claraSubscribed = false;
+      const { data: rootId } = await admin.rpc("organization_root_id", { p_org_id: tenantId });
+      if (typeof rootId === "string" && rootId !== "") {
+        const { data: clara } = await admin
+          .from("organization_applications")
+          .select("application_id")
+          .eq("organization_id", rootId)
+          .eq("application_id", "clara")
+          .maybeSingle();
+        claraSubscribed = Boolean(clara);
+      }
+
       return jsonResponse(
         200,
         serializePortalOrganizationsInfo(
           tenantId,
           (organizations ?? []) as UserInfoOrganization[],
           (infoRows ?? []) as Array<{ organization_id: unknown; info: unknown; updated_at: unknown }>,
+          (freeMailRows ?? []) as Array<{ organization_id: unknown; enabled: unknown; title: unknown }>,
+          claraSubscribed,
         ),
         corsHeaders,
       );

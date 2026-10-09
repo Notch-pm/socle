@@ -19,6 +19,7 @@ import type {
   QuartierDto,
   SmtpSettingsDto,
   PortalAssistantDto,
+  PortalFreeMailDto,
   TenantDto,
 } from "./dto.ts";
 import { serializePortalTheme } from "./portalTheme.ts";
@@ -418,6 +419,27 @@ export function readPortalAssistant(raw: unknown): PortalAssistantDto {
     enabled,
     deposit_enabled: enabled && source.deposit_enabled === true,
     voice_enabled: enabled && source.voice_enabled === true,
+  };
+}
+
+/**
+ * Le courrier libre d'un organisme, commutateur appliqué (contrat 1.38.0).
+ * `row` = la ligne `portal_free_mail_settings` (ou rien) ; `claraSubscribed` =
+ * la racine est abonnée à Clara — sans Clara, personne ne recevrait le
+ * courrier. Rien de réglé, une forme inattendue ⇒ fermé.
+ *
+ * Whitelist : deux champs. Le titre sort trimé, borné à 80 caractères (miroir
+ * de la contrainte SQL et de `cleanFreeMailTitle`, `src/features/organizations/freeMail.ts`),
+ * même quand `enabled` est `false` : le réglage gouverne l'usage, pas la donnée.
+ */
+export const FREE_MAIL_TITLE_MAX_LENGTH = 80;
+
+export function readPortalFreeMail(row: unknown, claraSubscribed: boolean): PortalFreeMailDto {
+  const source = typeof row === "object" && row !== null && !Array.isArray(row) ? (row as Row) : {};
+  const title = typeof source.title === "string" ? source.title.trim() : "";
+  return {
+    enabled: claraSubscribed === true && source.enabled === true,
+    title: title === "" || title.length > FREE_MAIL_TITLE_MAX_LENGTH ? null : title,
   };
 }
 

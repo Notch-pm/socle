@@ -1626,6 +1626,48 @@ export type Database = {
           },
         ]
       }
+      portal_free_mail_settings: {
+        Row: {
+          created_at: string
+          enabled: boolean
+          organization_id: string
+          title: string | null
+          updated_at: string
+          updated_by: string | null
+        }
+        Insert: {
+          created_at?: string
+          enabled?: boolean
+          organization_id: string
+          title?: string | null
+          updated_at?: string
+          updated_by?: string | null
+        }
+        Update: {
+          created_at?: string
+          enabled?: boolean
+          organization_id?: string
+          title?: string | null
+          updated_at?: string
+          updated_by?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "portal_free_mail_settings_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: true
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "portal_free_mail_settings_updated_by_fkey"
+            columns: ["updated_by"]
+            isOneToOne: false
+            referencedRelation: "users"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       portal_pages: {
         Row: {
           created_at: string
@@ -2123,6 +2165,11 @@ export type Database = {
           secret_keys: string[]
         }[]
       }
+      organization_root_applications: {
+        Args: { p_org_id: string }
+        Returns: string[]
+      }
+      organization_root_id: { Args: { p_org_id: string }; Returns: string }
       parent_branding: {
         Args: { p_org_id: string }
         Returns: {

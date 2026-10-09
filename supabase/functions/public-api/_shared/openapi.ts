@@ -30,7 +30,7 @@ export function buildOpenApiDocument(serverUrl: string): Record<string, unknown>
     openapi: "3.1.0",
     info: {
       title: "API Socle — Référentiel de la gamme",
-      version: "1.37.0",
+      version: "1.38.0",
       description: [
         "API **en lecture seule** exposant le référentiel central de la gamme : les",
         "**organisations** (et sous-organisations) avec l'intégralité de leur configuration,",
@@ -422,10 +422,13 @@ export function buildOpenApiDocument(serverUrl: string): Record<string, unknown>
             "lit pour répondre à « à quelle heure ouvre la mairie ? ». Pendant usager de",
             "`GET /v1/organizations/{id}/agent-guidance`, qui reste interne et ne se sert jamais ici.",
             "",
-            "Chaque organisme porte aussi le **téléphone** et le **courriel** de sa fiche (1.31.0).",
+            "Chaque organisme porte aussi le **téléphone** et le **courriel** de sa fiche (1.31.0),",
+            "et son **courrier libre** (`free_mail`, 1.38.0) : l'usager peut-il lui écrire depuis le",
+            "portail un courrier qui ne relève d'aucune démarche (reçu dans Clara) ?",
             "",
             "Ne sont listés que les organismes **affichés** (actifs, pas service interne) qui ont",
-            "**écrit** quelque chose ou renseigné un téléphone ou un courriel. **Pas d'héritage** :",
+            "**écrit** quelque chose, renseigné un téléphone ou un courriel, ou **ouvert le courrier",
+            "libre**. **Pas d'héritage** :",
             "un organisme absent n'a rien dit — ne lui prêtez pas les horaires ni les coordonnées de",
             "son parent. Enregistré = publié : il n'y a pas de brouillon.",
             "",
@@ -445,7 +448,8 @@ export function buildOpenApiDocument(serverUrl: string): Record<string, unknown>
           responses: {
             "200": {
               description:
-                "Organismes qui ont écrit quelque chose ou renseigné une coordonnée, la collectivité en tête.",
+                "Organismes qui ont écrit quelque chose, renseigné une coordonnée ou ouvert le courrier " +
+                "libre, la collectivité en tête.",
               content: {
                 "application/json": {
                   schema: { type: "array", items: { $ref: "#/components/schemas/PortalOrganizationInfo" } },
@@ -1901,7 +1905,7 @@ export function buildOpenApiDocument(serverUrl: string): Record<string, unknown>
           description:
             "Un organisme du portail et ce qu'il dit à ses usagers. **Public.** Textes en Markdown, " +
             "en français.",
-          required: ["id", "name", "slug", "is_tenant", "phone", "email", "updated_at", "info"],
+          required: ["id", "name", "slug", "is_tenant", "phone", "email", "updated_at", "info", "free_mail"],
           properties: {
             id: { type: "string", format: "uuid" },
             name: { type: "string", description: "Nom de l'organisme." },
@@ -1966,6 +1970,7 @@ export function buildOpenApiDocument(serverUrl: string): Record<string, unknown>
                 },
               },
             },
+            free_mail: { $ref: "#/components/schemas/PortalFreeMail" },
           },
           example: {
             id: "d5227d25-f327-493a-a9a2-278397531e33",
@@ -1981,6 +1986,35 @@ export function buildOpenApiDocument(serverUrl: string): Record<string, unknown>
               ],
               openingHoursNotes: "Fermé les jours fériés.",
               faq: [{ question: "Faut-il prendre rendez-vous ?", answer: "Seulement pour les passeports." }],
+            },
+            free_mail: { enabled: true, title: null },
+          },
+        },
+        PortalFreeMail: {
+          type: "object",
+          description:
+            "Courrier libre de l'organisme (contrat 1.38.0) : l'usager lui écrit, depuis le " +
+            "portail, un courrier qui ne relève d'aucune démarche ; la gestion du courrier " +
+            "(Clara) le reçoit. Réglé dans le Socle **par organisme**, sans héritage.\n\n" +
+            "⚠️ **Toujours présent, jamais `null`** : rien de réglé ⇒ `{ enabled: false, title: null }`. " +
+            "Un consommateur d'avant 1.38.0 ne reçoit pas le champ : lisez une absence comme fermé.\n\n" +
+            "⚠️ Le commutateur s'applique **à la frontière** : `enabled` n'est `true` que si " +
+            "l'organisme l'a ouvert **et** que la collectivité est abonnée à Clara. Lisez-le tel quel.",
+          required: ["enabled", "title"],
+          properties: {
+            enabled: {
+              type: "boolean",
+              description:
+                "Le portail propose d'écrire un courrier libre à cet organisme " +
+                "(page `/<slug>/courrier`, ou `/courrier` pour la collectivité).",
+            },
+            title: {
+              type: ["string", "null"],
+              maxLength: 80,
+              description:
+                "Titre saisi, trimé ; `null` ⇒ affichez votre libellé par défaut, traduit " +
+                "(« Envoyer un courrier libre »). Servi même quand `enabled` est `false` " +
+                "(le réglage gouverne l'usage, pas la donnée) : ne l'affichez que si `enabled`.",
             },
           },
         },

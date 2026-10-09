@@ -410,7 +410,8 @@ export interface DayOpeningHoursDto {
  * usager d'`AgentGuidanceDto`, qui reste interne.
  *
  * Seuls les organismes **affichés** (actifs, pas service interne) qui ont
- * **écrit** quelque chose sont listés. Pas d'héritage : un organisme absent de
+ * **écrit** quelque chose, renseigné une coordonnée ou **ouvert le courrier
+ * libre** sont listés. Pas d'héritage : un organisme absent de
  * la liste n'a rien dit, il n'emprunte pas les horaires de son parent.
  */
 export interface PortalOrganizationInfoDto {
@@ -429,6 +430,30 @@ export interface PortalOrganizationInfoDto {
   /** Dernier enregistrement des informations usagers (ISO 8601), `null` si rien d'écrit. */
   updated_at: string | null;
   info: UserInfoBody;
+  /**
+   * Le courrier libre de l'organisme sur le portail (contrat 1.38.0). Toujours
+   * présent, jamais `null`.
+   */
+  free_mail: PortalFreeMailDto;
+}
+
+/**
+ * Courrier libre d'un organisme : l'usager lui écrit, depuis le portail, un
+ * courrier qui ne relève d'aucune démarche ; Clara le reçoit (contrat 1.38.0).
+ *
+ * ⚠️ Le commutateur s'applique **à la frontière** (motif `PortalAssistantDto`) :
+ * `enabled` n'est `true` que si l'organisme l'a ouvert **et** que sa
+ * collectivité est abonnée à Clara. Un consommateur lit le booléen tel quel.
+ */
+export interface PortalFreeMailDto {
+  /** Le portail propose d'écrire un courrier libre à cet organisme. */
+  enabled: boolean;
+  /**
+   * Titre saisi (trimé, 80 caractères au plus), ou `null` : le portail met alors
+   * son libellé par défaut, traduit. Servi même quand `enabled` est `false`
+   * (le réglage gouverne l'usage, pas la donnée).
+   */
+  title: string | null;
 }
 
 /**

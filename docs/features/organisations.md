@@ -166,6 +166,19 @@ garde sa modale (`OrganizationsManager` reçoit `onEditOrganization` seulement c
   interne. Depuis 1.31.0, elle porte aussi le **téléphone** et le **courriel** de la fiche
   (« Informations de base »), et liste un organisme qui n'a que ça (rubriques vides). Français seulement pour l'instant (pas de `translations`). Côté superadmin, même
   composant en carte d'`OrgSettingsPage` (`?section=usagers`).
+- **Courrier libre (site Nora)** (`FreeMailSection`, 2026-10-09, sous les informations usagers —
+  même onglet, même carte superadmin, donc **jamais sur un service interne**) : un interrupteur
+  « Permettre aux usagers d'envoyer un courrier libre à cet organisme depuis le site » (effet
+  immédiat) et un **titre** (80 caractères, vide = « Envoyer un courrier libre », traduit par
+  Nora). Le courrier part dans **Clara**. Table `portal_free_mail_settings` (une ligne par
+  organisation, **pas d'héritage**, écriture `is_admin_of_self_or_ancestor`), règles pures
+  `freeMail.ts` (testées). ⚠️ **Disponible seulement si la racine est abonnée à Nora ET à Clara**
+  (RPC `organization_root_applications`, lisible depuis une sous-organisation) ; sinon l'écran dit
+  pourquoi, sans bascule. L'API, elle, ne vérifie que Clara (la clé de Nora ne voit déjà que les
+  collectivités abonnées à Nora) : résilier Clara referme tout, sans toucher aux lignes. ⚠️ Couper
+  l'interrupteur **conserve** le titre ; basculer envoie le titre **enregistré**, jamais une saisie
+  en cours. Servi par `GET /v1/portal/organizations` → `free_mail` (1.38.0) ; `courrier` est un
+  slug réservé (`SLUG_RESERVED`, contrainte `organizations_slug_url_form`).
 - **Onglet « Langues »** (`LanguagesSection`, **organisation principale uniquement** — une
   sous-organisation y lit qu'elle suit sa racine) : quelles langues la collectivité active pour
   s'adresser à ses usagers. Voir feature « Langues et libellés traduits ».

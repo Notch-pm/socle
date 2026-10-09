@@ -14,6 +14,7 @@
  * ni organisme qui n'a rien écrit.
  */
 import type { DayOpeningHoursDto, PortalOrganizationInfoDto, UserInfoBody } from "./dto.ts";
+import { readPortalFreeMail } from "./serializers.ts";
 
 type Row = Record<string, unknown>;
 
@@ -124,7 +125,9 @@ function contact(value: unknown): string | null {
 /**
  * Organismes du portail et leurs informations usagers. Ne sort qu'un organisme
  * **affiché** (actif, pas service interne) qui a **écrit** quelque chose ou qui
- * a un **téléphone ou un courriel** sur sa fiche (1.31.0). Le
+ * a un **téléphone ou un courriel** sur sa fiche (1.31.0), ou dont le
+ * **courrier libre est ouvert** (1.38.0 — sinon le portail ne saurait pas
+ * qu'on peut lui écrire). Le
  * tenant en tête, puis les autres par nom : c'est l'ordre dans lequel un
  * usager (ou un assistant) les lit.
  */
@@ -132,8 +135,13 @@ export function serializePortalOrganizationsInfo(
   tenantId: string,
   organizations: UserInfoOrganization[],
   rows: Array<{ organization_id: unknown; info: unknown; updated_at: unknown }>,
+  /** Lignes `portal_free_mail_settings` de l'arbre (1.38.0). */
+  freeMailRows: Array<{ organization_id: unknown; enabled: unknown; title: unknown }> = [],
+  /** La racine du tenant est abonnée à Clara : sans elle, aucun courrier libre n'est ouvert. */
+  claraSubscribed = false,
 ): PortalOrganizationInfoDto[] {
   const byOrg = new Map(rows.map((row) => [String(row.organization_id), row]));
+  const freeMailByOrg = new Map(freeMailRows.map((row) => [String(row.organization_id), row]));
   const out: PortalOrganizationInfoDto[] = [];
   for (const org of organizations) {
     if (org.status !== "active" || org.is_internal_service === true) continue;
@@ -141,7 +149,8 @@ export function serializePortalOrganizationsInfo(
     const info = parseUserInfo(row?.info);
     const phone = contact(org.phone);
     const email = contact(org.email);
-    if (isUserInfoEmpty(info) && phone === null && email === null) continue;
+    const freeMail = readPortalFreeMail(freeMailByOrg.get(org.id), claraSubscribed);
+    if (isUserInfoEmpty(info) && phone === null && email === null && !freeMail.enabled) continue;
     out.push({
       id: org.id,
       name: org.name,
@@ -151,6 +160,7 @@ export function serializePortalOrganizationsInfo(
       email,
       updated_at: typeof row?.updated_at === "string" ? row.updated_at : null,
       info,
+      free_mail: freeMail,
     });
   }
   return out.sort((a, b) =>

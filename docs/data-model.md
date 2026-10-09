@@ -336,6 +336,29 @@ aucun endpoint, il décrit ce qui existe **en base**.
 
 ---
 
+### `portal_free_mail_settings` — courrier libre du portail (2026-10-09)
+
+- `organization_id` **clé primaire**, FK **CASCADE** vers `organizations` (une ligne par
+  organisation, **racine comme sous-organisation**, sans héritage) ; `enabled` bool NOT NULL
+  défaut `false` (le portail propose d'écrire un courrier libre à cet organisme, reçu dans
+  Clara) ; `title` text **nullable**, CHECK `portal_free_mail_settings_title_length`
+  (`char_length(btrim(title))` entre 1 et 80 ; `null` = libellé par défaut du portail) ;
+  `created_at` / `updated_at` (trigger `set_updated_at`) ; `updated_by` FK `users` **SET NULL**.
+- **Aucune ligne = fermé.** ⚠️ Le réglage gouverne l'usage, pas la donnée : couper `enabled`
+  **conserve** le titre. ⚠️ L'abonnement n'est **pas** vérifié en base : `public-api` ne sert
+  `free_mail.enabled = true` que si la **racine est abonnée à Clara** (`readPortalFreeMail`).
+- **RLS** (calquée sur `organization_attributions`) : lecture `has_org_access OR
+  is_admin_of_self_or_ancestor` · INSERT/UPDATE `is_super_admin() OR
+  is_admin_of_self_or_ancestor` · pas de DELETE client.
+- Fonctions de la même migration : `organization_root_id(p_org_id)` (racine d'une organisation,
+  **service role seul**, utilisée par `public-api`) et `organization_root_applications(p_org_id)`
+  (`text[]` des applications de la racine, SECURITY DEFINER, **vide** si l'appelant n'a pas accès
+  à l'organisation — l'admin d'une sous-organisation ne lit pas la ligne d'abonnement de sa racine).
+- Servi dans `GET /v1/portal/organizations?tenant_id=` → `free_mail` (contrat 1.38.0). Fiche :
+  [`features/organisations.md`](features/organisations.md).
+
+---
+
 ---
 
 ## Catalogue de démarches

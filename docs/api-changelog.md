@@ -13,6 +13,27 @@ Format d'une entrée : `## AAAA-MM-JJ — <api> — ajout|correctif|rupture`
 
 ---
 
+## 2026-10-09 — public-api — ajout (courrier libre des organismes)
+
+Version du contrat **1.38.0**, ajout **additif**.
+
+- **`PortalOrganizationInfo.free_mail`** (`GET /v1/portal/organizations?tenant_id=`, toujours
+  présent) : `{ enabled: boolean, title: string | null }` — l'usager peut-il écrire à cet
+  organisme, depuis le portail, un courrier qui ne relève d'aucune démarche ? Le courrier est
+  reçu dans **Clara**. Réglé par organisme (toute organisation affichée, sans héritage), effet
+  immédiat.
+- ⚠️ Commutateur appliqué **à la frontière** : `enabled` n'est `true` que si l'organisme l'a
+  ouvert **et** que sa collectivité est abonnée à Clara. `title` = titre saisi, trimé (80
+  caractères au plus), servi même fermé ; `null` ⇒ libellé par défaut du portail, traduit.
+- Un organisme qui n'a **que** son courrier libre ouvert (ni texte, ni coordonnée) est désormais
+  listé.
+- `courrier` rejoint les **slugs réservés** d'une organisation : le portail sert
+  `/<slug>/courrier` (et `/courrier` pour la collectivité).
+- Consommateur concerné (Nora) : un portail d'avant 1.38.0 ne lit pas le champ ; une absence se
+  lit comme fermé.
+
+---
+
 ## 2026-10-09 — ai-api — correctif (documentation du coût de la voix)
 
 Aucun changement de comportement. La description de l'OpenAPI disait que « la synthèse coûte

@@ -17,6 +17,7 @@ import { LanguagesSection } from "@/features/languages/LanguagesSection";
 import { AgentGuidanceSection } from "@/features/organizations/AgentGuidanceSection";
 import { UserInfoSection } from "@/features/organizations/UserInfoSection";
 import { AttributionsSection } from "@/features/organizations/AttributionsSection";
+import { FreeMailSection } from "@/features/organizations/FreeMailSection";
 import { hasUserInfoTab } from "@/features/organizations/userInfo";
 import { IntegrationsSection } from "@/features/integrations/IntegrationsSection";
 import { ApiKeysSection } from "@/features/superadmin/organizations/sections/ApiKeysSection";
@@ -168,7 +169,13 @@ export function OrgSettingsPage() {
         {activeSection === "charte" && <BrandingSection organization={organization} />}
         {/* Le composant dit lui-même qu'une sous-organisation suit sa racine. */}
         {activeSection === "langues" && <LanguagesSection organization={organization} />}
-        {activeSection === "usagers" && <UserInfoSection organization={organization} />}
+        {/* Avec le courrier libre du site (Nora → Clara), offre au public lui aussi. */}
+        {activeSection === "usagers" && (
+          <div className="flex flex-col gap-6">
+            <UserInfoSection organization={organization} />
+            <FreeMailSection organization={organization} />
+          </div>
+        )}
         {/* Idem : la doctrine de la collectivité se règle sur sa racine. */}
         {activeSection === "agents" && <AgentGuidanceSection organization={organization} />}
         {activeSection === "domaines" && <DomainsSection organizationId={organization.id} />}

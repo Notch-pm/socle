@@ -246,6 +246,13 @@ démarches ». Ajouter une collectivité au portail = une ligne de domaine, aucu
   (collectivité en tête), le descriptif, les **horaires d'accueil** et la FAQ rédigés dans
   l'onglet « Informations usagers » de l'organisation — public, sans brouillon, sans héritage ;
   rien d'écrit = `[]`. Lu par Nora et par son assistant. Détail : [`organisations.md`](organisations.md).
+- **Courrier libre** (2026-10-09, contrat 1.38.0) : chaque organisme de
+  `GET /v1/portal/organizations` porte `free_mail: { enabled, title }` — l'usager peut-il lui
+  écrire, depuis le portail, un courrier qui ne relève d'aucune démarche (reçu dans **Clara**) ?
+  Page Nora `/<slug>/courrier` (`/courrier` pour la collectivité ; `courrier` est un **slug
+  réservé**). ⚠️ `enabled` est décidé **à la frontière** : ligne ouverte **et** racine abonnée à
+  Clara ; `title` `null` = libellé par défaut traduit par Nora. Un organisme qui n'a que son
+  courrier libre ouvert est listé. Réglage par organisme : [`organisations.md`](organisations.md).
 - Code : `src/features/portal/` — `portalPage.ts` (+ `fieldsForKind`, `sectionText`,
   `setSectionTranslation`, `hasTranslations`), `portalReorder.ts`, `catalogue.ts` (purs,
   **testés** — `catalogue.ts` porte aussi `audiences` par entrée, `catalogueAudiences` et
