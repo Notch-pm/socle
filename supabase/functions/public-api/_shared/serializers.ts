@@ -12,6 +12,7 @@ import type {
   ProcedureDocumentDto,
   ProcedureDocumentsDto,
   OrganizationDto,
+  PortalCategoryRefDto,
   PortalProcedureDetailDto,
   PortalProcedureDto,
   OrganizationProcedureDto,
@@ -526,9 +527,25 @@ export interface PortalOrganizationInput {
   handlingOrganizationId: string | null;
 }
 
+/**
+ * Catégorie d'une démarche du portail. `null` quand la démarche n'en a pas —
+ * ou quand la ligne n'a pas été trouvée : une catégorie n'est qu'un libellé de
+ * plus sur la carte, son absence n'empêche rien.
+ */
+export function serializePortalCategoryRef(category: Row | null): PortalCategoryRefDto | null {
+  if (category === null) return null;
+  return {
+    id: str(category.id),
+    name: str(category.name),
+    icon: nonEmpty(category.icon),
+    translations: category.translations ?? null,
+  };
+}
+
 export function serializePortalProcedure(
   row: Row,
   organizations: PortalOrganizationInput[] = [],
+  category: Row | null = null,
 ): PortalProcedureDto {
   return {
     id: str(row.id),
@@ -545,6 +562,7 @@ export function serializePortalProcedure(
       handling_organization_id: nullableStr(org.handlingOrganizationId),
     })),
     audiences: readAudiences(row.requester_config),
+    category: serializePortalCategoryRef(category),
     translations: row.translations ?? null,
   };
 }
@@ -566,15 +584,7 @@ export function serializePortalProcedureDetail(
   category: Row | null = null,
 ): PortalProcedureDetailDto {
   return {
-    ...serializePortalProcedure(row, organizations),
-    category:
-      category === null
-        ? null
-        : {
-            id: str(category.id),
-            name: str(category.name),
-            translations: category.translations ?? null,
-          },
+    ...serializePortalProcedure(row, organizations, category),
     form_schema: detail?.form_schema ?? null,
     requester_config: detail?.requester_config ?? null,
     // ⚠️ Depuis `detail`, jamais depuis `row` : comme `form_schema`, cette

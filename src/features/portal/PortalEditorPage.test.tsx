@@ -59,6 +59,10 @@ vi.mock("@/features/procedures/useProcedures", () => ({
   useProceduresForOrg: () => ({ data: [] }),
 }));
 
+vi.mock("@/features/categories/useCategories", () => ({
+  useCategoriesQuery: () => ({ data: [] }),
+}));
+
 vi.mock("@/features/organizations/useOrganizationProcedures", () => ({
   useEnabledProcedureBindings: () => ({ data: [] }),
 }));

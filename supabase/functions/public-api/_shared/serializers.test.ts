@@ -735,7 +735,7 @@ describe("serializePortalProcedure — le paramétrage d'instruction ne sort pas
     category_id: "cat-1",
   };
 
-  it("n'expose que les neuf champs publics", () => {
+  it("n'expose que les dix champs publics", () => {
     expect(serializePortalProcedure(row)).toEqual({
       id: "proc-1",
       name: "Demande d'acte de naissance",
@@ -749,6 +749,9 @@ describe("serializePortalProcedure — le paramétrage d'instruction ne sort pas
       // `requester_config` de la fixture ne déclare aucun public connu : rien
       // à servir. ⚠️ Pas « tous publics » — voir le test dédié plus bas.
       audiences: [],
+      // `category_id` ne sort jamais tel quel : sans la ligne de la catégorie
+      // jointe par l'appelant, la démarche est servie sans catégorie.
+      category: null,
       // Des libellés, pas du paramétrage : le portail en a besoin pour servir
       // la démarche dans la langue choisie par l'usager.
       translations: { br: { name: "Testeni ganedigezh" } },
@@ -886,7 +889,15 @@ describe("serializePortalProcedureDetail — le formulaire sort, l'instruction n
       faq: { items: [{ question: "Où déposer ?", answer: "En ligne." }] },
     },
   };
-  const category = { id: "cat-1", name: "État civil", translations: { br: { name: "Stad-civil" } } };
+  const category = {
+    id: "cat-1",
+    name: "État civil",
+    icon: "scale",
+    translations: { br: { name: "Stad-civil" } },
+    // Rien d'autre de la ligne ne sort.
+    organization_id: "org-1",
+    integration_id: null,
+  };
 
   it("ajoute au public de la liste la catégorie et les deux schémas de saisie", () => {
     const dto = serializePortalProcedureDetail(
@@ -913,11 +924,27 @@ describe("serializePortalProcedureDetail — le formulaire sort, l'instruction n
       ],
       audiences: ["citoyen"],
       translations: { br: { name: "Testeni ganedigezh" } },
-      category: { id: "cat-1", name: "État civil", translations: { br: { name: "Stad-civil" } } },
+      category: {
+        id: "cat-1",
+        name: "État civil",
+        icon: "scale",
+        translations: { br: { name: "Stad-civil" } },
+      },
       form_schema: detail.form_schema,
       requester_config: detail.requester_config,
       user_communication: detail.user_communication,
     });
+  });
+
+  it("la liste porte la même catégorie, pictogramme compris (1.41.0)", () => {
+    expect(serializePortalProcedure(row, [], category).category).toEqual({
+      id: "cat-1",
+      name: "État civil",
+      icon: "scale",
+      translations: { br: { name: "Stad-civil" } },
+    });
+    // Sans pictogramme choisi : `null`, au consommateur d'afficher son repli.
+    expect(serializePortalProcedure(row, [], { ...category, icon: "" }).category?.icon).toBeNull();
   });
 
   it("⚠️ user_communication vient du DÉTAIL, pas de la ligne du catalogue", () => {

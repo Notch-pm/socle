@@ -333,8 +333,8 @@ describe("contrat — traduction de la communication usager (1.26.0)", () => {
 describe("contrat — documents et courriers", () => {
   const doc = buildOpenApiDocument("https://example.supabase.co/functions/v1/public-api") as any;
 
-  it("annonce la version 1.39.0 du contrat", () => {
-    expect(doc.info.version).toBe("1.39.0");
+  it("annonce la version 1.41.0 du contrat", () => {
+    expect(doc.info.version).toBe("1.41.0");
   });
 
   it("le lieu d'intervention est un type de champ structurel, à réponse objet (1.29.0)", () => {
@@ -601,6 +601,7 @@ describe("contrat — démarches du portail", () => {
     expect(Object.keys(schema.properties).sort()).toEqual([
       "access_mode",
       "audiences",
+      "category",
       "id",
       "input_duration_minutes",
       "name",
@@ -612,6 +613,15 @@ describe("contrat — démarches du portail", () => {
     for (const leak of ["form_schema", "knowledge_base", "agent_description", "requester_config"]) {
       expect(schema.properties).not.toHaveProperty(leak);
     }
+  });
+
+  it("sert la catégorie dès la liste, pictogramme compris (1.41.0)", () => {
+    const schema = doc.components.schemas.PortalProcedure;
+    expect(schema.required).toContain("category");
+    const ref = doc.components.schemas.PortalCategoryRef;
+    expect(Object.keys(ref.properties).sort()).toEqual(["icon", "id", "name", "translations"]);
+    // Le piège qu'un consommateur doit lire : une valeur inconnue se replie.
+    expect(ref.properties.icon.description).toContain("neutre");
   });
 
   it("sert les PUBLICS d'une démarche, jamais la configuration qui les porte", () => {

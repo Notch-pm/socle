@@ -30,7 +30,7 @@ export function buildOpenApiDocument(serverUrl: string): Record<string, unknown>
     openapi: "3.1.0",
     info: {
       title: "API Socle — Référentiel de la gamme",
-      version: "1.39.0",
+      version: "1.41.0",
       description: [
         "API **en lecture seule** exposant le référentiel central de la gamme : les",
         "**organisations** (et sous-organisations) avec l'intégralité de leur configuration,",
@@ -1369,7 +1369,7 @@ export function buildOpenApiDocument(serverUrl: string): Record<string, unknown>
           description:
             "Démarche telle qu'un usager la voit. Whitelist beaucoup plus étroite que " +
             "`Procedure` : le paramétrage d'instruction n'y figure pas.",
-          required: ["id", "name", "organizations", "audiences", "access_mode"],
+          required: ["id", "name", "organizations", "audiences", "access_mode", "category"],
           properties: {
             id: { type: "string", format: "uuid" },
             name: { type: "string", description: "Intitulé de la démarche." },
@@ -1426,6 +1426,14 @@ export function buildOpenApiDocument(serverUrl: string): Record<string, unknown>
                 "`GET /v1/portal/procedures/{id}` dans `requester_config`.",
               items: { type: "string", enum: ["citoyen", "entreprise", "association"] },
               examples: [["citoyen", "association"]],
+            },
+            category: {
+              description:
+                "Catégorie de la démarche — libellé, pictogramme, traductions —, `null` si elle " +
+                "n'en a pas. **Dans la liste depuis le contrat 1.41.0** (elle n'était servie que " +
+                "par le détail) : de quoi montrer la catégorie et son pictogramme sur une carte " +
+                "sans charger chaque démarche.",
+              oneOf: [{ $ref: "#/components/schemas/PortalCategoryRef" }, { type: "null" }],
             },
             translations: { $ref: "#/components/schemas/Translations" },
           },
@@ -1490,17 +1498,10 @@ export function buildOpenApiDocument(serverUrl: string): Record<string, unknown>
             {
               type: "object",
               description:
-                "Ce que la liste ne porte pas : la catégorie, les schémas de saisie, et " +
-                "ce que la collectivité écrit pour l'usager.",
-              required: ["category", "form_schema", "requester_config", "user_communication"],
+                "Ce que la liste ne porte pas : les schémas de saisie, et ce que la " +
+                "collectivité écrit pour l'usager.",
+              required: ["form_schema", "requester_config", "user_communication"],
               properties: {
-                category: {
-                  description: "Catégorie de la démarche. `null` si elle n'en a pas.",
-                  oneOf: [
-                    { $ref: "#/components/schemas/PortalCategoryRef" },
-                    { type: "null" },
-                  ],
-                },
                 form_schema: {
                   description:
                     "Schéma de formulaire possédé, `{ version: 1, content: [...] }`. Un nœud " +
@@ -1523,11 +1524,20 @@ export function buildOpenApiDocument(serverUrl: string): Record<string, unknown>
         },
         PortalCategoryRef: {
           type: "object",
-          description: "Catégorie d'une démarche : de quoi la nommer, rien de plus.",
-          required: ["id", "name"],
+          description: "Catégorie d'une démarche : de quoi la nommer et la dessiner, rien de plus.",
+          required: ["id", "name", "icon"],
           properties: {
             id: { type: "string", format: "uuid" },
             name: { type: "string", description: "Libellé en français, la langue pivot." },
+            icon: {
+              type: ["string", "null"],
+              description:
+                "Pictogramme (contrat 1.41.0) : nom d'icône **Lucide** en kebab-case " +
+                "(`utensils`, `school`, `backpack`…), `null` si aucun n'a été choisi. Le " +
+                "catalogue est fermé et ne fait que s'allonger — mais une valeur que vous ne " +
+                "connaissez pas doit retomber sur un pictogramme neutre, pas casser l'affichage.",
+              examples: ["utensils"],
+            },
             translations: { $ref: "#/components/schemas/Translations" },
           },
         },

@@ -186,7 +186,10 @@ async function loadPortalCatalogue(
         "access_mode, " +
         // `integration_id` EXCLUT : une démarche partenaire (Arpège…) n'est
         // jamais au portail (`isPubliclyPublished`).
-        "integration_id",
+        "integration_id, " +
+        // `category_id` ne sort pas tel quel : il sert à joindre la catégorie
+        // (libellé, pictogramme) que la carte affiche — `loadPortalCategories`.
+        "category_id",
     )
     .eq("organization_id", rootId);
   if (proceduresError) throw proceduresError;
@@ -199,6 +202,33 @@ async function loadPortalCatalogue(
     organizations: tree,
     today: isoDay(new Date()),
   });
+}
+
+/**
+ * Les catégories des démarches publiées, en une lecture, par identifiant. Une
+ * catégorie n'est qu'un libellé de plus sur la carte : une ligne introuvable
+ * donne une démarche sans catégorie, jamais une erreur.
+ */
+async function loadPortalCategories(
+  admin: ReturnType<typeof createClient>,
+  catalogue: PublishedProcedure[],
+): Promise<Map<string, Record<string, unknown>>> {
+  const ids = [
+    ...new Set(
+      catalogue
+        .map((entry) => entry.row.category_id)
+        .filter((id): id is string => typeof id === "string" && id !== ""),
+    ),
+  ];
+  const byId = new Map<string, Record<string, unknown>>();
+  if (ids.length === 0) return byId;
+  const { data, error } = await admin
+    .from("categories")
+    .select("id, name, icon, translations")
+    .in("id", ids);
+  if (error) throw error;
+  for (const row of (data ?? []) as Array<Record<string, unknown>>) byId.set(String(row.id), row);
+  return byId;
 }
 
 /** SHA-256 hexadécimal (même algorithme que la génération côté navigateur). */
@@ -538,7 +568,7 @@ Deno.serve(async (req: Request) => {
         if (typeof categoryId === "string" && categoryId !== "") {
           const { data: categoryRow, error: categoryError } = await admin
             .from("categories")
-            .select("id, name, translations")
+            .select("id, name, icon, translations")
             .eq("id", categoryId)
             .maybeSingle();
           if (categoryError) throw categoryError;
@@ -557,9 +587,16 @@ Deno.serve(async (req: Request) => {
         );
       }
 
+      const categories = await loadPortalCategories(admin, catalogue);
       return jsonResponse(
         200,
-        catalogue.map((entry) => serializePortalProcedure(entry.row, entry.organizations)),
+        catalogue.map((entry) =>
+          serializePortalProcedure(
+            entry.row,
+            entry.organizations,
+            categories.get(String(entry.row.category_id)) ?? null,
+          ),
+        ),
         corsHeaders,
       );
     }

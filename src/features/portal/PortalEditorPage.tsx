@@ -20,6 +20,7 @@ import {
 } from "@/features/superadmin/organizations/useOrganizationsAdmin";
 import { useAdminRootOrganizations } from "@/features/ai-usage/useAdminRootOrganizations";
 import { useProceduresForOrg } from "@/features/procedures/useProcedures";
+import { useCategoriesQuery } from "@/features/categories/useCategories";
 import { useEnabledProcedureBindings } from "@/features/organizations/useOrganizationProcedures";
 import { useOrganizationLanguages } from "@/features/languages/useOrganizationLanguages";
 import { PortalEditor } from "@/features/portal/PortalEditor";
@@ -245,6 +246,7 @@ function LoadedEditor({
   onClose: () => void;
 }) {
   const { data: procedures } = useProceduresForOrg(organization.id);
+  const { data: categories } = useCategoriesQuery(organization.id);
   // L'arbre que le portail sert — la racine et ses sous-organisations actives —
   // et qui y propose quoi : le canevas rend la liste réelle, avec les
   // organismes de chaque démarche, exactement comme le portail.
@@ -347,8 +349,8 @@ function LoadedEditor({
 
   const today = isoDay();
   const catalogue = React.useMemo(
-    () => buildCatalogue(procedures ?? [], bindings ?? [], tree, today),
-    [procedures, bindings, tree, today],
+    () => buildCatalogue(procedures ?? [], bindings ?? [], tree, today, categories ?? []),
+    [procedures, bindings, tree, today, categories],
   );
 
   const contact = {

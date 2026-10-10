@@ -13,6 +13,23 @@ Format d'une entrée : `## AAAA-MM-JJ — <api> — ajout|correctif|rupture`
 
 ---
 
+## 2026-10-10 — public-api — ajout (pictogramme de catégorie sur le portail)
+
+Version du contrat **1.41.0**, ajout **additif** (1.40.0 = intégration Goodflag, branche à part).
+
+- **`GET /v1/portal/procedures`** : chaque démarche porte désormais **`category`**
+  (`PortalCategoryRef` ou `null`) — elle n'était servie que par le détail. De quoi afficher la
+  catégorie et son pictogramme sur une carte sans charger chaque démarche.
+- **`PortalCategoryRef.icon`** (liste **et** détail) : le pictogramme choisi au Socle, nom
+  d'icône **Lucide** en kebab-case (`utensils`, `school`, `backpack`…), `null` si aucun. Le
+  catalogue est fermé et passe de 21 à **69** valeurs (restauration scolaire, périscolaire,
+  séjours, crèche, loisirs, médical, sports, culture…) ; il ne fait que s'allonger. ⚠️ Une
+  valeur inconnue du consommateur doit retomber sur un pictogramme neutre.
+- `CategoryDto.icon` (`GET /v1/categories`) inchangé — il sert les mêmes valeurs.
+- Consommateur concerné : **Nora** (cartes de démarches).
+
+---
+
 ## 2026-10-09 — public-api — ajout (assistant par organisation)
 
 Version du contrat **1.39.0**, ajout **additif**.

@@ -1,6 +1,7 @@
 import type { ReactNode } from "react";
-import { Building2, ChevronDown, FileText, UserRound } from "lucide-react";
+import { ArrowRight, Building2, ChevronDown, Clock, FileText, Star, UserRound } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { ICON_OPTIONS } from "@/features/categories/icon-options";
 import type { DemarchesSection as DemarchesSectionData } from "@/features/portal/portalPage";
 import {
   AUDIENCE_FILTER_LABELS,
@@ -106,55 +107,81 @@ export function DemarchesSection({
         </p>
       ) : (
         <div className={cn("grid gap-2.5", GRID_COLS_CLASS[cols])}>
-          {entries.map((entry) => {
-            const isPinned = pinned.has(entry.id);
-            return (
-              <div
-                key={entry.id}
-                style={isPinned ? { background: "var(--pt-primary-soft)" } : undefined}
-                className={cn(
-                  "flex flex-col gap-2 rounded-[var(--pt-radius)] border p-[var(--pt-card-pad)] shadow-[var(--pt-shadow)]",
-                  isPinned
-                    ? "border-[color:var(--pt-primary)]"
-                    : "border-[color:var(--pt-border)] bg-white",
-                )}
-              >
-                <div className="flex items-center justify-between gap-1.5">
-                  <div
-                    className="flex size-[26px] items-center justify-center rounded-[var(--pt-radius-sm)]"
-                    style={{ background: "var(--pt-primary-soft)" }}
-                  >
-                    <FileText className="size-3.5 text-[color:var(--pt-primary)]" />
-                  </div>
-                  {isPinned ? (
-                    <span className="whitespace-nowrap rounded-full bg-[color:var(--pt-accent)] px-1.5 py-0.5 text-[length:var(--pt-tiny)] font-extrabold text-[color:var(--pt-accent-ink)]">
-                      À la une
-                    </span>
-                  ) : null}
-                </div>
-                <span className="text-[length:var(--pt-body)] font-bold leading-tight text-[color:var(--pt-ink)]">
-                  {entry.name}
-                </span>
-                {entry.shortDescription ? (
-                  <span className="text-[length:var(--pt-small)] text-[color:var(--pt-muted)]">
-                    {entry.shortDescription}
-                  </span>
-                ) : null}
-                <ul className="mt-auto flex flex-wrap gap-1 pt-1" aria-label="Organismes proposant cette démarche">
-                  {entry.organizations.map((org) => (
-                    <li
-                      key={org.id}
-                      className="rounded-full bg-[color:var(--pt-surface)] px-1.5 py-0.5 text-[length:var(--pt-tiny)] font-semibold text-[color:var(--pt-muted)]"
-                    >
-                      {org.name}
-                    </li>
-                  ))}
-                </ul>
-              </div>
-            );
-          })}
+          {entries.map((entry) => (
+            <DemarcheCardPreview key={entry.id} entry={entry} pinned={pinned.has(entry.id)} />
+          ))}
         </div>
       )}
+    </div>
+  );
+}
+
+/**
+ * La carte d'une démarche telle que Nora la rend (`DemarcheCard`) : le
+ * pictogramme de sa catégorie, la pastille « À la une », la catégorie, le nom,
+ * le texte public, les organismes, puis la durée et la flèche en pied. Sans
+ * catégorie (ou avec un pictogramme inconnu), un document neutre — le même
+ * repli que Nora.
+ */
+function DemarcheCardPreview({ entry, pinned }: { entry: PortalCatalogueEntry; pinned: boolean }) {
+  const Icon = ICON_OPTIONS.find((option) => option.value === entry.category?.icon)?.Icon ?? FileText;
+  return (
+    <div className="flex flex-col gap-2 rounded-[var(--pt-radius)] border border-[color:var(--pt-border)] bg-white p-[var(--pt-card-pad)] shadow-[var(--pt-shadow)]">
+      <div className="flex items-start justify-between gap-1.5">
+        <div
+          className="flex size-9 items-center justify-center rounded-[var(--pt-radius-sm)]"
+          style={{ background: "var(--pt-primary-soft)" }}
+        >
+          <Icon className="size-[18px] text-[color:var(--pt-primary)]" />
+        </div>
+        {pinned ? (
+          <span className="flex items-center gap-1 whitespace-nowrap rounded-full bg-[color:var(--pt-accent)] px-2 py-0.5 text-[length:var(--pt-tiny)] font-extrabold text-[color:var(--pt-accent-ink)]">
+            <Star className="size-3 fill-current" />
+            À la une
+          </span>
+        ) : null}
+      </div>
+      {entry.category ? (
+        <span className="text-[length:var(--pt-tiny)] font-bold uppercase tracking-wide text-[color:var(--pt-muted)]">
+          {entry.category.name}
+        </span>
+      ) : null}
+      <span className="text-[length:var(--pt-body)] font-bold leading-tight text-[color:var(--pt-ink)]">
+        {entry.name}
+      </span>
+      {entry.shortDescription ? (
+        <span className="text-[length:var(--pt-small)] text-[color:var(--pt-muted)]">
+          {entry.shortDescription}
+        </span>
+      ) : null}
+      {entry.organizations.length > 0 ? (
+        <ul className="flex flex-wrap gap-1" aria-label="Organismes proposant cette démarche">
+          {entry.organizations.map((org) => (
+            <li
+              key={org.id}
+              className="rounded-full bg-[color:var(--pt-surface)] px-1.5 py-0.5 text-[length:var(--pt-tiny)] font-semibold text-[color:var(--pt-muted)]"
+            >
+              {org.name}
+            </li>
+          ))}
+        </ul>
+      ) : null}
+      <div className="mt-auto flex items-center justify-between gap-2 border-t border-[color:var(--pt-border)] pt-2">
+        {entry.estimatedMinutes !== null ? (
+          <span className="flex items-center gap-1.5 text-[length:var(--pt-tiny)] text-[color:var(--pt-muted)]">
+            <Clock className="size-3.5" />
+            Environ {entry.estimatedMinutes} minutes
+          </span>
+        ) : (
+          <span />
+        )}
+        <span
+          aria-hidden="true"
+          className="flex size-7 items-center justify-center rounded-full bg-[color:var(--pt-primary)] text-[color:var(--pt-on-primary)]"
+        >
+          <ArrowRight className="size-3.5" />
+        </span>
+      </div>
     </div>
   );
 }

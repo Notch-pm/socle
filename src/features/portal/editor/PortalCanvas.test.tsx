@@ -175,11 +175,28 @@ describe("PortalCanvas — les filtres de la grille de démarches", () => {
     visibility: "visible",
     organizations: orgs.map((name) => ({ id: name, name, handlingOrganizationId: null })),
     audiences,
+    category: null,
+    estimatedMinutes: null,
   });
 
   const grid = (audienceFilter: boolean) => [
     { ...createSection("demarches"), id: "g", title: "Démarches les plus demandées", audienceFilter },
   ];
+
+  it("nomme la catégorie de chaque carte et annonce sa durée, comme Nora", () => {
+    renderCanvas({
+      sections: grid(false),
+      catalogue: [
+        {
+          ...proc("a", ["citoyen"], ["ACCM"]),
+          category: { id: "c1", name: "Restauration scolaire", icon: "utensils" },
+          estimatedMinutes: 3,
+        },
+      ],
+    });
+    expect(screen.getByText("Restauration scolaire")).toBeTruthy();
+    expect(screen.getByText(/Environ 3 minutes/)).toBeTruthy();
+  });
 
   it("montre « Je suis… » quand les démarches affichées visent plusieurs publics", () => {
     renderCanvas({

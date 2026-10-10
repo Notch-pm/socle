@@ -23,6 +23,8 @@ function entry(over: Partial<PortalCatalogueEntry> = {}): PortalCatalogueEntry {
     visibility: "visible",
     organizations: [{ id: "org-1", name: "ACCM", handlingOrganizationId: null }],
     audiences: ["citoyen"],
+    category: null,
+    estimatedMinutes: null,
     ...over,
   };
 }

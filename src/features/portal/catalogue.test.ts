@@ -138,7 +138,26 @@ describe("toCatalogueEntry / libellés", () => {
       organizations: [ACCM],
       // Jamais paramétrée : aucun public déclaré. Voir `enabledAudiences`.
       audiences: [],
+      category: null,
+      estimatedMinutes: null,
     });
+  });
+
+  it("nomme la catégorie de la démarche et son pictogramme, parmi celles fournies", () => {
+    const categories = [
+      { id: "c1", name: "Restauration scolaire", icon: "utensils" },
+      { id: "c2", name: "Culture", icon: null },
+    ];
+    const entry = toCatalogueEntry(
+      procedure({ category_id: "c1", input_duration_minutes: 3 }),
+      TODAY,
+      [ACCM],
+      categories,
+    );
+    expect(entry.category).toEqual({ id: "c1", name: "Restauration scolaire", icon: "utensils" });
+    expect(entry.estimatedMinutes).toBe(3);
+    // Une catégorie inconnue (supprimée, ou d'une autre racine) ne casse rien.
+    expect(toCatalogueEntry(procedure({ category_id: "zz" }), TODAY, [ACCM], categories).category).toBeNull();
   });
 
   it("porte les publics déclarés, dans l'ordre du paramétrage", () => {

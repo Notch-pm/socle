@@ -667,6 +667,13 @@ export interface PortalProcedureDto {
    */
   audiences: Array<"citoyen" | "entreprise" | "association">;
   /**
+   * Catégorie de la démarche (libellé, pictogramme, traductions), `null` si
+   * elle n'en a pas. **Dans la liste depuis le contrat 1.41.0** — elle n'était
+   * servie que par le détail : une carte peut désormais montrer la catégorie
+   * et son pictogramme sans charger chaque démarche.
+   */
+  category: PortalCategoryRefDto | null;
+  /**
    * Libellés traduits, `{ "<code de langue>": { "name": "…" } }` — mêmes règles
    * que `CategoryDto.translations` (pas de clé `fr`, repli sur `name`).
    */
@@ -730,10 +737,17 @@ export interface PortalOrganizationRefDto {
   handling_organization_id: string | null;
 }
 
-/** Catégorie d'une démarche, telle qu'un usager la lit : de quoi la nommer. */
+/** Catégorie d'une démarche, telle qu'un usager la lit : de quoi la nommer et la dessiner. */
 export interface PortalCategoryRefDto {
   id: string;
   name: string;
+  /**
+   * Pictogramme, `null` si la collectivité n'en a pas choisi. **Contrat
+   * 1.41.0.** Un nom d'icône Lucide en kebab-case (`utensils`, `school`…), pris
+   * dans un catalogue fermé que le Socle ne fait qu'allonger — mais une valeur
+   * inconnue de vous doit retomber sur un pictogramme neutre, pas casser.
+   */
+  icon: string | null;
   /** Mêmes règles que `CategoryDto.translations` (pas de clé `fr`, repli sur `name`). */
   translations: unknown;
 }
@@ -755,8 +769,6 @@ export interface PortalCategoryRefDto {
  * rien à faire dans le navigateur d'un usager.
  */
 export interface PortalProcedureDetailDto extends PortalProcedureDto {
-  /** Catégorie de la démarche, `null` si elle n'en a pas. */
-  category: PortalCategoryRefDto | null;
   /**
    * Schéma de formulaire possédé par le Socle (`{ version: 1, content: [...] }`).
    * `null` quand la démarche n'a pas encore de formulaire — le portail affiche

@@ -296,3 +296,20 @@ confirmation). ⚠️ Un seul upsert (`useEnableProcedures`) : tout passe ou rie
 qu'une autre organisation du même porteur tient déjà sont donc écartées d'avance
 (`procedureIdsToEnable`), sinon `enforce_single_offer_per_bearer` refuserait le lot entier. Pas
 de « tout désactiver » : on relâche une démarche à la fois.
+
+## Pictogrammes des catégories (2026-10-10)
+
+`categories.icon` prend sa valeur dans un catalogue **fermé** : `ICON_GROUPS` de
+`src/features/categories/icon-options.ts` (69 pictogrammes rangés par thème — administratif,
+enfance et jeunesse, santé, cadre de vie, mobilité, sports et culture, économie et sécurité ;
+sélecteur `IconPicker`). La valeur est un nom d'icône **Lucide** en kebab-case.
+- ⚠️ **Contrat public** : servie par `CategoryDto.icon` et, depuis la 1.41.0, par
+  `PortalCategoryRef.icon` dans la **liste** du portail (`/v1/portal/procedures`), que Nora dessine
+  sur chaque carte. On **ajoute** des valeurs, on n'en renomme ni n'en retire (la catégorie
+  retomberait sur le pictogramme neutre). Le libellé et le groupe sont libres.
+- ⚠️ **Deux listes épinglées** : `icon-options.test.ts` ici, `categoryIcons.test.tsx` dans Nora.
+  Nora n'embarque pas Lucide : son registre `categoryIcons.ts` est **généré** depuis ce fichier
+  (`node scripts/generate-category-icons.mjs ../socle`, dans le dépôt Nora). Ajouter un
+  pictogramme = l'ajouter ici, régénérer Nora, recopier la liste dans les deux tests.
+- L'aperçu de l'éditeur du site (`DemarchesSection`) rend la même carte que Nora : pictogramme de
+  la catégorie, pastille « À la une », catégorie, nom, résumé, organismes, puis durée et flèche.

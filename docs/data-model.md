@@ -365,7 +365,9 @@ aucun endpoint, il décrit ce qui existe **en base**.
 
 ### `categories`
 
-- `organization_id` **nullable**, FK CASCADE ; `name` NOT NULL ; `icon` ; `created_at` ;
+- `organization_id` **nullable**, FK CASCADE ; `name` NOT NULL ; `icon` (nom d'icône Lucide pris dans
+  le catalogue fermé `src/features/categories/icon-options.ts` — contrat public, on n'y retire
+  rien) ; `created_at` ;
   `translations` jsonb NOT NULL défaut `{}`, CHECK `categories_translations_object_check`
   (`jsonb_typeof = 'object'`) — voir [Contrats JSONB possédés](#contrats-jsonb-possédés).
 - **Aucun trigger de rattachement racine, aucun index d'unicité de nom, aucun index sur

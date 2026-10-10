@@ -101,6 +101,21 @@ export interface PortalCatalogueEntry {
    * ne répond donc à aucun choix du filtre.
    */
   audiences: Audience[];
+  /**
+   * Catégorie de la démarche (libellé et pictogramme), `null` sans catégorie —
+   * ou si elle n'est pas dans la liste passée à `buildCatalogue`. La carte du
+   * portail la nomme et dessine son pictogramme, comme Nora.
+   */
+  category: CatalogueCategory | null;
+  /** Temps pour REMPLIR le formulaire, en minutes — `null` s'il n'est pas renseigné. */
+  estimatedMinutes: number | null;
+}
+
+/** Ce qu'il faut d'une catégorie pour l'afficher sur une carte. */
+export interface CatalogueCategory {
+  id: string;
+  name: string;
+  icon: string | null;
 }
 
 /** Ce qu'il faut d'une liaison `organization_procedures` pour savoir qui propose quoi. */
@@ -230,7 +245,9 @@ export function toCatalogueEntry(
   procedure: Procedure,
   today: string,
   organizations: CatalogueOrganization[] = [],
+  categories: CatalogueCategory[] = [],
 ): PortalCatalogueEntry {
+  const category = categories.find((candidate) => candidate.id === procedure.category_id);
   return {
     id: procedure.id,
     name: procedure.name,
@@ -238,22 +255,28 @@ export function toCatalogueEntry(
     visibility: catalogueVisibility(procedure, today, organizations),
     organizations,
     audiences: enabledAudiences(procedure.requester_config),
+    category: category ? { id: category.id, name: category.name, icon: category.icon } : null,
+    estimatedMinutes: procedure.input_duration_minutes ?? null,
   };
 }
 
 /**
  * Le catalogue complet de l'éditeur : toutes les démarches de la racine, dans
  * l'ordre reçu, chacune avec sa visibilité et ses organismes. `organizations`
- * est l'arbre servi par le portail (`portalTreeOrganizations`).
+ * est l'arbre servi par le portail (`portalTreeOrganizations`), `categories`
+ * celles de la racine (pour nommer et dessiner la catégorie de chaque carte).
  */
 export function buildCatalogue(
   procedures: Procedure[],
   bindings: CatalogueBinding[],
   organizations: CatalogueTreeOrganization[],
   today: string,
+  categories: CatalogueCategory[] = [],
 ): PortalCatalogueEntry[] {
   const offers = offersByProcedure(bindings, organizations);
-  return procedures.map((procedure) => toCatalogueEntry(procedure, today, offers.get(procedure.id) ?? []));
+  return procedures.map((procedure) =>
+    toCatalogueEntry(procedure, today, offers.get(procedure.id) ?? [], categories),
+  );
 }
 
 /**
