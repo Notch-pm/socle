@@ -39,7 +39,7 @@ export function buildOpenApiDocument(serverUrl: string): Record<string, unknown>
     openapi: "3.1.0",
     info: {
       title: "API Socle — Référentiel des usagers",
-      version: "1.2.0",
+      version: "1.3.0",
       description: [
         "API du **référentiel des usagers** de la gamme (contacts : personnes physiques,",
         "entreprises, associations, administrations). Elle permet de **consulter, créer,",
@@ -180,6 +180,16 @@ export function buildOpenApiDocument(serverUrl: string): Record<string, unknown>
                 "Filtre sur le quartier de rattachement (UUID — voir `GET /v1/quartiers` de " +
                 "l'API référentiel). La valeur littérale `null` renvoie les usagers **sans** quartier.",
               schema: { type: "string" },
+            },
+            {
+              name: "role",
+              in: "query",
+              required: false,
+              description:
+                "Filtre sur les rôles **codés** du catalogue (`code` de `GET /v1/contact-roles`), " +
+                "séparés par des virgules : `role=elu,interne` renvoie les usagers portant l'un OU " +
+                "l'autre. Un code absent du catalogue de l'organisation ne renvoie rien (1.3.0).",
+              schema: { type: "string", examples: ["elu,interne"] },
             },
             {
               name: "limit",
@@ -454,6 +464,13 @@ export function buildOpenApiDocument(serverUrl: string): Record<string, unknown>
           properties: {
             id: { type: "string", format: "uuid" },
             name: { type: "string", examples: ["Habitant"] },
+            code: {
+              type: ["string", "null"],
+              description:
+                "Code stable d'un rôle reconnu par la gamme (`elu`, `interne`), `null` pour un " +
+                "rôle ordinaire. Immuable ; le nom, lui, se renomme (1.3.0).",
+              examples: ["elu"],
+            },
           },
         },
         ExternalReference: {
@@ -885,6 +902,11 @@ export function buildOpenApiDocument(serverUrl: string): Record<string, unknown>
             id: { type: "string", format: "uuid" },
             organization_id: { type: "string", format: "uuid" },
             name: { type: "string", examples: ["Habitant"] },
+            code: {
+              type: ["string", "null"],
+              description: "Code stable (`elu`, `interne`), `null` pour un rôle ordinaire (1.3.0).",
+              examples: ["interne"],
+            },
             created_at: { type: ["string", "null"], format: "date-time" },
           },
         },

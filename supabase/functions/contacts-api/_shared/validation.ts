@@ -418,6 +418,25 @@ export function parsePagination(limitRaw: string | null, offsetRaw: string | nul
   return { ok: true, limit, offset };
 }
 
+/** Code de rôle du catalogue : même format que la contrainte `contact_roles_code_format`. */
+const ROLE_CODE_RE = /^[a-z][a-z0-9_]*$/;
+
+export type RoleCodesOutcome = { ok: true; codes: string[] | null } | { ok: false; message: string };
+
+/**
+ * Paramètre `role` de `GET /v1/contacts` : codes séparés par des virgules
+ * (`elu,interne`), dédoublonnés. `null` ou vide = pas de filtre.
+ */
+export function parseRoleCodes(raw: string | null): RoleCodesOutcome {
+  if (raw === null || raw.trim() === "") return { ok: true, codes: null };
+  const codes = [...new Set(raw.split(",").map((c) => c.trim()).filter((c) => c !== ""))];
+  if (codes.length === 0) return { ok: true, codes: null };
+  if (codes.length > 20 || codes.some((c) => !ROLE_CODE_RE.test(c))) {
+    return { ok: false, message: "Paramètre role invalide (codes de rôle séparés par des virgules, ex. elu,interne)." };
+  }
+  return { ok: true, codes };
+}
+
 /** Échappe `%`, `_` et `\` pour un motif `ilike` sûr. */
 export function escapeIlikePattern(term: string): string {
   return term.replace(/[\\%_]/g, (c) => `\\${c}`);

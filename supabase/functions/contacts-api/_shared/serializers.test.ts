@@ -48,7 +48,8 @@ describe("serializeContact", () => {
       external_references: [{ id: "e-1", source: "portail_citoyen", external_id: "USR-1" }],
     });
     // Le rôle embarqué est une référence courte : pas d'organization_id.
-    expect(Object.keys(dto.roles[0])).toEqual(["id", "name"]);
+    expect(Object.keys(dto.roles[0])).toEqual(["id", "name", "code"]);
+    expect(dto.roles[0].code).toBeNull();
   });
 
   it("whitelist stricte : une colonne inattendue ne fuit pas", () => {
@@ -107,8 +108,8 @@ describe("serializeContact", () => {
 describe("serializeContactRole", () => {
   it("recopie l'entrée de catalogue", () => {
     expect(
-      serializeContactRole({ id: "r-1", organization_id: "org-1", name: "Élu", created_at: null, extra: 1 }),
-    ).toEqual({ id: "r-1", organization_id: "org-1", name: "Élu", created_at: null });
+      serializeContactRole({ id: "r-1", organization_id: "org-1", name: "Élu", code: "elu", created_at: null, extra: 1 }),
+    ).toEqual({ id: "r-1", organization_id: "org-1", name: "Élu", code: "elu", created_at: null });
   });
 });
 

@@ -735,18 +735,21 @@ export type Database = {
       }
       contact_roles: {
         Row: {
+          code: string | null
           created_at: string
           id: string
           name: string
           organization_id: string
         }
         Insert: {
+          code?: string | null
           created_at?: string
           id?: string
           name: string
           organization_id: string
         }
         Update: {
+          code?: string | null
           created_at?: string
           id?: string
           name?: string

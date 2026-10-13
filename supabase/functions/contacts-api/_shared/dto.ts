@@ -13,6 +13,8 @@
 export interface ContactRoleRefDto {
   id: string;
   name: string;
+  /** Code stable d'un rôle reconnu par la gamme (`elu`, `interne`), `null` sinon (1.3.0). */
+  code: string | null;
 }
 
 /** Référence du contact dans un logiciel tiers. */
@@ -165,5 +167,7 @@ export interface ContactRoleDto {
   id: string;
   organization_id: string;
   name: string;
+  /** Code stable (`elu`, `interne`), `null` pour un rôle ordinaire (1.3.0). */
+  code: string | null;
   created_at: string | null;
 }

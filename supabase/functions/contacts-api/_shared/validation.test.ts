@@ -12,6 +12,7 @@ import {
   parseContactPayload,
   parseMatchPayload,
   parsePagination,
+  parseRoleCodes,
   resolveRootOrgId,
   type ContactShape,
 } from "./validation.ts";
@@ -558,5 +559,21 @@ describe("parseConsentsPayload", () => {
   it("traite une référence de dépôt vide comme absente (pas d'idempotence)", () => {
     const res = parseConsentsPayload({ ...base, source_reference: "   " });
     expect(res.ok && res.value[0].source_reference).toBeNull();
+  });
+});
+
+describe("parseRoleCodes", () => {
+  it("absent ou vide : pas de filtre", () => {
+    expect(parseRoleCodes(null)).toEqual({ ok: true, codes: null });
+    expect(parseRoleCodes("  ")).toEqual({ ok: true, codes: null });
+    expect(parseRoleCodes(" , ")).toEqual({ ok: true, codes: null });
+  });
+  it("liste séparée par des virgules, dédoublonnée", () => {
+    expect(parseRoleCodes("elu, interne,elu")).toEqual({ ok: true, codes: ["elu", "interne"] });
+  });
+  it("refuse un code mal formé", () => {
+    expect(parseRoleCodes("Élu").ok).toBe(false);
+    expect(parseRoleCodes("elu;drop").ok).toBe(false);
+    expect(parseRoleCodes("1elu").ok).toBe(false);
   });
 });

@@ -1,7 +1,7 @@
 # Journal des évolutions des API publiques
 
 > **Public** : équipes consommatrices (Ariane, Clara, Iris, partenaires) · **Question traitée** :
-> quand un contrat d'API a-t-il changé, et comment ? · **Dernière mise à jour** : 2026-10-09
+> quand un contrat d'API a-t-il changé, et comment ? · **Dernière mise à jour** : 2026-10-13
 
 Journal **append-only** : chaque évolution de la surface de contrat des API publiques
 (`public-api`, `contacts-api`, `ai-api`, `audience-api`) — endpoint, paramètre, champ de réponse,
@@ -10,6 +10,46 @@ réécrite ; une correction s'ajoute sous une nouvelle date. Politique de compat
 consommateur : [integration.md](./integration.md#politique-de-compatibilité-v1).
 
 Format d'une entrée : `## AAAA-MM-JJ — <api> — ajout|correctif|rupture`
+
+---
+
+## 2026-10-13 — contacts-api — ajout (rôles codés : élus et internes)
+
+**Un rôle de contact peut porter un code stable, et la liste se filtre dessus.** Le catalogue de
+rôles est libre (un identifiant par racine, un nom renommable) : un consommateur ne pouvait pas
+reconnaître « les élus » de façon fiable. Deux rôles sont désormais **codés** dans chaque racine :
+
+| `code` | Rôle | Usage |
+|---|---|---|
+| `elu` | « Élu » (déjà seedé) | Élus de la collectivité |
+| `interne` | « Interne » (**nouveau**, créé dans chaque racine) | Agents et services de la collectivité |
+
+« Agent » n'est pas codé : il sert aux relations (« agent de la Préfecture »).
+
+Version du contrat : **1.3.0**. Ajout **additif** :
+
+- `code` (`string | null`) sur `ContactRoleRef` (rôles embarqués dans un usager et dans ses
+  relations) et sur `ContactRole` (`GET /v1/contact-roles`). Immuable une fois posé ; le **nom**
+  reste renommable — fiez-vous au code, jamais au nom.
+- `GET /v1/contacts?role=elu,interne` : usagers portant l'un **ou** l'autre rôle codé. Format
+  `^[a-z][a-z0-9_]*# Journal des évolutions des API publiques
+
+> **Public** : équipes consommatrices (Ariane, Clara, Iris, partenaires) · **Question traitée** :
+> quand un contrat d'API a-t-il changé, et comment ? · **Dernière mise à jour** : 2026-10-13
+
+Journal **append-only** : chaque évolution de la surface de contrat des API publiques
+(`public-api`, `contacts-api`, `ai-api`, `audience-api`) — endpoint, paramètre, champ de réponse,
+comportement d'authentification — ajoute une entrée datée en tête de liste. Une entrée n'est jamais
+réécrite ; une correction s'ajoute sous une nouvelle date. Politique de compatibilité et obligations
+consommateur : [integration.md](./integration.md#politique-de-compatibilité-v1).
+
+Format d'une entrée : `## AAAA-MM-JJ — <api> — ajout|correctif|rupture`
+
+, 20 codes au plus (400 `bad_request` sinon). Un code absent du catalogue
+  de l'organisation renvoie une liste vide. Se combine avec les autres filtres.
+
+Côté base : colonne `contact_roles.code`, posée d'office à la création d'un rôle nommé « Élu » ou
+« Interne », unique par racine ; `provision_root` crée « Interne » pour toute nouvelle racine.
 
 ---
 

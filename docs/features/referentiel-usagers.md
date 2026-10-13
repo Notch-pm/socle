@@ -25,6 +25,12 @@ strict** : un contact est rattaché à une **organisation principale (racine)** 
   org insensible à la casse. **Seed** : 8 rôles d'exemple insérés pour les racines existantes
   (Habitant, Représentant d'entreprise, Président d'association, Élu, Agent, Propriétaire,
   Demandeur, Bénéficiaire). Seule table du référentiel **modifiable côté client** (admins d'org).
+  **Rôles codés (2026-10-13)** : colonne `code` (NULL pour un rôle ordinaire), unique par racine,
+  **immuable** une fois posée (trigger `trg_contact_role_code_guard`, qui la pose aussi d'office à
+  la création d'un rôle nommé « Élu » → `elu` ou « Interne » → `interne`). Le rôle **Interne**
+  (agents et services de la collectivité) est créé dans chaque racine et par `provision_root`.
+  Les consommateurs (Clara : destinataires, tâches, expéditeurs de sortants) reconnaissent les
+  catégories par code, jamais par nom ; filtre `GET /v1/contacts?role=elu,interne` (1.3.0).
 - **`contact_role_assignments`** : n-n contact↔rôle, unique `(contact_id, role_id)`, trigger
   `enforce_contact_role_same_org` (contact et rôle de la même racine).
 - **`contact_external_references`** : identifiants tiers (`source` libre : `portail_citoyen`,

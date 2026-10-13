@@ -30,7 +30,7 @@ function nullableNum(value: unknown): number | null {
 }
 
 export function serializeContactRoleRef(row: Row): ContactRoleRefDto {
-  return { id: str(row.id), name: str(row.name) };
+  return { id: str(row.id), name: str(row.name), code: nullableStr(row.code) };
 }
 
 /**
@@ -144,6 +144,7 @@ export function serializeContactRole(row: Row): ContactRoleDto {
     id: str(row.id),
     organization_id: str(row.organization_id),
     name: str(row.name),
+    code: nullableStr(row.code),
     created_at: nullableStr(row.created_at),
   };
 }

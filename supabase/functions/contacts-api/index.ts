@@ -38,6 +38,7 @@ import {
   parseContactPayload,
   parseMatchPayload,
   parsePagination,
+  parseRoleCodes,
   resolveRootOrgId,
   type ExternalRefInput,
   type OrgParentRow,
@@ -136,7 +137,7 @@ async function loadRolesAndRefs(
   const [{ data: assignments, error: aErr }, { data: refs, error: rErr }] = await Promise.all([
     admin
       .from("contact_role_assignments")
-      .select("contact_id, role:contact_roles(id, name)")
+      .select("contact_id, role:contact_roles(id, name, code)")
       .in("contact_id", contactIds),
     admin
       .from("contact_external_references")
@@ -180,13 +181,13 @@ async function loadRelations(
     admin
       .from("contact_relations")
       .select(
-        "id, contact_id, role:contact_roles(id, name), peer:contacts!contact_relations_related_contact_id_fkey(id, display_name, contact_type)",
+        "id, contact_id, role:contact_roles(id, name, code), peer:contacts!contact_relations_related_contact_id_fkey(id, display_name, contact_type)",
       )
       .in("contact_id", contactIds),
     admin
       .from("contact_relations")
       .select(
-        "id, related_contact_id, role:contact_roles(id, name), peer:contacts!contact_relations_contact_id_fkey(id, display_name, contact_type)",
+        "id, related_contact_id, role:contact_roles(id, name, code), peer:contacts!contact_relations_contact_id_fkey(id, display_name, contact_type)",
       )
       .in("related_contact_id", contactIds),
   ]);
@@ -595,6 +596,10 @@ Deno.serve(async (req: Request) => {
             corsHeaders,
           );
         }
+        const roleCodes = parseRoleCodes(url.searchParams.get("role"));
+        if (!roleCodes.ok) {
+          return errorResponse("bad_request", roleCodes.message, corsHeaders);
+        }
         const pagination = parsePagination(url.searchParams.get("limit"), url.searchParams.get("offset"));
         if (!pagination.ok) {
           return errorResponse("bad_request", pagination.message, corsHeaders);
@@ -616,6 +621,28 @@ Deno.serve(async (req: Request) => {
             .eq("external_id", externalId);
           if (refErr) throw refErr;
           idFilter = (refRows ?? []).map((r: Row) => String(r.contact_id));
+          if (idFilter.length === 0) return jsonResponse(200, [], corsHeaders);
+        }
+
+        // Filtre par rôle codé (1.3.0) : élus et internes sont peu nombreux, la
+        // pré-requête par identifiants reste bornée ; intersectée avec la
+        // référence externe si les deux sont demandées.
+        if (roleCodes.codes !== null) {
+          const { data: roleRows, error: roleErr } = await admin
+            .from("contact_roles")
+            .select("id")
+            .eq("organization_id", orgId)
+            .in("code", roleCodes.codes);
+          if (roleErr) throw roleErr;
+          const roleIds = (roleRows ?? []).map((r: Row) => String(r.id));
+          if (roleIds.length === 0) return jsonResponse(200, [], corsHeaders);
+          const { data: assignRows, error: assignErr } = await admin
+            .from("contact_role_assignments")
+            .select("contact_id")
+            .in("role_id", roleIds);
+          if (assignErr) throw assignErr;
+          const byRole = [...new Set((assignRows ?? []).map((r: Row) => String(r.contact_id)))];
+          idFilter = idFilter === null ? byRole : idFilter.filter((id) => byRole.includes(id));
           if (idFilter.length === 0) return jsonResponse(200, [], corsHeaders);
         }
 
