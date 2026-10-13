@@ -24,11 +24,12 @@ est portée par la fonction). Permet de **consulter, créer, modifier, archiver*
 - **Endpoints** (préfixe `/v1`) : `contacts` GET (filtres `type`, `status`, `search` sur
   `display_name`, `email` exact, `phone` — égalité sur chiffres significatifs, mobile ET fixe,
   `quartier_id` — UUID ou littéral `null` pour les sans-quartier,
+  `role` — codes de rôle séparés par des virgules, ex. `elu,interne`, 1.3.0,
   lookup `source`+`external_id`, pagination `limit`/`offset` max 500) + POST ·
   `contacts/match` POST (rapprochement d'identités, voir ci-dessous) ·
   `contacts/{id}` GET + PATCH (partiel ; `contact_type` immuable ; `status` refusé) ·
   `contacts/{id}/archive` et `/restore` POST (obsolescence réversible, idempotent) ·
-  `contact-roles` GET (catalogue → `role_ids`). Racine `/` + `openapi.json` publics.
+  `contact-roles` GET (catalogue → `role_ids` ; chaque rôle porte un `code` stable ou `null`, 1.3.0). Racine `/` + `openapi.json` publics.
 - **Rapprochement d'identités (détection de doublons)** : `POST /v1/contacts/match` — **lecture
   seule** malgré le POST (identité trop riche pour une query string). Requête = identité
   partielle (tous champs optionnels, au moins un critère ; un prénom seul ne suffit pas) ;
