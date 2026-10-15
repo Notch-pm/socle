@@ -35,6 +35,12 @@ export interface OrganizationDto {
   email_sender_name: string | null;
   metadata: unknown;
   created_at: string | null;
+  /**
+   * Applications de la gamme souscrites par la collectivité (racine) dont relève
+   * l'organisation — `clara`, `iris`, `nora`… (contrat 1.42.0). Triées, vide
+   * si aucune. Une sous-organisation porte celles de sa racine.
+   */
+  applications: string[];
 }
 
 /**

@@ -39,6 +39,13 @@ n'étant en production).
   une `ApiKeysList` par application + « Nouvelle application »), `ApiKeyFormDialog` (sélecteur
   d'application, requis pour une clé plateforme et pour le scope `ai`), `ApiKeysList` affiche les
   **cinq** scopes et l'application. Les clés **liées** (partenaires) ne changent pas.
+- **Lecture des abonnements par les applications** (contrat public-api 1.42.0, 2026-10-15) :
+  chaque `Organization` porte `applications` — les abonnements de sa **racine**
+  (`_shared/applications.ts`, `applicationsByOrganization`, testé). C'est ce qui fait se
+  reconnaître deux applications sans configuration croisée : Clara dépose dans Iris pour une
+  collectivité abonnée aux deux (clé plateforme Iris `clara`), Iris ouvre la source `clara` de
+  ce tenant d'après le même champ. Décocher Iris ou Clara coupe le dépôt à la synchronisation
+  suivante.
 - Migration `applications_et_abonnements` ; changelog du 2026-09-08. **Hors dépôt** : Iris et
   Clara doivent créer leurs tenants à la synchronisation (leur clé rend exactement leurs clients),
   Nora prendre une clé d'ingestion Iris plateforme.

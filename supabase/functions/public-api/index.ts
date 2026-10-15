@@ -29,6 +29,7 @@ import {
   serializeTenant,
   readPortalAssistant,
 } from "./_shared/serializers.ts";
+import { applicationsByOrganization, rootIdOf } from "./_shared/applications.ts";
 import { buildOrganizationTree, isUuid } from "./_shared/scope.ts";
 import { API_KEY_COLUMNS, evaluateApiKey, scopeRequest, shouldTouchKey, type ApiKeyRow } from "./_shared/apiKeyAuth.ts";
 import { errorResponse, jsonResponse } from "./_shared/errors.ts";
@@ -844,7 +845,32 @@ Deno.serve(async (req: Request) => {
         if (status === "active" || status === "obsolete") query = query.eq("status", status);
         const { data, error } = await query;
         if (error) throw error;
-        const orgs = (data ?? []).map(serializeOrganization);
+        // Abonnements de la racine de chaque organisation (contrat 1.42.0).
+        // Les parents du périmètre suffisent : une clé ne voit que des sous-arbres entiers.
+        let parents = parentById;
+        if (parents.size === 0) {
+          const { data: tree, error: treeError } = await admin
+            .from("organizations")
+            .select("id, parent_id")
+            .in("id", scopeIds);
+          if (treeError) throw treeError;
+          parents = new Map(
+            ((tree ?? []) as Array<{ id: string; parent_id: string | null }>).map((r) => [r.id, r.parent_id]),
+          );
+        }
+        const ids = (data ?? []).map((r) => String((r as { id: unknown }).id));
+        const rootIds = [...new Set(ids.map((id) => rootIdOf(id, parents)))];
+        const { data: subs, error: subsError } = rootIds.length
+          ? await admin
+            .from("organization_applications")
+            .select("organization_id, application_id")
+            .in("organization_id", rootIds)
+          : { data: [], error: null };
+        if (subsError) throw subsError;
+        const appsById = applicationsByOrganization(ids, parents, subs ?? []);
+        const orgs = (data ?? []).map((r) =>
+          serializeOrganization(r, appsById.get(String((r as { id: unknown }).id)) ?? [])
+        );
         if (url.searchParams.get("tree") === "true") {
           return jsonResponse(200, buildOrganizationTree(orgs), corsHeaders);
         }
@@ -861,7 +887,17 @@ Deno.serve(async (req: Request) => {
         const { data, error } = await admin.from("organizations").select("*").eq("id", id).maybeSingle();
         if (error) throw error;
         if (!data) return errorResponse("not_found", "Organisation introuvable.", corsHeaders);
-        return jsonResponse(200, serializeOrganization(data), corsHeaders);
+        let applications: string[] = [];
+        const { data: rootId } = await admin.rpc("organization_root_id", { p_org_id: id });
+        if (typeof rootId === "string" && rootId !== "") {
+          const { data: subs, error: subsError } = await admin
+            .from("organization_applications")
+            .select("application_id")
+            .eq("organization_id", rootId);
+          if (subsError) throw subsError;
+          applications = ((subs ?? []) as Array<{ application_id: string }>).map((s) => s.application_id).sort();
+        }
+        return jsonResponse(200, serializeOrganization(data, applications), corsHeaders);
       }
       // --- /v1/organizations/{id}/smtp ---
       // SEUL endpoint de cette API qui sert un secret (mot de passe du relais

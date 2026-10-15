@@ -45,6 +45,7 @@ describe("serializers — whitelist stricte (aucune fuite)", () => {
     expect(Object.keys(dto).sort()).toEqual(
       [
         "address",
+        "applications",
         "created_at",
         "email",
         "email_sender_name",
@@ -63,6 +64,14 @@ describe("serializers — whitelist stricte (aucune fuite)", () => {
     );
     expect(dto).not.toHaveProperty("secret_column");
     expect(dto).not.toHaveProperty("password");
+  });
+
+  it("organisation : applications de la racine, vide par défaut, jamais partagées par référence", () => {
+    const apps = ["clara", "iris"];
+    const dto = serializeOrganization({ id: "o1", name: "O", status: "active" }, apps);
+    expect(dto.applications).toEqual(["clara", "iris"]);
+    expect(dto.applications).not.toBe(apps);
+    expect(serializeOrganization({ id: "o2", name: "P", status: "active" }).applications).toEqual([]);
   });
 
   it("catégorie : libellé, icône et libellés traduits", () => {

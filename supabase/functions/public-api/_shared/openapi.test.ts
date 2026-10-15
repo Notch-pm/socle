@@ -333,8 +333,14 @@ describe("contrat — traduction de la communication usager (1.26.0)", () => {
 describe("contrat — documents et courriers", () => {
   const doc = buildOpenApiDocument("https://example.supabase.co/functions/v1/public-api") as any;
 
-  it("annonce la version 1.41.0 du contrat", () => {
-    expect(doc.info.version).toBe("1.41.0");
+  it("annonce la version 1.42.0 du contrat", () => {
+    expect(doc.info.version).toBe("1.42.0");
+  });
+
+  it("une organisation dit les applications souscrites par sa collectivité (1.42.0)", () => {
+    const org = doc.components.schemas.Organization;
+    expect(org.properties.applications.type).toBe("array");
+    expect(org.example.applications).toEqual(["clara", "iris"]);
   });
 
   it("le lieu d'intervention est un type de champ structurel, à réponse objet (1.29.0)", () => {

@@ -1,7 +1,7 @@
 # Journal des évolutions des API publiques
 
 > **Public** : équipes consommatrices (Ariane, Clara, Iris, partenaires) · **Question traitée** :
-> quand un contrat d'API a-t-il changé, et comment ? · **Dernière mise à jour** : 2026-10-13
+> quand un contrat d'API a-t-il changé, et comment ? · **Dernière mise à jour** : 2026-10-15
 
 Journal **append-only** : chaque évolution de la surface de contrat des API publiques
 (`public-api`, `contacts-api`, `ai-api`, `audience-api`) — endpoint, paramètre, champ de réponse,
@@ -10,6 +10,26 @@ réécrite ; une correction s'ajoute sous une nouvelle date. Politique de compat
 consommateur : [integration.md](./integration.md#politique-de-compatibilité-v1).
 
 Format d'une entrée : `## AAAA-MM-JJ — <api> — ajout|correctif|rupture`
+
+---
+
+## 2026-10-15 — public-api — ajout (applications souscrites d'une organisation)
+
+**Une organisation dit à quelles applications de la gamme sa collectivité est abonnée.** Jusqu'ici,
+une application ne connaissait que son propre abonnement (sa clé ne voit que ses clients) : pour
+que Clara dépose dans Iris, il fallait configurer Iris dans Clara, collectivité par collectivité.
+Désormais, cocher Clara et Iris dans « Applications souscrites » suffit : chacune lit l'abonnement
+de l'autre ici.
+
+Version du contrat **1.42.0**, ajout **additif** :
+
+- `applications` (`string[]`) sur `Organization` — `GET /v1/organizations` (liste et arbre) et
+  `GET /v1/organizations/{id}`. Identifiants du registre (`clara`, `iris`, `nora`…), triés, vide
+  si aucun. Porté par la **racine** (`organization_applications`) : une sous-organisation porte
+  celui de sa racine.
+
+Aucun changement de périmètre : la liste des organisations servies reste celle des clients de
+l'application de la clé.
 
 ---
 

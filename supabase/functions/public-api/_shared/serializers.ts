@@ -40,7 +40,7 @@ function nullableNum(value: unknown): number | null {
   return typeof value === "number" ? value : null;
 }
 
-export function serializeOrganization(row: Row): OrganizationDto {
+export function serializeOrganization(row: Row, applications: string[] = []): OrganizationDto {
   return {
     id: str(row.id),
     parent_id: nullableStr(row.parent_id),
@@ -57,6 +57,7 @@ export function serializeOrganization(row: Row): OrganizationDto {
     email_sender_name: nullableStr(row.email_sender_name),
     metadata: row.metadata ?? null,
     created_at: nullableStr(row.created_at),
+    applications: [...applications],
   };
 }
 

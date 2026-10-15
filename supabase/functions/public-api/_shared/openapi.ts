@@ -30,7 +30,7 @@ export function buildOpenApiDocument(serverUrl: string): Record<string, unknown>
     openapi: "3.1.0",
     info: {
       title: "API Socle — Référentiel de la gamme",
-      version: "1.41.0",
+      version: "1.42.0",
       description: [
         "API **en lecture seule** exposant le référentiel central de la gamme : les",
         "**organisations** (et sous-organisations) avec l'intégralité de leur configuration,",
@@ -1878,6 +1878,16 @@ export function buildOpenApiDocument(serverUrl: string): Record<string, unknown>
             email_sender_name: { type: ["string", "null"] },
             metadata: { type: ["object", "null"], additionalProperties: true },
             created_at: { type: ["string", "null"], format: "date-time" },
+            applications: {
+              type: "array",
+              items: { type: "string" },
+              description:
+                "Applications de la gamme souscrites par la **collectivité** (organisation " +
+                "principale) dont relève l'organisation : `clara`, `iris`, `nora`… Triées, " +
+                "vide si aucune ; une sous-organisation porte celles de sa racine. Sert à deux " +
+                "applications de la gamme à se reconnaître sans configuration croisée (ex. Clara " +
+                "dépose dans Iris pour une collectivité abonnée aux deux). Depuis 1.42.0.",
+            },
           },
           example: {
             id: "d5227d25-f327-493a-a9a2-278397531e33",
@@ -1895,6 +1905,7 @@ export function buildOpenApiDocument(serverUrl: string): Record<string, unknown>
             email_sender_name: null,
             metadata: null,
             created_at: "2026-01-15T09:00:00Z",
+            applications: ["clara", "iris"],
           },
         },
         Branding: {
