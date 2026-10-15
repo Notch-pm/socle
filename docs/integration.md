@@ -260,6 +260,7 @@ collectivité peut activer d'autres langues ; les libellés traduits des **déma
 
 - [ ] Clé obtenue auprès d'un super admin Socle, avec le bon scope (`read`, `contacts`, `smtp`, `ai`) — une clé **par application**, jamais par client
 - [ ] Nouveaux clients découverts par `GET /v1/organizations` (la clé rend exactement les collectivités abonnées) plutôt que provisionnés à la main
+- [ ] Raccordement entre applications de la gamme déduit du champ `applications` d’`Organization` (contrat 1.42.0 — abonnements de la collectivité), jamais d’une configuration croisée saisie dans chaque application (motif Clara → Iris du 2026-10-15)
 - [ ] `ai-api` : délai du consommateur réglé **au-dessus de 60 s** (chaîne 55 < 60 < le vôtre)
 - [ ] `ai-api` : `ai_quota_exceeded` et `ai_rate_limited` traités **séparément** (`Retry-After`)
 - [ ] `/v1/ocr` : URL signée de courte durée, émise juste avant l'appel — et réservé aux PDF
