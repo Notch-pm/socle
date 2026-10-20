@@ -16,6 +16,14 @@ export const CONTACT_TYPES = ["personne", "entreprise", "association", "administ
 export type ContactType = (typeof CONTACT_TYPES)[number];
 
 export const CIVILITIES = ["madame", "monsieur"] as const;
+
+/**
+ * Source de la référence qui lie une fiche à un compte du portail usagers
+ * (contacts-api 1.4.0). Elle ne s'écrit QUE par `/v1/citizen/*` : le scope
+ * `contacts` la lit mais ne la crée, ne la déplace ni ne la retire jamais
+ * (relecture de sécurité du 2026-10-20, I3).
+ */
+export const CITIZEN_REFERENCE_SOURCE = "portail_citoyen";
 export const PREFERRED_CHANNELS = ["email", "telephone", "courrier"] as const;
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
@@ -267,6 +275,10 @@ export function parseContactPayload(body: unknown, mode: "create" | "update"): P
         return fail(`Références externes en double pour la source « ${source} » (une seule par source).`);
       }
       seenSources.add(source);
+      // Réservée aux routes /v1/citizen (compte du portail) : ignorée ici, pour
+      // qu'un client qui relit une fiche et renvoie ses références ne casse
+      // pas — et ne puisse ni déplacer ni retirer le lien d'un compte.
+      if (source === CITIZEN_REFERENCE_SOURCE) continue;
       parsed.push({ source, external_id: externalId });
     }
     externalRefs = parsed;

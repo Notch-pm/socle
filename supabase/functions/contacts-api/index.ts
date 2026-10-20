@@ -31,6 +31,7 @@ import {
   contactInvariantError,
   coordinatesPairError,
   escapeIlikePattern,
+  CITIZEN_REFERENCE_SOURCE,
   isUuid,
   mergeContactShape,
   normalizePhoneNumber,
@@ -521,8 +522,11 @@ async function replaceExternalRefs(
     .eq("contact_id", contactId);
   if (error) throw error;
   const wantedSources = new Set(refs.map((r) => r.source));
+  // La référence d'un compte du portail n'est jamais retirée par ce chemin
+  // (voir CITIZEN_REFERENCE_SOURCE) ; `parseContactPayload` l'a déjà écartée
+  // des références voulues.
   const toDelete = (current ?? [])
-    .filter((r: Row) => !wantedSources.has(String(r.source)))
+    .filter((r: Row) => String(r.source) !== CITIZEN_REFERENCE_SOURCE && !wantedSources.has(String(r.source)))
     .map((r: Row) => String(r.id));
 
   if (toDelete.length > 0) {

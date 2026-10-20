@@ -577,3 +577,18 @@ describe("parseRoleCodes", () => {
     expect(parseRoleCodes("1elu").ok).toBe(false);
   });
 });
+
+describe("référence d'un compte du portail (contacts-api 1.4.0, I3)", () => {
+  it("le scope contacts ne la crée ni ne la déplace : elle est ignorée à l'écriture", () => {
+    const parsed = parseContactPayload(
+      {
+        external_references: [
+          { source: "clara", external_id: "c-1" },
+          { source: "portail_citoyen", external_id: "compte-d-un-autre" },
+        ],
+      },
+      "update",
+    );
+    expect(parsed.ok && parsed.value.externalRefs).toEqual([{ source: "clara", external_id: "c-1" }]);
+  });
+});
