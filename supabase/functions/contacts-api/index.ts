@@ -168,13 +168,19 @@ async function handleCitizen(admin: SupabaseClient, orgId: string, segments: str
 
   if (segments.length === 5 && segments[4] === "consents") {
     // L'usager modifie SES consentements depuis son compte. La phrase consignée
-    // est composée ici (nom de la collectivité), jamais reçue ; l'application
-    // source est celle de la clé — le portail —, pas une valeur de l'appelant.
+    // est composée ici (nom de la collectivité), jamais reçue ; la source est
+    // fixe — `portail-citoyen` —, jamais une valeur de l'appelant : le scope
+    // `citizen` n'est donné qu'à la clé du portail.
     if (req.method !== "POST") return errorResponse("method_not_allowed", "Seule la méthode POST est autorisée ici.", corsHeaders);
     const parsed = parseCitizenConsent(await readBody());
     if (!parsed.ok) return errorResponse("bad_request", parsed.message, corsHeaders);
     const contactId = await citizenContactId(admin, orgId, accountId);
     if (contactId === null) return errorResponse("not_found", "Aucune fiche rattachée à ce compte.", corsHeaders);
+    // Une fiche archivée ne reçoit plus de recueil : la preuve serait écrite
+    // sur une fiche que plus personne ne lit, puis la réponse dirait 404.
+    if (await citizenDto(admin, orgId, contactId) === null) {
+      return errorResponse("not_found", "Aucune fiche rattachée à ce compte.", corsHeaders);
+    }
     const { data: org, error: orgError } = await admin.from("organizations").select("name").eq("id", orgId).maybeSingle();
     if (orgError) throw orgError;
     const { error } = await admin.from("contact_consents").insert({

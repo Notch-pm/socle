@@ -371,17 +371,24 @@ Deno.serve(async (req: Request) => {
     // Les parents servent à remonter à la racine d'un quartier demandé par
     // une clé plateforme. Métadonnées sans contenu, et l'organisation visée
     // est d'abord vérifiée dans le périmètre (`inScope`).
-    let parentById: Map<string, string | null> = new Map();
-    if (scope.kind === "platform") {
-      const { data: allOrgs, error: allOrgsError } = await admin
-        .from("organizations")
-        .select("id, parent_id");
-      if (allOrgsError) {
-        return errorResponse("internal_error", "Impossible de calculer le périmètre.", corsHeaders);
-      }
-      const rows = (allOrgs ?? []) as Array<{ id: string; parent_id: string | null }>;
-      parentById = new Map(rows.map((r) => [r.id, r.parent_id]));
-    }
+    //
+    // Lus À LA DEMANDE (quartiers, liste des organisations) : une clé
+    // plateforme porte tout le trafic du portail, et charger l'arbre entier à
+    // chaque appel ajoutait une lecture à chacun — résolution du domaine
+    // comprise (mesuré le 2026-10-20). Vide pour une clé de collectivité.
+    let parentsLoaded: Promise<Map<string, string | null>> | null = null;
+    const loadParents = (): Promise<Map<string, string | null>> => {
+      if (scope.kind !== "platform") return Promise.resolve(new Map());
+      parentsLoaded ??= (async () => {
+        const { data: allOrgs, error: allOrgsError } = await admin
+          .from("organizations")
+          .select("id, parent_id");
+        if (allOrgsError) throw allOrgsError;
+        const rows = (allOrgs ?? []) as Array<{ id: string; parent_id: string | null }>;
+        return new Map(rows.map((r) => [r.id, r.parent_id]));
+      })();
+      return parentsLoaded;
+    };
     const inScope = (id: string | null | undefined) => id != null && scopeIds.includes(id);
 
     const url = new URL(req.url);
@@ -430,53 +437,49 @@ Deno.serve(async (req: Request) => {
         return errorResponse("not_found", "Aucune collectivité n'est rattachée à ce domaine.", corsHeaders);
       }
 
-      const { data: org, error: orgError } = await admin
-        .from("organizations")
-        .select("id, name, slug, status")
-        .eq("id", domain.organization_id)
-        .maybeSingle();
+      // Les cinq lectures suivantes ne dépendent que du domaine : elles partent
+      // ENSEMBLE. Chaque portail résout son domaine à chaque requête ; les
+      // enchaîner coûtait cinq allers-retours en base (mesuré le 2026-10-20).
+      const orgId = domain.organization_id as string;
+      const [
+        { data: org, error: orgError },
+        // Langues de la collectivité — résolues en base (le réglage vit sur la
+        // racine, le domaine peut désigner une sous-organisation). Un échec ne
+        // ferme pas le portail : le sérialiseur retombe sur le français, qui est
+        // la seule langue dont on est certain.
+        { data: languages },
+        // Thème PUBLIÉ du site — jamais le brouillon, qui est une colonne
+        // distincte et n'a pas de route. Il vit sur la racine, comme la page :
+        // rien de publié (ou rien du tout) ⇒ le sérialiseur rend les défauts du
+        // Socle, jamais `null`. Un échec de lecture ne ferme donc pas le portail.
+        { data: theme },
+        // La déclaration d'accessibilité PUBLIÉE — lue ici pour une seule raison :
+        // décider si la mention du pied de page porte son lien. Le lien ne sort
+        // que vers une déclaration non vide, jamais vers une page blanche. Même
+        // organisation que le thème, et même tolérance : un échec de lecture ôte
+        // le lien, il ne ferme pas le portail.
+        { data: statement },
+        // L'assistant du portail — réglé par le super admin sur la racine, donc
+        // résolu en base comme les langues. Un échec de lecture ne ferme pas le
+        // portail : il ferme l'ASSISTANT (le sérialiseur lit « rien » comme
+        // « fermé »), ce qui est le bon côté où tomber quand un crédit est en jeu.
+        { data: assistant },
+      ] = await Promise.all([
+        admin.from("organizations").select("id, name, slug, status").eq("id", orgId).maybeSingle(),
+        admin.rpc("resolve_org_languages", { p_org_id: orgId }),
+        admin.from("portal_themes").select("published").eq("organization_id", orgId).maybeSingle(),
+        admin
+          .from("portal_contents")
+          .select("published")
+          .eq("organization_id", orgId)
+          .eq("slug", ACCESSIBILITY_STATEMENT_SLUG)
+          .maybeSingle(),
+        admin.rpc("resolve_portal_assistant", { p_org_id: orgId }),
+      ]);
       if (orgError) throw orgError;
       if (!org || org.status !== "active") {
         return errorResponse("not_found", "Aucune collectivité n'est rattachée à ce domaine.", corsHeaders);
       }
-
-      // Langues de la collectivité — résolues en base (le réglage vit sur la
-      // racine, le domaine peut désigner une sous-organisation). Un échec ne
-      // ferme pas le portail : le sérialiseur retombe sur le français, qui est
-      // la seule langue dont on est certain.
-      const { data: languages } = await admin.rpc("resolve_org_languages", {
-        p_org_id: org.id,
-      });
-
-      // Thème PUBLIÉ du site — jamais le brouillon, qui est une colonne
-      // distincte et n'a pas de route. Il vit sur la racine, comme la page :
-      // rien de publié (ou rien du tout) ⇒ le sérialiseur rend les défauts du
-      // Socle, jamais `null`. Un échec de lecture ne ferme donc pas le portail.
-      const { data: theme } = await admin
-        .from("portal_themes")
-        .select("published")
-        .eq("organization_id", org.id)
-        .maybeSingle();
-
-      // La déclaration d'accessibilité PUBLIÉE — lue ici pour une seule raison :
-      // décider si la mention du pied de page porte son lien. Le lien ne sort
-      // que vers une déclaration non vide, jamais vers une page blanche. Même
-      // organisation que le thème, et même tolérance : un échec de lecture ôte
-      // le lien, il ne ferme pas le portail.
-      const { data: statement } = await admin
-        .from("portal_contents")
-        .select("published")
-        .eq("organization_id", org.id)
-        .eq("slug", ACCESSIBILITY_STATEMENT_SLUG)
-        .maybeSingle();
-
-      // L'assistant du portail — réglé par le super admin sur la racine, donc
-      // résolu en base comme les langues. Un échec de lecture ne ferme pas le
-      // portail : il ferme l'ASSISTANT (le sérialiseur lit « rien » comme
-      // « fermé »), ce qui est le bon côté où tomber quand un crédit est en jeu.
-      const { data: assistant } = await admin.rpc("resolve_portal_assistant", {
-        p_org_id: org.id,
-      });
 
       return jsonResponse(
         200,
@@ -847,7 +850,7 @@ Deno.serve(async (req: Request) => {
         if (error) throw error;
         // Abonnements de la racine de chaque organisation (contrat 1.42.0).
         // Les parents du périmètre suffisent : une clé ne voit que des sous-arbres entiers.
-        let parents = parentById;
+        let parents = await loadParents();
         if (parents.size === 0) {
           const { data: tree, error: treeError } = await admin
             .from("organizations")
@@ -1279,6 +1282,7 @@ Deno.serve(async (req: Request) => {
         }
         let current = requested;
         const seen = new Set<string>([current]);
+        const parentById = await loadParents();
         for (;;) {
           const parent = parentById.get(current) ?? null;
           if (!parent || seen.has(parent)) break;
