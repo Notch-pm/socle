@@ -32,6 +32,8 @@ Version du contrat : **1.4.0**. Ajout **additif** :
   (`CitizenContact` : ni `internal_notes`, ni rôles, ni relations, ni références d'autres
   applications). Il ne modifie que ses coordonnées et son nom d'usage ; l'identité et l'adresse
   de courriel sont figées.
+- `POST /v1/citizen/contacts/{account_id}/consents` `{ kind, granted }` : l'usager modifie ses
+  consentements ; phrase composée par le Socle (catalogue d'Iris), source `portail-citoyen`.
 - La référence `portail_citoyen` ne s'écrit que par `/v1/citizen/*` : le scope `contacts` la
   lit, mais l'ignore à l'écriture et ne la retire jamais.
 

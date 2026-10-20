@@ -11,6 +11,7 @@ describe("openapi (contacts-api)", () => {
   it("décrit tous les endpoints, sans DELETE", () => {
     expect(Object.keys(doc.paths).sort()).toEqual([
       "/v1/citizen/contacts/{account_id}",
+      "/v1/citizen/contacts/{account_id}/consents",
       "/v1/citizen/contacts/{account_id}/link",
       "/v1/contact-roles",
       "/v1/contacts",

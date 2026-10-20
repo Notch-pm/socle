@@ -163,6 +163,33 @@ export function buildOpenApiDocument(serverUrl: string): Record<string, unknown>
           },
         },
       },
+      "/v1/citizen/contacts/{account_id}/consents": {
+        post: {
+          tags: ["Usager du portail"],
+          summary: "L'usager modifie ses consentements",
+          description:
+            "Corps `{ kind: traitement | partage, granted }` — rien d'autre. La phrase consignée est " +
+            "composée par le Socle depuis le nom de la collectivité (catalogue d'Iris) ; une phrase " +
+            "envoyée est refusée. Source consignée : `portail-citoyen`. Un retrait est un recueil " +
+            "`granted: false` plus récent.",
+          parameters: [X_ORGANIZATION_ID_PARAM, CITIZEN_ACCOUNT_PARAM],
+          requestBody: {
+            required: true,
+            content: { "application/json": { schema: { type: "object", additionalProperties: false } } },
+          },
+          responses: {
+            "201": {
+              description: "La fiche, consentements à jour.",
+              content: {
+                "application/json": {
+                  schema: { type: "object", properties: { contact: { $ref: "#/components/schemas/CitizenContact" } } },
+                },
+              },
+            },
+            ...errorResponses("400", "401", "403", "404", "500"),
+          },
+        },
+      },
       "/v1/citizen/contacts/{account_id}/link": {
         post: {
           tags: ["Usager du portail"],
