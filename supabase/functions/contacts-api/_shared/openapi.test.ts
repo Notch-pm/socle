@@ -150,6 +150,6 @@ describe("contrat 1.4.0 — la fiche vue par le compte du portail", () => {
     for (const hidden of ["internal_notes", "roles", "relations", "external_references", "quartier_id"]) {
       expect(fields).not.toContain(hidden);
     }
-    expect(doc.info.version).toBe("1.4.1");
+    expect(doc.info.version).toBe("1.4.2");
   });
 });

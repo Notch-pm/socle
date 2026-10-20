@@ -191,8 +191,11 @@ export function citizenConsentStatement(kind: "traitement" | "partage", organism
   if (kind === "traitement") {
     return "J'accepte que les informations fournies ici soient utilisées dans le cadre du traitement de ma demande.";
   }
-  const organism = (organismName ?? "").trim() || "la collectivité";
-  return `J'accepte de partager ces informations aux services de ${organism} `
+  // `organismPhrase` d'Iris : le nom est CITÉ (« l'organisme « X » »), jamais
+  // accordé — « aux services de Agglomération… » n'était pas du français.
+  const organism = (organismName ?? "").trim();
+  const phrase = organism === "" ? "la collectivité" : `l'organisme « ${organism} »`;
+  return `J'accepte de partager ces informations avec les services de ${phrase} `
     + "afin d'améliorer le traitement de ma demande et de mes futures demandes.";
 }
 

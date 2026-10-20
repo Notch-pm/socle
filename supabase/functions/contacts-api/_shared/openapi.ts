@@ -46,7 +46,7 @@ export function buildOpenApiDocument(serverUrl: string): Record<string, unknown>
     openapi: "3.1.0",
     info: {
       title: "API Socle — Référentiel des usagers",
-      version: "1.4.1",
+      version: "1.4.2",
       description: [
         "API du **référentiel des usagers** de la gamme (contacts : personnes physiques,",
         "entreprises, associations, administrations). Elle permet de **consulter, créer,",
@@ -742,7 +742,7 @@ export function buildOpenApiDocument(serverUrl: string): Record<string, unknown>
             consent_partage: {
               type: "boolean",
               description:
-                "Consentement RGPD au partage aux services de la collectivité (facultatif). " +
+                "Consentement RGPD au partage avec les services de la collectivité (facultatif). " +
                 "Dérivé de `consents` — ne s'écrit pas directement.",
             },
             consent_partage_at: { type: ["string", "null"], format: "date-time" },
@@ -790,7 +790,7 @@ export function buildOpenApiDocument(serverUrl: string): Record<string, unknown>
               enum: ["traitement", "partage"],
               description:
                 "`traitement` = utilisation des informations pour instruire la demande (obligatoire " +
-                "au dépôt) ; `partage` = partage aux services de la collectivité (facultatif).",
+                "au dépôt) ; `partage` = partage avec les services de la collectivité (facultatif).",
             },
             granted: { type: "boolean" },
             statement: {

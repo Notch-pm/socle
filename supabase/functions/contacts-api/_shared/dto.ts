@@ -120,7 +120,7 @@ export interface ContactDto {
    */
   consent_traitement: boolean;
   consent_traitement_at: string | null;
-  /** Consentement RGPD au partage aux services de la collectivité (facultatif). */
+  /** Consentement RGPD au partage avec les services de la collectivité (facultatif). */
   consent_partage: boolean;
   consent_partage_at: string | null;
   /** Historique des recueils, du plus récent au plus ancien. */

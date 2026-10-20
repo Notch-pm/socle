@@ -69,7 +69,10 @@ describe("consentements de l'usager depuis son compte", () => {
       "J'accepte que les informations fournies ici soient utilisées dans le cadre du traitement de ma demande.",
     );
     expect(citizenConsentStatement("partage", "Ville de Sceaux")).toBe(
-      "J'accepte de partager ces informations aux services de Ville de Sceaux afin d'améliorer le traitement de ma demande et de mes futures demandes.",
+      "J'accepte de partager ces informations avec les services de l'organisme « Ville de Sceaux » afin d'améliorer le traitement de ma demande et de mes futures demandes.",
+    );
+    expect(citizenConsentStatement("partage", "  ")).toBe(
+      "J'accepte de partager ces informations avec les services de la collectivité afin d'améliorer le traitement de ma demande et de mes futures demandes.",
     );
   });
 

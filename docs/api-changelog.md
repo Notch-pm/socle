@@ -13,6 +13,17 @@ Format d'une entrée : `## AAAA-MM-JJ — <api> — ajout|correctif|rupture`
 
 ---
 
+## 2026-10-20 — contacts-api — correctif (phrase du consentement « partage », 1.4.2)
+
+- `POST /v1/citizen/contacts/{account_id}/consents` : la phrase consignée pour `partage` devient
+  « J'accepte de partager ces informations avec les services de l'organisme « {nom} » afin
+  d'améliorer le traitement de ma demande et de mes futures demandes. » (repli : « … avec les
+  services de la collectivité … »), miroir du catalogue d'Iris (contrat 2.7.1). L'ancienne
+  formulation (« aux services de {nom} ») ne s'accordait pas avec le nom. Les recueils déjà
+  consignés gardent leur phrase d'origine ; aucune forme de requête ni de réponse ne change.
+
+---
+
 ## 2026-10-20 — contacts-api — correctif (origine des consentements de l'usager, 1.4.1)
 
 - `POST /v1/citizen/contacts/{account_id}/consents` : l'origine consignée (`source_app`) vient
