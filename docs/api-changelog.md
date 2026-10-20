@@ -1,7 +1,7 @@
 # Journal des évolutions des API publiques
 
 > **Public** : équipes consommatrices (Ariane, Clara, Iris, partenaires) · **Question traitée** :
-> quand un contrat d'API a-t-il changé, et comment ? · **Dernière mise à jour** : 2026-10-15
+> quand un contrat d'API a-t-il changé, et comment ? · **Dernière mise à jour** : 2026-10-20
 
 Journal **append-only** : chaque évolution de la surface de contrat des API publiques
 (`public-api`, `contacts-api`, `ai-api`, `audience-api`) — endpoint, paramètre, champ de réponse,
@@ -10,6 +10,27 @@ réécrite ; une correction s'ajoute sous une nouvelle date. Politique de compat
 consommateur : [integration.md](./integration.md#politique-de-compatibilité-v1).
 
 Format d'une entrée : `## AAAA-MM-JJ — <api> — ajout|correctif|rupture`
+
+---
+
+## 2026-10-20 — contacts-api — ajout (la fiche d'un usager vue par son compte du portail)
+
+**Le portail usagers (Nora) rattache un compte citoyen à une fiche, et l'usager lit et met à jour
+ses coordonnées — sans jamais voir le référentiel.** Projet Sceaux (espace usager, lot L3b).
+
+Version du contrat : **1.4.0**. Ajout **additif** :
+
+- **Scope `citizen`** (nouveau) : n'ouvre que les routes `/v1/citizen/*`, et `contacts` ne les
+  ouvre pas. Réservé à la clé du portail.
+- `POST /v1/citizen/contacts/{account_id}/link` : rattachement **strict** — la fiche UNIQUE
+  portant la même adresse de courriel (vérifiée par le portail) ET le même nom et le même
+  prénom, non tenue par un autre compte ; sinon une fiche neuve. Référence externe
+  `portail_citoyen` = identifiant du compte. Idempotent (`outcome` : `existing`, `created`,
+  `already_linked`).
+- `GET` / `PATCH /v1/citizen/contacts/{account_id}` : la fiche, vue par l'usager
+  (`CitizenContact` : ni `internal_notes`, ni rôles, ni relations, ni références d'autres
+  applications). Il ne modifie que ses coordonnées et son nom d'usage ; l'identité et l'adresse
+  de courriel sont figées.
 
 ---
 

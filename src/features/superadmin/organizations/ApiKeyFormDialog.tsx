@@ -50,6 +50,14 @@ const SCOPE_OPTIONS = [
       + "partenaire. Exige de nommer l'application, pour que la dépense soit imputable.",
   },
   {
+    scope: "citizen",
+    label: "Usager du portail (sa propre fiche)",
+    description:
+      "La fiche d'UN usager, désignée par son compte du portail, sans notes internes ni rôles — "
+      + "API contacts-api, routes /v1/citizen. À ne cocher que pour le portail usagers (Nora), "
+      + "jamais avec « Usagers » sur la même clé.",
+  },
+  {
     scope: "audience",
     label: "Audience du portail (écriture)",
     description:

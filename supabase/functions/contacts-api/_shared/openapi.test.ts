@@ -10,6 +10,8 @@ describe("openapi (contacts-api)", () => {
 
   it("décrit tous les endpoints, sans DELETE", () => {
     expect(Object.keys(doc.paths).sort()).toEqual([
+      "/v1/citizen/contacts/{account_id}",
+      "/v1/citizen/contacts/{account_id}/link",
       "/v1/contact-roles",
       "/v1/contacts",
       "/v1/contacts/match",
@@ -136,5 +138,17 @@ describe("openapi (contacts-api)", () => {
         ).toBe(true);
       }
     }
+  });
+});
+
+describe("contrat 1.4.0 — la fiche vue par le compte du portail", () => {
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const doc = buildOpenApiDocument("https://socle.example/functions/v1/contacts-api") as any;
+  it("la vue usager ne porte ni notes internes ni rôles", () => {
+    const fields = Object.keys(doc.components.schemas.CitizenContact.properties);
+    for (const hidden of ["internal_notes", "roles", "relations", "external_references", "quartier_id"]) {
+      expect(fields).not.toContain(hidden);
+    }
+    expect(doc.info.version).toBe("1.4.0");
   });
 });

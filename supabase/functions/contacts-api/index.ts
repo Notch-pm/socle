@@ -21,7 +21,7 @@
  * `_shared/` (sans dépendance Deno) : testée par vitest et déployée avec la
  * fonction.
  */
-import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { createClient, type SupabaseClient } from "https://esm.sh/@supabase/supabase-js@2";
 import {
   serializeContact,
   serializeContactRole,
@@ -54,6 +54,12 @@ import {
 } from "./_shared/geocoding.ts";
 import { errorResponse, jsonResponse } from "./_shared/errors.ts";
 import { buildOpenApiDocument } from "./_shared/openapi.ts";
+import {
+  CITIZEN_CONTACT_SELECT,
+  parseCitizenIdentity,
+  parseCitizenUpdate,
+  serializeCitizenContact,
+} from "./_shared/citizen.ts";
 
 const FUNCTION_NAME = "contacts-api";
 
@@ -96,6 +102,94 @@ function parseRoute(req: Request): { path: string; serverUrl: string } {
 }
 
 /** Erreur Postgres (via PostgREST) → réponse API. */
+/** La fiche rattachée à ce compte du portail, ou `null`. */
+async function citizenContactId(admin: SupabaseClient, orgId: string, accountId: string): Promise<string | null> {
+  const { data, error } = await admin
+    .from("contact_external_references")
+    .select("contact_id")
+    .eq("organization_id", orgId)
+    .eq("source", "portail_citoyen")
+    .eq("external_id", accountId)
+    .maybeSingle();
+  if (error) throw error;
+  return data ? String((data as Row).contact_id) : null;
+}
+
+async function citizenDto(admin: SupabaseClient, orgId: string, contactId: string) {
+  const { data, error } = await admin
+    .from("contacts")
+    .select(CITIZEN_CONTACT_SELECT)
+    .eq("organization_id", orgId)
+    .eq("id", contactId)
+    .maybeSingle();
+  if (error) throw error;
+  const row = data as unknown as Row | null;
+  return row && row.status === "active" ? serializeCitizenContact(row) : null;
+}
+
+/**
+ * GET   /v1/citizen/contacts/{account_id}       → la fiche rattachée (404 sinon)
+ * PATCH /v1/citizen/contacts/{account_id}       → ses coordonnées
+ * POST  /v1/citizen/contacts/{account_id}/link  → rattacher (strict), ou créer
+ */
+async function handleCitizen(admin: SupabaseClient, orgId: string, segments: string[], req: Request): Promise<Response> {
+  if (segments[1] !== "citizen" || segments[2] !== "contacts" || !isUuid(segments[3] ?? "")) {
+    return errorResponse("not_found", "Endpoint inconnu.", corsHeaders);
+  }
+  const accountId = segments[3];
+  const readBody = async (): Promise<unknown> => {
+    try {
+      return await req.json();
+    } catch (_) {
+      return undefined;
+    }
+  };
+
+  if (segments.length === 5 && segments[4] === "link") {
+    if (req.method !== "POST") return errorResponse("method_not_allowed", "Seule la méthode POST est autorisée ici.", corsHeaders);
+    const parsed = parseCitizenIdentity(await readBody());
+    if (!parsed.ok) return errorResponse("bad_request", parsed.message, corsHeaders);
+    const { data, error } = await admin.rpc("citizen_contact_link", {
+      p_organization_id: orgId,
+      p_account_id: accountId,
+      p_fields: parsed.value,
+    });
+    if (error) return writeErrorResponse(error);
+    const row = (Array.isArray(data) ? data[0] : data) as Row | null;
+    if (!row?.contact_id) return errorResponse("internal_error", "Erreur interne du serveur.", corsHeaders);
+    const dto = await citizenDto(admin, orgId, String(row.contact_id));
+    if (dto === null) return errorResponse("not_found", "Fiche introuvable.", corsHeaders);
+    return jsonResponse(row.outcome === "created" ? 201 : 200, { contact: dto, outcome: row.outcome }, corsHeaders);
+  }
+
+  if (segments.length !== 4) return errorResponse("not_found", "Endpoint inconnu.", corsHeaders);
+  const contactId = await citizenContactId(admin, orgId, accountId);
+  if (contactId === null) return errorResponse("not_found", "Aucune fiche rattachée à ce compte.", corsHeaders);
+
+  if (req.method === "GET") {
+    const dto = await citizenDto(admin, orgId, contactId);
+    return dto === null
+      ? errorResponse("not_found", "Aucune fiche rattachée à ce compte.", corsHeaders)
+      : jsonResponse(200, { contact: dto }, corsHeaders);
+  }
+  if (req.method === "PATCH") {
+    const parsed = parseCitizenUpdate(await readBody());
+    if (!parsed.ok) return errorResponse("bad_request", parsed.message, corsHeaders);
+    const { error } = await admin
+      .from("contacts")
+      .update(parsed.value)
+      .eq("organization_id", orgId)
+      .eq("id", contactId)
+      .eq("status", "active");
+    if (error) return writeErrorResponse(error);
+    const dto = await citizenDto(admin, orgId, contactId);
+    return dto === null
+      ? errorResponse("not_found", "Aucune fiche rattachée à ce compte.", corsHeaders)
+      : jsonResponse(200, { contact: dto }, corsHeaders);
+  }
+  return errorResponse("method_not_allowed", "Méthodes autorisées : GET, PATCH.", corsHeaders);
+}
+
 function writeErrorResponse(err: unknown): Response {
   const pg = err as { code?: string; message?: string };
   if (pg?.code === "23505") {
@@ -497,10 +591,19 @@ Deno.serve(async (req: Request) => {
 
     // La décision (révoquée, expirée, scope, clé plateforme sans application)
     // vit dans _shared/apiKeyAuth.ts, identique dans les trois fonctions.
-    const decision = evaluateApiKey(apiKeyRow as ApiKeyRow | null, {
-      requiredScope: "contacts",
-      scopeMessage: "Cette clé ne porte pas le scope « contacts » requis pour le référentiel des usagers.",
-    });
+    // `/v1/citizen/*` : la fiche d'UN usager vue par son compte du portail
+    // (scope `citizen`) ; tout le reste : le référentiel (scope `contacts`).
+    // Aucun des deux n'ouvre l'autre.
+    const citizenRoute = path.startsWith("/v1/citizen/");
+    const decision = evaluateApiKey(apiKeyRow as ApiKeyRow | null, citizenRoute
+      ? {
+        requiredScope: "citizen",
+        scopeMessage: "Cette clé ne porte pas le scope « citizen » requis pour la fiche d'un usager du portail.",
+      }
+      : {
+        requiredScope: "contacts",
+        scopeMessage: "Cette clé ne porte pas le scope « contacts » requis pour le référentiel des usagers.",
+      });
     if (!decision.ok) return errorResponse(decision.code, decision.message, corsHeaders);
     const apiKey = decision.key;
 
@@ -557,6 +660,14 @@ Deno.serve(async (req: Request) => {
     const segments = path.split("/").filter(Boolean); // ex. ["v1","contacts","<id>","archive"]
     if (segments[0] !== "v1") {
       return errorResponse("not_found", "Endpoint inconnu.", corsHeaders);
+    }
+
+    // --- /v1/citizen/contacts/{account_id}[/link] — scope citizen ---------
+    // La fiche d'UN usager, désignée par l'identifiant de son compte du
+    // portail (référence externe `portail_citoyen`). Liste blanche
+    // `_shared/citizen.ts` : jamais de notes internes ni de rôles.
+    if (citizenRoute) {
+      return await handleCitizen(admin, orgId, segments, req);
     }
 
     // --- /v1/contact-roles ---

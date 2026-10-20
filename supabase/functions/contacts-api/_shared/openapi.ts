@@ -33,13 +33,20 @@ const ID_PARAM = {
 
 /** Référence vers le paramètre d'en-tête réutilisable `XOrganizationId` (clé plateforme). */
 const X_ORGANIZATION_ID_PARAM = { $ref: "#/components/parameters/XOrganizationId" };
+const CITIZEN_ACCOUNT_PARAM = {
+  name: "account_id",
+  in: "path",
+  required: true,
+  schema: { type: "string", format: "uuid" },
+  description: "Identifiant du compte du portail usagers (Nora).",
+};
 
 export function buildOpenApiDocument(serverUrl: string): Record<string, unknown> {
   return {
     openapi: "3.1.0",
     info: {
       title: "API Socle — Référentiel des usagers",
-      version: "1.3.0",
+      version: "1.4.0",
       description: [
         "API du **référentiel des usagers** de la gamme (contacts : personnes physiques,",
         "entreprises, associations, administrations). Elle permet de **consulter, créer,",
@@ -106,8 +113,78 @@ export function buildOpenApiDocument(serverUrl: string): Record<string, unknown>
     tags: [
       { name: "Usagers", description: "Fiches usagers (consultation, création, modification, archivage)." },
       { name: "Rôles", description: "Catalogue des rôles de contact de l'organisation." },
+      {
+        name: "Usager du portail",
+        description:
+          "La fiche d'UN usager vue par son compte du portail (scope `citizen`, 1.4.0) : jamais les " +
+          "notes internes, les rôles ni les relations. Réservé au portail usagers (Nora).",
+      },
     ],
     paths: {
+      "/v1/citizen/contacts/{account_id}": {
+        get: {
+          tags: ["Usager du portail"],
+          summary: "La fiche rattachée à un compte du portail",
+          parameters: [X_ORGANIZATION_ID_PARAM, CITIZEN_ACCOUNT_PARAM],
+          responses: {
+            "200": {
+              description: "La fiche, vue par l'usager.",
+              content: {
+                "application/json": {
+                  schema: { type: "object", properties: { contact: { $ref: "#/components/schemas/CitizenContact" } } },
+                },
+              },
+            },
+            ...errorResponses("400", "401", "403", "404", "500"),
+          },
+        },
+        patch: {
+          tags: ["Usager du portail"],
+          summary: "L'usager modifie ses coordonnées",
+          description:
+            "Seuls `usage_name`, `mobile_phone`, `landline_phone`, `address_line1`, `address_line2`, " +
+            "`postal_code` et `city`. L'identité (civilité, nom, prénom, date de naissance) et l'adresse " +
+            "de courriel sont figées : une correction passe par la collectivité.",
+          parameters: [X_ORGANIZATION_ID_PARAM, CITIZEN_ACCOUNT_PARAM],
+          requestBody: {
+            required: true,
+            content: { "application/json": { schema: { type: "object", additionalProperties: false } } },
+          },
+          responses: {
+            "200": {
+              description: "La fiche mise à jour.",
+              content: {
+                "application/json": {
+                  schema: { type: "object", properties: { contact: { $ref: "#/components/schemas/CitizenContact" } } },
+                },
+              },
+            },
+            ...errorResponses("400", "401", "403", "404", "500"),
+          },
+        },
+      },
+      "/v1/citizen/contacts/{account_id}/link": {
+        post: {
+          tags: ["Usager du portail"],
+          summary: "Rattacher un compte du portail à une fiche (strict), ou la créer",
+          description:
+            "Le compte rejoint la fiche UNIQUE portant la même adresse de courriel (vérifiée par le " +
+            "portail) ET le même nom et le même prénom, non tenue par un autre compte ; sinon une fiche " +
+            "neuve est créée. Idempotent : un compte déjà rattaché rend sa fiche (`outcome: already_linked`). " +
+            "Corps : `civility`, `first_name`, `last_name`, `email`, `address_line1`, `postal_code`, `city` " +
+            "(requis), `usage_name`, `birth_date`, `mobile_phone`, `landline_phone`, `address_line2`.",
+          parameters: [X_ORGANIZATION_ID_PARAM, CITIZEN_ACCOUNT_PARAM],
+          requestBody: {
+            required: true,
+            content: { "application/json": { schema: { type: "object", additionalProperties: false } } },
+          },
+          responses: {
+            "200": { description: "Rattaché à une fiche existante (`existing`, `already_linked`)." },
+            "201": { description: "Fiche créée (`created`)." },
+            ...errorResponses("400", "401", "403", "404", "409", "500"),
+          },
+        },
+      },
       "/v1/contacts": {
         get: {
           tags: ["Usagers"],
@@ -443,6 +520,32 @@ export function buildOpenApiDocument(serverUrl: string): Record<string, unknown>
         },
       },
       schemas: {
+        CitizenContact: {
+          type: "object",
+          description:
+            "La fiche vue par l'usager lui-même (1.4.0) — liste blanche distincte de `Contact` : ni " +
+            "notes internes, ni rôles, ni relations, ni références d'autres applications.",
+          properties: {
+            id: { type: "string", format: "uuid" },
+            civility: { type: "string", enum: ["madame", "monsieur"], nullable: true },
+            first_name: { type: "string", nullable: true },
+            last_name: { type: "string", nullable: true },
+            usage_name: { type: "string", nullable: true },
+            birth_date: { type: "string", format: "date", nullable: true },
+            email: { type: "string", nullable: true },
+            mobile_phone: { type: "string", nullable: true },
+            landline_phone: { type: "string", nullable: true },
+            address_line1: { type: "string", nullable: true },
+            address_line2: { type: "string", nullable: true },
+            postal_code: { type: "string", nullable: true },
+            city: { type: "string", nullable: true },
+            country: { type: "string", nullable: true },
+            consent_traitement: { type: "boolean", nullable: true },
+            consent_traitement_at: { type: "string", format: "date-time", nullable: true },
+            consent_partage: { type: "boolean", nullable: true },
+            consent_partage_at: { type: "string", format: "date-time", nullable: true },
+          },
+        },
         Error: {
           type: "object",
           required: ["error"],
