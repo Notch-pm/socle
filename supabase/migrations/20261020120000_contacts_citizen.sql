@@ -33,7 +33,7 @@
 alter table public.api_keys drop constraint api_keys_scopes_known;
 alter table public.api_keys
   add constraint api_keys_scopes_known
-  check (scopes <@ array['read', 'contacts', 'smtp', 'ai', 'audience', 'integrations', 'citizen']::text[]);
+  check (scopes <@ array['read', 'contacts', 'smtp', 'ai', 'audience', 'integrations', 'signatures', 'citizen']::text[]);
 
 -- ----------------------------------------------------------------------------
 -- 2. Le rattachement
