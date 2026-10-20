@@ -164,6 +164,12 @@ vit ici parce que presque chaque étape commence par une capacité du Socle (une
 d'API, un écran de paramétrage). Ordre de bataille tel qu'arrêté le 2026-09-05 — chaque étape
 suppose la précédente.
 
+⚠️ **L'espace usager (étapes 3 à 6 ci-dessous) a son dossier transverse** : `C:\Users\jacqu\Notch\Sceaux\`
+— `02-espace-usager.md` pour la conception, `03-avancement.md` pour l'état et le point de reprise.
+Reste à livrer, dans cet ordre : **L4c** (courriels à l'usager), **L5** FranceConnect, **L6**
+documents et brouillons, **L7** RGPD (suppression, export, purge), **L8** recette de sécurité et
+de charge.
+
 ### Livré
 
 - **2026-09-05 — Résolution de tenant par domaine.** `organization_domains` (unique sur toute la
@@ -175,7 +181,7 @@ suppose la précédente.
   `portal_pages` (`draft` autosauvegardé / `published` explicite — sauvegarder n'est pas
   publier), schéma possédé versionné, palette / canevas / inspecteur, glisser-déposer avec ombre
   de destination, zoom, aperçu par appareil, retrait de bloc, catalogue épinglé avec sa visibilité
-  portail. Blocs : recherche, grille de démarches, espace usager (décoratif), bandeau texte,
+  portail. Blocs : recherche, grille de démarches, espace usager (le bloc d'entrée vers `/suivi` et `/compte`, cf. étapes 3 à 5), bandeau texte,
   contact et horaires (preset), pied de page (pleine largeur, fond, 1 à 3 colonnes).
 - **2026-09-05 — Rendu au portail** : `GET /v1/portal/page` (1.8.0, pied de page en 1.9.0),
   composition publiée rendue par Nora avec recherche réelle sur le catalogue, charte graphique de
@@ -282,6 +288,12 @@ suppose la précédente.
   la vitrine reste le porteur, la demande part vers le **service interne** — Iris, strict, la
   refusait quand elle s'adressait à la mairie. Vérifié : trois dépôts (Rosny, SNA, ACCM), chacun
   rattaché à sa collectivité et à son service. Rien à faire au Socle.
+- **2026-10-19 → 2026-10-21 — L'espace usager (projet Sceaux, lots L1 à L4b).** Sessions de
+  même origine (L1), suivi sans compte par code d'accès (L2), compte usager rattaché à sa fiche
+  par le scope **`citizen`** de `contacts-api` 1.4.0 → 1.4.2, « Mes demandes », démarches
+  réservées, consentements modifiables (L3), code perdu et coupure par un agent (L4a), réponse
+  de l'usager en ligne (L4b, Iris 2.9.0). Détail : étapes 3 à 6 ci-dessous et
+  `C:\Users\jacqu\Notch\Sceaux\03-avancement.md`.
 
 ### Envisagé, dans l'ordre
 
@@ -323,35 +335,37 @@ suppose la précédente.
    table `portal_contents`, qui accueillera les deux autres de la même façon) ; le bloc
    « Actualités » (grisé) quand une source d'actualités existera au Socle, et son entrée dans la
    vue « Contenus », ouverte depuis le 2026-09-18.
-3. **Démarches hors compte.** La demande part déjà (2026-09-06) ; il lui manque son après :
-   confirmation par courriel et **lien de suivi signé** à durée limitée, sans mot de passe. Il
-   faut pour cela que le **statut d'une demande soit consultable** depuis le portail — Iris le
-   sert sur `GET /v1/requests/{id}` avec le scope `requests:read`, à exposer sous une route du
-   portail qui ne révèle rien sans le lien signé. C'est le parcours qui fait vivre le portail dès
-   le premier jour.
-4. **Démarches avec compte.** L'espace usager derrière le bloc « Espace usager » : mes demandes,
-   leur état, mes informations. Authentification portée par Nora (projet Supabase du portail) et
-   **rattachée au référentiel usagers du Socle** (`contacts`, via `contacts-api`) — le compte
-   portail est une clé externe du contact (`contact_external_references`, source `portail_citoyen`,
-   déjà prévue), pas une seconde fiche. **Le paramétrage est prêt depuis le 2026-09-10** :
-   `procedures.access_mode` dit, démarche par démarche, si le dépôt exige un usager connecté, et il
-   est servi en contrat 1.19.0 sur `Procedure` et `PortalProcedure`. Reste à le **lire** — annoncer
-   la restriction sur la carte et sur la page de la démarche, puis bloquer le dépôt. ⚠️ Sans jamais
-   retirer la démarche du catalogue : c'est là que l'usager apprend qu'il doit se connecter.
-5. **Création de compte.** Inscription par courriel avec validation, réinitialisation de mot de
-   passe, données minimales (RGPD : finalité, durée, droit d'accès et d'effacement à documenter),
-   rapprochement d'une demande hors compte faite avec le même courriel.
-6. **Les échanges.** Fil de messages entre l'usager et l'agent sur une demande (demande de
-   complément, réponse, notification par courriel via le SMTP hérité de la collectivité). Le fil
-   vit avec la demande (Iris) ; le portail en est une vue.
+3. **Démarches hors compte — livrées** (lot L2, 2026-10-19 ; L4a, 2026-10-21). Au dépôt, l'usager
+   qui veut suivre sa demande reçoit un **code d'accès** tiré par Iris (affiché une fois, cité dans
+   le courriel d'accusé, empreinte seule en base) ; la page `/suivi` (référence + courriel + code)
+   ouvre une **session invitée** limitée à cette demande, en liste blanche (jamais notes internes,
+   agents ni journal). L4a : code perdu (renvoi d'un code neuf), coupure d'accès et nouveau code
+   par un agent. Contrat Iris 2.6.0 puis 2.8.0.
+4. **Démarches avec compte — livrées** (lot L3, 2026-10-20). Comptes dans le projet Supabase de
+   Nora, **rattachés à la fiche du Socle** par `contact_external_references` (source
+   `portail_citoyen`) via le scope **`citizen`** de `contacts-api` (1.4.0 → 1.4.2) : rattachement
+   **strict** (courriel, nom, prénom, code postal, et date de naissance si la fiche en porte une),
+   sinon fiche neuve — une seule fiche, pas de seconde identité. ⚠️ **`access_mode` est lu et
+   appliqué** : la démarche réservée reste au catalogue avec cadenas et infobulle, « Me connecter »
+   au détail, dépôt **refusé côté serveur** sans compte connecté. « Mes demandes » = toutes les
+   demandes rattachées à la fiche (décision PO), **sauf** celles créées suite à un courrier Clara,
+   masquées tant qu'un agent ne les rend pas visibles.
+5. **Création de compte — livrée** (L3a, 2026-10-20). Inscription par courriel sans mot de passe
+   (choisi au lien de confirmation), réinitialisation, TOTP facultatif, courriels de compte envoyés
+   par le serveur d'envoi de la collectivité (scope `smtp`). Les CGU sont un **projet à valider**
+   par la collectivité et son DPO.
+6. **Les échanges — livrés en partie.** L'usager **répond en ligne** (L4b, 2026-10-21, Iris
+   2.9.0), depuis `/suivi` comme depuis « Mes demandes », avec pièces jointes. Le fil vit avec la
+   demande (Iris) ; le portail en est une vue. **Reste L4c** : les courriels à l'usager à chaque
+   changement de statut et nouveau message, désactivables.
 7. **Les pièces jointes — livrées le 2026-09-08** (Iris + Nora, contrat d'ingestion Iris
    2.0.0). Le fichier part dès sa sélection au portail (`portal-api /v1/demandes/pieces`) vers
    Iris (`POST /v1/uploads`), qui vérifie le **contenu réel** (signature binaire contre une liste
    fermée : PDF, images, HEIC, Word/Excel/OpenDocument — jamais SVG, HTML ni Office à macros),
-   borne la taille (10 Mo au portail), calcule l'empreinte et garde le fichier en attente de la
+   borne la taille (**20 Mo** au portail depuis le lot L3c, 10 Mo auparavant), calcule l'empreinte et garde le fichier en attente de la
    demande ; Nora ne stocke rien. Pas d'antivirus (décision PO : la liste fermée est la défense).
-   Le remplacement d'une pièce refusée existe côté Iris (instruction) ; **côté portail, il attend
-   les échanges (6)**, comme les pièces jointes aux échanges.
+   Le remplacement d'une pièce refusée existe côté Iris (instruction). **Les pièces jointes aux
+   réponses de l'usager sont livrées** (L4b : 5 pièces PDF/JPEG/PNG, 20 Mo au plus).
    ⚠️ **Question ouverte, POUR LE SOCLE (2026-09-08)** : Iris refuse une demande dont la
    démarche n'est pas activée pour l'organisme transmis (`organization_procedures`, opt-in
    strict — garde `t18`). Or le portail ne transmet un organisme que si l'usager l'a choisi, donc
@@ -363,10 +377,11 @@ suppose la précédente.
    l'activent** (le portail présélectionnant l'unique organisme), ou bien l'activation à la racine
    devient implicite quand une seule commune active. La première lecture est la plus cohérente
    avec l'opt-in strict.
-8. **FranceConnect (?)** Identification par FranceConnect / FranceConnect+ pour les démarches qui
-   exigent une identité vérifiée. Question ouverte : habilitation à obtenir par la collectivité
-   ou par l'éditeur, périmètre des données restituées, cohabitation avec les comptes locaux.
-   À instruire avant de coder.
+8. **FranceConnect** (lot L5). Identification par FranceConnect / FranceConnect+ pour les
+   démarches qui exigent une identité vérifiée. L'architecture est tranchée dans
+   `Sceaux\02-espace-usager.md` §3. ⚠️ **L'habilitation DataPass n'est pas lancée** : c'est un
+   délai administratif qui conditionne le lot. Reste ouverte une question de conception :
+   cohabitation avec les comptes locaux.
 
 ### Accessibilité RGAA — le relevé du 2026-09-15
 

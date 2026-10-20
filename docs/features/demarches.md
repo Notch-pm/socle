@@ -73,8 +73,10 @@ est fonctionnelle (voir feature « Édition d'organisation » ci-dessous). Param
   personne n'avait déclaré fermé. Même raison pour le parseur : **au moindre doute, `libre`** —
   l'inverse de `procedureStatus` (là le doute ne publie rien, ici il ne **ferme** rien).
   ⚠️ Le Socle **enregistre et publie**, il ne garde aucune porte (motif de la charte graphique et de
-  l'étape « Publication ») : tant que Nora ne lit pas le champ, une démarche réservée se dépose comme
-  les autres. L'espace usager est à la roadmap (« Démarches avec compte »).
+  l'étape « Publication ») : la porte est tenue par Nora, qui **lit et applique** le champ depuis le
+  2026-10-20 (lot L3c de l'espace usager) — cadenas et infobulle au catalogue, « Me connecter » sur
+  la démarche, dépôt refusé côté serveur sans compte connecté (`account_required`). Une valeur
+  inconnue est traitée comme **réservée** côté Nora. Voir la roadmap, « Portail usagers (Nora) ».
   **En aval** (contrat 1.19.0) : `access_mode` sur `Procedure` **et** sur `PortalProcedure` (liste
   et détail) — le portail en a besoin pour l'annoncer, l'application qui instruit pour refuser un
   dépôt anonyme. Logique pure `procedureAccess.ts` (testée) ; miroir edge `readAccessMode` dans
