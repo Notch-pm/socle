@@ -277,11 +277,11 @@ describe("rattachement STRICT (courriel + nom + prénom + code postal + date de 
     expect((await world.sql("select count(*)::int n from contacts"))[0]).toEqual(before);
   });
 
-  // ANOMALIE S1 (mineure) — `parseCitizenIdentity` (contacts-api/_shared/citizen.ts) ne contrôle
+  // S1 (corrigée le 2026-10-20) — `parseCitizenIdentity` (contacts-api/_shared/citizen.ts) ne contrôle
   // la date de naissance que par sa FORME (AAAA-MM-JJ). « 1990-02-31 » traverse, puis le
   // `::date` de `citizen_contact_link` lève 22008 : réponse 500 « Erreur interne » au lieu d'un
   // 400 sur le champ. Côté usager (Nora), « service momentanément indisponible ».
-  it.fails("S1 — une date de naissance impossible est refusée en 400 (champ birth_date), pas en 500", async () => {
+  it("S1 — une date de naissance impossible est refusée en 400 (champ birth_date), pas en 500", async () => {
     const reply = await link(ACCOUNT_A, { ...IDENTITY, birth_date: "1990-02-31" });
     expect(reply.status).toBe(400);
   });

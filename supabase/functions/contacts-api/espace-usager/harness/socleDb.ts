@@ -19,7 +19,11 @@ import { PGlite } from "@electric-sql/pglite";
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
 
-const MIGRATION = join(import.meta.dirname, "..", "..", "..", "..", "migrations", "20261020120000_contacts_citizen.sql");
+const MIGRATIONS_DIR = join(import.meta.dirname, "..", "..", "..", "..", "migrations");
+/** Les migrations de l'espace usager, dans l'ordre : la seconde remplace `citizen_contact_link`. */
+const MIGRATIONS = ["20261020120000_contacts_citizen.sql", "20261020180000_citizen_link_gardes.sql"].map((f) =>
+  join(MIGRATIONS_DIR, f)
+);
 
 const STUB_SCHEMA = `
   create role anon; create role authenticated; create role service_role;
@@ -113,7 +117,7 @@ let shared: PGlite | null = null;
 export async function createSocleDb(): Promise<PGlite> {
   const db = new PGlite();
   await db.exec(STUB_SCHEMA);
-  await db.exec(readFileSync(MIGRATION, "utf8"));
+  for (const migration of MIGRATIONS) await db.exec(readFileSync(migration, "utf8"));
   return db;
 }
 

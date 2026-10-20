@@ -69,17 +69,17 @@ describe("citizen_contact_link — invariants du rattachement", () => {
     expect((await q("select count(*)::int n from contacts"))[0]).toEqual({ n: 0 });
   });
 
-  // ANOMALIE S2 (défense en profondeur) — `citizen_contact_link` : `v_last` et `v_first` valent
+  // S2 (corrigée le 2026-10-20, migration 20261020180000) — `citizen_contact_link` : `v_last` et `v_first` valent
   // `normalize_name(...)`, qui rend NULL (et non '') pour un nom vide. Le garde
   // `v_last = '' or v_first = ''` vaut alors NULL, donc FAUX : un prénom ou un nom blanc ne
   // lève pas 22023 et la fonction CRÉE une fiche au prénom vide. Inatteignable aujourd'hui par
   // HTTP (`parseCitizenIdentity` refuse un nom blanc en amont), mais le garde SQL ne garde rien.
-  it.fails.each(["first_name", "last_name"])("S2 — sans « %s » : refusé (22023), rien n'est créé", async (field) => {
+  it.each(["first_name", "last_name"])("S2 — sans « %s » : refusé (22023), rien n'est créé", async (field) => {
     await expect(link(ORG, A, { ...FIELDS, [field]: "  " })).rejects.toMatchObject({ code: "22023" });
     expect((await q("select count(*)::int n from contacts"))[0]).toEqual({ n: 0 });
   });
 
-  // OBSERVATION S3 — `normalize_name` ne garde que [a-z0-9] après suppression des accents latins :
+  // OBSERVATION S3 (À TRANCHER PAR LE PO, laissée en échec attendu) — `normalize_name` ne garde que [a-z0-9] après suppression des accents latins :
   // un nom en caractères non latins (cyrillique, arabe, chinois…) se normalise en NULL, ne
   // correspond donc JAMAIS à une fiche existante, et crée une fiche neuve à chaque premier
   // rattachement (doublon sûr, jamais une fuite). Comportement voulu à confirmer avec le PO.
@@ -155,9 +155,9 @@ describe("citizen_contact_link — invariants du rattachement", () => {
     expect(new Set([r1.contact_id, r2.contact_id]).size).toBe(2);
   });
 
-  // ANOMALIE S1 (mineure) — voir citizen.contract.test.ts : une date impossible passe la forme
+  // S1 (corrigée le 2026-10-20, migration 20261020180000) — voir citizen.contract.test.ts : une date impossible passe la forme
   // AAAA-MM-JJ et fait lever `22008` au `::date`, au lieu d'un refus de validation.
-  it.fails("S1 — une date de naissance impossible est refusée comme une saisie invalide (22023), pas comme une erreur de conversion", async () => {
+  it("S1 — une date de naissance impossible est refusée comme une saisie invalide (22023), pas comme une erreur de conversion", async () => {
     await expect(link(ORG, A, { ...FIELDS, birth_date: "1990-02-31" })).rejects.toMatchObject({ code: "22023" });
   });
 

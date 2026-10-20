@@ -137,11 +137,25 @@ export function parseCitizenIdentity(body: unknown): CitizenParse<Record<string,
   }
   const birth = text(input, "birth_date", false);
   if (!birth.ok) return birth;
-  if (birth.value !== null && !/^\d{4}-\d{2}-\d{2}$/.test(birth.value)) {
+  if (birth.value !== null && !isRealDate(birth.value)) {
     return { ok: false, message: "birth_date : date AAAA-MM-JJ." };
   }
   out.birth_date = birth.value;
   return { ok: true, value: out };
+}
+
+/**
+ * Une date RÉELLE au format AAAA-MM-JJ, entre 1900 et aujourd'hui : la forme
+ * ne suffit pas, « 1990-02-31 » faisait lever la conversion SQL (500).
+ */
+function isRealDate(value: string): boolean {
+  const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(value);
+  if (m === null) return false;
+  const [year, month, day] = [Number(m[1]), Number(m[2]), Number(m[3])];
+  const date = new Date(Date.UTC(year, month - 1, day));
+  return year >= 1900
+    && date.getUTCFullYear() === year && date.getUTCMonth() === month - 1 && date.getUTCDate() === day
+    && date.getTime() <= Date.now();
 }
 
 /** Ce que l'usager modifie lui-même : ses coordonnées et son nom d'usage. */
