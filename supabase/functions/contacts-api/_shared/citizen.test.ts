@@ -61,3 +61,22 @@ describe("parseCitizenUpdate", () => {
     expect(parseCitizenUpdate({ city: "" }).ok).toBe(false);
   });
 });
+
+describe("consentements de l'usager depuis son compte", () => {
+  it("la phrase est celle d'Iris, mot pour mot", async () => {
+    const { citizenConsentStatement } = await import("./citizen.ts");
+    expect(citizenConsentStatement("traitement", "Ville de Sceaux")).toBe(
+      "J'accepte que les informations fournies ici soient utilisées dans le cadre du traitement de ma demande.",
+    );
+    expect(citizenConsentStatement("partage", "Ville de Sceaux")).toBe(
+      "J'accepte de partager ces informations aux services de Ville de Sceaux afin d'améliorer le traitement de ma demande et de mes futures demandes.",
+    );
+  });
+
+  it("refuse une phrase venue de l'appelant", async () => {
+    const { parseCitizenConsent } = await import("./citizen.ts");
+    expect(parseCitizenConsent({ kind: "partage", granted: false }).ok).toBe(true);
+    expect(parseCitizenConsent({ kind: "partage", granted: true, statement: "autre chose" }).ok).toBe(false);
+    expect(parseCitizenConsent({ kind: "autre", granted: true }).ok).toBe(false);
+  });
+});

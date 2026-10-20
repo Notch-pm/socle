@@ -164,3 +164,31 @@ export function parseCitizenUpdate(body: unknown): CitizenParse<Record<string, s
   if (Object.keys(out).length === 0) return { ok: false, message: "Aucun champ à modifier." };
   return { ok: true, value: out };
 }
+
+// ---- Consentements de l'usager, depuis son compte (contacts-api 1.4.0) ------
+
+/**
+ * La phrase consignée, composée ICI — jamais envoyée par le navigateur (règle
+ * de la gamme). ⚠️ MIROIR mot pour mot du catalogue d'Iris
+ * (`supabase/functions/_shared/consents/catalog.ts`, `consentStatement`), qui
+ * le possède ; `citizen.test.ts` épingle le texte.
+ */
+export function citizenConsentStatement(kind: "traitement" | "partage", organismName: string | null): string {
+  if (kind === "traitement") {
+    return "J'accepte que les informations fournies ici soient utilisées dans le cadre du traitement de ma demande.";
+  }
+  const organism = (organismName ?? "").trim() || "la collectivité";
+  return `J'accepte de partager ces informations aux services de ${organism} `
+    + "afin d'améliorer le traitement de ma demande et de mes futures demandes.";
+}
+
+/** `{ kind, granted }` seulement : un `statement` venu de l'appelant est refusé. */
+export function parseCitizenConsent(body: unknown): CitizenParse<{ kind: "traitement" | "partage"; granted: boolean }> {
+  if (typeof body !== "object" || body === null || Array.isArray(body)) return { ok: false, message: "Objet JSON attendu." };
+  const input = body as Record<string, unknown>;
+  const unknown = Object.keys(input).filter((k) => k !== "kind" && k !== "granted");
+  if (unknown.length > 0) return { ok: false, message: `Champ inconnu : ${unknown.join(", ")}.` };
+  if (input.kind !== "traitement" && input.kind !== "partage") return { ok: false, message: "kind : « traitement » ou « partage »." };
+  if (typeof input.granted !== "boolean") return { ok: false, message: "granted : booléen attendu." };
+  return { ok: true, value: { kind: input.kind, granted: input.granted } };
+}

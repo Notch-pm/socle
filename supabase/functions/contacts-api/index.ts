@@ -57,6 +57,8 @@ import { errorResponse, jsonResponse } from "./_shared/errors.ts";
 import { buildOpenApiDocument } from "./_shared/openapi.ts";
 import {
   CITIZEN_CONTACT_SELECT,
+  citizenConsentStatement,
+  parseCitizenConsent,
   parseCitizenIdentity,
   parseCitizenUpdate,
   serializeCitizenContact,
@@ -132,6 +134,7 @@ async function citizenDto(admin: SupabaseClient, orgId: string, contactId: strin
  * GET   /v1/citizen/contacts/{account_id}       → la fiche rattachée (404 sinon)
  * PATCH /v1/citizen/contacts/{account_id}       → ses coordonnées
  * POST  /v1/citizen/contacts/{account_id}/link  → rattacher (strict), ou créer
+ * POST  /v1/citizen/contacts/{account_id}/consents → l'usager modifie ses consentements
  */
 async function handleCitizen(admin: SupabaseClient, orgId: string, segments: string[], req: Request): Promise<Response> {
   if (segments[1] !== "citizen" || segments[2] !== "contacts" || !isUuid(segments[3] ?? "")) {
@@ -161,6 +164,33 @@ async function handleCitizen(admin: SupabaseClient, orgId: string, segments: str
     const dto = await citizenDto(admin, orgId, String(row.contact_id));
     if (dto === null) return errorResponse("not_found", "Fiche introuvable.", corsHeaders);
     return jsonResponse(row.outcome === "created" ? 201 : 200, { contact: dto, outcome: row.outcome }, corsHeaders);
+  }
+
+  if (segments.length === 5 && segments[4] === "consents") {
+    // L'usager modifie SES consentements depuis son compte. La phrase consignée
+    // est composée ici (nom de la collectivité), jamais reçue ; l'application
+    // source est celle de la clé — le portail —, pas une valeur de l'appelant.
+    if (req.method !== "POST") return errorResponse("method_not_allowed", "Seule la méthode POST est autorisée ici.", corsHeaders);
+    const parsed = parseCitizenConsent(await readBody());
+    if (!parsed.ok) return errorResponse("bad_request", parsed.message, corsHeaders);
+    const contactId = await citizenContactId(admin, orgId, accountId);
+    if (contactId === null) return errorResponse("not_found", "Aucune fiche rattachée à ce compte.", corsHeaders);
+    const { data: org, error: orgError } = await admin.from("organizations").select("name").eq("id", orgId).maybeSingle();
+    if (orgError) throw orgError;
+    const { error } = await admin.from("contact_consents").insert({
+      contact_id: contactId,
+      kind: parsed.value.kind,
+      granted: parsed.value.granted,
+      statement: citizenConsentStatement(parsed.value.kind, (org as Row | null)?.name as string | null ?? null),
+      source_app: "portail-citoyen",
+      source_reference: null,
+      collected_at: new Date().toISOString(),
+    });
+    if (error) return writeErrorResponse(error);
+    const dto = await citizenDto(admin, orgId, contactId);
+    return dto === null
+      ? errorResponse("not_found", "Aucune fiche rattachée à ce compte.", corsHeaders)
+      : jsonResponse(201, { contact: dto }, corsHeaders);
   }
 
   if (segments.length !== 4) return errorResponse("not_found", "Endpoint inconnu.", corsHeaders);
