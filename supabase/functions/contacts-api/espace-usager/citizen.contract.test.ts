@@ -344,7 +344,10 @@ describe("consentements", () => {
       "select kind, granted, statement, source_app, source_reference from contact_consents order by collected_at",
     );
     expect(rows.map((r) => r.granted)).toEqual([true, false]);
-    expect(rows[0]).toMatchObject({ kind: "partage", source_app: "portail-citoyen", source_reference: null });
+    expect(rows[0]).toMatchObject({ kind: "partage", source_app: "portail-citoyen" });
+    // Le compte qui a agi est consigné ; deux recueils du même compte coexistent (référence horodatée).
+    for (const row of rows) expect(row.source_reference).toMatch(new RegExp(`^compte:${ACCOUNT_A}:\\d{4}-`));
+    expect(rows[0].source_reference).not.toBe(rows[1].source_reference);
     expect(rows[0].statement).toContain("Ville de Sceaux");
     expect(rows[0].statement).toMatch(/partager ces informations/);
   });
@@ -367,6 +370,17 @@ describe("consentements", () => {
     [null],
   ])("%j : refusé (400) — le navigateur n'envoie que { kind, granted }, la phrase et la source ne se choisissent pas", async (body) => {
     expect((await consent(body)).status).toBe(400);
+    expect((await world.sql("select count(*)::int n from contact_consents"))[0]).toEqual({ n: 0 });
+  });
+
+  it("l'origine vient de la clé : une clé sans application connue ne consigne rien (403)", async () => {
+    await world.addKey("sk_sceaux", ["citizen"], { organizationId: world.sceaux });
+    await world.addKey("sk_autre", ["citizen"], { consumer: "autre-portail" });
+    await world.db.query("insert into org_applications (organization_id, application) values ($1, 'autre-portail')", [world.sceaux]);
+    for (const key of ["sk_sceaux", "sk_autre"]) {
+      const reply = await call("POST", `/v1/citizen/contacts/${ACCOUNT_A}/consents`, { key, json: { kind: "partage", granted: true } });
+      expect(reply.status, key).toBe(403);
+    }
     expect((await world.sql("select count(*)::int n from contact_consents"))[0]).toEqual({ n: 0 });
   });
 

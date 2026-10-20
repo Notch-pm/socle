@@ -196,6 +196,29 @@ export function citizenConsentStatement(kind: "traitement" | "partage", organism
     + "afin d'améliorer le traitement de ma demande et de mes futures demandes.";
 }
 
+/**
+ * L'application qui recueille, déduite de la CLÉ appelante (`api_keys.consumer`)
+ * — jamais d'une valeur de l'appelant, jamais d'une constante : l'historique
+ * des consentements est une preuve, son origine doit être un fait. Le libellé
+ * est celui que portent déjà les recueils des dépôts du portail
+ * (`portail-citoyen`) : une même porte, un même nom. Application absente de
+ * la table = aucun recueil (`null`).
+ */
+const CITIZEN_CONSENT_SOURCES: Readonly<Record<string, string>> = { nora: "portail-citoyen" };
+
+export function citizenConsentSource(consumer: string | null): string | null {
+  return consumer !== null && Object.hasOwn(CITIZEN_CONSENT_SOURCES, consumer) ? CITIZEN_CONSENT_SOURCES[consumer] : null;
+}
+
+/**
+ * Le compte qui a agi, consigné avec le recueil. L'horodatage rend la
+ * référence unique : `(contact, kind, source_app, source_reference)` l'est en
+ * base, et un même compte change plusieurs fois d'avis.
+ */
+export function citizenConsentReference(accountId: string, collectedAt: string): string {
+  return `compte:${accountId}:${collectedAt}`;
+}
+
 /** `{ kind, granted }` seulement : un `statement` venu de l'appelant est refusé. */
 export function parseCitizenConsent(body: unknown): CitizenParse<{ kind: "traitement" | "partage"; granted: boolean }> {
   if (typeof body !== "object" || body === null || Array.isArray(body)) return { ok: false, message: "Objet JSON attendu." };

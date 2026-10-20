@@ -46,7 +46,7 @@ export function buildOpenApiDocument(serverUrl: string): Record<string, unknown>
     openapi: "3.1.0",
     info: {
       title: "API Socle — Référentiel des usagers",
-      version: "1.4.0",
+      version: "1.4.1",
       description: [
         "API du **référentiel des usagers** de la gamme (contacts : personnes physiques,",
         "entreprises, associations, administrations). Elle permet de **consulter, créer,",
@@ -170,7 +170,9 @@ export function buildOpenApiDocument(serverUrl: string): Record<string, unknown>
           description:
             "Corps `{ kind: traitement | partage, granted }` — rien d'autre. La phrase consignée est " +
             "composée par le Socle depuis le nom de la collectivité (catalogue d'Iris) ; une phrase " +
-            "envoyée est refusée. Source consignée : `portail-citoyen`. Un retrait est un recueil " +
+            "envoyée est refusée. Origine consignée : l'application de la clé (`portail-citoyen` pour Nora ; " +
+            "une clé d'une autre application est refusée, 403), avec le compte qui agit (`source_reference` " +
+            "`compte:{account_id}:{horodatage}`). Un retrait est un recueil " +
             "`granted: false` plus récent.",
           parameters: [X_ORGANIZATION_ID_PARAM, CITIZEN_ACCOUNT_PARAM],
           requestBody: {

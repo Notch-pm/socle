@@ -13,6 +13,17 @@ Format d'une entrée : `## AAAA-MM-JJ — <api> — ajout|correctif|rupture`
 
 ---
 
+## 2026-10-20 — contacts-api — correctif (origine des consentements de l'usager, 1.4.1)
+
+- `POST /v1/citizen/contacts/{account_id}/consents` : l'origine consignée (`source_app`) vient
+  de l'application de la clé appelante (`nora` → `portail-citoyen`), et non plus d'une
+  constante ; une clé d'une autre application, ou liée à une collectivité sans application,
+  reçoit **403** et rien n'est consigné. Le compte qui agit est consigné dans
+  `source_reference` (`compte:{account_id}:{horodatage}`). Sans effet pour Nora ; les recueils
+  antérieurs gardent `source_reference` vide.
+
+---
+
 ## 2026-10-20 — contacts-api — ajout (la fiche d'un usager vue par son compte du portail)
 
 **Le portail usagers (Nora) rattache un compte citoyen à une fiche, et l'usager lit et met à jour

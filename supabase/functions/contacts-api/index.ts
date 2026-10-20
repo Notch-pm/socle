@@ -57,6 +57,8 @@ import { errorResponse, jsonResponse } from "./_shared/errors.ts";
 import { buildOpenApiDocument } from "./_shared/openapi.ts";
 import {
   CITIZEN_CONTACT_SELECT,
+  citizenConsentReference,
+  citizenConsentSource,
   citizenConsentStatement,
   parseCitizenConsent,
   parseCitizenIdentity,
@@ -136,7 +138,13 @@ async function citizenDto(admin: SupabaseClient, orgId: string, contactId: strin
  * POST  /v1/citizen/contacts/{account_id}/link  → rattacher (strict), ou créer
  * POST  /v1/citizen/contacts/{account_id}/consents → l'usager modifie ses consentements
  */
-async function handleCitizen(admin: SupabaseClient, orgId: string, segments: string[], req: Request): Promise<Response> {
+async function handleCitizen(
+  admin: SupabaseClient,
+  orgId: string,
+  consumer: string | null,
+  segments: string[],
+  req: Request,
+): Promise<Response> {
   if (segments[1] !== "citizen" || segments[2] !== "contacts" || !isUuid(segments[3] ?? "")) {
     return errorResponse("not_found", "Endpoint inconnu.", corsHeaders);
   }
@@ -168,10 +176,13 @@ async function handleCitizen(admin: SupabaseClient, orgId: string, segments: str
 
   if (segments.length === 5 && segments[4] === "consents") {
     // L'usager modifie SES consentements depuis son compte. La phrase consignée
-    // est composée ici (nom de la collectivité), jamais reçue ; la source est
-    // fixe — `portail-citoyen` —, jamais une valeur de l'appelant : le scope
-    // `citizen` n'est donné qu'à la clé du portail.
+    // est composée ici (nom de la collectivité), jamais reçue ; l'origine vient
+    // de la CLÉ (`citizenConsentSource`), le compte qui agit est consigné.
     if (req.method !== "POST") return errorResponse("method_not_allowed", "Seule la méthode POST est autorisée ici.", corsHeaders);
+    const sourceApp = citizenConsentSource(consumer);
+    if (sourceApp === null) {
+      return errorResponse("forbidden", "Cette clé n'est rattachée à aucune application qui recueille les consentements des usagers.", corsHeaders);
+    }
     const parsed = parseCitizenConsent(await readBody());
     if (!parsed.ok) return errorResponse("bad_request", parsed.message, corsHeaders);
     const contactId = await citizenContactId(admin, orgId, accountId);
@@ -183,14 +194,15 @@ async function handleCitizen(admin: SupabaseClient, orgId: string, segments: str
     }
     const { data: org, error: orgError } = await admin.from("organizations").select("name").eq("id", orgId).maybeSingle();
     if (orgError) throw orgError;
+    const collectedAt = new Date().toISOString();
     const { error } = await admin.from("contact_consents").insert({
       contact_id: contactId,
       kind: parsed.value.kind,
       granted: parsed.value.granted,
       statement: citizenConsentStatement(parsed.value.kind, (org as Row | null)?.name as string | null ?? null),
-      source_app: "portail-citoyen",
-      source_reference: null,
-      collected_at: new Date().toISOString(),
+      source_app: sourceApp,
+      source_reference: citizenConsentReference(accountId, collectedAt),
+      collected_at: collectedAt,
     });
     if (error) return writeErrorResponse(error);
     const dto = await citizenDto(admin, orgId, contactId);
@@ -707,7 +719,7 @@ Deno.serve(async (req: Request) => {
     // portail (référence externe `portail_citoyen`). Liste blanche
     // `_shared/citizen.ts` : jamais de notes internes ni de rôles.
     if (citizenRoute) {
-      return await handleCitizen(admin, orgId, segments, req);
+      return await handleCitizen(admin, orgId, apiKey.consumer, segments, req);
     }
 
     // --- /v1/contact-roles ---

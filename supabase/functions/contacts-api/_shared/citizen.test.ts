@@ -73,6 +73,13 @@ describe("consentements de l'usager depuis son compte", () => {
     );
   });
 
+  it("l'origine se déduit de l'application de la clé, sinon aucune", async () => {
+    const { citizenConsentSource, citizenConsentReference } = await import("./citizen.ts");
+    expect(citizenConsentSource("nora")).toBe("portail-citoyen");
+    for (const consumer of [null, "", "iris", "clara", "toString", "__proto__"]) expect(citizenConsentSource(consumer)).toBeNull();
+    expect(citizenConsentReference("abc", "2026-10-20T10:00:00.000Z")).toBe("compte:abc:2026-10-20T10:00:00.000Z");
+  });
+
   it("refuse une phrase venue de l'appelant", async () => {
     const { parseCitizenConsent } = await import("./citizen.ts");
     expect(parseCitizenConsent({ kind: "partage", granted: false }).ok).toBe(true);
