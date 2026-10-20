@@ -169,7 +169,8 @@ export function buildOpenApiDocument(serverUrl: string): Record<string, unknown>
           summary: "Rattacher un compte du portail à une fiche (strict), ou la créer",
           description:
             "Le compte rejoint la fiche UNIQUE portant la même adresse de courriel (vérifiée par le " +
-            "portail) ET le même nom et le même prénom, non tenue par un autre compte ; sinon une fiche " +
+            "portail), le même nom, le même prénom, le même code postal et, si la fiche en porte une, la " +
+            "même date de naissance, non tenue par un autre compte ; sinon une fiche " +
             "neuve est créée. Idempotent : un compte déjà rattaché rend sa fiche (`outcome: already_linked`). " +
             "Corps : `civility`, `first_name`, `last_name`, `email`, `address_line1`, `postal_code`, `city` " +
             "(requis), `usage_name`, `birth_date`, `mobile_phone`, `landline_phone`, `address_line2`.",

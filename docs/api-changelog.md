@@ -23,14 +23,17 @@ Version du contrat : **1.4.0**. Ajout **additif** :
 - **Scope `citizen`** (nouveau) : n'ouvre que les routes `/v1/citizen/*`, et `contacts` ne les
   ouvre pas. Réservé à la clé du portail.
 - `POST /v1/citizen/contacts/{account_id}/link` : rattachement **strict** — la fiche UNIQUE
-  portant la même adresse de courriel (vérifiée par le portail) ET le même nom et le même
-  prénom, non tenue par un autre compte ; sinon une fiche neuve. Référence externe
+  portant la même adresse de courriel (vérifiée par le portail), le même nom, le même prénom, le
+  même **code postal**, et la même **date de naissance** si la fiche en porte une, non tenue par
+  un autre compte ; sinon une fiche neuve (une adresse posée sur une fiche n'est pas une preuve). Référence externe
   `portail_citoyen` = identifiant du compte. Idempotent (`outcome` : `existing`, `created`,
   `already_linked`).
 - `GET` / `PATCH /v1/citizen/contacts/{account_id}` : la fiche, vue par l'usager
   (`CitizenContact` : ni `internal_notes`, ni rôles, ni relations, ni références d'autres
   applications). Il ne modifie que ses coordonnées et son nom d'usage ; l'identité et l'adresse
   de courriel sont figées.
+- La référence `portail_citoyen` ne s'écrit que par `/v1/citizen/*` : le scope `contacts` la
+  lit, mais l'ignore à l'écriture et ne la retire jamais.
 
 ---
 

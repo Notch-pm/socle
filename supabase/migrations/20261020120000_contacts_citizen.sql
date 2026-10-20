@@ -12,11 +12,15 @@
 -- désignée par le compte, et seulement ses champs d'usager (contacts-api
 -- `/v1/citizen/*`, liste blanche `_shared/citizen.ts`).
 --
--- Rattachement STRICT (décision PO du 2026-10-19, garde-fou de « Mes
--- demandes ») : le compte rejoint une fiche existante seulement si elle est
--- UNIQUE à porter la même adresse — vérifiée par Nora — ET le même nom et le
--- même prénom (normalisés), et qu'aucun autre compte ne la tient déjà. Sinon,
--- une fiche neuve : un doublon vaut mieux que les demandes d'un homonyme.
+-- Rattachement STRICT (décisions PO des 2026-10-19 et 2026-10-20, garde-fou
+-- de « Mes demandes ») : le compte rejoint une fiche existante seulement si
+-- elle est UNIQUE à porter la même adresse — vérifiée par Nora —, le même nom
+-- et le même prénom (normalisés), le même CODE POSTAL, et la même date de
+-- naissance si la fiche en porte une ; et qu'aucun autre compte ne la tient
+-- déjà. L'adresse posée sur une fiche n'est pas une preuve (saisie d'agent,
+-- dépôt sans compte, extraction) : les signaux supplémentaires coupent la
+-- reprise d'un historique par quelqu'un d'autre. Sinon, une fiche neuve : un
+-- doublon vaut mieux que les demandes d'un autre.
 -- ============================================================================
 
 -- ----------------------------------------------------------------------------
@@ -47,11 +51,13 @@ declare
   v_email text := lower(btrim(p_fields->>'email'));
   v_last text := public.normalize_name(p_fields->>'last_name');
   v_first text := public.normalize_name(p_fields->>'first_name');
+  v_postal text := replace(coalesce(p_fields->>'postal_code', ''), ' ', '');
+  v_birth date := nullif(p_fields->>'birth_date', '')::date;
   v_candidates uuid[];
   v_id uuid;
 begin
-  if v_email is null or v_email = '' or v_last = '' or v_first = '' then
-    raise exception 'Identité incomplète : adresse, nom et prénom sont requis.' using errcode = '22023';
+  if v_email is null or v_email = '' or v_last = '' or v_first = '' or v_postal = '' then
+    raise exception 'Identité incomplète : adresse, nom, prénom et code postal sont requis.' using errcode = '22023';
   end if;
 
   -- Déjà rattaché : la même fiche, toujours.
@@ -74,6 +80,8 @@ begin
      and lower(c.email) = v_email
      and public.normalize_name(c.first_name) = v_first
      and (public.normalize_name(c.last_name) = v_last or public.normalize_name(c.usage_name) = v_last)
+     and replace(coalesce(c.postal_code, ''), ' ', '') = v_postal
+     and (c.birth_date is null or c.birth_date = v_birth)
      and not exists (
        select 1 from public.contact_external_references r
         where r.contact_id = c.id and r.source = 'portail_citoyen'
@@ -114,6 +122,6 @@ end;
 $fn$;
 
 comment on function public.citizen_contact_link(uuid, text, jsonb) is
-  'Rattache un compte du portail (Nora) à une fiche usager : la fiche UNIQUE de même adresse, même nom et même prénom non tenue par un autre compte, sinon une fiche neuve. Référence externe portail_citoyen. service_role uniquement (contacts-api, scope citizen).';
+  'Rattache un compte du portail (Nora) à une fiche usager : la fiche UNIQUE de même adresse, même nom, même prénom, même code postal (et même date de naissance si la fiche en porte une), non tenue par un autre compte, sinon une fiche neuve. Référence externe portail_citoyen. service_role uniquement (contacts-api, scope citizen).';
 revoke execute on function public.citizen_contact_link(uuid, text, jsonb) from public, anon, authenticated;
 grant execute on function public.citizen_contact_link(uuid, text, jsonb) to service_role;
