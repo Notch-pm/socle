@@ -134,13 +134,14 @@ nombre de clés plateforme actives.
 
 | Route | Composant |
 |---|---|
-| `/` (index) | `DashboardPage` (chiffres du référentiel + fréquentation du site) |
+| `/` (index) | `DashboardPage` (chiffres du référentiel + aperçu de la fréquentation sur 30 jours) |
 | `/organisations` | `OrganizationsPage` |
 | `/organisations/:orgId` (`?section=`) | `OrganizationEditorPage` (menu latéral en trois groupes ; renvoie aux pages Connaissances) |
 | `/demarches` | `ProceduresPage` |
 | `/demarches/nouveau` (`?org=<rootId>`) | `ProcedureEditorPage variant="admin"` |
 | `/demarches/:procId` (`?step=N`) | idem |
 | `/site-de-demarches` (`?org=<rootId>`) | `PortalEditorPage variant="admin"` — éditeur du site de démarches (pleine hauteur dans le shell) |
+| `/site-de-demarches/frequentation` (`?org=<rootId>`) | `AudiencePage` (fréquentation en détail ; le tableau de bord n'en a qu'un aperçu) |
 | `/connaissances/recommandations` (`?org=<rootId>`) | `AgentGuidancePage` |
 | `/connaissances/attributions` (`?org=<orgId>`) | `AttributionsPage` (liste des organismes + éditeur) |
 | `/connaissances/informations-usagers` (`?org=<orgId>`) | `UserInfoPage` (idem, sans les services internes) |

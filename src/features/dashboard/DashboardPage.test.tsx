@@ -7,13 +7,14 @@ import { emptyDashboardStats, parseDashboardStats } from "./dashboardStats";
 
 /**
  * Ce fichier teste la PAGE — le sélecteur d'organisation, les valeurs
- * affichées, la période, et les deux états qui ne doivent pas mentir : aucune
- * collectivité visible, et aucune visite mesurée.
+ * affichées, l'aperçu de fréquentation (30 jours, renvoi au détail), et les
+ * deux états qui ne doivent pas mentir : aucune collectivité visible, et
+ * aucune visite mesurée. La période, les langues et les appareils vivent sur
+ * la page Fréquentation (`AudiencePage.test.tsx`).
  *
  * ⚠️ Les GRAPHIQUES sont remplacés par un pantin : jsdom ne dessine rien, et
  * ApexCharts y échoue sur des mesures de SVG. Ce qui compte à leur place, c'est
- * QUE LEUR EST PASSÉ — les lignes du graphique par organisme, et la décision
- * d'afficher ou non le camembert des langues.
+ * QUE LEUR EST PASSÉ — les lignes du graphique par organisme.
  */
 const h = vi.hoisted(() => ({
   organizations: [] as { id: string; name: string }[],
@@ -22,8 +23,8 @@ const h = vi.hoisted(() => ({
   statsLoading: false,
   audience: null as unknown,
   audienceLoading: false,
-  languages: ["fr"] as string[],
   chartProps: null as Record<string, unknown> | null,
+  periods: [] as string[],
 }));
 
 vi.mock("react-router-dom", () => ({
@@ -38,29 +39,29 @@ vi.mock("@/features/procedures/useWritableRootOrganizations", () => ({
   }),
 }));
 
-vi.mock("@/features/languages/useOrganizationLanguages", () => ({
-  useOrganizationLanguages: () => ({ data: h.languages }),
-}));
-
 vi.mock("./useDashboard", () => ({
   useOrganizationDashboard: () => ({
     data: h.stats === null ? emptyDashboardStats() : parseDashboardStats(h.stats),
     isLoading: h.statsLoading,
   }),
-  usePortalAudience: () => ({
+  usePortalAudience: (_org: string | null, period: string) => {
+    h.periods.push(period);
+    return {
     data: {
       audience: h.audience === null ? emptyAudience() : parseAudience(h.audience),
       range: { from: "2026-09-06", to: "2026-09-12" },
     },
     isLoading: h.audienceLoading,
-  }),
+    };
+  },
 }));
 
 vi.mock("./DashboardCharts", () => ({
-  default: (props: Record<string, unknown>) => {
+  ActivationsChart: (props: Record<string, unknown>) => {
     h.chartProps = props;
     return <div data-testid="charts" />;
   },
+  TrafficChart: () => <div data-testid="traffic" />,
 }));
 
 const STATS = {
@@ -89,8 +90,8 @@ beforeEach(() => {
   h.statsLoading = false;
   h.audience = AUDIENCE;
   h.audienceLoading = false;
-  h.languages = ["fr"];
   h.chartProps = null;
+  h.periods = [];
 });
 
 describe("les chiffres du référentiel", () => {
@@ -114,7 +115,7 @@ describe("les chiffres du référentiel", () => {
   it("passe au graphique les organismes qui portent des démarches", async () => {
     render(<DashboardPage />);
     await screen.findByTestId("charts");
-    expect(h.chartProps?.activations).toEqual([
+    expect(h.chartProps?.rows).toEqual([
       { id: "b", name: "Urbanisme", count: 7 },
       { id: "a", name: "Ville", count: 2 },
     ]);
@@ -145,35 +146,18 @@ describe("la fréquentation", () => {
     expect(screen.getByText(/pas un visiteur unique/)).toBeTruthy();
   });
 
-  it("propose les trois périodes, 30 jours par défaut", () => {
+  it("n'est qu'un aperçu sur 30 jours, sans choix de période", async () => {
     render(<DashboardPage />);
-    for (const label of ["7 jours", "30 jours", "1 an"]) {
-      expect(screen.getByRole("tab", { name: label })).toBeTruthy();
-    }
-    expect(screen.getByRole("tab", { name: "30 jours" }).getAttribute("aria-selected")).toBe("true");
+    await screen.findByTestId("traffic");
+    expect(new Set(h.periods)).toEqual(new Set(["30d"]));
+    expect(screen.queryByRole("tab", { name: "7 jours" })).toBeNull();
   });
 
-  it("change de période au clic", () => {
+  it("renvoie au détail, sur la même collectivité", () => {
     render(<DashboardPage />);
-    fireEvent.click(screen.getByRole("tab", { name: "7 jours" }));
-    expect(screen.getByRole("tab", { name: "7 jours" }).getAttribute("aria-selected")).toBe("true");
-  });
-});
-
-describe("le camembert des langues suit la collectivité", () => {
-  // ⚠️ Un découpage à une seule part n'en est pas un : « 100 % français » sur
-  // une collectivité monolingue occuperait une carte pour ne rien dire.
-  it("n'est pas demandé quand la collectivité est monolingue", async () => {
-    render(<DashboardPage />);
-    await screen.findByTestId("charts");
-    expect(h.chartProps?.multilingual).toBe(false);
-  });
-
-  it("l'est dès qu'une seconde langue est activée", async () => {
-    h.languages = ["fr", "oc"];
-    render(<DashboardPage />);
-    await screen.findByTestId("charts");
-    expect(h.chartProps?.multilingual).toBe(true);
+    expect(screen.getByText("Voir le détail").closest("a")?.getAttribute("href")).toBe(
+      "/site-de-demarches/frequentation?org=a",
+    );
   });
 });
 

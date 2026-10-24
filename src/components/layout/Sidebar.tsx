@@ -2,6 +2,7 @@ import * as React from "react";
 import { NavLink, useLocation } from "react-router-dom";
 import {
   BookUser,
+  ChartLine,
   Briefcase,
   ChevronRight,
   Database,
@@ -81,8 +82,26 @@ const PINNED: NavItem = { to: "/", title: "Tableau de bord", icon: House, end: t
 export const RAIL: RailEntry[] = [
   { kind: "link", to: "/organisations", title: "Organisations", icon: Network },
   { kind: "link", to: "/demarches", title: "Démarches", icon: ListChecks },
-  // La face publique des démarches : la page d'accueil que les usagers voient.
-  { kind: "link", to: "/site-de-demarches", title: "Site de démarches", icon: LayoutTemplate },
+  {
+    kind: "group",
+    id: "site",
+    title: "Site de démarches",
+    icon: LayoutTemplate,
+    // La face publique des démarches, au même endroit : ce qu'on y montre, et
+    // qui vient le voir.
+    sections: [
+      {
+        items: [
+          // ⚠️ `end` : sans lui, l'éditeur se dirait actif sur la page
+          // Fréquentation, qui vit sous son chemin.
+          // « Éditeur du site » et non « Page d'accueil » (maquette) : on y
+          // règle aussi le thème et les contenus, pas seulement l'accueil.
+          { to: "/site-de-demarches", title: "Éditeur du site", icon: LayoutTemplate, end: true },
+          { to: "/site-de-demarches/frequentation", title: "Fréquentation", icon: ChartLine },
+        ],
+      },
+    ],
+  },
   {
     kind: "group",
     id: "connaissances",
@@ -282,6 +301,7 @@ function GroupTile({
                     <li key={item.to}>
                       <NavLink
                         to={item.to}
+                        end={item.end}
                         onClick={onClose}
                         className={({ isActive }) =>
                           cn(

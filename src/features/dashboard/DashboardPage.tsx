@@ -6,20 +6,24 @@
  * Socle, qui est un référentiel —, ensuite ce que son site PRODUIT
  * (fréquentation), qui vient d'ailleurs et n'existe qu'une fois Nora déployé.
  *
+ * La fréquentation n'y est qu'un APERÇU, sur 30 jours (navigation v2,
+ * 2026-10-24) : le détail — période, pages, langues, appareils — vit sur
+ * `/site-de-demarches/frequentation` (`AudiencePage`).
+ *
  * ⚠️ La fréquentation vide est l'ÉTAT NORMAL tant que le portail ne mesure pas :
  * l'écran le dit (« Aucune visite enregistrée »), il ne se cache pas. Masquer
  * la section ferait chercher un réglage qui n'existe pas.
  */
 
 import * as React from "react";
-import { FileText, Users, User, Building2, HeartHandshake, Eye, MousePointerClick, Send } from "lucide-react";
+import { Link } from "react-router-dom";
+import { ArrowRight, FileText, Users, User, Building2, HeartHandshake } from "lucide-react";
 import { PageHeader } from "@/components/shared/PageHeader";
 import { EmptyState } from "@/components/shared/EmptyState";
 import { Field } from "@/components/ui/field";
-import { SegmentedControl } from "@/components/ui/segmented-control";
 import { useWritableRootOrganizations } from "@/features/procedures/useWritableRootOrganizations";
-import { useOrganizationLanguages } from "@/features/languages/useOrganizationLanguages";
 import { KpiCard } from "./KpiCard";
+import { AUDIENCE_METHOD, AudienceKpis } from "./AudienceKpis";
 import { useOrganizationDashboard, usePortalAudience } from "./useDashboard";
 import {
   activationRows,
@@ -28,28 +32,18 @@ import {
   formatCount,
   proceduresSubtitle,
 } from "./dashboardStats";
-import {
-  AUDIENCE_PERIODS,
-  DEFAULT_PERIOD,
-  PERIOD_LABELS,
-  breakdownOf,
-  depositSubtitle,
-  emptyAudience,
-  seriesFor,
-  type AudiencePeriod,
-} from "./audience";
+import { DEFAULT_PERIOD, emptyAudience, seriesFor } from "./audience";
 
 // ApexCharts pèse ~130 Ko : les tuiles ne l'attendent pas (voir l'en-tête de
-// `DashboardCharts`).
-const DashboardCharts = React.lazy(() => import("./DashboardCharts"));
+// `DashboardCharts`). Deux graphiques, un seul module, chargé UNE fois : la
+// promesse est partagée.
+let chartsModule: Promise<typeof import("./DashboardCharts")> | undefined;
+const loadCharts = () => (chartsModule ??= import("./DashboardCharts"));
+const ActivationsChart = React.lazy(() => loadCharts().then((m) => ({ default: m.ActivationsChart })));
+const TrafficChart = React.lazy(() => loadCharts().then((m) => ({ default: m.TrafficChart })));
 
-function ChartsFallback() {
-  return (
-    <div className="flex flex-col gap-4">
-      <div className="h-64 animate-pulse rounded-lg bg-muted/40" />
-      <div className="h-72 animate-pulse rounded-lg bg-muted/40" />
-    </div>
-  );
+function ChartFallback() {
+  return <div className="h-64 animate-pulse rounded-lg bg-muted/40" />;
 }
 
 export function DashboardPage() {
@@ -57,14 +51,11 @@ export function DashboardPage() {
   const [selectedId, setSelectedId] = React.useState<string | null>(null);
   const organizationId = selectedId ?? organizations[0]?.id ?? null;
 
-  const [period, setPeriod] = React.useState<AudiencePeriod>(DEFAULT_PERIOD);
+  // L'aperçu porte toujours sur la période par défaut (30 jours).
+  const period = DEFAULT_PERIOD;
 
   const stats = useOrganizationDashboard(organizationId);
   const audienceQuery = usePortalAudience(organizationId, period);
-  // La pastille « Langues » n'a de sens que si la collectivité en a plusieurs —
-  // même règle que le filtre par organisme du portail : le réglage dit ce que la
-  // collectivité VEUT, c'est le contenu qui dit si un découpage a un sens.
-  const { data: languages } = useOrganizationLanguages(organizationId ?? undefined);
 
   const data = stats.data ?? emptyDashboardStats();
   const audience = audienceQuery.data?.audience ?? emptyAudience();
@@ -161,63 +152,30 @@ export function DashboardPage() {
           />
         </div>
 
-        {/* --- Ce que son site produit -------------------------------------- */}
+        <React.Suspense fallback={<ChartFallback />}>
+          <ActivationsChart rows={activationRows(data)} loading={statsLoading} />
+        </React.Suspense>
+
+        {/* --- Ce que son site produit : un aperçu, le détail a sa page ------ */}
         <section className="flex flex-col gap-4">
-          <div className="flex flex-wrap items-center justify-between gap-3">
+          <div className="flex flex-wrap items-start justify-between gap-3">
             <div>
               <h2 className="text-base font-semibold">Fréquentation du site de démarches</h2>
-              <p className="mt-1 text-sm text-muted-foreground">
-                Mesure sans cookie : aucune donnée n'est enregistrée sur le poste des visiteurs, et
-                une visite est une arrivée sur le site — pas un visiteur unique.
-              </p>
+              <p className="mt-1 text-sm text-muted-foreground">30 derniers jours. {AUDIENCE_METHOD}</p>
             </div>
-            <SegmentedControl
-              value={period}
-              onChange={setPeriod}
-              options={AUDIENCE_PERIODS.map((p) => ({ value: p, label: PERIOD_LABELS[p] }))}
-              aria-label="Période"
-            />
+            <Link
+              to={`/site-de-demarches/frequentation?org=${organizationId}`}
+              className="inline-flex shrink-0 items-center gap-1 text-sm font-medium text-primary hover:underline"
+            >
+              Voir le détail
+              <ArrowRight aria-hidden="true" className="size-3.5" />
+            </Link>
           </div>
-
-          <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
-            <KpiCard
-              label="Visites"
-              value={formatCount(audience.totals.visits)}
-              Icon={MousePointerClick}
-              loading={audienceLoading}
-            />
-            <KpiCard
-              label="Pages vues"
-              value={formatCount(audience.totals.views)}
-              Icon={Eye}
-              iconClassName="text-blue-500"
-              loading={audienceLoading}
-            />
-            <KpiCard
-              label="Demandes déposées"
-              value={formatCount(audience.totals.deposits)}
-              sub={depositSubtitle(audience.totals)}
-              Icon={Send}
-              iconClassName="text-amber-500"
-              loading={audienceLoading}
-            />
-          </div>
-        </section>
-
-        <div className="flex flex-col gap-4">
-          <React.Suspense fallback={<ChartsFallback />}>
-            <DashboardCharts
-              activations={activationRows(data)}
-              statsLoading={statsLoading}
-              points={points}
-              audience={audience}
-              audienceLoading={audienceLoading}
-              languages={breakdownOf(audience, "langue")}
-              devices={breakdownOf(audience, "appareil")}
-              multilingual={(languages ?? ["fr"]).length > 1}
-            />
+          <AudienceKpis totals={audience.totals} loading={audienceLoading} />
+          <React.Suspense fallback={<ChartFallback />}>
+            <TrafficChart points={points} loading={audienceLoading} />
           </React.Suspense>
-        </div>
+        </section>
       </div>
     </div>
   );

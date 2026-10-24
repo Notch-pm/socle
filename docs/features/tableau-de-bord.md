@@ -82,11 +82,28 @@ environnement de développement ne pollue pas les chiffres d'une production. ⚠
 dev ni sous `navigator.webdriver`. Le dépôt est signalé **après** l'acceptation par Iris. Détail et
 pièges : README de Nora, « Mesure d'audience sans cookie ».
 
-## L'écran
+## Les écrans
 
-- Cinq tuiles (démarches, usagers, personnes, entreprises, associations), barres « Démarches
-  activées par organisme », puis la fréquentation : trois tuiles, aire « Visites et pages vues »,
-  « Pages les plus vues », camemberts « Langues » et « Appareils ».
+- ⚠️ **Deux écrans depuis la navigation v2 (2026-10-24).** Le **tableau de bord** (`/`) : cinq
+  tuiles (démarches, usagers, personnes, entreprises, associations), barres « Démarches activées
+  par organisme », puis un **aperçu** de la fréquentation — **30 jours fixes**, trois tuiles, aire
+  « Visites et pages vues », lien « Voir le détail ». La page **Fréquentation**
+  (`/site-de-demarches/frequentation`, `AudiencePage`, sous la bulle « Site de démarches » du
+  rail) : sélecteur de période (7 jours / 30 jours / 1 an), trois tuiles, aire, « Pages les plus
+  vues », camemberts « Langues » et « Appareils ». La collectivité y est en `?org=` — le lien du
+  tableau de bord ouvre la même. Tuiles communes : `AudienceKpis` ; graphiques : exports nommés
+  de `DashboardCharts.tsx`, composés pour la page par `AudienceCharts.tsx`.
+  ⚠️ Le tableau de bord charge ses deux graphiques en `React.lazy` depuis **une seule promesse
+  d'import partagée** (`loadCharts`) : deux `import()` du même module chargeaient deux fois, et le
+  second contournait les doublures de vitest.
+- ⚠️ **Tous les graphiques passent par `charts/StableApexChart`**, jamais `ReactApexChart` en
+  direct : `react-apexcharts@1.5.0` appelle `updateOptions` à **chaque** rendu du parent (sa
+  comparaison JSON confronte les options reçues à la configuration fusionnée, elle échoue
+  toujours). Un rendu pendant l'animation d'entrée — une requête voisine qui arrive — figeait
+  l'aire « Visites et pages vues » à `x = 0`, sans dates, **au premier affichage seulement** (vu
+  au navigateur le 2026-10-24 ; le défaut datait de la création du tableau de bord).
+  `StableApexChart` ne transmet options et séries que si leur contenu JSON change : les
+  formateurs doivent donc rester des fonctions pures du texte.
   ⚠️ Le camembert des **langues** ne s'affiche que si la collectivité en a plusieurs — même règle
   que le filtre par organisme du portail : un découpage à une seule part n'en est pas un.
   ⚠️ `activationRows` **écarte les organismes sans activation** (une barre à zéro n'apprend rien),
@@ -111,5 +128,5 @@ pièges : README de Nora, « Mesure d'audience sans cookie ».
   ~130 Ko, et les tuiles de chiffres ne doivent pas l'attendre.
 - Code : `src/features/dashboard/` — `dashboardStats.ts`, `audience.ts` (purs, **testés** :
   lecteurs tolérants, remplissage des jours, taux de dépôt), `useDashboard.ts`, `KpiCard.tsx`,
-  `DashboardCharts.tsx`, `DashboardPage.tsx` (**testé**, graphiques doublés — jsdom ne dessine
-  rien). Migration `portal_audience` ; changelog du 2026-09-12.
+  `AudienceKpis.tsx`, `DashboardCharts.tsx`, `AudienceCharts.tsx`, `DashboardPage.tsx` et
+  `AudiencePage.tsx` (**testés**, graphiques doublés — jsdom ne dessine rien). Migration `portal_audience` ; changelog du 2026-09-12.

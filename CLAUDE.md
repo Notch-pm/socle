@@ -93,7 +93,7 @@ Projet Supabase : `qhrokbkyxgcvkbpmbmna`.
 1. **App par organisation** (`AppShell`, routes protégées par `ProtectedRoute`) — pour les
    utilisateurs et **administrateurs d'organisation**. Routes : `/` (tableau de bord —
    voir feature), `/organisations`, `/demarches`, `/site-de-demarches` (éditeur du portail
-   usagers — voir feature), `/connaissances/{recommandations,attributions,informations-usagers}`,
+   usagers — voir feature) et `/site-de-demarches/frequentation`, `/connaissances/{recommandations,attributions,informations-usagers}`,
    `/referentiels/{categories,types-pieces,modeles-documents,quartiers}`
    (rubrique « Référentiels » du rail), `/parametres/utilisateurs` (icône « Paramètres » de
    l'en-tête), `/integrations` et `/consommation-ia` (consultation seule). Rail en **rubriques à
@@ -395,6 +395,8 @@ Envoi des e-mails —, `?section=`, `organizationSections.ts`), gestion superadm
 - ⚠️ **Aucune donnée personnelle** (ni cookie, ni IP, ni User-Agent, ni référent) : c'est ce qui
   dispense de bandeau, et des tests le vérifient. Une visite = une arrivée sur le site ; le jour
   vient du serveur, heure de Paris.
+- Le tableau de bord n'en montre qu'un **aperçu sur 30 jours** ; le détail est sur
+  `/site-de-demarches/frequentation` (`AudiencePage`, 2026-10-24).
 - `audience-api` : **écriture seule**, scope `audience`. Tables sans policy (RPC seulement).
   ApexCharts épinglé (3.54.1 / wrapper 1.5.0) ; `charts/*` copiés d'Iris à l'identique.
 

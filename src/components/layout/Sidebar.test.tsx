@@ -158,4 +158,14 @@ describe("Sidebar", () => {
     expect(screen.getByRole("button", { name: "Connaissances" }).getAttribute("aria-expanded")).toBe("false");
     expect(referentiels().getAttribute("aria-expanded")).toBe("true");
   });
+
+  it("ne marque pas l'éditeur du site actif sur la page Fréquentation", () => {
+    // Elle vit sous son chemin : sans `end`, les deux entrées se diraient actives.
+    renderRail("/site-de-demarches/frequentation");
+    const site = screen.getByRole("button", { name: "Site de démarches" });
+    expect(site.hasAttribute("data-active")).toBe(true);
+    fireEvent.click(site);
+    expect(screen.getByRole("link", { name: "Éditeur du site" }).getAttribute("aria-current")).toBeNull();
+    expect(screen.getByRole("link", { name: "Fréquentation" }).getAttribute("aria-current")).toBe("page");
+  });
 });

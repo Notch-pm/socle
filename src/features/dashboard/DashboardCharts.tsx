@@ -1,6 +1,7 @@
 /**
- * Les graphiques du tableau de bord — chargés en `React.lazy` depuis
- * `DashboardPage`.
+ * Les graphiques du tableau de bord et de la page Fréquentation — chargés en
+ * `React.lazy`, un à un depuis `DashboardPage`, composés par `AudienceCharts`
+ * pour la page Fréquentation.
  *
  * ⚠️ POURQUOI UN MODULE À PART : ApexCharts pèse ~130 Ko compressé. Les tuiles
  * de chiffres, elles, sont là dès la première requête — et c'est l'accueil de
@@ -10,7 +11,7 @@
  */
 
 import type { ApexOptions } from "apexcharts";
-import { ReactApexChart } from "./charts/ReactApexChart";
+import { StableApexChart } from "./charts/StableApexChart";
 import { ChartCard } from "./charts/ChartCard";
 import {
   CHART_COLORS,
@@ -36,7 +37,7 @@ import {
 // Démarches activées par organisme
 // --------------------------------------------------------------------------
 
-function ActivationsChart({ rows, loading }: { rows: ActivationRow[]; loading: boolean }) {
+export function ActivationsChart({ rows, loading }: { rows: ActivationRow[]; loading: boolean }) {
   const categories = rows.map((r) => r.name);
   const values = rows.map((r) => r.count);
   const max = Math.max(...values, 1);
@@ -65,7 +66,7 @@ function ActivationsChart({ rows, loading }: { rows: ActivationRow[]; loading: b
       empty={rows.length === 0}
       emptyText="Aucun organisme n'a encore activé de démarche."
     >
-      <ReactApexChart
+      <StableApexChart
         options={options}
         series={[{ name: "Démarches activées", data: values }]}
         type="bar"
@@ -81,7 +82,7 @@ function ActivationsChart({ rows, loading }: { rows: ActivationRow[]; loading: b
 // Visites et pages vues
 // --------------------------------------------------------------------------
 
-function TrafficChart({ points, loading }: { points: SeriesPoint[]; loading: boolean }) {
+export function TrafficChart({ points, loading }: { points: SeriesPoint[]; loading: boolean }) {
   const empty = points.every((p) => p.views === 0 && p.visits === 0);
 
   const options: ApexOptions = {
@@ -120,7 +121,7 @@ function TrafficChart({ points, loading }: { points: SeriesPoint[]; loading: boo
       empty={empty}
       emptyText="Aucune visite enregistrée sur la période."
     >
-      <ReactApexChart
+      <StableApexChart
         options={options}
         series={[
           { name: "Pages vues", data: points.map((p) => p.views) },
@@ -137,7 +138,7 @@ function TrafficChart({ points, loading }: { points: SeriesPoint[]; loading: boo
 // Pages les plus vues
 // --------------------------------------------------------------------------
 
-function TopPagesChart({ audience, loading }: { audience: Audience; loading: boolean }) {
+export function TopPagesChart({ audience, loading }: { audience: Audience; loading: boolean }) {
   const rows = audience.pages.filter((p) => p.views > 0);
   const categories = rows.map(pageLabel);
   const values = rows.map((p) => p.views);
@@ -167,7 +168,7 @@ function TopPagesChart({ audience, loading }: { audience: Audience; loading: boo
       empty={rows.length === 0}
       emptyText="Aucune page vue sur la période."
     >
-      <ReactApexChart
+      <StableApexChart
         options={options}
         series={[{ name: "Pages vues", data: values }]}
         type="bar"
@@ -188,7 +189,7 @@ interface BreakdownChartProps {
   emptyText: string;
 }
 
-function BreakdownChart({ title, rows, loading, emptyText }: BreakdownChartProps) {
+export function BreakdownChart({ title, rows, loading, emptyText }: BreakdownChartProps) {
   const options: ApexOptions = {
     chart: { ...baseChart, type: "donut", id: `ventilation-${title}` },
     labels: rows.map(breakdownLabel),
@@ -208,69 +209,12 @@ function BreakdownChart({ title, rows, loading, emptyText }: BreakdownChartProps
 
   return (
     <ChartCard title={title} loading={loading} empty={rows.length === 0} emptyText={emptyText}>
-      <ReactApexChart
+      <StableApexChart
         options={options}
         series={rows.map((r) => r.views)}
         type="donut"
         height={280}
       />
     </ChartCard>
-  );
-}
-
-// --------------------------------------------------------------------------
-// La composition, en un seul export
-// --------------------------------------------------------------------------
-
-export interface DashboardChartsProps {
-  activations: ActivationRow[];
-  statsLoading: boolean;
-  points: SeriesPoint[];
-  audience: Audience;
-  audienceLoading: boolean;
-  languages: AudienceBreakdown[];
-  devices: AudienceBreakdown[];
-  /**
-   * La collectivité s'adresse-t-elle à ses usagers en plusieurs langues ?
-   * ⚠️ Le camembert des langues ne s'affiche que si oui — même règle que le
-   * filtre par organisme du portail : un découpage à une seule part n'en est
-   * pas un, et « 100 % français » sur une collectivité monolingue occuperait
-   * une carte entière pour ne rien dire.
-   */
-  multilingual: boolean;
-}
-
-/**
- * Un seul export par défaut, pour que `React.lazy` n'ait rien à recomposer :
- * le module entier (ApexCharts compris) arrive derrière un seul `import()`.
- */
-export default function DashboardCharts(props: DashboardChartsProps) {
-  return (
-    <>
-      <ActivationsChart rows={props.activations} loading={props.statsLoading} />
-      <TrafficChart points={props.points} loading={props.audienceLoading} />
-      {/* `items-start` : les deux colonnes n'ont pas la même hauteur naturelle
-          (une liste de pages contre un ou deux camemberts). Sans lui, la plus
-          courte s'étire et laisse un grand vide sous son graphique. */}
-      <div className="grid grid-cols-1 items-start gap-4 lg:grid-cols-2">
-        <TopPagesChart audience={props.audience} loading={props.audienceLoading} />
-        <div className="flex flex-col gap-4">
-          {props.multilingual && (
-            <BreakdownChart
-              title="Langues"
-              rows={props.languages}
-              loading={props.audienceLoading}
-              emptyText="Aucune langue enregistrée sur la période."
-            />
-          )}
-          <BreakdownChart
-            title="Appareils"
-            rows={props.devices}
-            loading={props.audienceLoading}
-            emptyText="Aucun appareil enregistré sur la période."
-          />
-        </div>
-      </div>
-    </>
   );
 }

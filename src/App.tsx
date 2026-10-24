@@ -7,6 +7,7 @@ import { LoginPage } from "@/features/auth/LoginPage";
 import { SetPasswordPage } from "@/features/auth/SetPasswordPage";
 import { ForgotPasswordPage } from "@/features/auth/ForgotPasswordPage";
 import { DashboardPage } from "@/features/dashboard/DashboardPage";
+import { AudiencePage } from "@/features/dashboard/AudiencePage";
 import { CategoriesPage } from "@/features/categories/CategoriesPage";
 import { DocumentTypesPage } from "@/features/document-types/DocumentTypesPage";
 import { DocumentsPage } from "@/features/documents/DocumentsPage";
@@ -93,6 +94,7 @@ export function App() {
               <Route path="demarches/:procId" element={<ProcedureEditorPage variant="admin" />} />
               {/* Éditeur du site de démarches — plein écran, organisation choisie dans la page. */}
               <Route path="site-de-demarches" element={<PortalEditorPage variant="admin" />} />
+              <Route path="site-de-demarches/frequentation" element={<AudiencePage />} />
               {/* Rubrique « Connaissances » du rail. */}
               <Route path="connaissances/recommandations" element={<AgentGuidancePage />} />
               <Route path="connaissances/attributions" element={<AttributionsPage />} />

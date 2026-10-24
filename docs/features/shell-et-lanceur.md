@@ -33,8 +33,9 @@
   — sauf **un**, qui isole la consultation (Intégrations, Consommation IA) du paramétrage.
 - **Navigation v2 (2026-10-24) : quelques liens, des rubriques en bulles.** Le rail portait onze
   entrées à plat ; il est décrit par une table, `RAIL` (`Sidebar.tsx`) : liens directs
-  (Organisations, Démarches, Site de démarches, Intégrations, Consommation IA) et **rubriques**
-  (« Connaissances » : recommandations aux agents, attributions, informations usagers, rangées
+  (Organisations, Démarches, Intégrations, Consommation IA) et **rubriques** (« Site de
+  démarches » : éditeur du site — `end`, sinon il se dirait actif sous `/frequentation` — et
+  fréquentation ; « Connaissances » : recommandations aux agents, attributions, informations usagers, rangées
   par destinataire ; « Référentiels » : catégories, types de PJ, modèles de documents, quartiers). Une rubrique est
   un **bouton** qui ouvre une bulle à droite du rail (disclosure `aria-expanded`, motif du
   lanceur : clic dehors, Échap — focus rendu au bouton —, choix d'une page ou changement de
@@ -46,7 +47,8 @@
   redirection** (démonstrations seulement à cette date). Un test vérifie que chaque lien de `RAIL`
   est une route déclarée dans `App.tsx`.
   Maquette de référence : projet Claude Design « Socle navigation v2 » ; les rubriques
-  « Fréquentation » et les « Bases des démarches » arrivent dans les lots suivants.
+  Les « Bases des démarches » arrivent dans un lot suivant. Écart assumé : l'entrée de l'éditeur
+  s'appelle « Éditeur du site », pas « Page d'accueil » (on y règle aussi thème et contenus).
 - **Documentations d'API en pied de rail** (`DocTile`, catalogue
   `src/features/public-api-docs/apiDocLinks.ts`) : « API Référentiel » (`/api-doc`) et
   « API Usagers » (`/api-doc-usagers`), **hors du groupe centré** comme le tableau de bord est
