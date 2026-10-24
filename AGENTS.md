@@ -93,7 +93,7 @@ Projet Supabase : `qhrokbkyxgcvkbpmbmna`.
 1. **App par organisation** (`AppShell`, routes protégées par `ProtectedRoute`) — pour les
    utilisateurs et **administrateurs d'organisation**. Routes : `/` (tableau de bord —
    voir feature), `/organisations`, `/demarches`, `/site-de-demarches` (éditeur du portail
-   usagers — voir feature) et `/site-de-demarches/frequentation`, `/connaissances/{recommandations,attributions,informations-usagers}`,
+   usagers — voir feature) et `/site-de-demarches/frequentation`, `/connaissances/{recommandations,attributions,informations-usagers,demarches}`,
    `/referentiels/{categories,types-pieces,modeles-documents,quartiers}`
    (rubrique « Référentiels » du rail), `/parametres/utilisateurs` (icône « Paramètres » de
    l'en-tête), `/integrations` et `/consommation-ia` (consultation seule). Rail en **rubriques à

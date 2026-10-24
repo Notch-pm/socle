@@ -145,6 +145,7 @@ nombre de clés plateforme actives.
 | `/connaissances/recommandations` (`?org=<rootId>`) | `AgentGuidancePage` |
 | `/connaissances/attributions` (`?org=<orgId>`) | `AttributionsPage` (liste des organismes + éditeur) |
 | `/connaissances/informations-usagers` (`?org=<orgId>`) | `UserInfoPage` (idem, sans les services internes) |
+| `/connaissances/demarches` (`?org=<rootId>`) | `ProcedureKnowledgePage` (état de la base de chaque démarche, lecture seule) |
 | `/referentiels/categories` | `CategoriesPage` |
 | `/referentiels/types-pieces` | `DocumentTypesPage` |
 | `/referentiels/modeles-documents` | `DocumentsPage` (modèles à variables) |

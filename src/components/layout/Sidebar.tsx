@@ -8,6 +8,7 @@ import {
   Database,
   FileCheck2,
   FileSignature,
+  LibraryBig,
   Library,
   House,
   LayoutTemplate,
@@ -129,6 +130,10 @@ export const RAIL: RailEntry[] = [
             icon: MessageCircleQuestion,
           },
         ],
+      },
+      {
+        label: "Par démarche",
+        items: [{ to: "/connaissances/demarches", title: "Bases des démarches", icon: LibraryBig }],
       },
     ],
   },

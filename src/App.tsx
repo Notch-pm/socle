@@ -24,6 +24,7 @@ import {
   AttributionsPage,
   UserInfoPage,
 } from "@/features/knowledge/KnowledgePages";
+import { ProcedureKnowledgePage } from "@/features/knowledge/ProcedureKnowledgePage";
 import { UtilisateursPage } from "@/pages/UtilisateursPage";
 import { SuperAdminDashboardPage } from "@/features/superadmin/SuperAdminDashboardPage";
 import { OrgSettingsPage } from "@/features/superadmin/organizations/OrgSettingsPage";
@@ -99,6 +100,7 @@ export function App() {
               <Route path="connaissances/recommandations" element={<AgentGuidancePage />} />
               <Route path="connaissances/attributions" element={<AttributionsPage />} />
               <Route path="connaissances/informations-usagers" element={<UserInfoPage />} />
+              <Route path="connaissances/demarches" element={<ProcedureKnowledgePage />} />
               {/* Rubrique « Référentiels » du rail. */}
               <Route path="referentiels/categories" element={<CategoriesPage />} />
               <Route path="referentiels/types-pieces" element={<DocumentTypesPage />} />

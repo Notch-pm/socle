@@ -129,7 +129,8 @@ sections.
   ils se rédigent dans la rubrique « Connaissances » du rail (`src/features/knowledge/`),
   rangés par destinataire (« Pour les agents », « Pour les usagers ») —
   `/connaissances/recommandations` (racine seule, sélecteur si plusieurs racines),
-  `/connaissances/attributions` et `/connaissances/informations-usagers` (liste des organismes
+  `/connaissances/demarches` (« Bases des démarches », vue transverse en lecture — voir la fiche
+  Démarches), `/connaissances/attributions` et `/connaissances/informations-usagers` (liste des organismes
   dans l'ordre de l'arbre à gauche, avec l'état **renseigné / à rédiger** de chacun, éditeur à
   droite ; organisme choisi en `?org=`). Les éditeurs sont **les mêmes sections**, partagées avec
   le superadmin (option `intro={false}` : l'en-tête de page dit déjà à qui s'adresse le texte et

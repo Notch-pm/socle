@@ -148,6 +148,13 @@ est fonctionnelle (voir feature « Édition d'organisation » ci-dessous). Param
   `procedure-documents` (voir feature ci-dessous), référencés dans le JSON par `{path, name}`
   (`agentDocuments`/`trainingDocuments`). Logique pure + parseur robuste `knowledgeBase.ts`
   (testé), UI `steps/KnowledgeBaseStep.tsx` (+ `steps/connaissances/*`).
+  **Vue transverse « Bases des démarches »** (`/connaissances/demarches`, rubrique Connaissances,
+  2026-10-24) : une ligne par démarche du catalogue de la racine, quatre colonnes — aide à l'agent
+  (texte d'aide, procédures, documents, liens), FAQ, sources IA (sources + documents
+  d'entraînement), garde-fous —, « Compléter » ouvre l'éditeur sur `?step=5`. ⚠️ **Lecture
+  seule** : rien ne s'écrit ailleurs que dans l'étape (une seconde façon d'éditer le JSON serait
+  une seconde façon de le casser). Regroupement pur et testé : `knowledge/knowledgeCoverage.ts`,
+  lu par `parseKnowledgeBase` (ébauches et blancs ne comptent pas).
   ⚠️ **Ce qu'un consommateur en fait, depuis le 2026-09-19** : l'assistant d'Iris PROPOSE à
   l'agent de consulter les **sources IA** et les **documents d'entraînement**, et n'en lit le
   contenu **qu'avec son accord** (même règle pour les `recommendedSources` d'une collectivité —
