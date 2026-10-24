@@ -17,9 +17,11 @@ import {
   MAX_GUIDELINE_TEXT_LENGTH,
   MAX_GUIDELINE_TITLE_LENGTH,
   MAX_RECOMMENDED_SOURCES,
+  cleanAgentGuidance,
   type AgentGuidance,
   type Guideline,
 } from "@/features/organizations/agentGuidance";
+import { useReportDirty } from "@/components/shared/unsavedChanges";
 import { useAgentGuidance, useSaveAgentGuidance } from "@/features/organizations/useAgentGuidance";
 import type { Organization } from "@/features/superadmin/organizations/useOrganizationsAdmin";
 
@@ -93,6 +95,7 @@ function formatDate(iso: string): string {
 export function AgentGuidanceSection({
   organization,
   intro = true,
+  onDirtyChange,
 }: {
   organization: Organization;
   /**
@@ -100,6 +103,8 @@ export function AgentGuidanceSection({
    * l'en-tête dit déjà ce qu'est ce texte et à qui il sert.
    */
   intro?: boolean;
+  /** Signale une saisie non enregistrée (garde des pages Connaissances). */
+  onDirtyChange?: (dirty: boolean) => void;
 }) {
   const isRoot = organization.parent_id === null;
   const { data: stored, isLoading } = useAgentGuidance(isRoot ? organization.id : undefined);
@@ -111,6 +116,14 @@ export function AgentGuidanceSection({
   React.useEffect(() => {
     if (stored && draft === null) setDraft(stored.guidance);
   }, [stored, draft]);
+
+  // Comparé après nettoyage : une consigne laissée vide n'est pas une modification.
+  useReportDirty(
+    draft !== null &&
+      stored !== undefined &&
+      JSON.stringify(cleanAgentGuidance(draft)) !== JSON.stringify(stored.guidance),
+    onDirtyChange,
+  );
 
   if (!isRoot) {
     return <EmptyState message={AGENT_GUIDANCE_ROOT_ONLY_MESSAGE} />;

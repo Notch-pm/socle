@@ -83,4 +83,26 @@ describe("AttributionsSection", () => {
     expect((screen.getByLabelText("Attributions") as HTMLTextAreaElement).value).toBe("Voirie, éclairage public.");
     expect(screen.getByText(/Dernière mise à jour le 1 octobre 2026/)).toBeTruthy();
   });
+
+  it("se dit modifiée dès qu'on écrit, pas pour des blancs en fin de texte", () => {
+    h.stored = { attributions: "Voirie.", updatedAt: null };
+    const onDirtyChange = vi.fn();
+    render(<AttributionsSection organization={org()} onDirtyChange={onDirtyChange} />);
+    const field = screen.getByLabelText("Attributions");
+
+    fireEvent.change(field, { target: { value: "Voirie.  " } });
+    expect(onDirtyChange).not.toHaveBeenCalledWith(true);
+
+    fireEvent.change(field, { target: { value: "Voirie, propreté." } });
+    expect(onDirtyChange).toHaveBeenLastCalledWith(true);
+  });
+
+  it("ne dit plus rien une fois retirée de l'écran", () => {
+    h.stored = { attributions: "", updatedAt: null };
+    const onDirtyChange = vi.fn();
+    const { unmount } = render(<AttributionsSection organization={org()} onDirtyChange={onDirtyChange} />);
+    fireEvent.change(screen.getByLabelText("Attributions"), { target: { value: "Voirie." } });
+    unmount();
+    expect(onDirtyChange).toHaveBeenLastCalledWith(false);
+  });
 });

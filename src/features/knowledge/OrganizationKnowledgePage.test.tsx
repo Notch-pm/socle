@@ -36,7 +36,14 @@ function renderPage(path = "/connaissances/attributions") {
           h.requestedIds.push(ids);
           return { data: h.filled };
         }}
-        renderEditor={(o) => <p>Éditeur de {o.name}</p>}
+        renderEditor={(o, onDirtyChange) => (
+          <div>
+            <p>Éditeur de {o.name}</p>
+            <button type="button" onClick={() => onDirtyChange(true)}>
+              Saisir
+            </button>
+          </div>
+        )}
       />
     </MemoryRouter>,
   );
@@ -94,5 +101,24 @@ describe("OrganizationKnowledgePage", () => {
   it("ignore un organisme écarté demandé par l'URL", () => {
     renderPage("/connaissances/attributions?org=ec");
     expect(screen.getByText("Éditeur de Ville")).toBeTruthy();
+  });
+
+  it("demande confirmation avant d'abandonner une saisie, et reste sur place si on continue", () => {
+    renderPage();
+    fireEvent.click(screen.getByRole("button", { name: "Saisir" }));
+    fireEvent.click(within(list()).getByRole("button", { name: /Annexe/ }));
+
+    expect(screen.getByRole("alertdialog", { name: "Abandonner les modifications ?" })).toBeTruthy();
+    fireEvent.click(screen.getByRole("button", { name: "Continuer la saisie" }));
+    expect(screen.queryByRole("alertdialog")).toBeNull();
+    expect(screen.getByText("Éditeur de Ville")).toBeTruthy();
+  });
+
+  it("change d'organisme une fois l'abandon confirmé", () => {
+    renderPage();
+    fireEvent.click(screen.getByRole("button", { name: "Saisir" }));
+    fireEvent.click(within(list()).getByRole("button", { name: /Annexe/ }));
+    fireEvent.click(screen.getByRole("button", { name: "Abandonner" }));
+    expect(screen.getByText("Éditeur de Annexe")).toBeTruthy();
   });
 });

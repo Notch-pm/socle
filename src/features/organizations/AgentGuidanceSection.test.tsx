@@ -116,4 +116,16 @@ describe("AgentGuidanceSection", () => {
 
     expect(screen.queryByRole("button", { name: /Ajouter une consigne/ })).toBeNull();
   });
+
+  it("se dit modifiée dès qu'on écrit, pas pour une consigne laissée vide", () => {
+    const onDirtyChange = vi.fn();
+    render(<AgentGuidanceSection organization={org()} onDirtyChange={onDirtyChange} />);
+    expect(onDirtyChange).not.toHaveBeenCalledWith(true);
+
+    fireEvent.click(screen.getByRole("button", { name: /Ajouter une consigne/ }));
+    expect(onDirtyChange).not.toHaveBeenCalledWith(true);
+
+    fireEvent.change(screen.getByLabelText("Rôle des agents"), { target: { value: "Orienter." } });
+    expect(onDirtyChange).toHaveBeenLastCalledWith(true);
+  });
 });

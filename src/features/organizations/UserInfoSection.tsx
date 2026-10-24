@@ -10,12 +10,14 @@ import {
   MAX_USER_INFO_DESCRIPTION_LENGTH,
   MAX_USER_INFO_FAQ,
   MAX_USER_INFO_HOURS_NOTES_LENGTH,
+  cleanUserInfo,
   dayDraftErrors,
   fromDayDrafts,
   toDayDrafts,
   type DayHoursDraft,
   type OrganizationUserInfo,
 } from "@/features/organizations/userInfo";
+import { useReportDirty } from "@/components/shared/unsavedChanges";
 import { useSaveUserInfo, useUserInfo } from "@/features/organizations/useUserInfo";
 import type { Organization } from "@/features/superadmin/organizations/useOrganizationsAdmin";
 
@@ -35,6 +37,7 @@ function formatDate(iso: string): string {
 export function UserInfoSection({
   organization,
   intro = true,
+  onDirtyChange,
 }: {
   organization: Organization;
   /**
@@ -42,6 +45,8 @@ export function UserInfoSection({
    * l'en-tête dit déjà ce qu'est ce texte et à qui il sert.
    */
   intro?: boolean;
+  /** Signale une saisie non enregistrée (garde des pages Connaissances). */
+  onDirtyChange?: (dirty: boolean) => void;
 }) {
   const { data: stored, isLoading } = useUserInfo(organization.id);
   const save = useSaveUserInfo(organization.id);
@@ -60,6 +65,17 @@ export function UserInfoSection({
       setHours(toDayDrafts(stored.info.openingHours));
     }
   }, [stored, draft]);
+
+  // Comparé après nettoyage, horaires compris (une grille incomplète compte
+  // pour une modification : elle n'est pas enregistrable telle quelle).
+  useReportDirty(
+    draft !== null &&
+      stored !== undefined &&
+      (Object.keys(dayDraftErrors(hours)).length > 0 ||
+        JSON.stringify(cleanUserInfo({ ...draft, openingHours: fromDayDrafts(hours) })) !==
+          JSON.stringify(stored.info)),
+    onDirtyChange,
+  );
 
   if (isLoading || draft === null) {
     return (

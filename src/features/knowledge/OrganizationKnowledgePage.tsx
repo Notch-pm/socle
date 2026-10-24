@@ -2,6 +2,7 @@ import * as React from "react";
 import { Link, useSearchParams } from "react-router-dom";
 import { ArrowRight, CircleCheck, CircleDashed } from "lucide-react";
 import { EmptyState } from "@/components/shared/EmptyState";
+import { useDiscardGuard } from "@/components/shared/unsavedChanges";
 import { cn } from "@/lib/utils";
 import {
   useAllOrganizations,
@@ -21,8 +22,8 @@ import { knowledgeOrgEntries, selectedKnowledgeOrg } from "@/features/knowledge/
  *
  * L'organisme choisi vit dans l'URL (`?org=`) : la fiche d'une organisation y
  * renvoie directement. Un identifiant inconnu retombe sur le premier organisme.
- * Changer d'organisme abandonne une saisie non enregistrée, comme le faisait
- * déjà le changement d'onglet.
+ * ⚠️ Changer d'organisme avec une saisie non enregistrée demande confirmation
+ * (l'éditeur la signale par `onDirtyChange`), fermer l'onglet aussi.
  */
 export function OrganizationKnowledgePage({
   header,
@@ -37,7 +38,10 @@ export function OrganizationKnowledgePage({
   include?: (organization: Organization) => boolean;
   /** Identifiants des organismes dont le texte est rédigé. */
   useFilled: (organizationIds: string[]) => { data?: Set<string> };
-  renderEditor: (organization: Organization) => React.ReactNode;
+  renderEditor: (
+    organization: Organization,
+    onDirtyChange: (dirty: boolean) => void,
+  ) => React.ReactNode;
 }) {
   const { data: organizations, isLoading, isError } = useAllOrganizations();
   const [searchParams, setSearchParams] = useSearchParams();
@@ -50,6 +54,11 @@ export function OrganizationKnowledgePage({
   const ids = React.useMemo(() => entries.map((e) => e.organization.id), [entries]);
   const { data: filled } = useFilled(ids);
   const selected = selectedKnowledgeOrg(entries, searchParams.get("org"));
+  const [dirty, setDirty] = React.useState(false);
+  const guard = useDiscardGuard<string>(dirty, (id) => {
+    setDirty(false);
+    setSearchParams({ org: id }, { replace: true });
+  });
 
   return (
     <div className="p-6">
@@ -75,7 +84,9 @@ export function OrganizationKnowledgePage({
                   <li key={organization.id}>
                     <button
                       type="button"
-                      onClick={() => setSearchParams({ org: organization.id }, { replace: true })}
+                      onClick={() => {
+                        if (!active) guard.request(organization.id);
+                      }}
                       aria-current={active ? "true" : undefined}
                       style={{ paddingLeft: `${0.5 + (depth - 1) * 0.75}rem` }}
                       className={cn(
@@ -114,10 +125,11 @@ export function OrganizationKnowledgePage({
               </Link>
             </div>
             {/* `key` : un autre organisme repart d'un formulaire neuf. */}
-            <div key={selected.id}>{renderEditor(selected)}</div>
+            <div key={selected.id}>{renderEditor(selected, setDirty)}</div>
           </section>
         </div>
       )}
+      {guard.dialog}
     </div>
   );
 }

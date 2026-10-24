@@ -131,4 +131,27 @@ describe("UserInfoSection", () => {
     expect(screen.getByText("L'heure de fermeture de l'après-midi est obligatoire.")).toBeTruthy();
     expect(screen.getByText(/corrigez les jours signalés/)).toBeTruthy();
   });
+
+  it("ne se dit pas modifiée à l'ouverture, horaires compris", () => {
+    // Les horaires passent par des lignes de saisie : l'aller-retour ne doit
+    // pas compter pour une modification, sinon chaque changement d'organisme
+    // demanderait confirmation.
+    h.stored = {
+      info: {
+        ...defaultUserInfo(),
+        description: "Mairie annexe.",
+        openingHours: [
+          { day: "monday", morningOpen: "08:30", morningClose: "12:00", afternoonOpen: "13:30", afternoonClose: "17:00" },
+          { day: "saturday", morningOpen: "09:00", morningClose: null, afternoonOpen: null, afternoonClose: "12:00" },
+        ],
+      },
+      updatedAt: "2026-09-24T08:00:00Z",
+    };
+    const onDirtyChange = vi.fn();
+    render(<UserInfoSection organization={org()} onDirtyChange={onDirtyChange} />);
+    expect(onDirtyChange).not.toHaveBeenCalledWith(true);
+
+    fireEvent.change(screen.getByLabelText("Descriptif"), { target: { value: "Mairie annexe du centre." } });
+    expect(onDirtyChange).toHaveBeenLastCalledWith(true);
+  });
 });

@@ -1,6 +1,7 @@
 import * as React from "react";
 import { useSearchParams } from "react-router-dom";
 import { EmptyState } from "@/components/shared/EmptyState";
+import { useDiscardGuard } from "@/components/shared/unsavedChanges";
 import { Field } from "@/components/ui/field";
 import {
   sortedRootOrganizations,
@@ -36,7 +37,9 @@ export function AttributionsPage() {
       }}
       listLabel="Organismes"
       useFilled={useFilledAttributions}
-      renderEditor={(organization) => <AttributionsSection organization={organization} intro={false} />}
+      renderEditor={(organization, onDirtyChange) => (
+        <AttributionsSection organization={organization} intro={false} onDirtyChange={onDirtyChange} />
+      )}
     />
   );
 }
@@ -59,7 +62,9 @@ export function UserInfoPage() {
       listLabel="Organismes visibles sur le site"
       include={hasUserInfoTab}
       useFilled={useFilledUserInfo}
-      renderEditor={(organization) => <UserInfoSection organization={organization} intro={false} />}
+      renderEditor={(organization, onDirtyChange) => (
+        <UserInfoSection organization={organization} intro={false} onDirtyChange={onDirtyChange} />
+      )}
     />
   );
 }
@@ -76,6 +81,11 @@ export function AgentGuidancePage() {
   const roots = React.useMemo(() => sortedRootOrganizations(organizations ?? []), [organizations]);
   const requested = searchParams.get("org");
   const root = roots.find((o) => o.id === requested) ?? roots[0];
+  const [dirty, setDirty] = React.useState(false);
+  const guard = useDiscardGuard<string>(dirty, (id) => {
+    setDirty(false);
+    setSearchParams({ org: id }, { replace: true });
+  });
 
   return (
     <div className="p-6">
@@ -100,7 +110,7 @@ export function AgentGuidancePage() {
               <select
                 id="agent-guidance-org"
                 value={root.id}
-                onChange={(e) => setSearchParams({ org: e.target.value }, { replace: true })}
+                onChange={(e) => guard.request(e.target.value)}
                 className="h-11 w-full rounded-lg border border-input bg-background px-3 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
               >
                 {roots.map((org) => (
@@ -111,9 +121,15 @@ export function AgentGuidancePage() {
               </select>
             </Field>
           ) : null}
-          <AgentGuidanceSection key={root.id} organization={root} intro={false} />
+          <AgentGuidanceSection
+            key={root.id}
+            organization={root}
+            intro={false}
+            onDirtyChange={setDirty}
+          />
         </div>
       )}
+      {guard.dialog}
     </div>
   );
 }

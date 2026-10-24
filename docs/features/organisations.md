@@ -118,7 +118,11 @@ garde sa modale (`OrganizationsManager` reçoit `onEditOrganization` seulement c
   (règles `isAttributionsEmpty` / `isUserInfoEmpty`) ; les enregistrements invalident par
   **préfixe** de clé, pour rafraîchir texte et liste d'un coup. La fiche d'organisation garde un
   encart « Connaissances » qui y renvoie, sur l'organisme courant — les recommandations sur sa
-  racine. Changer d'organisme abandonne une saisie non enregistrée (comme le changement d'onglet).
+  racine. ⚠️ **Saisie non enregistrée** : chaque section la signale (`onDirtyChange`, comparaison
+  **après nettoyage** — des blancs, une consigne vide ou l'aller-retour des horaires ne comptent
+  pas) ; changer d'organisme demande alors confirmation et fermer l'onglet aussi
+  (`src/components/shared/unsavedChanges.tsx`). La navigation par le rail n'est **pas** gardée :
+  `BrowserRouter` n'a pas de `useBlocker`.
 - **« Recommandations aux agents »** (`AgentGuidanceSection`, 2026-09-19, **organisation
   principale uniquement** — une sous-organisation y lit que le réglage vit sur sa racine) : ce que
   la collectivité dit **à ses agents**, pour toutes ses démarches à la fois — rôle des agents et

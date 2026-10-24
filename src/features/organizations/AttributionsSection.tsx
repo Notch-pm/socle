@@ -4,7 +4,8 @@ import { Card, CardHeader, CardTitle, CardDescription, CardContent } from "@/com
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import { MarkdownField } from "@/features/procedures/steps/connaissances/MarkdownField";
-import { MAX_ATTRIBUTIONS_LENGTH } from "@/features/organizations/attributions";
+import { useReportDirty } from "@/components/shared/unsavedChanges";
+import { MAX_ATTRIBUTIONS_LENGTH, cleanAttributions } from "@/features/organizations/attributions";
 import { useAttributions, useSaveAttributions } from "@/features/organizations/useAttributions";
 import type { Organization } from "@/features/superadmin/organizations/useOrganizationsAdmin";
 
@@ -25,6 +26,7 @@ function formatDate(iso: string): string {
 export function AttributionsSection({
   organization,
   intro = true,
+  onDirtyChange,
 }: {
   organization: Organization;
   /**
@@ -32,6 +34,8 @@ export function AttributionsSection({
    * l'en-tête dit déjà ce qu'est ce texte et à qui il sert.
    */
   intro?: boolean;
+  /** Signale une saisie non enregistrée (garde des pages Connaissances). */
+  onDirtyChange?: (dirty: boolean) => void;
 }) {
   const { data: stored, isLoading } = useAttributions(organization.id);
   const save = useSaveAttributions(organization.id);
@@ -42,6 +46,12 @@ export function AttributionsSection({
   React.useEffect(() => {
     if (stored && draft === null) setDraft(stored.attributions);
   }, [stored, draft]);
+
+  // Comparé après nettoyage : des blancs en fin de texte ne sont pas une modification.
+  useReportDirty(
+    draft !== null && stored !== undefined && cleanAttributions(draft) !== stored.attributions,
+    onDirtyChange,
+  );
 
   if (isLoading || draft === null) {
     return (
