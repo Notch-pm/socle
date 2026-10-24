@@ -185,7 +185,8 @@ export function parseUserInfo(raw: unknown): OrganizationUserInfo {
 }
 
 /**
- * L'onglet « Informations usagers » existe-t-il pour cette organisation ? Pas
+ * Les informations usagers existent-elles pour cette organisation (liste de la
+ * page Connaissances, carte superadmin, courrier libre) ? Pas
  * sur un service interne : le portail ne l'affiche pas, et la route ne le sert
  * pas — ce qu'on y écrirait ne serait lu par personne.
  */

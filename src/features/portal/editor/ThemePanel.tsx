@@ -464,7 +464,7 @@ export function ThemePanel({
           <p className="text-[11px] leading-snug text-muted-foreground">
             Seuils RGAA AA : 4,5 : 1 pour le texte, 3 : 1 pour les éléments d'interface. Les
             séparateurs purement décoratifs n'y sont pas soumis. Les couleurs se règlent dans
-            l'onglet « Charte graphique » de l'organisation.
+            la section « Charte graphique » de la fiche de l'organisation.
           </p>
         </Group>
       </div>

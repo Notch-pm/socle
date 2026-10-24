@@ -298,7 +298,7 @@ visibilité et d'import : [intégrations partenaires](integrations.md).
 
 ## Écran « Démarches activées » — par catégorie (2026-10-03)
 
-`OrganizationProceduresTab` (super admin et onglet de l'administrateur) range le catalogue par
+`OrganizationProceduresTab` (super admin et section « Démarches proposées » de l'administrateur) range le catalogue par
 catégorie (`groupProceduresByCategory` : alphabétique, « Sans catégorie » en dernier), avec un
 compteur et un bouton **« Tout activer »** par catégorie, et un « Tout activer » global (avec
 confirmation). ⚠️ Un seul upsert (`useEnableProcedures`) : tout passe ou rien. Les démarches

@@ -409,6 +409,10 @@ Envoi des e-mails —, `?section=`, `organizationSections.ts`), gestion superadm
 - Rail aux **mesures de la gamme** (`w-[52px]`, tuiles 36 px, `RAIL_WIDTH_CLASS`), couleur propre
   à Socle (jeton `--rail`) : changer de couleur = changer le jeton **et** son jeton de contraste,
   jamais de `white/…` en dur. En-tête : la collectivité à gauche, le produit à droite.
+- ⚠️ **Navigation v2** (2026-10-24) : le rail est une table (`RAIL`, `Sidebar.tsx`) de liens et de
+  **rubriques en bulles** ; une page nouvelle s'y ajoute dans sa rubrique, et un test exige que
+  chaque lien soit une route de `App.tsx`. « Paramètres » (en-tête) = l'administration de
+  l'application, jamais un contenu. Le superadmin n'a pas été refondu.
 - Lanceur `AppLauncher` (catalogue figé `suiteApps.ts`, la `key` est le sous-domaine) — ⚠️ à ne
   pas confondre avec la table `applications`. Le damier est réservé au lanceur.
 

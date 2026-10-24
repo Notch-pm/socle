@@ -84,7 +84,7 @@ function formatDate(iso: string): string {
 
 /**
  * Recommandations aux agents d'une collectivité — composant partagé par les
- * deux zones (onglet d'`OrganizationEditorPage` côté admin, section
+ * deux zones (page `/connaissances/recommandations` côté admin, section
  * d'`OrgSettingsPage` côté superadmin), comme `LanguagesSection`.
  *
  * Le réglage n'existe que sur une **organisation principale** : c'est la

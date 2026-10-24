@@ -29,7 +29,7 @@ service interne — qui est nommé à sa place, **même s'il n'a pas activé la 
   mais il entre dans le **catalogue** : une activation ne compte que si l'organisation **et son
   porteur** sont actifs. Un service interne sous une mairie obsolète n'est proposé par personne ;
   le faire remonter d'un cran de plus le rattacherait à une agglomération qui ne l'instruit pas.
-- **UI** : commutateur dans l'onglet « Informations de base » (`OrganizationInfoTab`, rendu
+- **UI** : commutateur dans la section « Informations générales » (`GeneralInfoForm`, `OrganizationInfoTab.tsx`, rendu
   seulement si `parent_id !== null`) et dans l'`OrganizationFormDialog` du superadmin (rendu
   seulement si un parent est choisi) ; **badge « Service interne »** en lecture dans
   `OrganizationTree`, à côté d'« Obsolète » — l'organigramme est ce qu'on lit là.

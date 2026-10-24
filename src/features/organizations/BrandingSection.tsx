@@ -218,10 +218,10 @@ function BrandingPreview({ branding }: { branding: ResolvedBranding }) {
 
 /**
  * Charte graphique d'une organisation — composant partagé par les deux zones
- * (onglet de `OrganizationEditorPage` côté admin, section d'`OrgSettingsPage`
+ * (section de `OrganizationEditorPage` côté admin, section d'`OrgSettingsPage`
  * côté superadmin), comme `SmtpSettingsSection`.
  *
- * ⚠️ Le logo couleur (`logo_url`) vit ici, plus dans « Informations de base » :
+ * ⚠️ Le logo couleur (`logo_url`) vit ici, plus dans les informations générales :
  * c'est un élément de charte, gouverné par le même commutateur d'héritage que
  * les quatre autres.
  */

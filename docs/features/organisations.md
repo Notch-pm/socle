@@ -12,7 +12,7 @@
 - Champs : `name` (obligatoire), `address`, `phone`, `email`, `status`
   (`active` | `obsolete`, obsolescence **réversible**), + `slug`, `type` hérités. Les cinq
   colonnes de **charte graphique** (`logo_url`, `logo_white_url`, `favicon_url`, `primary_color`,
-  `secondary_color`) + `branding_inherit_parent` ont leur propre onglet — voir feature ci-dessous.
+  `secondary_color`) + `branding_inherit_parent` ont leur propre section — voir feature ci-dessous.
 - RLS `organizations` : SELECT `has_org_access(id) OR is_admin_of_self_or_ancestor(id)` ·
   INSERT super_admin ou (parent défini ET admin d'un ancêtre) · UPDATE admin self/ancêtre ·
   DELETE `is_super_admin() AND parent_id IS NOT NULL`.
@@ -200,12 +200,12 @@ sections.
   internes : les deux ne se fusionnent jamais, et le champ « accueil physique » des
   recommandations renvoie ici pour les horaires. ⚠️ **Pas d'héritage** : un organisme qui n'a rien
   écrit n'est pas listé, il n'emprunte pas les horaires de son parent. ⚠️ La route ne sert que les
-  organismes **affichés** (actifs, pas service interne) — d'où l'onglet retiré sur un service
-  interne. Depuis 1.31.0, elle porte aussi le **téléphone** et le **courriel** de la fiche
-  (« Informations de base »), et liste un organisme qui n'a que ça (rubriques vides). Français seulement pour l'instant (pas de `translations`). Côté superadmin, même
+  organismes **affichés** (actifs, pas service interne) — d'où le service interne absent de la liste
+  de la page Connaissances. Depuis 1.31.0, elle porte aussi le **téléphone** et le **courriel** de la fiche
+  (« Informations générales »), et liste un organisme qui n'a que ça (rubriques vides). Français seulement pour l'instant (pas de `translations`). Côté superadmin, même
   composant en carte d'`OrgSettingsPage` (`?section=usagers`).
-- **Courrier libre (site Nora)** (`FreeMailSection`, 2026-10-09 ; en tête de l'onglet
-  **« Démarches »** de l'éditeur d'organisme, et de la carte superadmin « Démarches activées »
+- **Courrier libre (site Nora)** (`FreeMailSection`, 2026-10-09 ; en tête de la section
+  **« Démarches proposées »** de l'éditeur d'organisme, et de la carte superadmin « Démarches activées »
   (`?section=activations`) — ce qu'un usager peut adresser à l'organisme depuis le site ;
   **jamais sur un service interne**, que le portail n'affiche pas, `hasUserInfoTab`) : un interrupteur
   « Permettre aux usagers d'envoyer un courrier libre à cet organisme depuis le site » (effet

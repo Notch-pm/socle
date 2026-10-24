@@ -2,7 +2,7 @@
 
 > **Public** : tous (devs Socle, équipes consommatrices) · **Question traitée** : quelles
 > évolutions sont envisagées, et lesquelles ont déjà été livrées ? · **Dernière mise à jour** :
-> 2026-10-01
+> 2026-10-24
 
 Liste d'**intentions**, pas d'engagements — sauf mention explicite d'une date de livraison.
 Née du chantier « Clara délègue ses usagers au Socle » (2026-07-16), enrichie depuis. Pour ce qui
@@ -515,6 +515,25 @@ notés dans `architecture.md` § 7.
 
 ## Frontend Socle
 
+### Livré
+
+- ✅ *2026-10-24* : **navigation v2** (maquette Claude Design « Socle navigation v2 ») — rail à
+  rubriques en bulles (Site de démarches, Connaissances, Référentiels), « Paramètres » dans
+  l'en-tête, URL par rubrique ; rubrique **Connaissances** (recommandations, attributions,
+  informations usagers, bases des démarches) sortie des onglets de la fiche ; éditeur
+  d'organisation en menu latéral à trois groupes ; page **Fréquentation**. Détail :
+  fiches « Shell », « Organisations » et « Tableau de bord ».
+
+### Envisagé
+
+- **Appliquer les mêmes regroupements au superadmin** : `OrgSettingsPage` aligne 21 sections
+  à plat par client — exclu de la navigation v2 à la demande du PO, c'est le prochain foyer de
+  désordre.
+- **Garder la saisie non enregistrée sur toute navigation** : la confirmation ne couvre
+  aujourd'hui que les pages Connaissances (changement d'organisme, fermeture de l'onglet). Le
+  rail n'est pas gardé — il faudrait un routeur de données (`createBrowserRouter`,
+  `useBlocker`) —, et les sections de l'éditeur d'organisation (charte, SMTP, langues…) ne
+  signalent pas encore leur saisie en cours.
 - **Sélecteur global d'organisation courante** (pour un utilisateur membre de plusieurs
   organisations), plutôt que le choix implicite actuel.
 - **UI de consultation des contacts dans Socle** : le référentiel des usagers n'a aujourd'hui

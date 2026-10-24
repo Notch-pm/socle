@@ -84,7 +84,7 @@ service — motif du catalogue de démarches, des quartiers, du plafond IA.
   lirait la chaîne vide afficherait un texte vide là où il devait **retomber sur le français**. Une
   langue dont plus aucun champ n'est rempli **disparaît** de la colonne : une entrée vide se
   compterait comme « traduit en anglais » alors que rien ne l'est.
-- **UI** : `LanguagesSection` (onglet « Langues » de `OrganizationEditorPage` côté admin, section
+- **UI** : `LanguagesSection` (section « Langues » de `OrganizationEditorPage` côté admin, section
   `?section=langues` d'`OrgSettingsPage` côté superadmin — motif `BrandingSection`) : deux groupes
   de cases à cocher, recherche, français coché et verrouillé, récapitulatif des langues actives.
   ⚠️ Une réponse de traduction s'applique **d'un seul geste** (`onApply`), jamais case par case :

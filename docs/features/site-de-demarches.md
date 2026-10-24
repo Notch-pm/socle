@@ -13,8 +13,8 @@ démarches ». Ajouter une collectivité au portail = une ligne de domaine, aucu
 - **Domaines** (`organization_domains`) : `hostname` **unique sur toute la plateforme** (un domaine
   désigne exactement une collectivité — c'est l'invariant de toute la résolution de tenant),
   normalisé par trigger à l'écriture, au plus un `is_primary` par organisation, **pas** restreint
-  à une racine (une sous-organisation peut tenir son guichet). Écran `DomainsSection` : onglet
-  « Domaines du portail » de l'éditeur d'organisation (admin) et section `?section=domaines`
+  à une racine (une sous-organisation peut tenir son guichet). Écran `DomainsSection` : section
+  « Domaines » de l'éditeur d'organisation (admin, retirée d'un service interne) et section `?section=domaines`
   d'`OrgSettingsPage` (superadmin). ⚠️ **Écriture réservée au super administrateur** depuis le
   2026-09-08 (RLS `is_super_admin()`) : le sous-domaine fourni se pose au provisioning, un domaine
   personnalisé suppose un CNAME chez le client et un enregistrement chez l'hébergeur du portail ;

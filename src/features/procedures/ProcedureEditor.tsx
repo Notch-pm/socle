@@ -269,7 +269,8 @@ export function ProcedureEditor({
               nom et sa description viennent du partenaire et seront remplacés au prochain import ;
               ses informations demandeur, son formulaire et sa publication sont ceux du partenaire,
               d'où les seules étapes Descriptif et Base de connaissances. La catégorie et la base
-              de connaissances se règlent ici, l'activation dans « Démarches activées ».
+              de connaissances se règlent ici, l'activation organisme par organisme (« Démarches
+              proposées » de chaque organisation ; « Démarches activées » côté plateforme).
             </p>
           </div>
         ) : null}

@@ -77,7 +77,7 @@ function LanguageRow({
 }
 
 /**
- * Langues d'une collectivité — composant partagé par les deux zones (onglet de
+ * Langues d'une collectivité — composant partagé par les deux zones (section de
  * `OrganizationEditorPage` côté admin, section d'`OrgSettingsPage` côté
  * superadmin), comme `BrandingSection`.
  *

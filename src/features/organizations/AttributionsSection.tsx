@@ -14,8 +14,8 @@ function formatDate(iso: string): string {
 }
 
 /**
- * Attributions d'un organisme — composant partagé par les deux zones (onglet
- * d'`OrganizationEditorPage` côté admin, section d'`OrgSettingsPage` côté
+ * Attributions d'un organisme — composant partagé par les deux zones (page
+ * `/connaissances/attributions` côté admin, section d'`OrgSettingsPage` côté
  * superadmin), comme `UserInfoSection`.
  *
  * ⚠️ Visible sur **toute** organisation, **service interne compris** : ce sont

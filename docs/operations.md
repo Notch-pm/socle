@@ -68,7 +68,7 @@ fichiers casse la fonction en production alors que les tests passent en local.
   / `relais=plateforme`), jamais les identifiants.
 - **SMTP** : pas de secret SMTP global pour les courriels métier. Chaque organisation racine porte ses propres identifiants
   dans la table `smtp_settings` (hôte, port, identifiant, mot de passe, expéditeur), saisis par un
-  admin d'org depuis l'onglet « Emails (SMTP) ». `auth-email-hook` et `send-test-email` lisent
+  admin d'org depuis la section « Expéditeur et SMTP » de la fiche. `auth-email-hook` et `send-test-email` lisent
   cette table avec la service role.
   **Depuis le 2026-08-23, ces identifiants sortent aussi du Socle** : `public-api` les sert sur
   `GET /v1/organizations/{id}/smtp` aux clés portant le scope `smtp` (racine uniquement), pour

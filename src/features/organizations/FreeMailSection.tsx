@@ -26,7 +26,7 @@ const SWITCH_LABEL = "Permettre aux usagers d'envoyer un courrier libre à cet o
 /**
  * Courrier libre (site Nora) — l'usager écrit à cet organisme un courrier qui
  * ne relève d'aucune démarche ; Clara le reçoit. Composant partagé par les
- * deux zones (onglet « Informations usagers » d'`OrganizationEditorPage`,
+ * deux zones (section « Démarches proposées » d'`OrganizationEditorPage`,
  * section du même nom d'`OrgSettingsPage`), sous les informations usagers :
  * c'est, comme elles, ce que l'organisme offre au public.
  *

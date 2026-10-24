@@ -27,7 +27,7 @@ function formatDate(iso: string): string {
 
 /**
  * Informations à destination des usagers d'un organisme — composant partagé
- * par les deux zones (onglet d'`OrganizationEditorPage` côté admin, section
+ * par les deux zones (page `/connaissances/informations-usagers` côté admin, section
  * d'`OrgSettingsPage` côté superadmin), comme `AgentGuidanceSection`.
  *
  * Contrairement aux recommandations aux agents, le réglage vit sur **toute**

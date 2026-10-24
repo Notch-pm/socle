@@ -71,7 +71,7 @@ export interface PortalEditorProps {
    * dérive toute sa palette.
    *
    * ⚠️ CE N'EST PAS UNE DONNÉE DU THÈME : le thème n'en porte aucune. Elles
-   * viennent du paramétrage de l'organisation (onglet « Charte graphique »),
+   * viennent du paramétrage de l'organisation (section « Charte graphique » de sa fiche),
    * et l'éditeur étant toujours sur une racine, elles sont déjà résolues.
    */
   branding: ThemeBranding | null;

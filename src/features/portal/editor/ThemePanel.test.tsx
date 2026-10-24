@@ -123,6 +123,6 @@ describe("ThemePanel — contrôle des contrastes", () => {
 
   it("renvoie vers la charte graphique — le thème ne porte pas de couleur", () => {
     renderPanel();
-    expect(screen.getByText(/onglet « Charte graphique »/)).toBeTruthy();
+    expect(screen.getByText(/section « Charte graphique »/)).toBeTruthy();
   });
 });
