@@ -28,11 +28,11 @@ import type { Json } from "@/types/database.types";
  * Liste + CRUD des catégories. Deux modes, motif `DocumentTypesManager` :
  * - `organizationId` fourni → **une organisation** (section superadmin d'une
  *   racine) : la liste est bornée à elle et le dialogue la verrouille ;
- * - sans → **toutes les catégories visibles** (page admin `/categories`) : le
+ * - sans → **toutes les catégories visibles** (page admin `/referentiels/categories`) : le
  *   dialogue propose un sélecteur d'organisation.
  *
  * Le super administrateur ne pouvait pas créer de catégorie avant ce
- * composant : `/categories` vit dans l'app par organisation, dont
+ * composant : `/referentiels/categories` vit dans l'app par organisation, dont
  * `ProtectedRoute` le redirige. Or une démarche exige une catégorie — un
  * client ne pouvait donc pas être livré clé en main sans SQL.
  */

@@ -29,7 +29,23 @@
   ⚠️ **Disposition de la gamme** : tableau de bord **épinglé tout en haut**, le reste **centré
   dans la hauteur du rail** — centré sur le rail ENTIER (`absolute inset-0`), pas sur la place
   qui reste sous le tableau de bord, sans quoi le groupe tomberait plus bas qu'ailleurs. Ni
-  pastille de produit au-dessus (l'application se nomme dans l'en-tête), ni trait de séparation.
+  pastille de produit au-dessus (l'application se nomme dans l'en-tête), ni trait de séparation
+  — sauf **un**, qui isole la consultation (Intégrations, Consommation IA) du paramétrage.
+- **Navigation v2 (2026-10-24) : quelques liens, des rubriques en bulles.** Le rail portait onze
+  entrées à plat ; il est décrit par une table, `RAIL` (`Sidebar.tsx`) : liens directs
+  (Organisations, Démarches, Site de démarches, Intégrations, Consommation IA) et **rubriques**
+  (« Référentiels » : catégories, types de PJ, modèles de documents, quartiers). Une rubrique est
+  un **bouton** qui ouvre une bulle à droite du rail (disclosure `aria-expanded`, motif du
+  lanceur : clic dehors, Échap — focus rendu au bouton —, choix d'une page ou changement de
+  route la referment) ; elle ne navigue pas. Un petit chevron la distingue au repos d'un lien
+  direct ; sa tuile est **active** quand l'écran courant est l'une de ses pages
+  (`isGroupActive`). Les pages d'une rubrique rappellent celle-ci au-dessus de leur titre
+  (`PageHeader section="Référentiels"`).
+  ⚠️ **Les URL suivent les rubriques** (`/referentiels/…`, `/parametres/…`) et ont changé **sans
+  redirection** (démonstrations seulement à cette date). Un test vérifie que chaque lien de `RAIL`
+  est une route déclarée dans `App.tsx`.
+  Maquette de référence : projet Claude Design « Socle navigation v2 » ; les rubriques
+  « Connaissances » et la page « Fréquentation » arrivent dans les lots suivants.
 - **Documentations d'API en pied de rail** (`DocTile`, catalogue
   `src/features/public-api-docs/apiDocLinks.ts`) : « API Référentiel » (`/api-doc`) et
   « API Usagers » (`/api-doc-usagers`), **hors du groupe centré** comme le tableau de bord est
@@ -46,8 +62,11 @@
   est pas : le guichet IA n'est ouvert qu'aux applications de la gamme.
 - **En-tête** (`Header.tsx`) : **lanceur d'applications** (dans une colonne de la largeur du rail,
   voir ci-dessous) · wordmark Edilumen · séparateur · **logo + nom de l'organisation principale**
-  — à droite : **pastille + nom du produit** (« Socle », en primaire) · séparateur · menu
-  utilisateur. Motif repris du shell d'Iris/Clara.
+  — à droite : **pastille + nom du produit** (« Socle », en primaire) · séparateur · icône
+  **« Paramètres »** · menu utilisateur. Motif repris du shell d'Iris/Clara.
+  ⚠️ **« Paramètres » = l'administration de l'application** (aujourd'hui : utilisateurs et rôles,
+  `/parametres/utilisateurs`), comme dans Clara et Iris — jamais un contenu qu'on paramètre, qui
+  vit dans le rail. Le mot ne sert à rien d'autre dans le Socle.
   ⚠️ **QUI L'ON SERT À GAUCHE, AVEC QUOI À DROITE** : la collectivité est le **contexte** de tout
   ce que l'agent voit, elle suit donc immédiatement Edilumen ; le produit est un **repère de
   navigation** entre applications, il se pose à l'autre bout, contre le menu utilisateur.

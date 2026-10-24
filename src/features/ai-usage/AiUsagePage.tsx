@@ -21,7 +21,7 @@ import { useAdminRootOrganizations } from "./useAdminRootOrganizations";
  *
  * Le plafond vit sur une organisation PRINCIPALE : le sélecteur ne propose donc
  * que des racines (masqué s'il n'y en a qu'une), motif déjà appliqué à
- * `/quartiers` et `/types-pieces`.
+ * `/referentiels/quartiers` et `/referentiels/types-pieces`.
  */
 export function AiUsagePage() {
   const { data: organizations, isLoading, isError } = useAdminRootOrganizations();

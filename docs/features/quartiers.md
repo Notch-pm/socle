@@ -50,7 +50,7 @@ l'API (RPC `stats_contacts_by_quartier` disponible).
   composant partagé `QuartiersManager` : carte cadrée sur l'emprise, liste avec nombre d'usagers
   par quartier, import GeoJSON (noms devinés depuis les propriétés, couleurs cyclées), édition
   nom/couleur, suppression, recalcul des assignations. Deux points d'entrée (motif
-  `document_types`) : page admin **`/quartiers`** (sélecteur de racine si plusieurs) et section
+  `document_types`) : page admin **`/referentiels/quartiers`** (sélecteur de racine si plusieurs) et section
   « Quartiers » de `OrgSettingsPage` (racine uniquement). Les droits d'écriture sont portés par
   le RLS (l'UI ne masque pas les actions).
 - Code : `src/features/quartiers/` — `useQuartiers.ts` (hooks + mutations ; l'import enchaîne

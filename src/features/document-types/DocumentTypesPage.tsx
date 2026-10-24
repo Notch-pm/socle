@@ -5,6 +5,7 @@ export function DocumentTypesPage() {
   return (
     <div className="p-6">
       <PageHeader
+        section="Référentiels"
         title="Types de pièce justificative"
         subtitle="Le catalogue des pièces demandées aux usagers dans vos démarches."
       />

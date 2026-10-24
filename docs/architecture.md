@@ -140,12 +140,18 @@ nombre de clés plateforme actives.
 | `/demarches` | `ProceduresPage` |
 | `/demarches/nouveau` (`?org=<rootId>`) | `ProcedureEditorPage variant="admin"` |
 | `/demarches/:procId` (`?step=N`) | idem |
-| `/categories` | `CategoriesPage` |
-| `/types-pieces` | `DocumentTypesPage` |
-| `/documents` | `DocumentsPage` (modèles à variables) |
 | `/site-de-demarches` (`?org=<rootId>`) | `PortalEditorPage variant="admin"` — éditeur du site de démarches (pleine hauteur dans le shell) |
-| `/quartiers` | `QuartiersPage` |
-| `/utilisateurs` | `UtilisateursPage` |
+| `/referentiels/categories` | `CategoriesPage` |
+| `/referentiels/types-pieces` | `DocumentTypesPage` |
+| `/referentiels/modeles-documents` | `DocumentsPage` (modèles à variables) |
+| `/referentiels/quartiers` | `QuartiersPage` |
+| `/parametres/utilisateurs` | `UtilisateursPage` (icône « Paramètres » de l'en-tête) |
+| `/integrations` | `IntegrationsPage` (consultation seule) |
+| `/consommation-ia` | `AiUsagePage` (consultation seule) |
+
+Les URL suivent les rubriques du rail depuis le 2026-10-24 (navigation v2) ; les anciennes
+(`/categories`, `/documents`, `/utilisateurs`…) ont disparu **sans redirection**, le Socle ne
+servant alors que des démonstrations.
 
 ### 3.4 Gardes (`src/components/layout/ProtectedRoute.tsx`)
 

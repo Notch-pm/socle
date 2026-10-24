@@ -30,7 +30,7 @@ import { QuartierEditDialog } from "@/features/quartiers/QuartierEditDialog";
  * Paramétrage des quartiers d'une organisation principale (racine) : carte,
  * liste avec nombre d'usagers rattachés, import GeoJSON, renommage/couleur,
  * suppression, recalcul des assignations. Utilisé par la page admin
- * `/quartiers` et la section superadmin de `OrgSettingsPage` — les droits
+ * `/referentiels/quartiers` et la section superadmin de `OrgSettingsPage` — les droits
  * d'écriture sont portés par le RLS (`is_org_admin`).
  */
 export function QuartiersManager({ organizationId }: { organizationId: string }) {

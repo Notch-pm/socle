@@ -88,11 +88,13 @@ export function App() {
               <Route path="demarches/:procId" element={<ProcedureEditorPage variant="admin" />} />
               {/* Éditeur du site de démarches — plein écran, organisation choisie dans la page. */}
               <Route path="site-de-demarches" element={<PortalEditorPage variant="admin" />} />
-              <Route path="categories" element={<CategoriesPage />} />
-              <Route path="types-pieces" element={<DocumentTypesPage />} />
-              <Route path="documents" element={<DocumentsPage />} />
-              <Route path="quartiers" element={<QuartiersPage />} />
-              <Route path="utilisateurs" element={<UtilisateursPage />} />
+              {/* Rubrique « Référentiels » du rail. */}
+              <Route path="referentiels/categories" element={<CategoriesPage />} />
+              <Route path="referentiels/types-pieces" element={<DocumentTypesPage />} />
+              <Route path="referentiels/modeles-documents" element={<DocumentsPage />} />
+              <Route path="referentiels/quartiers" element={<QuartiersPage />} />
+              {/* Icône « Paramètres » de l'en-tête. */}
+              <Route path="parametres/utilisateurs" element={<UtilisateursPage />} />
               {/* Consultation seule — le plafond se règle côté superadmin. */}
               <Route path="integrations" element={<IntegrationsPage />} />
               <Route path="consommation-ia" element={<AiUsagePage />} />

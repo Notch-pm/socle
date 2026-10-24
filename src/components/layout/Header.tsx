@@ -1,5 +1,6 @@
 import * as React from "react";
-import { LogOut, ChevronsUpDown } from "lucide-react";
+import { NavLink } from "react-router-dom";
+import { LogOut, ChevronsUpDown, Settings } from "lucide-react";
 import { useAuth } from "@/features/auth/AuthProvider";
 import {
   useAllOrganizations,
@@ -125,6 +126,27 @@ export function Header() {
       </div>
 
       <span className="h-6 w-px shrink-0 bg-border" aria-hidden="true" />
+
+      {/*
+        ⚠️ **« PARAMÈTRES » = L'ADMINISTRATION DE L'APPLICATION**, comme dans
+        Clara et Iris : qui y a accès, avec quel rôle. Pas un contenu qu'on
+        paramètre — ceux-là sont dans le rail (« Référentiels »…). Le mot ne
+        sert donc à rien d'autre dans le Socle.
+      */}
+      <NavLink
+        to="/parametres/utilisateurs"
+        title="Paramètres"
+        aria-label="Paramètres"
+        className={({ isActive }) =>
+          cn(
+            "flex h-9 w-9 shrink-0 items-center justify-center rounded-lg transition-colors",
+            "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
+            isActive ? "bg-primary/10 text-primary" : "text-foreground hover:bg-muted",
+          )
+        }
+      >
+        <Settings className="size-5" />
+      </NavLink>
 
       <div ref={menuRef} className="relative shrink-0">
         <button

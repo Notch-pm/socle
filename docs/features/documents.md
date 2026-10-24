@@ -56,7 +56,7 @@ absentes qui sont bien là), et ne sait pas valoriser la plupart des variables q
   catalogue, **testés**.
 - **Deux points d'entrée**, tous deux via le composant partagé `DocumentTemplatesManager` (liste +
   CRUD), motif `document_types` :
-  - **Admin** : écran **`/documents`** dans l'app par organisation — mode « toutes mes racines », le
+  - **Admin** : écran **`/referentiels/modeles-documents`** (« Modèles de documents ») dans l'app par organisation — mode « toutes mes racines », le
     dialogue propose un sélecteur d'organisation (masqué s'il n'y en a qu'une).
   - **Superadmin** : section « Documents » d'`OrgSettingsPage` (`?section=documents`, racine
     uniquement) — mode **org fixée** (`fixedOrganizationId`).

@@ -6,7 +6,7 @@ import { useWritableRootOrganizations } from "@/features/procedures/useWritableR
 import { QuartiersManager } from "@/features/quartiers/QuartiersManager";
 
 /**
- * Page admin `/quartiers`. Les quartiers appartiennent à une organisation
+ * Page admin `/referentiels/quartiers`. Les quartiers appartiennent à une organisation
  * principale (racine) : si l'utilisateur en voit plusieurs, un sélecteur
  * choisit celle à paramétrer (masqué s'il n'y en a qu'une).
  */
@@ -18,6 +18,7 @@ export function QuartiersPage() {
   return (
     <div className="p-6">
       <PageHeader
+        section="Référentiels"
         title="Quartiers"
         subtitle="Le découpage du territoire en quartiers, pour rattacher les usagers et produire des statistiques."
       />

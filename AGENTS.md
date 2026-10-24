@@ -92,10 +92,11 @@ Projet Supabase : `qhrokbkyxgcvkbpmbmna`.
 
 1. **App par organisation** (`AppShell`, routes protégées par `ProtectedRoute`) — pour les
    utilisateurs et **administrateurs d'organisation**. Routes : `/` (tableau de bord —
-   voir feature), `/organisations`,
-   `/demarches`, `/categories`, `/types-pieces`, `/quartiers`, `/utilisateurs`,
-   `/integrations` et `/consommation-ia` (consultation seule), `/documents`, `/site-de-demarches` (éditeur du
-   portail usagers — voir feature).
+   voir feature), `/organisations`, `/demarches`, `/site-de-demarches` (éditeur du portail
+   usagers — voir feature), `/referentiels/{categories,types-pieces,modeles-documents,quartiers}`
+   (rubrique « Référentiels » du rail), `/parametres/utilisateurs` (icône « Paramètres » de
+   l'en-tête), `/integrations` et `/consommation-ia` (consultation seule). Rail en **rubriques à
+   bulles** depuis la navigation v2 (2026-10-24) — voir la fiche du shell.
 2. **Zone super admin** (`SuperAdminLayout`, protégée par `SuperAdminRoute`) — routes
    `/superadmin/*`. Réservée à `global_role = 'super_admin'`.
 3. **Routes publiques** (hors shell) : `/login`, `/mot-de-passe-oublie`, `/activer-compte`,

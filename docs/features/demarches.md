@@ -249,7 +249,7 @@ est fonctionnelle (voir feature « Édition d'organisation » ci-dessous). Param
   `markdown.ts`, `procedureStorage.ts`.
   Superadmin : section « Catalogue de démarches » dans `OrgSettingsPage` (racine uniquement).
 - Prérequis : une racine sans **catégorie** ne permet pas de créer une démarche (catégorie
-  obligatoire) → créer d'abord des catégories via `/categories`.
+  obligatoire) → créer d'abord des catégories via `/referentiels/categories`.
 - La **pièce justificative** porte un `documentTypeId?: string` référençant un type du catalogue
   `document_types` (voir feature ci-dessous). Le type est **obligatoire à la saisie** : `FormulaireStep`
   bloque l'enregistrement tant qu'une PJ n'est pas typée (helper pur `attachmentFieldsMissingDocumentType`,

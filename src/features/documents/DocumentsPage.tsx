@@ -5,7 +5,8 @@ export function DocumentsPage() {
   return (
     <div className="p-6">
       <PageHeader
-        title="Documents"
+        section="Référentiels"
+        title="Modèles de documents"
         subtitle="Les modèles de documents et de courriers de votre collectivité, et leurs variables."
       />
       <DocumentTemplatesManager />

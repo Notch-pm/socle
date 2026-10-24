@@ -34,7 +34,8 @@ export function UtilisateursPage() {
   return (
     <div className="p-6">
       <PageHeader
-        title="Utilisateurs & rôles"
+        section="Paramètres"
+        title="Utilisateurs et rôles"
         subtitle="Gérez les membres et leurs rôles au sein de votre organisation."
       />
       {isLoading ? (

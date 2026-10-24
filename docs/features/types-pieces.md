@@ -17,7 +17,7 @@ pièce justificative** du form builder (`documentTypeId`, obligatoire — cf. fe
 - Unicité vérifiée côté client (feedback immédiat) **et** garantie en base (repli sur l'erreur
   Postgres `23505`).
 - **Deux points d'entrée**, tous deux via le composant partagé `DocumentTypesManager` (liste + CRUD) :
-  - **Admin** : écran **`/types-pieces`** dans l'app par organisation (comme `/categories`) — mode
+  - **Admin** : écran **`/referentiels/types-pieces`** dans l'app par organisation (comme `/referentiels/categories`) — mode
     « toutes mes racines », le dialogue propose un sélecteur d'organisation (masqué s'il n'y en a qu'une).
   - **Superadmin** : section « Types de pièce justificative » de `OrgSettingsPage` (racine uniquement) —
     mode **org fixée** : `DocumentTypesManager organizationId=…`, le dialogue **verrouille** l'organisation
