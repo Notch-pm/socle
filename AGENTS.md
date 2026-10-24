@@ -195,8 +195,9 @@ Trois motifs reviennent dans presque toutes les fiches — les connaître évite
   des deux côtés et **testée des deux côtés** (motif `readDocumentIds`).
 
 ### [Organisations](docs/features/organisations.md)
-Hiérarchie, édition en pleine page (onglets Informations, Charte graphique, Langues, Domaines,
-Démarches, Emails), gestion superadmin (`OrgSettingsPage`, menu latéral par client).
+Hiérarchie, édition en pleine page (menu latéral en trois groupes — Identité, Site de démarches,
+Envoi des e-mails —, `?section=`, `organizationSections.ts`), gestion superadmin
+(`OrgSettingsPage`, menu latéral par client).
 - ⚠️ **Rubrique « Connaissances »** (2026-10-24) : recommandations, attributions et informations
   usagers ne sont plus des onglets de la fiche — pages `/connaissances/*` (`src/features/knowledge/`),
   liste des organismes avec leur état, mêmes sections que le superadmin.

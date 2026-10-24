@@ -1,18 +1,21 @@
-import * as React from "react";
-import { Link, useParams, useNavigate } from "react-router-dom";
+import { Link, useNavigate, useParams, useSearchParams } from "react-router-dom";
 import {
   ArrowLeft,
   ArrowRight,
+  Building2,
   Globe,
   Languages,
   Library,
-  ListChecks,
+  Lock,
   Mail,
   Palette,
   Settings2,
+  ToggleRight,
   type LucideIcon,
 } from "lucide-react";
+import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { EmptyState } from "@/components/shared/EmptyState";
 import { cn } from "@/lib/utils";
 import {
@@ -22,33 +25,32 @@ import {
   type Organization,
 } from "@/features/superadmin/organizations/useOrganizationsAdmin";
 import { SmtpSettingsSection } from "@/features/superadmin/organizations/sections/SmtpSettingsSection";
-import { OrganizationInfoTab } from "@/features/organizations/OrganizationInfoTab";
+import {
+  ChildOrganizations,
+  EmailSenderForm,
+  GeneralInfoForm,
+} from "@/features/organizations/OrganizationInfoTab";
 import { OrganizationProceduresTab } from "@/features/organizations/OrganizationProceduresTab";
 import { BrandingSection } from "@/features/organizations/BrandingSection";
 import { DomainsSection } from "@/features/organizations/DomainsSection";
 import { LanguagesSection } from "@/features/languages/LanguagesSection";
 import { FreeMailSection } from "@/features/organizations/FreeMailSection";
 import { hasUserInfoTab } from "@/features/organizations/userInfo";
+import {
+  currentOrgSection,
+  organizationSectionGroups,
+  type OrgSectionKey,
+} from "@/features/organizations/organizationSections";
 
-type TabKey = "infos" | "charte" | "langues" | "domaines" | "demarches" | "smtp";
-
-const TABS: { key: TabKey; label: string; icon: LucideIcon }[] = [
-  { key: "infos", label: "Informations de base", icon: Settings2 },
-  // Comme le relais SMTP, la charte se règle sur TOUTE organisation : une
-  // sous-organisation y choisit entre celle de son parent et la sienne.
-  { key: "charte", label: "Charte graphique", icon: Palette },
-  // Les langues, elles, ne se découpent pas par service : le réglage n'existe
-  // que sur l'organisation principale, l'onglet le dit sur les autres.
-  { key: "langues", label: "Langues", icon: Languages },
-  // Le portail usagers sert la collectivité que DÉSIGNE le domaine visité :
-  // l'onglet vit donc sur toute organisation, sous-organisation comprise, dès
-  // lors qu'elle tient son propre guichet.
-  { key: "domaines", label: "Domaines du portail", icon: Globe },
-  { key: "demarches", label: "Démarches", icon: ListChecks },
-  // Onglet visible sur TOUTE organisation depuis l'héritage du relais : une
-  // sous-organisation y choisit entre la configuration de son parent et la sienne.
-  { key: "smtp", label: "Emails (SMTP)", icon: Mail },
-];
+const ICONS: Record<OrgSectionKey, LucideIcon> = {
+  general: Settings2,
+  charte: Palette,
+  "sous-organisations": Building2,
+  domaines: Globe,
+  langues: Languages,
+  demarches: ToggleRight,
+  emails: Mail,
+};
 
 /**
  * ⚠️ **CE QUE L'ORGANISME DIT N'EST PLUS ICI** (navigation v2, 2026-10-24) :
@@ -57,18 +59,13 @@ const TABS: { key: TabKey; label: string; icon: LucideIcon }[] = [
  * fiche y renvoie, sur l'organisme courant (`?org=`) — les recommandations,
  * qui ne vivent que sur la racine, sur l'organisation principale.
  */
-function KnowledgeLinks({ organization }: { organization: Organization }) {
-  const { data: organizations } = useAllOrganizations();
-  const root =
-    organization.parent_id === null
-      ? organization
-      : findRootAncestor(organizations ?? [], organization.id);
+function KnowledgeLinks({ organization, root }: { organization: Organization; root?: Organization }) {
   const links = [
     {
       to: `/connaissances/recommandations${root ? `?org=${root.id}` : ""}`,
       title:
         root && root.id !== organization.id
-          ? `Recommandations aux agents (${root.name})`
+          ? `Recommandations (${root.name})`
           : "Recommandations aux agents",
     },
     { to: `/connaissances/attributions?org=${organization.id}`, title: "Attributions" },
@@ -78,32 +75,59 @@ function KnowledgeLinks({ organization }: { organization: Organization }) {
       : []),
   ];
   return (
-    <div className="flex flex-wrap items-center gap-x-4 gap-y-1 rounded-xl border border-border bg-muted/40 px-4 py-3 text-sm">
-      <span className="flex items-center gap-1.5 font-semibold">
+    <div className="rounded-xl border border-border bg-muted/40 p-3">
+      <p className="flex items-center gap-1.5 text-sm font-semibold">
         <Library aria-hidden="true" className="size-4" />
         Connaissances
-      </span>
-      <span className="text-muted-foreground">Ce que cet organisme dit à ses agents et au public :</span>
-      {links.map((link) => (
-        <Link
-          key={link.to}
-          to={link.to}
-          className="inline-flex items-center gap-1 font-medium text-primary hover:underline"
-        >
-          {link.title}
-          <ArrowRight aria-hidden="true" className="size-3.5" />
-        </Link>
-      ))}
+      </p>
+      <p className="mt-1 text-xs text-muted-foreground">
+        Ce que cet organisme dit à ses agents et au public se rédige dans la rubrique dédiée.
+      </p>
+      <ul className="mt-2 flex flex-col gap-1">
+        {links.map((link) => (
+          <li key={link.to}>
+            <Link
+              to={link.to}
+              className="inline-flex items-center gap-1 text-sm font-medium text-primary hover:underline"
+            >
+              {link.title}
+              <ArrowRight aria-hidden="true" className="size-3.5" />
+            </Link>
+          </li>
+        ))}
+      </ul>
     </div>
   );
 }
 
-/** Édition d'une organisation en pleine page, organisée en onglets (app par organisation). */
+/**
+ * Titre de section — seulement pour celles dont le contenu n'est pas déjà une
+ * carte titrée (charte, langues, domaines, SMTP portent le leur) : deux fois
+ * le même mot l'un sous l'autre ne dirait rien de plus.
+ */
+function SectionTitle({ title, description }: { title: string; description: string }) {
+  return (
+    <div className="mb-4">
+      <h2 className="text-lg font-semibold">{title}</h2>
+      <p className="text-sm text-muted-foreground">{description}</p>
+    </div>
+  );
+}
+
+/**
+ * Édition d'une organisation en pleine page (app par organisation).
+ *
+ * ⚠️ **UN MENU LATÉRAL EN TROIS GROUPES, PLUS UNE RANGÉE D'ONGLETS**
+ * (navigation v2) : l'identité de l'organisme, sa présence sur le site de
+ * démarches, l'envoi de ses e-mails. Section choisie en `?section=` — la
+ * table est dans `organizationSections.ts` (pure, testée).
+ */
 export function OrganizationEditorPage() {
   const { orgId } = useParams<{ orgId: string }>();
   const navigate = useNavigate();
+  const [searchParams, setSearchParams] = useSearchParams();
   const { data: organization, isLoading } = useOrganization(orgId);
-  const [requestedTab, setRequestedTab] = React.useState<TabKey>("infos");
+  const { data: organizations } = useAllOrganizations();
 
   if (isLoading) {
     return (
@@ -121,7 +145,13 @@ export function OrganizationEditorPage() {
     );
   }
 
-  const activeTab = requestedTab;
+  const isRoot = organization.parent_id === null;
+  const parent = organization.parent_id
+    ? (organizations ?? []).find((o) => o.id === organization.parent_id)
+    : undefined;
+  const root = isRoot ? organization : findRootAncestor(organizations ?? [], organization.id);
+  const groups = organizationSectionGroups(organization);
+  const current = currentOrgSection(groups, searchParams.get("section"));
 
   return (
     <div className="flex flex-col gap-6 p-6">
@@ -134,61 +164,111 @@ export function OrganizationEditorPage() {
         >
           <ArrowLeft className="size-4" />
         </Button>
-        <div>
-          <h1 className="text-2xl font-bold tracking-tight">{organization.name}</h1>
-          <p className="text-muted-foreground">Édition de l'organisation</p>
+        <div className="min-w-0">
+          <h1 className="truncate text-2xl font-bold tracking-tight">{organization.name}</h1>
+          <div className="flex flex-wrap items-center gap-2">
+            <p className="text-muted-foreground">
+              {isRoot
+                ? "Organisation principale"
+                : parent
+                  ? `Sous-organisation de ${parent.name}`
+                  : "Sous-organisation"}
+            </p>
+            {organization.is_internal_service ? <Badge variant="muted">Service interne</Badge> : null}
+          </div>
         </div>
       </div>
 
-      <KnowledgeLinks organization={organization} />
+      <div className="grid gap-6 lg:grid-cols-[15rem_minmax(0,1fr)]">
+        <aside className="flex flex-col gap-4 self-start">
+          <nav aria-label="Sections de l'organisation" className="flex flex-col gap-4">
+            {groups.map((group) => (
+              <div key={group.label}>
+                <p className="px-2 pb-1 text-xs font-semibold text-muted-foreground">{group.label}</p>
+                <ul className="flex flex-col gap-0.5">
+                  {group.items.map((item) => {
+                    const Icon = ICONS[item.key];
+                    const active = item.key === current.key;
+                    return (
+                      <li key={item.key}>
+                        <button
+                          type="button"
+                          aria-current={active ? "page" : undefined}
+                          onClick={() => setSearchParams({ section: item.key }, { replace: true })}
+                          className={cn(
+                            "flex w-full items-center gap-2.5 rounded-lg px-2 py-2 text-left text-sm transition-colors",
+                            "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
+                            active ? "bg-primary/10 font-semibold text-primary" : "font-medium hover:bg-muted",
+                          )}
+                        >
+                          <Icon aria-hidden="true" className="size-4 shrink-0" />
+                          <span className="min-w-0 flex-1">{item.title}</span>
+                          {item.inherited ? (
+                            <span title="Réglé sur l'organisation principale">
+                              <Lock aria-hidden="true" className="size-3.5 text-muted-foreground" />
+                              <span className="sr-only"> (réglé sur l'organisation principale)</span>
+                            </span>
+                          ) : null}
+                        </button>
+                      </li>
+                    );
+                  })}
+                </ul>
+              </div>
+            ))}
+          </nav>
+          <KnowledgeLinks organization={organization} root={root} />
+        </aside>
 
-      <div className="border-b border-border">
-        <nav className="flex gap-1" role="tablist" aria-label="Sections de l'organisation">
-          {TABS.map((tab) => {
-            const active = activeTab === tab.key;
-            return (
-              <button
-                key={tab.key}
-                type="button"
-                role="tab"
-                aria-selected={active}
-                onClick={() => setRequestedTab(tab.key)}
-                className={cn(
-                  "-mb-px flex items-center gap-2 border-b-2 px-4 py-2 text-sm font-medium transition-colors",
-                  active
-                    ? "border-primary text-foreground"
-                    : "border-transparent text-muted-foreground hover:text-foreground",
-                )}
-              >
-                <tab.icon className="size-4" />
-                {tab.label}
-              </button>
-            );
-          })}
-        </nav>
-      </div>
-
-      {/* `key` force le remontage (et la réinitialisation des formulaires) au changement d'org. */}
-      <div key={organization.id}>
-        {activeTab === "infos" && <OrganizationInfoTab organization={organization} />}
-        {activeTab === "charte" && <BrandingSection organization={organization} />}
-        {activeTab === "langues" && <LanguagesSection organization={organization} />}
-        {activeTab === "domaines" && <DomainsSection organizationId={organization.id} />}
-        {activeTab === "demarches" && (
-          <div className="flex flex-col gap-6">
-            {/* Ce qu'un usager peut adresser à l'organisme depuis le site : ses démarches,
-                et un courrier libre hors démarche — jamais pour un service interne,
-                que le portail n'affiche pas. */}
-            {hasUserInfoTab(organization) && <FreeMailSection organization={organization} />}
-            <OrganizationProceduresTab organizationId={organization.id} />
-          </div>
-        )}
-        {activeTab === "smtp" && (
-          <SmtpSettingsSection
-            organizationId={organization.id}
-            parentOrganizationId={organization.parent_id}
-          />
-        )}
+        {/* `key` : remontage (et réinitialisation des formulaires) au changement d'org ou de section. */}
+        <section key={`${organization.id}-${current.key}`} aria-label={current.title} className="min-w-0">
+          {current.key === "general" && (
+            <>
+              <SectionTitle title={current.title} description={current.description} />
+              <GeneralInfoForm organization={organization} withEmailSender={false} />
+            </>
+          )}
+          {current.key === "charte" && <BrandingSection organization={organization} />}
+          {current.key === "sous-organisations" && (
+            <>
+              <SectionTitle title={current.title} description={current.description} />
+              <ChildOrganizations organization={organization} />
+            </>
+          )}
+          {current.key === "domaines" && <DomainsSection organizationId={organization.id} />}
+          {current.key === "langues" && <LanguagesSection organization={organization} />}
+          {current.key === "demarches" && (
+            <div className="flex flex-col gap-6">
+              <div>
+                <SectionTitle title={current.title} description={current.description} />
+                {/* Ce qu'un usager peut adresser à l'organisme depuis le site : ses démarches,
+                    et un courrier libre hors démarche — jamais pour un service interne,
+                    que le portail n'affiche pas. */}
+                {hasUserInfoTab(organization) && <FreeMailSection organization={organization} />}
+              </div>
+              <OrganizationProceduresTab organizationId={organization.id} />
+            </div>
+          )}
+          {current.key === "emails" && (
+            <div className="flex flex-col gap-6">
+              <Card>
+                <CardHeader>
+                  <CardTitle className="text-base">Expéditeur</CardTitle>
+                  <CardDescription>
+                    Le nom qui apparaît comme expéditeur des e-mails de cet organisme.
+                  </CardDescription>
+                </CardHeader>
+                <CardContent>
+                  <EmailSenderForm organization={organization} />
+                </CardContent>
+              </Card>
+              <SmtpSettingsSection
+                organizationId={organization.id}
+                parentOrganizationId={organization.parent_id}
+              />
+            </div>
+          )}
+        </section>
       </div>
     </div>
   );

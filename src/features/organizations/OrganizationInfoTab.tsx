@@ -1,6 +1,7 @@
 import * as React from "react";
 import { useNavigate } from "react-router-dom";
 import { Building2, Pencil, Plus } from "lucide-react";
+import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Field } from "@/components/ui/field";
@@ -24,21 +25,23 @@ import { slugIssue, slugPathPreview } from "./organizationSlug";
 /** Exporté pour que le test cible l'interrupteur par son nom accessible. */
 export const INTERNAL_SERVICE_SWITCH_LABEL = "Service interne";
 
-export function OrganizationInfoTab({ organization }: { organization: Organization }) {
-  return (
-    <div className="flex flex-col gap-8">
-      <GeneralInfoForm organization={organization} />
-      <ChildOrganizations organization={organization} />
-    </div>
-  );
-}
-
 /**
- * Le formulaire seul, sans la liste des sous-organisations : la page de
- * réglages du superadmin le monte aussi (`GeneralInfoSection`) — un seul
- * formulaire pour deux zones, motif `SmtpSettingsSection`.
+ * Informations générales d'une organisation : la page de réglages du superadmin
+ * le monte aussi (`GeneralInfoSection`) — un seul formulaire pour deux zones,
+ * motif `SmtpSettingsSection`.
+ *
+ * `withEmailSender = false` (éditeur de l'app par organisation, navigation v2) :
+ * l'expéditeur spécifique vit dans « Envoi des e-mails » (`EmailSenderForm`).
+ * Ses champs sortent alors AUSSI de l'enregistrement — sinon ce formulaire
+ * réécrirait l'expéditeur avec la valeur qu'il avait à son ouverture.
  */
-export function GeneralInfoForm({ organization }: { organization: Organization }) {
+export function GeneralInfoForm({
+  organization,
+  withEmailSender = true,
+}: {
+  organization: Organization;
+  withEmailSender?: boolean;
+}) {
   const { data: allOrgs } = useAllOrganizations();
   const updateOrg = useUpdateOrganization();
 
@@ -94,8 +97,12 @@ export function GeneralInfoForm({ organization }: { organization: Organization }
       email: email.trim() || null,
       type: type.trim() || null,
       slug: slug.trim() || null,
-      email_sender_override: emailSenderOverride,
-      email_sender_name: emailSenderName.trim() || null,
+      ...(withEmailSender
+        ? {
+            email_sender_override: emailSenderOverride,
+            email_sender_name: emailSenderName.trim() || null,
+          }
+        : {}),
       is_internal_service: isInternalService,
     });
   }
@@ -188,31 +195,14 @@ export function GeneralInfoForm({ organization }: { organization: Organization }
         />
       </Field>
 
-      <div className="flex flex-col gap-3 rounded-lg border border-border p-3">
-        <div className="flex items-center justify-between gap-3">
-          <div>
-            <p className="text-sm font-medium">Expéditeur spécifique pour les e-mails</p>
-            <p className="text-xs text-muted-foreground">
-              Utiliser un nom d'expéditeur propre à cette organisation, au lieu de celui par défaut.
-            </p>
-          </div>
-          <Switch
-            checked={emailSenderOverride}
-            aria-label="Expéditeur spécifique pour les e-mails"
-            onCheckedChange={setEmailSenderOverride}
-          />
-        </div>
-        {emailSenderOverride ? (
-          <Field label="Nom d'expéditeur" htmlFor="oi-sender-name">
-            <Input
-              id="oi-sender-name"
-              value={emailSenderName}
-              onChange={(e) => setEmailSenderName(e.target.value)}
-              placeholder="Ex. Mairie de Saint Martin de Crau"
-            />
-          </Field>
-        ) : null}
-      </div>
+      {withEmailSender ? (
+        <EmailSenderFields
+          override={emailSenderOverride}
+          onOverrideChange={setEmailSenderOverride}
+          name={emailSenderName}
+          onNameChange={setEmailSenderName}
+        />
+      ) : null}
 
       {organization.parent_id !== null ? (
         <div className="flex flex-col gap-3 rounded-lg border border-border p-3">
@@ -262,7 +252,96 @@ export function GeneralInfoForm({ organization }: { organization: Organization }
   );
 }
 
-function ChildOrganizations({ organization }: { organization: Organization }) {
+/**
+ * L'interrupteur et le nom d'expéditeur. ⚠️ Le réglage gouverne l'usage, pas
+ * la donnée (motif `email_sender_name`) : couper l'interrupteur masque le nom
+ * sans l'effacer.
+ */
+function EmailSenderFields({
+  override,
+  onOverrideChange,
+  name,
+  onNameChange,
+}: {
+  override: boolean;
+  onOverrideChange: (value: boolean) => void;
+  name: string;
+  onNameChange: (value: string) => void;
+}) {
+  return (
+    <div className="flex flex-col gap-3 rounded-lg border border-border p-3">
+      <div className="flex items-center justify-between gap-3">
+        <div>
+          <p className="text-sm font-medium">Expéditeur spécifique pour les e-mails</p>
+          <p className="text-xs text-muted-foreground">
+            Utiliser un nom d'expéditeur propre à cette organisation, au lieu de celui par défaut.
+          </p>
+        </div>
+        <Switch
+          checked={override}
+          aria-label="Expéditeur spécifique pour les e-mails"
+          onCheckedChange={onOverrideChange}
+        />
+      </div>
+      {override ? (
+        <Field label="Nom d'expéditeur" htmlFor="oi-sender-name">
+          <Input
+            id="oi-sender-name"
+            value={name}
+            onChange={(e) => onNameChange(e.target.value)}
+            placeholder="Ex. Mairie de Saint Martin de Crau"
+          />
+        </Field>
+      ) : null}
+    </div>
+  );
+}
+
+/**
+ * L'expéditeur spécifique seul, enregistré à part : section « Envoi des
+ * e-mails » de l'éditeur d'organisation, au-dessus du serveur SMTP. N'écrit
+ * que ses deux colonnes.
+ */
+export function EmailSenderForm({ organization }: { organization: Organization }) {
+  const updateOrg = useUpdateOrganization();
+  const [override, setOverride] = React.useState(organization.email_sender_override);
+  const [name, setName] = React.useState(organization.email_sender_name ?? "");
+
+  return (
+    <form
+      onSubmit={(e) => {
+        e.preventDefault();
+        updateOrg.mutate({
+          id: organization.id,
+          email_sender_override: override,
+          email_sender_name: name.trim() || null,
+        });
+      }}
+      className="flex max-w-lg flex-col gap-4"
+    >
+      <EmailSenderFields
+        override={override}
+        onOverrideChange={setOverride}
+        name={name}
+        onNameChange={setName}
+      />
+      {updateOrg.error ? (
+        <p className="text-sm text-destructive">{(updateOrg.error as Error).message}</p>
+      ) : null}
+      <div className="flex items-center gap-3">
+        <Button type="submit" disabled={updateOrg.isPending} className="self-start">
+          {updateOrg.isPending ? "Enregistrement…" : "Enregistrer l'expéditeur"}
+        </Button>
+        {updateOrg.isSuccess && !updateOrg.isPending ? (
+          <p className="text-sm text-success">Expéditeur mis à jour.</p>
+        ) : null}
+      </div>
+    </form>
+  );
+}
+
+/** Organisations rattachées directement à celle-ci, avec création d'une nouvelle. */
+export function ChildOrganizations({ organization }: { organization: Organization }) {
   const navigate = useNavigate();
   const { data: children, isLoading } = useChildOrganizations(organization.id);
   const createOrg = useCreateOrganization();
@@ -277,13 +356,7 @@ function ChildOrganizations({ organization }: { organization: Organization }) {
 
   return (
     <div className="flex flex-col gap-4">
-      <div className="flex items-center justify-between">
-        <div>
-          <h2 className="text-base font-semibold">Sous-organisations</h2>
-          <p className="text-sm text-muted-foreground">
-            Organisations rattachées directement à celle-ci.
-          </p>
-        </div>
+      <div className="flex justify-end">
         <Button variant="outline" size="sm" onClick={() => setFormOpen(true)}>
           <Plus className="size-4" />
           Ajouter
@@ -304,6 +377,11 @@ function ChildOrganizations({ organization }: { organization: Organization }) {
               <div className="flex min-w-0 items-center gap-2 font-medium">
                 <Building2 className="size-4 shrink-0 text-muted-foreground" />
                 <span className="truncate">{child.name}</span>
+                {child.is_internal_service ? (
+                  <Badge variant="muted" className="shrink-0">
+                    Service interne
+                  </Badge>
+                ) : null}
               </div>
               <Button
                 variant="outline"

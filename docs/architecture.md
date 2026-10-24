@@ -136,7 +136,7 @@ nombre de clés plateforme actives.
 |---|---|
 | `/` (index) | `DashboardPage` (chiffres du référentiel + fréquentation du site) |
 | `/organisations` | `OrganizationsPage` |
-| `/organisations/:orgId` | `OrganizationEditorPage` (page à onglets ; renvoie aux pages Connaissances) |
+| `/organisations/:orgId` (`?section=`) | `OrganizationEditorPage` (menu latéral en trois groupes ; renvoie aux pages Connaissances) |
 | `/demarches` | `ProceduresPage` |
 | `/demarches/nouveau` (`?org=<rootId>`) | `ProcedureEditorPage variant="admin"` |
 | `/demarches/:procId` (`?step=N`) | idem |

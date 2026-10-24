@@ -45,11 +45,30 @@
 
 ## Édition d'organisation en pleine page (app par organisation)
 
-Côté **admin** (`/organisations`), l'action « éditer » ouvre une **page dédiée à onglets**
+Côté **admin** (`/organisations`), l'action « éditer » ouvre une **page dédiée**
 (`OrganizationEditorPage`, route `organisations/:orgId`) au lieu de la modale — le superadmin
 garde sa modale (`OrganizationsManager` reçoit `onEditOrganization` seulement côté admin).
 
-- **Onglet « Informations de base »** (`OrganizationInfoTab`) : formulaire complet
+⚠️ **Menu latéral en trois groupes** (navigation v2, 2026-10-24 — il remplace une rangée de
+neuf onglets) : **Identité** (Informations générales, Charte graphique, Sous-organisations),
+**Site de démarches** (Domaines, Langues, Démarches proposées), **Envoi des e-mails** (Expéditeur
+et SMTP). Table pure `organizationSections.ts` (testée) ; section en `?section=` (clé inconnue
+ou absente pour l'organisme → informations générales). « Domaines » est **retiré d'un service
+interne** (le site ne l'affiche pas) ; « Langues » reste sur une sous-organisation avec un
+**cadenas** (réglé sur la racine). L'en-tête dit « Organisation principale » ou « Sous-organisation
+de X », et « Service interne » le cas échéant ; sous le menu, l'encart « Connaissances » renvoie
+aux pages de la rubrique. Les sections dont le contenu est déjà une carte titrée (charte, langues,
+domaines, SMTP) ne reçoivent pas de second titre. Les noms « Onglet … » ci-dessous désignent ces
+sections.
+
+- **Onglet « Informations de base »** (`GeneralInfoForm` + `ChildOrganizations`, dans
+  `OrganizationInfoTab.tsx`) — ⚠️ depuis la navigation v2, **deux sections** (« Informations
+  générales », « Sous-organisations », où un service interne porte son badge) et
+  **l'expéditeur spécifique n'y est plus** : il vit dans « Expéditeur et SMTP »
+  (`EmailSenderForm`, qui n'écrit que ses deux colonnes). `GeneralInfoForm withEmailSender={false}`
+  le masque **et le retire de l'enregistrement** (sinon il réécrirait la valeur de son ouverture) ;
+  le superadmin garde l'ancien formulaire complet (`withEmailSender` vaut `true` par défaut).
+  Historique : formulaire complet
   (nom, parent, adresse, téléphone, courriel, type, slug — ⚠️ **plus le logo**, parti dans
   l'onglet « Charte graphique » le 2026-08-30) enregistré via
   `useUpdateOrganization` + liste des **sous-organisations** (bouton « Éditer » → même page pour
