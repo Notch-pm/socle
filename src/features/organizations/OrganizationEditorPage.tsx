@@ -1,14 +1,13 @@
 import * as React from "react";
-import { useParams, useNavigate } from "react-router-dom";
+import { Link, useParams, useNavigate } from "react-router-dom";
 import {
   ArrowLeft,
-  BookUser,
-  Briefcase,
+  ArrowRight,
   Globe,
   Languages,
+  Library,
   ListChecks,
   Mail,
-  MessageCircleQuestion,
   Palette,
   Settings2,
   type LucideIcon,
@@ -16,41 +15,31 @@ import {
 import { Button } from "@/components/ui/button";
 import { EmptyState } from "@/components/shared/EmptyState";
 import { cn } from "@/lib/utils";
-import { useOrganization } from "@/features/superadmin/organizations/useOrganizationsAdmin";
+import {
+  findRootAncestor,
+  useAllOrganizations,
+  useOrganization,
+  type Organization,
+} from "@/features/superadmin/organizations/useOrganizationsAdmin";
 import { SmtpSettingsSection } from "@/features/superadmin/organizations/sections/SmtpSettingsSection";
 import { OrganizationInfoTab } from "@/features/organizations/OrganizationInfoTab";
 import { OrganizationProceduresTab } from "@/features/organizations/OrganizationProceduresTab";
 import { BrandingSection } from "@/features/organizations/BrandingSection";
 import { DomainsSection } from "@/features/organizations/DomainsSection";
 import { LanguagesSection } from "@/features/languages/LanguagesSection";
-import { AgentGuidanceSection } from "@/features/organizations/AgentGuidanceSection";
-import { UserInfoSection } from "@/features/organizations/UserInfoSection";
-import { AttributionsSection } from "@/features/organizations/AttributionsSection";
 import { FreeMailSection } from "@/features/organizations/FreeMailSection";
 import { hasUserInfoTab } from "@/features/organizations/userInfo";
 
-type TabKey = "infos" | "attributions" | "charte" | "langues" | "usagers" | "agents" | "domaines" | "demarches" | "smtp";
+type TabKey = "infos" | "charte" | "langues" | "domaines" | "demarches" | "smtp";
 
 const TABS: { key: TabKey; label: string; icon: LucideIcon }[] = [
   { key: "infos", label: "Informations de base", icon: Settings2 },
-  // Ce que l'organisme traite — INTERNE, pour les agents et leurs outils IA.
-  // Sur toute organisation, ⚠️ service interne COMPRIS : ce sont souvent eux
-  // qui instruisent. Jamais filtré, contrairement aux informations usagers.
-  { key: "attributions", label: "Attributions", icon: Briefcase },
   // Comme le relais SMTP, la charte se règle sur TOUTE organisation : une
   // sous-organisation y choisit entre celle de son parent et la sienne.
   { key: "charte", label: "Charte graphique", icon: Palette },
   // Les langues, elles, ne se découpent pas par service : le réglage n'existe
   // que sur l'organisation principale, l'onglet le dit sur les autres.
   { key: "langues", label: "Langues", icon: Languages },
-  // Ce que l'organisme dit au PUBLIC — sur toute organisation, sous-organisation
-  // comprise : chaque mairie annexe a ses horaires. Pendant public de l'onglet
-  // suivant, qui reste interne. Retiré sur un service interne (`hasUserInfoTab`).
-  // Porte aussi le courrier libre du site (Nora → Clara) : une offre au public.
-  { key: "usagers", label: "Informations usagers", icon: MessageCircleQuestion },
-  // Même parti que les langues : la doctrine de la collectivité ne se découpe
-  // pas par service, l'onglet renvoie une sous-organisation à sa racine.
-  { key: "agents", label: "Recommandations aux agents", icon: BookUser },
   // Le portail usagers sert la collectivité que DÉSIGNE le domaine visité :
   // l'onglet vit donc sur toute organisation, sous-organisation comprise, dès
   // lors qu'elle tient son propre guichet.
@@ -60,6 +49,54 @@ const TABS: { key: TabKey; label: string; icon: LucideIcon }[] = [
   // sous-organisation y choisit entre la configuration de son parent et la sienne.
   { key: "smtp", label: "Emails (SMTP)", icon: Mail },
 ];
+
+/**
+ * ⚠️ **CE QUE L'ORGANISME DIT N'EST PLUS ICI** (navigation v2, 2026-10-24) :
+ * attributions, informations usagers et recommandations aux agents se
+ * rédigent dans la rubrique « Connaissances », organisme par organisme. La
+ * fiche y renvoie, sur l'organisme courant (`?org=`) — les recommandations,
+ * qui ne vivent que sur la racine, sur l'organisation principale.
+ */
+function KnowledgeLinks({ organization }: { organization: Organization }) {
+  const { data: organizations } = useAllOrganizations();
+  const root =
+    organization.parent_id === null
+      ? organization
+      : findRootAncestor(organizations ?? [], organization.id);
+  const links = [
+    {
+      to: `/connaissances/recommandations${root ? `?org=${root.id}` : ""}`,
+      title:
+        root && root.id !== organization.id
+          ? `Recommandations aux agents (${root.name})`
+          : "Recommandations aux agents",
+    },
+    { to: `/connaissances/attributions?org=${organization.id}`, title: "Attributions" },
+    // Un service interne n'a pas d'informations usagers : le site ne l'affiche pas.
+    ...(hasUserInfoTab(organization)
+      ? [{ to: `/connaissances/informations-usagers?org=${organization.id}`, title: "Informations usagers" }]
+      : []),
+  ];
+  return (
+    <div className="flex flex-wrap items-center gap-x-4 gap-y-1 rounded-xl border border-border bg-muted/40 px-4 py-3 text-sm">
+      <span className="flex items-center gap-1.5 font-semibold">
+        <Library aria-hidden="true" className="size-4" />
+        Connaissances
+      </span>
+      <span className="text-muted-foreground">Ce que cet organisme dit à ses agents et au public :</span>
+      {links.map((link) => (
+        <Link
+          key={link.to}
+          to={link.to}
+          className="inline-flex items-center gap-1 font-medium text-primary hover:underline"
+        >
+          {link.title}
+          <ArrowRight aria-hidden="true" className="size-3.5" />
+        </Link>
+      ))}
+    </div>
+  );
+}
 
 /** Édition d'une organisation en pleine page, organisée en onglets (app par organisation). */
 export function OrganizationEditorPage() {
@@ -84,9 +121,7 @@ export function OrganizationEditorPage() {
     );
   }
 
-  // Un service interne n'a pas d'informations usagers : le portail ne l'affiche pas.
-  const tabs = TABS.filter((tab) => tab.key !== "usagers" || hasUserInfoTab(organization));
-  const activeTab = tabs.some((tab) => tab.key === requestedTab) ? requestedTab : "infos";
+  const activeTab = requestedTab;
 
   return (
     <div className="flex flex-col gap-6 p-6">
@@ -105,9 +140,11 @@ export function OrganizationEditorPage() {
         </div>
       </div>
 
+      <KnowledgeLinks organization={organization} />
+
       <div className="border-b border-border">
         <nav className="flex gap-1" role="tablist" aria-label="Sections de l'organisation">
-          {tabs.map((tab) => {
+          {TABS.map((tab) => {
             const active = activeTab === tab.key;
             return (
               <button
@@ -134,11 +171,8 @@ export function OrganizationEditorPage() {
       {/* `key` force le remontage (et la réinitialisation des formulaires) au changement d'org. */}
       <div key={organization.id}>
         {activeTab === "infos" && <OrganizationInfoTab organization={organization} />}
-        {activeTab === "attributions" && <AttributionsSection organization={organization} />}
         {activeTab === "charte" && <BrandingSection organization={organization} />}
         {activeTab === "langues" && <LanguagesSection organization={organization} />}
-        {activeTab === "usagers" && <UserInfoSection organization={organization} />}
-        {activeTab === "agents" && <AgentGuidanceSection organization={organization} />}
         {activeTab === "domaines" && <DomainsSection organizationId={organization.id} />}
         {activeTab === "demarches" && (
           <div className="flex flex-col gap-6">

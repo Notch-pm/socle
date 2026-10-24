@@ -22,7 +22,17 @@ function formatDate(iso: string): string {
  * savoir. ⚠️ **Interne** : l'écran le dit, pour qu'on n'y écrive pas ce qui
  * relève des informations usagers.
  */
-export function AttributionsSection({ organization }: { organization: Organization }) {
+export function AttributionsSection({
+  organization,
+  intro = true,
+}: {
+  organization: Organization;
+  /**
+   * Présentation en tête de carte. Coupée par les pages Connaissances, dont
+   * l'en-tête dit déjà ce qu'est ce texte et à qui il sert.
+   */
+  intro?: boolean;
+}) {
   const { data: stored, isLoading } = useAttributions(organization.id);
   const save = useSaveAttributions(organization.id);
 
@@ -51,20 +61,22 @@ export function AttributionsSection({ organization }: { organization: Organizati
       className="flex flex-col gap-6"
     >
       <Card>
-        <CardHeader>
-          <div className="flex items-center gap-3">
-            <Briefcase className="size-5 text-primary" />
-            <div>
-              <CardTitle className="text-base">Attributions</CardTitle>
-              <CardDescription>
-                Ce dont cet organisme s'occupe, pour orienter les demandes et les courriers vers le
-                bon service. Texte interne : lu par les agents et leurs outils IA (Clara, par
-                exemple), jamais affiché sur le site de démarches.
-              </CardDescription>
+        {intro ? (
+          <CardHeader>
+            <div className="flex items-center gap-3">
+              <Briefcase className="size-5 text-primary" />
+              <div>
+                <CardTitle className="text-base">Attributions</CardTitle>
+                <CardDescription>
+                  Ce dont cet organisme s'occupe, pour orienter les demandes et les courriers vers le
+                  bon service. Texte interne : lu par les agents et leurs outils IA (Clara, par
+                  exemple), jamais affiché sur le site de démarches.
+                </CardDescription>
+              </div>
             </div>
-          </div>
-        </CardHeader>
-        <CardContent className="flex flex-col gap-2">
+          </CardHeader>
+        ) : null}
+        <CardContent className={cn("flex flex-col gap-2", !intro && "pt-4")}>
           <MarkdownField
             id="organization-attributions"
             label="Attributions"

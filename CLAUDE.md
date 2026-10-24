@@ -93,7 +93,8 @@ Projet Supabase : `qhrokbkyxgcvkbpmbmna`.
 1. **App par organisation** (`AppShell`, routes protégées par `ProtectedRoute`) — pour les
    utilisateurs et **administrateurs d'organisation**. Routes : `/` (tableau de bord —
    voir feature), `/organisations`, `/demarches`, `/site-de-demarches` (éditeur du portail
-   usagers — voir feature), `/referentiels/{categories,types-pieces,modeles-documents,quartiers}`
+   usagers — voir feature), `/connaissances/{recommandations,attributions,informations-usagers}`,
+   `/referentiels/{categories,types-pieces,modeles-documents,quartiers}`
    (rubrique « Référentiels » du rail), `/parametres/utilisateurs` (icône « Paramètres » de
    l'en-tête), `/integrations` et `/consommation-ia` (consultation seule). Rail en **rubriques à
    bulles** depuis la navigation v2 (2026-10-24) — voir la fiche du shell.
@@ -194,14 +195,16 @@ Trois motifs reviennent dans presque toutes les fiches — les connaître évite
   des deux côtés et **testée des deux côtés** (motif `readDocumentIds`).
 
 ### [Organisations](docs/features/organisations.md)
-Hiérarchie, édition en pleine page (onglets Informations, Attributions, Charte graphique, Langues,
-Informations usagers, Recommandations aux agents, Démarches, Emails, Domaines), gestion
-superadmin (`OrgSettingsPage`, menu latéral par client).
+Hiérarchie, édition en pleine page (onglets Informations, Charte graphique, Langues, Domaines,
+Démarches, Emails), gestion superadmin (`OrgSettingsPage`, menu latéral par client).
+- ⚠️ **Rubrique « Connaissances »** (2026-10-24) : recommandations, attributions et informations
+  usagers ne sont plus des onglets de la fiche — pages `/connaissances/*` (`src/features/knowledge/`),
+  liste des organismes avec leur état, mêmes sections que le superadmin.
 - ⚠️ **Recommandations aux agents** (2026-09-19) : version **globale** de `knowledge_base`, sur la
   racine seule, servie par `GET /v1/organizations/{id}/agent-guidance` — **interne**, jamais au
   portail ; « consignes générales », jamais « procédures » (le mot désigne les démarches).
 - ⚠️ **Informations usagers** (2026-09-24) : leur pendant **public** (descriptif, horaires d'accueil,
-  FAQ), sur toute organisation **sauf un service interne** (onglet retiré), sans héritage ni
+  FAQ), sur toute organisation **sauf un service interne** (absent de la liste), sans héritage ni
   brouillon, servi par `GET /v1/portal/organizations` avec le téléphone et le courriel de la fiche
   — c'est là que l'assistant du portail trouve horaires et coordonnées.
 - ⚠️ **Attributions** (2026-10-01) : ce que **chaque** organisme traite et ne traite pas,

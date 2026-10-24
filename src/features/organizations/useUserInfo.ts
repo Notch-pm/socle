@@ -1,7 +1,12 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/lib/supabase";
 import type { Json } from "@/types/database.types";
-import { cleanUserInfo, parseUserInfo, type OrganizationUserInfo } from "@/features/organizations/userInfo";
+import {
+  cleanUserInfo,
+  isUserInfoEmpty,
+  parseUserInfo,
+  type OrganizationUserInfo,
+} from "@/features/organizations/userInfo";
 
 const USER_INFO_KEY = "organization-user-info";
 
@@ -33,6 +38,30 @@ export function useUserInfo(organizationId: string | undefined) {
 }
 
 /**
+ * Organismes dont les informations usagers ne sont pas vierges, parmi
+ * `organizationIds` — l'état « renseigné / à rédiger » de la liste de la page
+ * Connaissances (`isUserInfoEmpty`, la règle du portail).
+ */
+export function useFilledUserInfo(organizationIds: string[]) {
+  return useQuery({
+    queryKey: [USER_INFO_KEY, "renseignes", organizationIds] as const,
+    enabled: organizationIds.length > 0,
+    queryFn: async (): Promise<Set<string>> => {
+      const { data, error } = await supabase
+        .from("organization_user_info")
+        .select("organization_id, info")
+        .in("organization_id", organizationIds);
+      if (error) throw error;
+      return new Set(
+        data
+          .filter((row) => !isUserInfoEmpty(parseUserInfo(row.info)))
+          .map((row) => row.organization_id),
+      );
+    },
+  });
+}
+
+/**
  * Enregistre les informations (upsert sur `organization_id`) — et les publie :
  * il n'y a pas de brouillon. RLS : `is_admin_of_self_or_ancestor`.
  */
@@ -49,7 +78,8 @@ export function useSaveUserInfo(organizationId: string) {
       if (error) throw error;
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: [USER_INFO_KEY, organizationId] });
+      // Préfixe seul : les informations de l'organisme ET l'état de la liste.
+      queryClient.invalidateQueries({ queryKey: [USER_INFO_KEY] });
     },
   });
 }

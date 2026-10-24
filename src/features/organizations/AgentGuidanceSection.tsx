@@ -2,6 +2,7 @@ import * as React from "react";
 import { Loader2, Users as UsersIcon } from "lucide-react";
 import { Card, CardHeader, CardTitle, CardDescription, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
+import { cn } from "@/lib/utils";
 import { Field } from "@/components/ui/field";
 import { Input } from "@/components/ui/input";
 import { EmptyState } from "@/components/shared/EmptyState";
@@ -89,7 +90,17 @@ function formatDate(iso: string): string {
  * dit et renvoie à sa racine — le trigger `enforce_agent_guidance_root_org`
  * tient la même ligne en base.
  */
-export function AgentGuidanceSection({ organization }: { organization: Organization }) {
+export function AgentGuidanceSection({
+  organization,
+  intro = true,
+}: {
+  organization: Organization;
+  /**
+   * Présentation en tête de carte. Coupée par les pages Connaissances, dont
+   * l'en-tête dit déjà ce qu'est ce texte et à qui il sert.
+   */
+  intro?: boolean;
+}) {
   const isRoot = organization.parent_id === null;
   const { data: stored, isLoading } = useAgentGuidance(isRoot ? organization.id : undefined);
   const save = useSaveAgentGuidance(organization.id);
@@ -127,20 +138,22 @@ export function AgentGuidanceSection({ organization }: { organization: Organizat
       className="flex flex-col gap-6"
     >
       <Card>
-        <CardHeader>
-          <div className="flex items-center gap-3">
-            <UsersIcon className="size-5 text-primary" />
-            <div>
-              <CardTitle className="text-base">Recommandations aux agents</CardTitle>
-              <CardDescription>
-                Ce que la collectivité dit à ses agents, pour toutes ses démarches à la fois. Les
-                applications de la gamme le reprennent : Iris le montre dans sa base de
-                connaissances et le donne à son assistant IA. Rien ici n'est montré aux usagers.
-              </CardDescription>
+        {intro ? (
+          <CardHeader>
+            <div className="flex items-center gap-3">
+              <UsersIcon className="size-5 text-primary" />
+              <div>
+                <CardTitle className="text-base">Recommandations aux agents</CardTitle>
+                <CardDescription>
+                  Ce que la collectivité dit à ses agents, pour toutes ses démarches à la fois. Les
+                  applications de la gamme le reprennent : Iris le montre dans sa base de
+                  connaissances et le donne à son assistant IA. Rien ici n'est montré aux usagers.
+                </CardDescription>
+              </div>
             </div>
-          </div>
-        </CardHeader>
-        <CardContent className="flex flex-col gap-6">
+          </CardHeader>
+        ) : null}
+        <CardContent className={cn("flex flex-col gap-6", !intro && "pt-4")}>
           <MarkdownField
             id="agent-guidance-role"
             label="Rôle des agents"

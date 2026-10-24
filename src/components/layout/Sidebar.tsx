@@ -1,14 +1,18 @@
 import * as React from "react";
 import { NavLink, useLocation } from "react-router-dom";
 import {
+  BookUser,
+  Briefcase,
   ChevronRight,
   Database,
   FileCheck2,
   FileSignature,
+  Library,
   House,
   LayoutTemplate,
   ListChecks,
   MapPin,
+  MessageCircleQuestion,
   Network,
   Plug,
   Sparkles,
@@ -79,6 +83,36 @@ export const RAIL: RailEntry[] = [
   { kind: "link", to: "/demarches", title: "Démarches", icon: ListChecks },
   // La face publique des démarches : la page d'accueil que les usagers voient.
   { kind: "link", to: "/site-de-demarches", title: "Site de démarches", icon: LayoutTemplate },
+  {
+    kind: "group",
+    id: "connaissances",
+    title: "Connaissances",
+    // ⚠️ Pas `BookOpen` : c'est l'icône de la documentation d'API, en pied du
+    // même rail. Deux livres ouverts se liraient l'un pour l'autre.
+    icon: Library,
+    // ⚠️ Rangées par DESTINATAIRE : trois textes voisins qui ne se
+    // distinguent que par là, et se tromper de case, c'est publier ce qui
+    // devait rester interne.
+    sections: [
+      {
+        label: "Pour les agents",
+        items: [
+          { to: "/connaissances/recommandations", title: "Recommandations aux agents", icon: BookUser },
+          { to: "/connaissances/attributions", title: "Attributions", icon: Briefcase },
+        ],
+      },
+      {
+        label: "Pour les usagers",
+        items: [
+          {
+            to: "/connaissances/informations-usagers",
+            title: "Informations usagers",
+            icon: MessageCircleQuestion,
+          },
+        ],
+      },
+    ],
+  },
   {
     kind: "group",
     id: "referentiels",

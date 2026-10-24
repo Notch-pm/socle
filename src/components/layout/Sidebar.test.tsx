@@ -139,4 +139,23 @@ describe("Sidebar", () => {
       expect(appSource).toContain(`path="${path.slice(1)}"`);
     }
   });
+
+  it("range les connaissances par destinataire", () => {
+    renderRail();
+    fireEvent.click(screen.getByRole("button", { name: "Connaissances" }));
+    expect(screen.getByText("Pour les agents")).toBeTruthy();
+    expect(screen.getByText("Pour les usagers")).toBeTruthy();
+    expect(screen.getByRole("link", { name: "Attributions" }).getAttribute("href")).toBe(
+      "/connaissances/attributions",
+    );
+  });
+
+  it("n'ouvre qu'une rubrique à la fois", () => {
+    renderRail();
+    fireEvent.click(screen.getByRole("button", { name: "Connaissances" }));
+    fireEvent.mouseDown(referentiels());
+    fireEvent.click(referentiels());
+    expect(screen.getByRole("button", { name: "Connaissances" }).getAttribute("aria-expanded")).toBe("false");
+    expect(referentiels().getAttribute("aria-expanded")).toBe("true");
+  });
 });

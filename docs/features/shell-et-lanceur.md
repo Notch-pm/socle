@@ -34,7 +34,8 @@
 - **Navigation v2 (2026-10-24) : quelques liens, des rubriques en bulles.** Le rail portait onze
   entrées à plat ; il est décrit par une table, `RAIL` (`Sidebar.tsx`) : liens directs
   (Organisations, Démarches, Site de démarches, Intégrations, Consommation IA) et **rubriques**
-  (« Référentiels » : catégories, types de PJ, modèles de documents, quartiers). Une rubrique est
+  (« Connaissances » : recommandations aux agents, attributions, informations usagers, rangées
+  par destinataire ; « Référentiels » : catégories, types de PJ, modèles de documents, quartiers). Une rubrique est
   un **bouton** qui ouvre une bulle à droite du rail (disclosure `aria-expanded`, motif du
   lanceur : clic dehors, Échap — focus rendu au bouton —, choix d'une page ou changement de
   route la referment) ; elle ne navigue pas. Un petit chevron la distingue au repos d'un lien
@@ -45,7 +46,7 @@
   redirection** (démonstrations seulement à cette date). Un test vérifie que chaque lien de `RAIL`
   est une route déclarée dans `App.tsx`.
   Maquette de référence : projet Claude Design « Socle navigation v2 » ; les rubriques
-  « Connaissances » et la page « Fréquentation » arrivent dans les lots suivants.
+  « Fréquentation » et les « Bases des démarches » arrivent dans les lots suivants.
 - **Documentations d'API en pied de rail** (`DocTile`, catalogue
   `src/features/public-api-docs/apiDocLinks.ts`) : « API Référentiel » (`/api-doc`) et
   « API Usagers » (`/api-doc-usagers`), **hors du groupe centré** comme le tableau de bord est

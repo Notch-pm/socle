@@ -18,6 +18,11 @@ import { PortalEditorPage } from "@/features/portal/PortalEditorPage";
 import { QuartiersPage } from "@/features/quartiers/QuartiersPage";
 import { AiUsagePage } from "@/features/ai-usage/AiUsagePage";
 import { IntegrationsPage } from "@/features/integrations/IntegrationsPage";
+import {
+  AgentGuidancePage,
+  AttributionsPage,
+  UserInfoPage,
+} from "@/features/knowledge/KnowledgePages";
 import { UtilisateursPage } from "@/pages/UtilisateursPage";
 import { SuperAdminDashboardPage } from "@/features/superadmin/SuperAdminDashboardPage";
 import { OrgSettingsPage } from "@/features/superadmin/organizations/OrgSettingsPage";
@@ -88,6 +93,10 @@ export function App() {
               <Route path="demarches/:procId" element={<ProcedureEditorPage variant="admin" />} />
               {/* Éditeur du site de démarches — plein écran, organisation choisie dans la page. */}
               <Route path="site-de-demarches" element={<PortalEditorPage variant="admin" />} />
+              {/* Rubrique « Connaissances » du rail. */}
+              <Route path="connaissances/recommandations" element={<AgentGuidancePage />} />
+              <Route path="connaissances/attributions" element={<AttributionsPage />} />
+              <Route path="connaissances/informations-usagers" element={<UserInfoPage />} />
               {/* Rubrique « Référentiels » du rail. */}
               <Route path="referentiels/categories" element={<CategoriesPage />} />
               <Route path="referentiels/types-pieces" element={<DocumentTypesPage />} />

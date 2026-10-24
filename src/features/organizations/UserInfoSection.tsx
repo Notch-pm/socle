@@ -2,6 +2,7 @@ import * as React from "react";
 import { Loader2, MessageCircleQuestion } from "lucide-react";
 import { Card, CardHeader, CardTitle, CardDescription, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
+import { cn } from "@/lib/utils";
 import { MarkdownField } from "@/features/procedures/steps/connaissances/MarkdownField";
 import { FaqEditor } from "@/features/procedures/steps/connaissances/FaqEditor";
 import { OpeningHoursEditor } from "@/features/organizations/OpeningHoursEditor";
@@ -31,7 +32,17 @@ function formatDate(iso: string): string {
  * organisation : chaque mairie annexe a ses horaires. Et il est **public** :
  * enregistrer, c'est publier — l'écran le dit avant qu'on écrive.
  */
-export function UserInfoSection({ organization }: { organization: Organization }) {
+export function UserInfoSection({
+  organization,
+  intro = true,
+}: {
+  organization: Organization;
+  /**
+   * Présentation en tête de carte. Coupée par les pages Connaissances, dont
+   * l'en-tête dit déjà ce qu'est ce texte et à qui il sert.
+   */
+  intro?: boolean;
+}) {
   const { data: stored, isLoading } = useUserInfo(organization.id);
   const save = useSaveUserInfo(organization.id);
 
@@ -80,20 +91,22 @@ export function UserInfoSection({ organization }: { organization: Organization }
       className="flex flex-col gap-6"
     >
       <Card>
-        <CardHeader>
-          <div className="flex items-center gap-3">
-            <MessageCircleQuestion className="size-5 text-primary" />
-            <div>
-              <CardTitle className="text-base">Informations à destination des usagers</CardTitle>
-              <CardDescription>
-                Ce que cet organisme dit au public : présentation, horaires d'accueil, questions
-                fréquentes. Le site de démarches les affiche et son assistant IA s'en sert pour
-                répondre aux usagers. Tout ce qui est écrit ici est public, dès l'enregistrement.
-              </CardDescription>
+        {intro ? (
+          <CardHeader>
+            <div className="flex items-center gap-3">
+              <MessageCircleQuestion className="size-5 text-primary" />
+              <div>
+                <CardTitle className="text-base">Informations à destination des usagers</CardTitle>
+                <CardDescription>
+                  Ce que cet organisme dit au public : présentation, horaires d'accueil, questions
+                  fréquentes. Le site de démarches les affiche et son assistant IA s'en sert pour
+                  répondre aux usagers. Tout ce qui est écrit ici est public, dès l'enregistrement.
+                </CardDescription>
+              </div>
             </div>
-          </div>
-        </CardHeader>
-        <CardContent className="flex flex-col gap-6">
+          </CardHeader>
+        ) : null}
+        <CardContent className={cn("flex flex-col gap-6", !intro && "pt-4")}>
           <MarkdownField
             id="user-info-description"
             label="Descriptif"

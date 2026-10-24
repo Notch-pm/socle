@@ -1,6 +1,10 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/lib/supabase";
-import { cleanAttributions, parseAttributions } from "@/features/organizations/attributions";
+import {
+  cleanAttributions,
+  isAttributionsEmpty,
+  parseAttributions,
+} from "@/features/organizations/attributions";
 
 const ATTRIBUTIONS_KEY = "organization-attributions";
 
@@ -30,6 +34,30 @@ export function useAttributions(organizationId: string | undefined) {
   });
 }
 
+/**
+ * Organismes dont les attributions sont rédigées, parmi `organizationIds` —
+ * l'état « renseigné / à rédiger » de la liste de la page Connaissances. Un
+ * texte blanc compte pour rien, comme à la lecture par Clara.
+ */
+export function useFilledAttributions(organizationIds: string[]) {
+  return useQuery({
+    queryKey: [ATTRIBUTIONS_KEY, "renseignes", organizationIds] as const,
+    enabled: organizationIds.length > 0,
+    queryFn: async (): Promise<Set<string>> => {
+      const { data, error } = await supabase
+        .from("organization_attributions")
+        .select("organization_id, attributions")
+        .in("organization_id", organizationIds);
+      if (error) throw error;
+      return new Set(
+        data
+          .filter((row) => !isAttributionsEmpty(parseAttributions(row.attributions)))
+          .map((row) => row.organization_id),
+      );
+    },
+  });
+}
+
 /** Enregistre les attributions (upsert sur `organization_id`). RLS : `is_admin_of_self_or_ancestor`. */
 export function useSaveAttributions(organizationId: string) {
   const queryClient = useQueryClient();
@@ -44,7 +72,8 @@ export function useSaveAttributions(organizationId: string) {
       if (error) throw error;
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: [ATTRIBUTIONS_KEY, organizationId] });
+      // Préfixe seul : le texte de l'organisme ET l'état de la liste.
+      queryClient.invalidateQueries({ queryKey: [ATTRIBUTIONS_KEY] });
     },
   });
 }

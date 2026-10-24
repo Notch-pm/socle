@@ -105,7 +105,21 @@ garde sa modale (`OrganizationsManager` reçoit `onEditOrganization` seulement c
   `revoke ... from public` n'enlève pas. Reposer les droits en citant les **trois** rôles.
   Côté Nora, le favicon se pose en `<link rel="icon">` (`src/features/portal/favicon.ts`) :
   ⚠️ **son absence n'est pas un effacement**, l'onglet garde ce qu'il affichait.
-- **Onglet « Recommandations aux agents »** (`AgentGuidanceSection`, 2026-09-19, **organisation
+- ⚠️ **Rubrique « Connaissances » (navigation v2, 2026-10-24).** Les trois textes ci-dessous
+  (recommandations, attributions, informations usagers) **ne sont plus des onglets** de la fiche :
+  ils se rédigent dans la rubrique « Connaissances » du rail (`src/features/knowledge/`),
+  rangés par destinataire (« Pour les agents », « Pour les usagers ») —
+  `/connaissances/recommandations` (racine seule, sélecteur si plusieurs racines),
+  `/connaissances/attributions` et `/connaissances/informations-usagers` (liste des organismes
+  dans l'ordre de l'arbre à gauche, avec l'état **renseigné / à rédiger** de chacun, éditeur à
+  droite ; organisme choisi en `?org=`). Les éditeurs sont **les mêmes sections**, partagées avec
+  le superadmin (option `intro={false}` : l'en-tête de page dit déjà à qui s'adresse le texte et
+  qui le reprend). L'état de la liste vient de `useFilledAttributions` / `useFilledUserInfo`
+  (règles `isAttributionsEmpty` / `isUserInfoEmpty`) ; les enregistrements invalident par
+  **préfixe** de clé, pour rafraîchir texte et liste d'un coup. La fiche d'organisation garde un
+  encart « Connaissances » qui y renvoie, sur l'organisme courant — les recommandations sur sa
+  racine. Changer d'organisme abandonne une saisie non enregistrée (comme le changement d'onglet).
+- **« Recommandations aux agents »** (`AgentGuidanceSection`, 2026-09-19, **organisation
   principale uniquement** — une sous-organisation y lit que le réglage vit sur sa racine) : ce que
   la collectivité dit **à ses agents**, pour toutes ses démarches à la fois — rôle des agents et
   accueil physique (Markdown), **consignes générales** (titre + texte, ajout/suppression), FAQ des
@@ -118,8 +132,8 @@ garde sa modale (`OrganizationsManager` reçoit `onEditOrganization` seulement c
   déjà les démarches et `proceduresText`. ⚠️ **Interne** : aucune route du portail ne le sert.
   ⚠️ **Une table et non une colonne** : `organizations` se lit en `select("*")` partout.
   Côté superadmin, la même section est une carte d'`OrgSettingsPage` (`?section=agents`).
-- **Onglet « Attributions »** (`AttributionsSection`, 2026-10-01, **toute organisation, service
-  interne compris** — jamais filtré, juste après « Informations de base ») : ce que l'organisme
+- **« Attributions »** (`AttributionsSection`, 2026-10-01, **toute organisation, service
+  interne compris** — jamais filtré) : ce que l'organisme
   **traite et ne traite pas** (sujets, publics, exemples de demandes), un texte Markdown de
   **2 000 caractères** au plus (`MAX_ATTRIBUTIONS_LENGTH`, compteur à l'écran, CHECK en base).
   Table `organization_attributions` (une ligne par organisation, RLS calquée sur
@@ -141,9 +155,9 @@ garde sa modale (`OrganizationsManager` reçoit `onEditOrganization` seulement c
   | Table | `organization_user_info` | `organization_agent_guidance` | `organization_attributions` |
   | Route | `GET /v1/portal/organizations` | `GET /v1/organizations/{id}/agent-guidance` | `GET /v1/organizations/attributions` |
 
-- **Onglet « Informations usagers »** (`UserInfoSection`, 2026-09-24, **toute organisation**,
-  sous-organisation comprise — chaque annexe a ses horaires — **sauf un service interne**, où
-  l'onglet et la carte superadmin sont retirés : `hasUserInfoTab`) : ce que l'organisme dit **au public**
+- **« Informations usagers »** (`UserInfoSection`, 2026-09-24, **toute organisation**,
+  sous-organisation comprise — chaque annexe a ses horaires — **sauf un service interne**, absent
+  de la liste de la page et dont la carte superadmin est retirée : `hasUserInfoTab`) : ce que l'organisme dit **au public**
   — un **descriptif**, ses **horaires d'accueil** et une **FAQ usagers**. Horaires
   **structurés** (`OpeningHoursEditor`) : pour chaque jour, un interrupteur « Ouvert » et quatre
   heures `HH:MM` — ouverture et fermeture **obligatoires**, pause de midi (fin de matinée → début

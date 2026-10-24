@@ -136,11 +136,14 @@ nombre de clés plateforme actives.
 |---|---|
 | `/` (index) | `DashboardPage` (chiffres du référentiel + fréquentation du site) |
 | `/organisations` | `OrganizationsPage` |
-| `/organisations/:orgId` | `OrganizationEditorPage` (page à onglets) |
+| `/organisations/:orgId` | `OrganizationEditorPage` (page à onglets ; renvoie aux pages Connaissances) |
 | `/demarches` | `ProceduresPage` |
 | `/demarches/nouveau` (`?org=<rootId>`) | `ProcedureEditorPage variant="admin"` |
 | `/demarches/:procId` (`?step=N`) | idem |
 | `/site-de-demarches` (`?org=<rootId>`) | `PortalEditorPage variant="admin"` — éditeur du site de démarches (pleine hauteur dans le shell) |
+| `/connaissances/recommandations` (`?org=<rootId>`) | `AgentGuidancePage` |
+| `/connaissances/attributions` (`?org=<orgId>`) | `AttributionsPage` (liste des organismes + éditeur) |
+| `/connaissances/informations-usagers` (`?org=<orgId>`) | `UserInfoPage` (idem, sans les services internes) |
 | `/referentiels/categories` | `CategoriesPage` |
 | `/referentiels/types-pieces` | `DocumentTypesPage` |
 | `/referentiels/modeles-documents` | `DocumentsPage` (modèles à variables) |

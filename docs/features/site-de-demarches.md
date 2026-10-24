@@ -244,7 +244,7 @@ démarches ». Ajouter une collectivité au portail = une ligne de domaine, aucu
 - **Informations usagers des organismes** (2026-09-24, contrat 1.30.0) :
   `GET /v1/portal/organizations?tenant_id=` sert, pour chaque organisme **affiché** de l'arbre
   (collectivité en tête), le descriptif, les **horaires d'accueil** et la FAQ rédigés dans
-  l'onglet « Informations usagers » de l'organisation — public, sans brouillon, sans héritage ;
+  la page « Connaissances › Informations usagers » — public, sans brouillon, sans héritage ;
   rien d'écrit = `[]`. Lu par Nora et par son assistant. Détail : [`organisations.md`](organisations.md).
 - **Courrier libre** (2026-10-09, contrat 1.38.0) : chaque organisme de
   `GET /v1/portal/organizations` porte `free_mail: { enabled, title }` — l'usager peut-il lui
