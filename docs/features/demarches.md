@@ -306,6 +306,23 @@ qu'une autre organisation du même porteur tient déjà sont donc écartées d'a
 (`procedureIdsToEnable`), sinon `enforce_single_offer_per_bearer` refuserait le lot entier. Pas
 de « tout désactiver » : on relâche une démarche à la fois.
 
+## Tableau « Activation par organisme » (2026-10-25)
+
+`/demarches/activation` (`ProcedureActivationPage`, rubrique « Démarches » du rail) : les
+démarches de la racine en lignes, rangées par catégorie, les organismes de son arbre en colonnes
+(ordre de l'arbre), une case par `organization_procedures.is_enabled`. Même donnée que la section
+« Démarches proposées » de la fiche, vue sur tout l'arbre. Logique pure dans
+`src/features/procedures/activationMatrix.ts` (testée).
+- **« Tous / Aucun »** sur chaque ligne et chaque colonne, avec confirmation ; un lot de colonne
+  porte sur les démarches **affichées** (la recherche le borne, la confirmation le dit). Un lot =
+  un upsert (`useSetProceduresEnabled`) : tout passe ou rien.
+- ⚠️ « Tous » écarte d'avance ce qu'un autre organisme du **même porteur** tient (case grisée,
+  qui dit lequel) ; « Tous » sur une **ligne** ne coche **jamais un service interne** ni un
+  organisme obsolète — dans un groupe il faut choisir qui instruit, le lot coche le porteur et
+  l'on déplace la case à la main. « Aucun » décoche partout, services internes compris.
+- Une case cliquée affiche aussitôt l'état visé et le garde jusqu'à la relecture (la mutation
+  attend l'invalidation) ; un refus de la base la rend à son état et s'affiche au-dessus.
+
 ## Pictogrammes des catégories (2026-10-10)
 
 `categories.icon` prend sa valeur dans un catalogue **fermé** : `ICON_GROUPS` de

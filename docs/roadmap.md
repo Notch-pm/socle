@@ -523,6 +523,8 @@ notés dans `architecture.md` § 7.
   informations usagers, bases des démarches) sortie des onglets de la fiche ; éditeur
   d'organisation en menu latéral à trois groupes ; page **Fréquentation**. Détail :
   fiches « Shell », « Organisations » et « Tableau de bord ».
+- ✅ *2026-10-25* : rubrique **« Démarches »** (catalogue + tableau **« Activation par
+  organisme »**, démarches × organismes avec « Tous / Aucun »). Détail : fiche « Démarches ».
 
 ### Envisagé
 

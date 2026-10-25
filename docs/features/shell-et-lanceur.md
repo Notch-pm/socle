@@ -33,7 +33,9 @@
   — sauf **un**, qui isole la consultation (Intégrations, Consommation IA) du paramétrage.
 - **Navigation v2 (2026-10-24) : quelques liens, des rubriques en bulles.** Le rail portait onze
   entrées à plat ; il est décrit par une table, `RAIL` (`Sidebar.tsx`) : liens directs
-  (Organisations, Démarches, Intégrations, Consommation IA) et **rubriques** (« Site de
+  (Organisations, Intégrations, Consommation IA) et **rubriques** (« Démarches » depuis le
+  2026-10-25 : catalogue — `end`, sinon il se dirait actif sous `/activation` — et activation par
+  organisme ; « Site de
   démarches » : éditeur du site — `end`, sinon il se dirait actif sous `/frequentation` — et
   fréquentation ; « Connaissances » : recommandations aux agents, attributions, informations usagers, bases
   des démarches, rangées par destinataire ; « Référentiels » : catégories, types de PJ, modèles de documents, quartiers). Une rubrique est

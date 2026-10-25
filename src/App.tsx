@@ -14,6 +14,7 @@ import { DocumentsPage } from "@/features/documents/DocumentsPage";
 import { OrganizationsPage } from "@/features/organizations/OrganizationsPage";
 import { OrganizationEditorPage } from "@/features/organizations/OrganizationEditorPage";
 import { ProceduresPage } from "@/features/procedures/ProceduresPage";
+import { ProcedureActivationPage } from "@/features/procedures/ProcedureActivationPage";
 import { ProcedureEditorPage } from "@/features/procedures/ProcedureEditorPage";
 import { PortalEditorPage } from "@/features/portal/PortalEditorPage";
 import { QuartiersPage } from "@/features/quartiers/QuartiersPage";
@@ -91,6 +92,7 @@ export function App() {
               <Route path="organisations" element={<OrganizationsPage />} />
               <Route path="organisations/:orgId" element={<OrganizationEditorPage />} />
               <Route path="demarches" element={<ProceduresPage />} />
+              <Route path="demarches/activation" element={<ProcedureActivationPage />} />
               <Route path="demarches/nouveau" element={<ProcedureEditorPage variant="admin" />} />
               <Route path="demarches/:procId" element={<ProcedureEditorPage variant="admin" />} />
               {/* Éditeur du site de démarches — plein écran, organisation choisie dans la page. */}

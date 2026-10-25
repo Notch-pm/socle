@@ -159,6 +159,22 @@ describe("Sidebar", () => {
     expect(referentiels().getAttribute("aria-expanded")).toBe("true");
   });
 
+  it("range le catalogue et l'activation dans la rubrique Démarches", () => {
+    // Le catalogue n'est pas marqué actif sur le tableau d'activation, qui vit
+    // sous son chemin ; la rubrique l'est aussi dans l'éditeur d'une démarche.
+    renderRail("/demarches/activation");
+    const demarches = screen.getByRole("button", { name: "Démarches" });
+    expect(demarches.hasAttribute("data-active")).toBe(true);
+    fireEvent.click(demarches);
+    expect(screen.getByRole("link", { name: "Catalogue des démarches" }).getAttribute("aria-current")).toBeNull();
+    expect(screen.getByRole("link", { name: "Activation par organisme" }).getAttribute("aria-current")).toBe("page");
+  });
+
+  it("garde la rubrique Démarches active dans l'éditeur d'une démarche", () => {
+    renderRail("/demarches/123");
+    expect(screen.getByRole("button", { name: "Démarches" }).hasAttribute("data-active")).toBe(true);
+  });
+
   it("ne marque pas l'éditeur du site actif sur la page Fréquentation", () => {
     // Elle vit sous son chemin : sans `end`, les deux entrées se diraient actives.
     renderRail("/site-de-demarches/frequentation");

@@ -18,6 +18,7 @@ import {
   Network,
   Plug,
   Sparkles,
+  Table2,
   Tags,
 } from "lucide-react";
 import { API_DOC_LINKS, apiDocLinkTitle, type ApiDocLink } from "@/features/public-api-docs/apiDocLinks";
@@ -70,8 +71,9 @@ const PINNED: NavItem = { to: "/", title: "Tableau de bord", icon: House, end: t
  * ⚠️ **QUELQUES LIENS, DES RUBRIQUES EN BULLES** (navigation v2, 2026-10-24).
  * Le rail portait onze entrées à plat : on ne s'y repérait plus. Restent en
  * liens directs ce qu'on ouvre tous les jours (le catalogue de démarches est
- * le cœur du paramétrage, il ne se range pas dans une bulle) ; le reste se
- * range par rubrique, une bulle s'ouvrant au clic à côté de la tuile.
+ * le cœur du paramétrage) ; le reste se range par rubrique, une bulle
+ * s'ouvrant au clic à côté de la tuile. Les démarches sont passées en bulle le
+ * 2026-10-25, avec le tableau « Activation par organisme ».
  *
  * Utilisateurs et rôles n'y sont plus : c'est l'administration de
  * l'application, pas un contenu qu'on paramètre — l'icône « Paramètres » de
@@ -82,7 +84,24 @@ const PINNED: NavItem = { to: "/", title: "Tableau de bord", icon: House, end: t
  */
 export const RAIL: RailEntry[] = [
   { kind: "link", to: "/organisations", title: "Organisations", icon: Network },
-  { kind: "link", to: "/demarches", title: "Démarches", icon: ListChecks },
+  {
+    kind: "group",
+    id: "demarches",
+    title: "Démarches",
+    icon: ListChecks,
+    // Le catalogue, et qui propose quoi : deux vues sur les mêmes démarches.
+    sections: [
+      {
+        items: [
+          // ⚠️ `end` : sans lui, le catalogue se dirait actif sur le tableau
+          // d'activation, qui vit sous son chemin. (La rubrique, elle, reste
+          // active dans l'éditeur d'une démarche.)
+          { to: "/demarches", title: "Catalogue des démarches", icon: ListChecks, end: true },
+          { to: "/demarches/activation", title: "Activation par organisme", icon: Table2 },
+        ],
+      },
+    ],
+  },
   {
     kind: "group",
     id: "site",

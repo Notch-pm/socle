@@ -138,6 +138,7 @@ nombre de clés plateforme actives.
 | `/organisations` | `OrganizationsPage` |
 | `/organisations/:orgId` (`?section=`) | `OrganizationEditorPage` (menu latéral en trois groupes ; renvoie aux pages Connaissances) |
 | `/demarches` | `ProceduresPage` |
+| `/demarches/activation` (`?org=<rootId>`) | `ProcedureActivationPage` (tableau démarches × organismes, « Tous / Aucun ») — route statique, prioritaire sur `:procId` |
 | `/demarches/nouveau` (`?org=<rootId>`) | `ProcedureEditorPage variant="admin"` |
 | `/demarches/:procId` (`?step=N`) | idem |
 | `/site-de-demarches` (`?org=<rootId>`) | `PortalEditorPage variant="admin"` — éditeur du site de démarches (pleine hauteur dans le shell) |

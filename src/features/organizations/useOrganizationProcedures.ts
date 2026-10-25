@@ -76,6 +76,37 @@ export function useSetProcedureEnabled() {
 }
 
 /**
+ * Écrit un lot d'activations, sur plusieurs organisations à la fois (tableau
+ * « Activation par organisme »). Un seul upsert : tout passe ou rien — un refus
+ * de `enforce_single_offer_per_bearer` annule le lot entier, d'où le tri fait
+ * d'avance par `activationMatrix.ts`.
+ *
+ * L'invalidation est **attendue** : la mutation ne se termine qu'une fois les
+ * activations relues, ce qui permet à l'écran de garder l'état visé d'une case
+ * jusque-là, sans clignoter vers l'ancien.
+ */
+export function useSetProceduresEnabled() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async (
+      changes: { organizationId: string; procedureId: string; enabled: boolean }[],
+    ) => {
+      if (changes.length === 0) return;
+      const { error } = await supabase.from("organization_procedures").upsert(
+        changes.map((c) => ({
+          organization_id: c.organizationId,
+          procedure_id: c.procedureId,
+          is_enabled: c.enabled,
+        })),
+        { onConflict: "organization_id,procedure_id" },
+      );
+      if (error) throw error;
+    },
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: [KEY] }),
+  });
+}
+
+/**
  * Active plusieurs démarches d'un coup pour une organisation (« Tout activer »,
  * global ou par catégorie). Un seul upsert : tout passe ou rien — si le trigger
  * `enforce_single_offer_per_bearer` refuse une ligne, aucune n'est écrite.

@@ -92,7 +92,8 @@ Projet Supabase : `qhrokbkyxgcvkbpmbmna`.
 
 1. **App par organisation** (`AppShell`, routes protégées par `ProtectedRoute`) — pour les
    utilisateurs et **administrateurs d'organisation**. Routes : `/` (tableau de bord —
-   voir feature), `/organisations`, `/demarches`, `/site-de-demarches` (éditeur du portail
+   voir feature), `/organisations`, `/demarches` et `/demarches/activation` (tableau démarches ×
+   organismes), `/site-de-demarches` (éditeur du portail
    usagers — voir feature) et `/site-de-demarches/frequentation`, `/connaissances/{recommandations,attributions,informations-usagers,demarches}`,
    `/referentiels/{categories,types-pieces,modeles-documents,quartiers}`
    (rubrique « Référentiels » du rail), `/parametres/utilisateurs` (icône « Paramètres » de
@@ -254,6 +255,8 @@ Envoi des e-mails —, `?section=`, `organizationSections.ts`), gestion superadm
   existantes. L'aperçu du builder ne simule ni BAN ni carte.
 - JSON possédés = **contrats publics** (`form_schema`, `requester_config`,
   `communication_config`, `knowledge_base`, `user_communication`) : parseurs robustes testés.
+  Activation : section de la fiche (un organisme) ou tableau `/demarches/activation` (tout
+  l'arbre, « Tous / Aucun » — ⚠️ un lot de ligne ne coche jamais un service interne).
   Documents de la base de connaissances : bucket privé `procedure-documents`, 1er segment du
   chemin = la racine (le RLS storage s'appuie dessus). Code : `src/features/procedures/`.
 
