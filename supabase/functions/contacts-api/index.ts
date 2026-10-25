@@ -60,6 +60,7 @@ import {
   citizenConsentReference,
   citizenConsentSource,
   citizenConsentStatement,
+  parseCitizenAccountEmail,
   parseCitizenConsent,
   parseCitizenIdentity,
   parseCitizenUpdate,
@@ -137,6 +138,7 @@ async function citizenDto(admin: SupabaseClient, orgId: string, contactId: strin
  * PATCH /v1/citizen/contacts/{account_id}       → ses coordonnées
  * POST  /v1/citizen/contacts/{account_id}/link  → rattacher (strict), ou créer
  * POST  /v1/citizen/contacts/{account_id}/consents → l'usager modifie ses consentements
+ * POST  /v1/citizen/contacts/{account_id}/account-email → la fiche prend l'adresse du compte
  */
 async function handleCitizen(
   admin: SupabaseClient,
@@ -209,6 +211,28 @@ async function handleCitizen(
     return dto === null
       ? errorResponse("not_found", "Aucune fiche rattachée à ce compte.", corsHeaders)
       : jsonResponse(201, { contact: dto }, corsHeaders);
+  }
+
+  if (segments.length === 5 && segments[4] === "account-email") {
+    // ⚠️ L'adresse est celle du COMPTE, vérifiée par le portail : le Socle ne
+    // connaît pas les comptes, la garantie est celle de la clé `citizen`
+    // (voir `_shared/citizen.ts`). Idempotent.
+    if (req.method !== "POST") return errorResponse("method_not_allowed", "Seule la méthode POST est autorisée ici.", corsHeaders);
+    const parsed = parseCitizenAccountEmail(await readBody());
+    if (!parsed.ok) return errorResponse("bad_request", parsed.message, corsHeaders);
+    const contactId = await citizenContactId(admin, orgId, accountId);
+    if (contactId === null) return errorResponse("not_found", "Aucune fiche rattachée à ce compte.", corsHeaders);
+    const { error } = await admin
+      .from("contacts")
+      .update({ email: parsed.value.email })
+      .eq("organization_id", orgId)
+      .eq("id", contactId)
+      .eq("status", "active");
+    if (error) return writeErrorResponse(error);
+    const dto = await citizenDto(admin, orgId, contactId);
+    return dto === null
+      ? errorResponse("not_found", "Aucune fiche rattachée à ce compte.", corsHeaders)
+      : jsonResponse(200, { contact: dto }, corsHeaders);
   }
 
   if (segments.length !== 4) return errorResponse("not_found", "Endpoint inconnu.", corsHeaders);

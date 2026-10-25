@@ -1,7 +1,7 @@
 # Journal des évolutions des API publiques
 
 > **Public** : équipes consommatrices (Ariane, Clara, Iris, partenaires) · **Question traitée** :
-> quand un contrat d'API a-t-il changé, et comment ? · **Dernière mise à jour** : 2026-10-20
+> quand un contrat d'API a-t-il changé, et comment ? · **Dernière mise à jour** : 2026-10-25
 
 Journal **append-only** : chaque évolution de la surface de contrat des API publiques
 (`public-api`, `contacts-api`, `ai-api`, `audience-api`) — endpoint, paramètre, champ de réponse,
@@ -10,6 +10,23 @@ réécrite ; une correction s'ajoute sous une nouvelle date. Politique de compat
 consommateur : [integration.md](./integration.md#politique-de-compatibilité-v1).
 
 Format d'une entrée : `## AAAA-MM-JJ — <api> — ajout|correctif|rupture`
+
+---
+
+## 2026-10-25 — contacts-api — ajout (la fiche prend l'adresse du compte, 1.5.0)
+
+- `POST /v1/citizen/contacts/{account_id}/account-email`, scope `citizen` : corps `{ email }`,
+  rien d'autre — l'adresse **vérifiée** du compte du portail ; la fiche la prend (en minuscules)
+  et la renvoie (`200 { contact }`). Idempotent ; `404` sans fiche rattachée, `400` pour toute
+  autre clé ou une adresse malformée.
+- ⚠️ Le Socle **ne connaît pas les comptes** du portail : le rattachement recopie l'adresse dans
+  la fiche, puis l'oublie. Que l'adresse transmise soit celle du compte est donc la **garantie de
+  l'appelant** (clé `citizen`), comme au rattachement — le portail n'y envoie jamais une adresse
+  tapée pour la seule fiche.
+- `PATCH /v1/citizen/contacts/{account_id}` refuse **toujours** `email`. Un agent peut modifier
+  l'adresse de la fiche (`/v1/contacts`) ; le portail constate alors l'écart et le repropose à
+  l'usager (ADR-14 d'Iris, notifications à l'usager B12 / L4c-4).
+- Additif : rien ne change pour les appels existants.
 
 ---
 

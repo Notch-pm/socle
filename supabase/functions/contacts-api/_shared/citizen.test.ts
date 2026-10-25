@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { parseCitizenIdentity, parseCitizenUpdate, serializeCitizenContact } from "./citizen.ts";
+import { parseCitizenAccountEmail, parseCitizenIdentity, parseCitizenUpdate, serializeCitizenContact } from "./citizen.ts";
 
 const IDENTITY = {
   civility: "madame",
@@ -88,5 +88,20 @@ describe("consentements de l'usager depuis son compte", () => {
     expect(parseCitizenConsent({ kind: "partage", granted: false }).ok).toBe(true);
     expect(parseCitizenConsent({ kind: "partage", granted: true, statement: "autre chose" }).ok).toBe(false);
     expect(parseCitizenConsent({ kind: "autre", granted: true }).ok).toBe(false);
+  });
+});
+
+describe("parseCitizenAccountEmail", () => {
+  it("prend l'adresse du compte, en minuscules", () => {
+    expect(parseCitizenAccountEmail({ email: "  Camille.Durand@Example.org " })).toEqual({
+      ok: true,
+      value: { email: "camille.durand@example.org" },
+    });
+  });
+
+  it("refuse toute autre clé, une adresse absente ou malformée", () => {
+    for (const body of [{ email: "a@b.fr", mobile_phone: "0612345678" }, {}, { email: "" }, { email: "pas-une-adresse" }, { email: 42 }, [], null]) {
+      expect(parseCitizenAccountEmail(body).ok, JSON.stringify(body)).toBe(false);
+    }
   });
 });

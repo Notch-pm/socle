@@ -13,6 +13,14 @@
  * de naissance, ses prénoms, sa date de naissance et sa civilité sont figés
  * une fois la fiche rattachée — ils fondent le rattachement — ; son adresse de
  * courriel suit celle de son compte. Une correction passe par la collectivité.
+ *
+ * ⚠️ **L'ADRESSE DE COURRIEL N'EST JAMAIS SAISIE ICI** (1.5.0, ADR-14 d'Iris) :
+ * PATCH la refuse toujours. Le seul geste est « aligner la fiche sur le
+ * compte » (`POST …/account-email`), où le portail transmet l'adresse VÉRIFIÉE
+ * du compte. Le Socle ne connaît pas les comptes du portail (le rattachement
+ * recopie l'adresse dans la fiche, puis l'oublie) : que cette adresse soit
+ * bien celle du compte est la garantie du PORTAIL, détenteur de la clé
+ * `citizen` — exactement comme au rattachement.
  */
 import { CIVILITIES, normalizePhoneNumber } from "./validation.ts";
 
@@ -70,6 +78,9 @@ export function serializeCitizenContact(row: Row): CitizenContactDto {
   };
 }
 
+/** Forme d'une adresse de courriel — volontairement large : le portail l'a vérifiée par un envoi. */
+const EMAIL_SHAPE = /^[^\s@<>,;"()]+@[^\s@<>,;"()]+\.[^\s@<>,;"()]+$/;
+
 export type CitizenParse<T> = { ok: true; value: T } | { ok: false; message: string };
 
 const MAX_TEXT = 200;
@@ -125,7 +136,7 @@ export function parseCitizenIdentity(body: unknown): CitizenParse<Record<string,
     if (!t.ok) return t;
     out[key] = t.value;
   }
-  if (!/^[^\s@<>,;"()]+@[^\s@<>,;"()]+\.[^\s@<>,;"()]+$/.test(out.email ?? "")) {
+  if (!EMAIL_SHAPE.test(out.email ?? "")) {
     return { ok: false, message: "email : adresse invalide." };
   }
   out.email = (out.email ?? "").toLowerCase();
@@ -177,6 +188,21 @@ export function parseCitizenUpdate(body: unknown): CitizenParse<Record<string, s
   if ("postal_code" in out && !/^[0-9]{5}$/.test(out.postal_code ?? "")) return { ok: false, message: "postal_code : 5 chiffres." };
   if (Object.keys(out).length === 0) return { ok: false, message: "Aucun champ à modifier." };
   return { ok: true, value: out };
+}
+
+/**
+ * `{ email }` seulement : l'adresse VÉRIFIÉE du compte, que la fiche va
+ * prendre (1.5.0). Rangée en minuscules, comme au rattachement.
+ */
+export function parseCitizenAccountEmail(body: unknown): CitizenParse<{ email: string }> {
+  if (typeof body !== "object" || body === null || Array.isArray(body)) return { ok: false, message: "Objet JSON attendu." };
+  const input = body as Record<string, unknown>;
+  const unknown = Object.keys(input).filter((k) => k !== "email");
+  if (unknown.length > 0) return { ok: false, message: `Champ inconnu : ${unknown.join(", ")}.` };
+  const t = text(input, "email", true);
+  if (!t.ok) return t;
+  if (!EMAIL_SHAPE.test(t.value ?? "")) return { ok: false, message: "email : adresse invalide." };
+  return { ok: true, value: { email: (t.value ?? "").toLowerCase() } };
 }
 
 // ---- Consentements de l'usager, depuis son compte (contacts-api 1.4.0) ------

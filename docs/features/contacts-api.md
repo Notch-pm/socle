@@ -83,3 +83,10 @@ est portée par la fonction). Permet de **consulter, créer, modifier, archiver*
 - Code : `supabase/functions/contacts-api/` — `index.ts` + `_shared/{dto,errors,validation,
   serializers,openapi}.ts` (logique pure **testée** par vitest, sans dépendance Deno, déployée avec
   la fonction). Le déploiement (`deploy_edge_function`) doit inclure `index.ts` + tout `_shared/*.ts`.
+- **Porte usager** (`/v1/citizen/contacts/{account_id}…`, scope `citizen`, 1.4.0) : la fiche
+  d'UN usager vue par son compte du portail (Nora) — rattachement strict, lecture, coordonnées,
+  consentements ; liste blanche distincte (`_shared/citizen.ts`, tests contre la vraie migration
+  dans `espace-usager/`). ⚠️ **L'adresse de courriel ne se saisit jamais** : `PATCH` la refuse ;
+  seul `POST …/account-email` (1.5.0) aligne la fiche sur l'adresse **vérifiée du compte**. Le
+  Socle ne connaît pas les comptes du portail (le rattachement recopie l'adresse, puis l'oublie) :
+  que ce soit bien celle du compte est la garantie de la clé `citizen`, pas un contrôle du Socle.

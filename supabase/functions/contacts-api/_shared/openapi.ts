@@ -46,7 +46,7 @@ export function buildOpenApiDocument(serverUrl: string): Record<string, unknown>
     openapi: "3.1.0",
     info: {
       title: "API Socle — Référentiel des usagers",
-      version: "1.4.2",
+      version: "1.5.0",
       description: [
         "API du **référentiel des usagers** de la gamme (contacts : personnes physiques,",
         "entreprises, associations, administrations). Elle permet de **consulter, créer,",
@@ -182,6 +182,44 @@ export function buildOpenApiDocument(serverUrl: string): Record<string, unknown>
           responses: {
             "201": {
               description: "La fiche, consentements à jour.",
+              content: {
+                "application/json": {
+                  schema: { type: "object", properties: { contact: { $ref: "#/components/schemas/CitizenContact" } } },
+                },
+              },
+            },
+            ...errorResponses("400", "401", "403", "404", "500"),
+          },
+        },
+      },
+      "/v1/citizen/contacts/{account_id}/account-email": {
+        post: {
+          tags: ["Usager du portail"],
+          summary: "Aligner l'adresse de la fiche sur celle du compte",
+          description:
+            "Corps `{ email }` — rien d'autre : l'adresse **vérifiée** du compte du portail, que la fiche " +
+            "prend (rangée en minuscules). L'usager ne saisit jamais une adresse propre à la fiche : " +
+            "`PATCH` refuse toujours `email`. Le Socle ne connaît pas les comptes du portail — que " +
+            "l'adresse soit celle du compte est la garantie de l'appelant (clé `citizen`), comme au " +
+            "rattachement. Idempotent. Un agent peut ensuite modifier l'adresse de la fiche ; le portail " +
+            "constate alors l'écart et le propose de nouveau à l'usager (1.5.0).",
+          parameters: [X_ORGANIZATION_ID_PARAM, CITIZEN_ACCOUNT_PARAM],
+          requestBody: {
+            required: true,
+            content: {
+              "application/json": {
+                schema: {
+                  type: "object",
+                  additionalProperties: false,
+                  required: ["email"],
+                  properties: { email: { type: "string", format: "email" } },
+                },
+              },
+            },
+          },
+          responses: {
+            "200": {
+              description: "La fiche, à l'adresse du compte.",
               content: {
                 "application/json": {
                   schema: { type: "object", properties: { contact: { $ref: "#/components/schemas/CitizenContact" } } },

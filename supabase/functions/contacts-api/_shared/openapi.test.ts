@@ -11,6 +11,7 @@ describe("openapi (contacts-api)", () => {
   it("décrit tous les endpoints, sans DELETE", () => {
     expect(Object.keys(doc.paths).sort()).toEqual([
       "/v1/citizen/contacts/{account_id}",
+      "/v1/citizen/contacts/{account_id}/account-email",
       "/v1/citizen/contacts/{account_id}/consents",
       "/v1/citizen/contacts/{account_id}/link",
       "/v1/contact-roles",
@@ -150,6 +151,6 @@ describe("contrat 1.4.0 — la fiche vue par le compte du portail", () => {
     for (const hidden of ["internal_notes", "roles", "relations", "external_references", "quartier_id"]) {
       expect(fields).not.toContain(hidden);
     }
-    expect(doc.info.version).toBe("1.4.2");
+    expect(doc.info.version).toBe("1.5.0");
   });
 });

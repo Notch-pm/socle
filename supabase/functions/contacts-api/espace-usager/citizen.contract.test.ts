@@ -1,6 +1,6 @@
 /**
  * CONTRAT ANTI-FUITE de contacts-api côté usager (scope `citizen`, 1.4.0) :
- * `/v1/citizen/contacts/{account_id}[/link|/consents]`.
+ * `/v1/citizen/contacts/{account_id}[/link|/consents|/account-email]`.
  *
  * `index.ts` est exécuté pour de bon ; sa base est PGlite avec la VRAIE
  * migration `20261020120000_contacts_citizen.sql` (voir `harness/socleDb.ts`).
@@ -321,6 +321,40 @@ describe("coordonnées (PATCH)", () => {
     expect((await world.sql("select first_name, last_name, email, birth_date::text from contacts"))[0]).toEqual({
       first_name: "Camille", last_name: "Durand", email: "camille@example.org", birth_date: "1990-05-17",
     });
+  });
+});
+
+describe("adresse du compte (1.5.0)", () => {
+  beforeEach(async () => {
+    await link(ACCOUNT_A, IDENTITY);
+  });
+  const align = (json: unknown, account = ACCOUNT_A) => call("POST", `/v1/citizen/contacts/${account}/account-email`, { json });
+
+  it("la fiche prend l'adresse du compte, en minuscules — et rien d'autre ne bouge", async () => {
+    const reply = await align({ email: "Camille.Nouvelle@Example.org" });
+    expect(reply.status).toBe(200);
+    expect(reply.body.contact).toMatchObject({ email: "camille.nouvelle@example.org", first_name: "Camille" });
+    expect((await world.sql("select email, first_name, city from contacts"))[0]).toEqual({
+      email: "camille.nouvelle@example.org", first_name: "Camille", city: "Sceaux",
+    });
+    // Idempotent.
+    expect((await align({ email: "camille.nouvelle@example.org" })).status).toBe(200);
+  });
+
+  it("refuse toute autre clé et une adresse malformée (400), sans rien écrire", async () => {
+    for (const json of [{ email: "a@b.fr", first_name: "Pirate" }, { email: "pas-une-adresse" }, {}, []]) {
+      expect((await align(json)).status, JSON.stringify(json)).toBe(400);
+    }
+    expect((await world.sql("select email, first_name from contacts"))[0]).toEqual({ email: "camille@example.org", first_name: "Camille" });
+  });
+
+  it("un compte sans fiche : 404 ; seul POST est permis", async () => {
+    expect((await align({ email: "b@example.org" }, ACCOUNT_B)).status).toBe(404);
+    expect((await call("PATCH", `/v1/citizen/contacts/${ACCOUNT_A}/account-email`, { json: { email: "a@b.fr" } })).status).toBe(405);
+  });
+
+  it("PATCH refuse toujours email : l'usager ne saisit jamais une adresse propre à la fiche", async () => {
+    expect((await call("PATCH", `/v1/citizen/contacts/${ACCOUNT_A}`, { json: { email: "libre@example.org" } })).status).toBe(400);
   });
 });
 
