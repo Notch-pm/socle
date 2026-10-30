@@ -12,7 +12,7 @@
 | 0 | Étude Keycloak (IdP dédié, fédéré aux annuaires des collectivités) et ADR | à faire |
 | 1 | Annuaire et matrice d'accès dans le Socle | **livré dans le code** (2026-10-30) |
 | 2 | `GET /v1/users` (scope `users`), lecture incrémentale | **livré dans le code** (2026-10-30, contrat 1.43.0) |
-| 3 | Consommation par Clara puis Iris (`sync-socle-users`, écrans verrouillés) | à faire |
+| 3 | Consommation par Clara (`sync-socle-users`, écrans verrouillés), puis Iris | Clara : **codé** (2026-10-30, branche Clara `feature/agents-geres-par-socle`), comptes repris ; Iris : à faire |
 | 4 | Connexion OIDC par Keycloak dans chaque application | à faire |
 
 Principe : **Keycloak authentifie, le Socle autorise.** Un agent authentifié mais non provisionné
@@ -72,6 +72,21 @@ organisme). Les agents sans plus aucun accès sont masqués derrière une case �
 - ⚠️ La lecture incrémentale ne voit que ce qui **change** : un accès ne se supprime donc jamais
   (policy DELETE retirée, privilège révoqué — migration `api_users_scope`). Restent les cascades
   (organisme ou compte supprimé), rattrapées par la réconciliation complète de la nuit.
+
+## Reprise des comptes Clara (2026-10-30)
+
+Faite une fois, en SQL, sur les 6 tenants Clara rattachés au Socle (données de démonstration) :
+29 appartenances Clara → 29 agents du Socle (22 comptes créés **sans mot de passe ni accès
+Socle**, donc sans courriel ; 7 existaient) et 107 accès Clara. Règles :
+- un accès par organisme où l'agent était affecté dans Clara, avec son rôle de tenant ; sans
+  affectation (ou affecté à un organisme qui n'existe plus au Socle — 2 services `[TEST]`) :
+  un accès sur la collectivité ;
+- rôle hérité `member` → `gestionnaire` ; appartenance inactive → accès `is_active = false` ;
+- côté Clara, `users.socle_user_id` posé par e-mail (29/29).
+
+Conséquence acceptée : un agent non administrateur **sans** affectation dans Clara reçoit une
+affectation sur la racine quand Clara la tient en miroir (il voit aussi les courriers adressés à
+la collectivité) ; les affectations aux deux services `[TEST]` disparus sont retirées.
 
 ## Code et tests
 
