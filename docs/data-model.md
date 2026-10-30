@@ -131,7 +131,7 @@ aucun endpoint, il décrit ce qui existe **en base**.
 ### `application_roles` et `user_application_access` — accès aux applications de la gamme (2026-10-30)
 
 - `application_roles (application_id, code)` PK : rôles de base déclarés par chaque application
-  (seed Iris, Clara ; ni Socle — ses rôles vivent dans `user_organizations` — ni Nora). Lecture
+  (seed Clara ; Iris : un seul rôle `acces` depuis le 2026-10-30 — le Socle ouvre l'accès, les profils restent dans Iris ; ni Socle — ses rôles vivent dans `user_organizations` — ni Nora). Lecture
   `authenticated`, écriture super admin.
 - `user_application_access` : `user_id` (CASCADE), `application_id`, `organization_id` (CASCADE,
   tout organisme de l'arbre), `role_code` (FK composite vers `application_roles`), `is_active`,

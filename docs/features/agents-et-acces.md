@@ -12,7 +12,7 @@
 | 0 | Étude Keycloak (IdP dédié, fédéré aux annuaires des collectivités) et ADR | **fait** (2026-10-30) : 6 scénarios en local, [`labs/sso-keycloak/`](../../labs/sso-keycloak/README.md), ADR dans `architecture.md` |
 | 1 | Annuaire et matrice d'accès dans le Socle | **livré dans le code** (2026-10-30) |
 | 2 | `GET /v1/users` (scope `users`), lecture incrémentale | **livré dans le code** (2026-10-30, contrat 1.43.0) |
-| 3 | Consommation par Clara (`sync-socle-users`, écrans verrouillés), puis Iris | Clara : **codé** (2026-10-30, branche Clara `feature/agents-geres-par-socle`), comptes repris ; Iris : à faire |
+| 3 | Consommation par Clara puis Iris (`sync-socle-users`, écrans verrouillés) | Clara : **en ligne** (2026-10-30). Iris : **codé** (branche Iris `feature/agents-geres-par-socle`), accès repris au Socle ; reste le déploiement |
 | 4 | Connexion OIDC par Keycloak dans chaque application | à faire |
 
 Principe : **Keycloak authentifie, le Socle autorise.** Un agent authentifié mais non provisionné
@@ -103,6 +103,16 @@ Keycloak + Supabase Auth local ([`labs/sso-keycloak/`](../../labs/sso-keycloak/R
 Reste pour le lot 4 : l'hébergement de production (serveur loué en France ou Cloud-IAM sur
 Outscale), un essai avec un vrai Entra ID de collectivité, et l'écran du Socle qui associe un
 domaine d'e-mail à l'annuaire d'une collectivité.
+
+## Iris : le Socle ouvre l'accès, sans rôle (2026-10-30)
+
+Décision : pour Iris, le Socle **ouvre seulement l'accès**. Iris déclare un seul rôle de base,
+`acces` (« Accès », migration `iris_role_acces`) ; les profils de droits — donc ce que l'agent
+voit et fait — restent attribués **dans Iris**, aucun profil par défaut. Côté Iris : accès ouvert
+= compte + appartenance sans profil ; accès retiré = compte banni, appartenance et profils
+conservés (le retrait du membre les supprimerait en cascade) ; l'admin plateforme n'est jamais
+touché. Reprise : les 9 appartenances Iris hors admin plateforme → 9 accès `acces` sur la
+collectivité (6 agents créés au Socle, sans mot de passe ni accès Socle).
 
 ## Code et tests
 
