@@ -1,0 +1,42 @@
+{
+  "realm": "mairie-demo",
+  "displayName": "Annuaire de la Mairie de démonstration (joue Entra ID)",
+  "enabled": true,
+  "sslRequired": "none",
+  "registrationAllowed": false,
+  "loginWithEmailAllowed": true,
+  "clients": [
+    {
+      "clientId": "edilumen-broker",
+      "name": "Fédération vers le Keycloak Edilumen",
+      "enabled": true,
+      "protocol": "openid-connect",
+      "publicClient": false,
+      "secret": "broker-secret-lab",
+      "standardFlowEnabled": true,
+      "directAccessGrantsEnabled": false,
+      "redirectUris": ["http://${LAB_HOST}:8180/realms/edilumen/broker/mairie-demo/endpoint*"],
+      "webOrigins": ["+"]
+    }
+  ],
+  "users": [
+    {
+      "username": "agent.mairie",
+      "email": "agent.mairie@mairie-demo.fr",
+      "emailVerified": true,
+      "firstName": "Agnès",
+      "lastName": "Mairie",
+      "enabled": true,
+      "credentials": [{ "type": "password", "value": "Mairie!2026", "temporary": false }]
+    },
+    {
+      "username": "intrus",
+      "email": "intrus@mairie-demo.fr",
+      "emailVerified": true,
+      "firstName": "Ivan",
+      "lastName": "Intrus",
+      "enabled": true,
+      "credentials": [{ "type": "password", "value": "Mairie!2026", "temporary": false }]
+    }
+  ]
+}

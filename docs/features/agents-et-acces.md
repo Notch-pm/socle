@@ -9,7 +9,7 @@
 
 | Lot | Contenu | État |
 |---|---|---|
-| 0 | Étude Keycloak (IdP dédié, fédéré aux annuaires des collectivités) et ADR | à faire |
+| 0 | Étude Keycloak (IdP dédié, fédéré aux annuaires des collectivités) et ADR | **fait** (2026-10-30) : 6 scénarios en local, [`labs/sso-keycloak/`](../../labs/sso-keycloak/README.md), ADR dans `architecture.md` |
 | 1 | Annuaire et matrice d'accès dans le Socle | **livré dans le code** (2026-10-30) |
 | 2 | `GET /v1/users` (scope `users`), lecture incrémentale | **livré dans le code** (2026-10-30, contrat 1.43.0) |
 | 3 | Consommation par Clara (`sync-socle-users`, écrans verrouillés), puis Iris | Clara : **codé** (2026-10-30, branche Clara `feature/agents-geres-par-socle`), comptes repris ; Iris : à faire |
@@ -87,6 +87,22 @@ Socle**, donc sans courriel ; 7 existaient) et 107 accès Clara. Règles :
 Conséquence acceptée : un agent non administrateur **sans** affectation dans Clara reçoit une
 affectation sur la racine quand Clara la tient en miroir (il voit aussi les courriers adressés à
 la collectivité) ; les affectations aux deux services `[TEST]` disparus sont retirées.
+
+## Lot 0 : ce que le lab a établi (2026-10-30)
+
+Keycloak + Supabase Auth local ([`labs/sso-keycloak/`](../../labs/sso-keycloak/README.md)) :
+- ✅ un agent pré-créé par la sync (sans mot de passe, non confirmé) se connecte par l'annuaire de
+  sa collectivité et retombe sur **le même compte** (même `id`) — pas de pont maison ;
+- ✅ inscriptions fermées : un agent authentifié mais **non provisionné** est refusé (422) ;
+- ✅ un compte **banni** (suspension) est refusé même avec une session Keycloak ouverte ;
+- ✅ connexion unique entre applications, découverte de l'annuaire par `kc_idp_hint` ;
+- ⚠️ **`scopes: 'openid'`** obligatoire dans `signInWithOAuth` (sinon 403 sur `userinfo`) ;
+- ⚠️ Keycloak doit avoir **une seule adresse publique**, vue à l'identique par les navigateurs et
+  par Supabase Auth (émetteur des jetons).
+
+Reste pour le lot 4 : l'hébergement de production (serveur loué en France ou Cloud-IAM sur
+Outscale), un essai avec un vrai Entra ID de collectivité, et l'écran du Socle qui associe un
+domaine d'e-mail à l'annuaire d'une collectivité.
 
 ## Code et tests
 

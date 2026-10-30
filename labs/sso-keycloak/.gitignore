@@ -1,0 +1,4 @@
+.env
+supabase/.env
+supabase/.temp/
+.playwright-mcp/

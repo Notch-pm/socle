@@ -1,0 +1,27 @@
+# Lot 0 de l'annuaire des agents : étude de la connexion unique par Keycloak.
+# Voir README.md. Rien ici ne touche la production.
+#
+# Un seul Keycloak, deux realms (importés au démarrage depuis ./realms) :
+#   - `edilumen`     : le fournisseur d'identité de la gamme (ce que verraient
+#                      Socle, Clara, Iris) ;
+#   - `mairie-demo`  : joue l'annuaire d'une collectivité (le rôle d'Entra ID),
+#                      fédéré dans `edilumen` par OIDC.
+#
+# ⚠️ LAB_HOST = l'IP de la machine sur le réseau local (pas localhost) : le
+# navigateur ET les conteneurs (Supabase Auth, et Keycloak lui-même pour la
+# fédération) doivent joindre la MÊME adresse, qui est aussi l'émetteur (`iss`)
+# des jetons. Windows ne résout pas `host.docker.internal`.
+services:
+  keycloak:
+    image: quay.io/keycloak/keycloak:26.1.4
+    command: ["start-dev", "--import-realm", "--http-port=8180"]
+    environment:
+      KC_BOOTSTRAP_ADMIN_USERNAME: admin
+      KC_BOOTSTRAP_ADMIN_PASSWORD: admin
+      KC_HOSTNAME: http://${LAB_HOST:?LAB_HOST requis (IP locale)}:8180
+      KC_HEALTH_ENABLED: "true"
+      LAB_HOST: ${LAB_HOST}
+    ports:
+      - "8180:8180"
+    volumes:
+      - ./realms:/opt/keycloak/data/import:ro
