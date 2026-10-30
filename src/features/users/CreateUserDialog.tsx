@@ -1,3 +1,4 @@
+import * as React from "react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
@@ -13,31 +14,33 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Field } from "@/components/ui/field";
 import { useCreateOrgUser } from "@/features/users/useOrgUsers";
-
-const ROLES = [
-  { value: "admin", label: "Administrateur" },
-  { value: "consultant", label: "Consultant" },
-] as const;
+import { AccessRolesFields } from "@/features/users/AccessRolesFields";
+import { NO_ACCESS, SOCLE_APPLICATION_ID, type AccessApplication } from "@/features/users/agentAccess";
 
 const schema = z.object({
   email: z.string().email("Email invalide"),
   first_name: z.string().min(1, "Prénom obligatoire"),
   last_name: z.string().min(1, "Nom obligatoire"),
-  role: z.enum(["admin", "consultant"]),
 });
 
 type FormValues = z.infer<typeof schema>;
+
+const DEFAULT_ROLES = { [SOCLE_APPLICATION_ID]: "consultant" };
 
 export function CreateUserDialog({
   open,
   onOpenChange,
   organizationId,
+  applications,
 }: {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   organizationId: string;
+  applications: AccessApplication[];
 }) {
   const createUser = useCreateOrgUser(organizationId);
+  const [roles, setRoles] = React.useState<Record<string, string>>(DEFAULT_ROLES);
+  const [rolesError, setRolesError] = React.useState<string | null>(null);
   const {
     register,
     handleSubmit,
@@ -45,19 +48,30 @@ export function CreateUserDialog({
     formState: { errors },
   } = useForm<FormValues>({
     resolver: zodResolver(schema),
-    defaultValues: { email: "", first_name: "", last_name: "", role: "consultant" },
+    defaultValues: { email: "", first_name: "", last_name: "" },
   });
 
   function close() {
     reset();
+    setRoles(DEFAULT_ROLES);
+    setRolesError(null);
     createUser.reset();
     onOpenChange(false);
   }
 
   function onSubmit(values: FormValues) {
+    const socleRole = roles[SOCLE_APPLICATION_ID] ?? NO_ACCESS;
+    const appAccess = applications
+      .map((app) => ({ application_id: app.id, role_code: roles[app.id] ?? NO_ACCESS }))
+      .filter((a) => a.role_code !== NO_ACCESS);
+    if (socleRole === NO_ACCESS && appAccess.length === 0) {
+      setRolesError("Ouvrez l'accès à au moins une application.");
+      return;
+    }
+    setRolesError(null);
     createUser.mutate(
-      { ...values, organization_id: organizationId },
-      { onSuccess: (result) => (result.email_sent || !result.is_new_user) && close() },
+      { ...values, role: socleRole, organization_id: organizationId, applications: appAccess },
+      { onSuccess: (result) => (result.email_sent || !result.is_new_user || socleRole === NO_ACCESS) && close() },
     );
   }
 
@@ -69,7 +83,7 @@ export function CreateUserDialog({
         <DialogHeader>
           <DialogTitle>Nouvel utilisateur</DialogTitle>
           <DialogDescription>
-            Un email d'invitation sera envoyé pour définir le mot de passe.
+            Avec un accès au Socle, un email d'invitation est envoyé pour définir le mot de passe.
           </DialogDescription>
         </DialogHeader>
 
@@ -85,20 +99,14 @@ export function CreateUserDialog({
               <Input id="user-last-name" {...register("last_name")} />
             </Field>
           </div>
-          <Field label="Rôle" htmlFor="user-role">
-            <select
-              id="user-role"
-              {...register("role")}
-              className="h-11 w-full rounded-lg border border-input bg-background px-3 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-            >
-              {ROLES.map((r) => (
-                <option key={r.value} value={r.value}>
-                  {r.label}
-                </option>
-              ))}
-            </select>
-          </Field>
+          <AccessRolesFields
+            idPrefix="user-access"
+            applications={applications}
+            value={roles}
+            onChange={(app, role) => setRoles((prev) => ({ ...prev, [app]: role }))}
+          />
 
+          {rolesError ? <p className="text-sm text-destructive">{rolesError}</p> : null}
           {createUser.isError ? (
             <p className="text-sm text-destructive">{(createUser.error as Error).message}</p>
           ) : null}
@@ -120,7 +128,7 @@ export function CreateUserDialog({
               Annuler
             </Button>
             <Button type="submit" disabled={createUser.isPending}>
-              {createUser.isPending ? "Envoi…" : "Créer et inviter"}
+              {createUser.isPending ? "Envoi…" : "Créer"}
             </Button>
           </DialogFooter>
         </form>

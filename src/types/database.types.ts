@@ -12,31 +12,6 @@ export type Database = {
   __InternalSupabase: {
     PostgrestVersion: "14.5"
   }
-  graphql_public: {
-    Tables: {
-      [_ in never]: never
-    }
-    Views: {
-      [_ in never]: never
-    }
-    Functions: {
-      graphql: {
-        Args: {
-          extensions?: Json
-          operationName?: string
-          query?: string
-          variables?: Json
-        }
-        Returns: Json
-      }
-    }
-    Enums: {
-      [_ in never]: never
-    }
-    CompositeTypes: {
-      [_ in never]: never
-    }
-  }
   public: {
     Tables: {
       ai_usage_consumer_counters: {
@@ -466,6 +441,38 @@ export type Database = {
             columns: ["organization_id"]
             isOneToOne: false
             referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      application_roles: {
+        Row: {
+          application_id: string
+          code: string
+          is_admin: boolean
+          label: string
+          sort_order: number
+        }
+        Insert: {
+          application_id: string
+          code: string
+          is_admin?: boolean
+          label: string
+          sort_order?: number
+        }
+        Update: {
+          application_id?: string
+          code?: string
+          is_admin?: boolean
+          label?: string
+          sort_order?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "application_roles_application_id_fkey"
+            columns: ["application_id"]
+            isOneToOne: false
+            referencedRelation: "applications"
             referencedColumns: ["id"]
           },
         ]
@@ -1006,18 +1013,21 @@ export type Database = {
           id: string
           name: string
           position: number
+          single_active: boolean
         }
         Insert: {
           created_at?: string
           id: string
           name: string
           position?: number
+          single_active?: boolean
         }
         Update: {
           created_at?: string
           id?: string
           name?: string
           position?: number
+          single_active?: boolean
         }
         Relationships: []
       }
@@ -1897,6 +1907,83 @@ export type Database = {
           },
         ]
       }
+      signature_usage_events: {
+        Row: {
+          application_id: string
+          approvals_count: number
+          documents_count: number
+          external_id: string
+          id: string
+          integration_id: string
+          occurred_at: string
+          organization_id: string | null
+          outcome: string
+          period: string
+          recorded_at: string
+          root_organization_id: string
+          signatures_count: number
+        }
+        Insert: {
+          application_id: string
+          approvals_count?: number
+          documents_count?: number
+          external_id: string
+          id?: string
+          integration_id: string
+          occurred_at: string
+          organization_id?: string | null
+          outcome: string
+          period: string
+          recorded_at?: string
+          root_organization_id: string
+          signatures_count?: number
+        }
+        Update: {
+          application_id?: string
+          approvals_count?: number
+          documents_count?: number
+          external_id?: string
+          id?: string
+          integration_id?: string
+          occurred_at?: string
+          organization_id?: string | null
+          outcome?: string
+          period?: string
+          recorded_at?: string
+          root_organization_id?: string
+          signatures_count?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "signature_usage_events_application_id_fkey"
+            columns: ["application_id"]
+            isOneToOne: false
+            referencedRelation: "applications"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "signature_usage_events_integration_id_fkey"
+            columns: ["integration_id"]
+            isOneToOne: false
+            referencedRelation: "integrations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "signature_usage_events_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "signature_usage_events_root_organization_id_fkey"
+            columns: ["root_organization_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       smtp_settings: {
         Row: {
           created_at: string
@@ -1950,6 +2037,71 @@ export type Database = {
           },
         ]
       }
+      user_application_access: {
+        Row: {
+          application_id: string
+          created_at: string
+          created_by: string | null
+          id: string
+          is_active: boolean
+          organization_id: string
+          role_code: string
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          application_id: string
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          is_active?: boolean
+          organization_id: string
+          role_code: string
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          application_id?: string
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          is_active?: boolean
+          organization_id?: string
+          role_code?: string
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "user_application_access_application_id_role_code_fkey"
+            columns: ["application_id", "role_code"]
+            isOneToOne: false
+            referencedRelation: "application_roles"
+            referencedColumns: ["application_id", "code"]
+          },
+          {
+            foreignKeyName: "user_application_access_created_by_fkey"
+            columns: ["created_by"]
+            isOneToOne: false
+            referencedRelation: "users"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "user_application_access_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "user_application_access_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "users"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       user_organizations: {
         Row: {
           id: string
@@ -1994,6 +2146,8 @@ export type Database = {
           global_role: string
           id: string
           last_name: string | null
+          status: string
+          updated_at: string
         }
         Insert: {
           created_at?: string | null
@@ -2002,6 +2156,8 @@ export type Database = {
           global_role: string
           id?: string
           last_name?: string | null
+          status?: string
+          updated_at?: string
         }
         Update: {
           created_at?: string | null
@@ -2010,6 +2166,8 @@ export type Database = {
           global_role?: string
           id?: string
           last_name?: string | null
+          status?: string
+          updated_at?: string
         }
         Relationships: []
       }
@@ -2057,6 +2215,17 @@ export type Database = {
       archive_ai_usage_events: {
         Args: { p_keep_months?: number }
         Returns: number
+      }
+      citizen_contact_link: {
+        Args: {
+          p_account_id: string
+          p_fields: Json
+          p_organization_id: string
+        }
+        Returns: {
+          contact_id: string
+          outcome: string
+        }[]
       }
       contacts_outside_quartiers: {
         Args: { p_org_id: string }
@@ -2233,6 +2402,20 @@ export type Database = {
         }
         Returns: boolean
       }
+      record_signature_usage: {
+        Args: {
+          p_application: string
+          p_approvals: number
+          p_documents: number
+          p_external_id: string
+          p_occurred_at: string
+          p_organization_id: string
+          p_outcome: string
+          p_provider: string
+          p_signatures: number
+        }
+        Returns: string
+      }
       release_stale_ai_reservations: {
         Args: { p_max_age_minutes?: number }
         Returns: number
@@ -2341,9 +2524,44 @@ export type Database = {
         Args: { p_organization_integration_id: string; p_patch: Json }
         Returns: undefined
       }
+      set_user_status: {
+        Args: { p_status: string; p_user_id: string }
+        Returns: undefined
+      }
       settle_ai_usage: {
         Args: { p_actual_tokens: number; p_event_id: string; p_status: string }
         Returns: undefined
+      }
+      signature_usage_platform: {
+        Args: { p_period: string }
+        Returns: {
+          approvals: number
+          documents: number
+          finished: number
+          integration_id: string
+          integration_name: string
+          organization_name: string
+          refused: number
+          root_organization_id: string
+          signatures: number
+          stopped: number
+          workflows: number
+        }[]
+      }
+      signature_usage_summary: {
+        Args: { p_months?: number; p_organization_id: string }
+        Returns: {
+          approvals: number
+          documents: number
+          finished: number
+          integration_id: string
+          integration_name: string
+          period: string
+          refused: number
+          signatures: number
+          stopped: number
+          workflows: number
+        }[]
       }
       stats_contacts_by_quartier: {
         Args: { p_org_id: string }
@@ -2482,9 +2700,6 @@ export type CompositeTypes<
     : never
 
 export const Constants = {
-  graphql_public: {
-    Enums: {},
-  },
   public: {
     Enums: {},
   },

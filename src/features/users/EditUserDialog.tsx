@@ -9,41 +9,37 @@ import {
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Field } from "@/components/ui/field";
-import { useUpdateOrgUser, type OrgUser } from "@/features/users/useOrgUsers";
-
-const ROLES = [
-  { value: "admin", label: "Administrateur" },
-  { value: "consultant", label: "Consultant" },
-] as const;
+import { useUpdateOrgUser, type OrgAgent } from "@/features/users/useOrgUsers";
+import { AccessRolesFields, withSocle } from "@/features/users/AccessRolesFields";
+import { currentRole, type AccessApplication } from "@/features/users/agentAccess";
 
 export function EditUserDialog({
   user,
   organizationId,
+  applications,
   onClose,
 }: {
-  user: OrgUser | null;
+  user: OrgAgent | null;
   organizationId: string;
+  applications: AccessApplication[];
   onClose: () => void;
 }) {
   const updateUser = useUpdateOrgUser(organizationId);
   const [firstName, setFirstName] = React.useState("");
   const [lastName, setLastName] = React.useState("");
-  const [role, setRole] = React.useState("consultant");
+  const [roles, setRoles] = React.useState<Record<string, string>>({});
 
   React.useEffect(() => {
     if (!user) return;
     setFirstName(user.firstName ?? "");
     setLastName(user.lastName ?? "");
-    setRole(user.role);
-  }, [user]);
+    setRoles(Object.fromEntries(withSocle(applications).map((app) => [app.id, currentRole(user, app.id)])));
+  }, [user, applications]);
 
   function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     if (!user) return;
-    updateUser.mutate(
-      { userId: user.userId, membershipId: user.membershipId, firstName, lastName, role },
-      { onSuccess: onClose },
-    );
+    updateUser.mutate({ agent: user, firstName, lastName, roles }, { onSuccess: onClose });
   }
 
   return (
@@ -73,20 +69,12 @@ export function EditUserDialog({
                 />
               </Field>
             </div>
-            <Field label="Rôle" htmlFor="edit-role">
-              <select
-                id="edit-role"
-                value={role}
-                onChange={(e) => setRole(e.target.value)}
-                className="h-11 w-full rounded-lg border border-input bg-background px-3 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-              >
-                {ROLES.map((r) => (
-                  <option key={r.value} value={r.value}>
-                    {r.label}
-                  </option>
-                ))}
-              </select>
-            </Field>
+            <AccessRolesFields
+              idPrefix="edit-access"
+              applications={applications}
+              value={roles}
+              onChange={(app, role) => setRoles((prev) => ({ ...prev, [app]: role }))}
+            />
 
             {updateUser.isError ? (
               <p className="text-sm text-destructive">{(updateUser.error as Error).message}</p>

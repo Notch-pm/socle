@@ -119,6 +119,29 @@ aucun endpoint, il décrit ce qui existe **en base**.
   les profils de ses membres » (`EXISTS user_organizations … is_org_admin(...)`) · écriture
   UPDATE own + UPDATE par admin d'org du membre. **Aucune policy INSERT ni DELETE** (création par
   le trigger `SECURITY DEFINER` / service role).
+- `status` text NOT NULL (`active` | `suspended`, CHECK), `updated_at` (2026-10-30) — écrit par la
+  RPC `set_user_status` seule, qui pose aussi `auth.users.banned_until` (voir
+  [agents et accès](features/agents-et-acces.md)).
+- ⚠️ **Privilèges de colonne** (2026-10-30) : `anon`/`authenticated` n'ont plus que
+  `UPDATE (first_name, last_name)` — ni INSERT, ni DELETE, ni écriture de `global_role`/`status`.
+  Avant, la policy « update own » laissait un compte s'écrire `global_role = 'super_admin'`.
+  Le RLS dit quelles lignes, les privilèges quelles colonnes. Policies SELECT/UPDATE
+  supplémentaires pour l'admin d'un organisme où l'agent a un accès `user_application_access`.
+
+### `application_roles` et `user_application_access` — accès aux applications de la gamme (2026-10-30)
+
+- `application_roles (application_id, code)` PK : rôles de base déclarés par chaque application
+  (seed Iris, Clara ; ni Socle — ses rôles vivent dans `user_organizations` — ni Nora). Lecture
+  `authenticated`, écriture super admin.
+- `user_application_access` : `user_id` (CASCADE), `application_id`, `organization_id` (CASCADE,
+  tout organisme de l'arbre), `role_code` (FK composite vers `application_roles`), `is_active`,
+  `created_by`, `updated_at` ; **UNIQUE (user_id, application_id, organization_id)**.
+- Trigger `enforce_user_application_access_subscription` (SECURITY DEFINER, EXECUTE révoqué) :
+  la racine de l'organisme doit être abonnée à l'application, **à la pose seulement**.
+- **RLS** : lecture `user_id = auth.uid() OR is_admin_of_self_or_ancestor(organization_id)` ·
+  INSERT/UPDATE/DELETE `is_admin_of_self_or_ancestor(organization_id)`.
+- ⚠️ Retirer un accès = `is_active = false`, jamais DELETE côté UI : l'application consommatrice
+  doit apprendre le retrait pour bannir le compte.
 
 ### `user_organizations` — appartenance (jointure user↔org)
 

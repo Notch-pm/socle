@@ -305,6 +305,15 @@ Envoi des e-mails —, `?section=`, `organizationSections.ts`), gestion superadm
 - ⚠️ Décision d'auth dans `_shared/apiKeyAuth.ts`, **identique dans les quatre fonctions** (test
   d'identité). ⚠️ Ordre de déploiement : migration → abonnements et clés dans l'UI → fonctions.
 
+### [Annuaire des agents et accès aux applications](docs/features/agents-et-acces.md)
+- Le Socle décide **qui accède à quelle application, sur quel organisme, avec quel rôle de base**
+  (`user_application_access`, rôles déclarés dans `application_roles`) ; droits fins dans chaque
+  application. Le Socle reste piloté par `user_organizations`. Cible : Keycloak authentifie, le
+  Socle autorise (lots 0-4 dans la fiche).
+- ⚠️ Retirer un accès = `is_active = false`, jamais DELETE. Suspension (`users.status`) par la
+  RPC `set_user_status` seule. ⚠️ `users` : le navigateur n'écrit que prénom et nom (privilèges
+  de colonne — sinon `global_role` redevient inscriptible).
+
 ### [Intégrations partenaires](docs/features/integrations.md)
 - **Catalogue** (`integrations`, types en table, plusieurs applications par intégration) ≠
   **configuration** d'une racine (`organization_integrations`, super admin seul). Seule Arpège
