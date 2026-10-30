@@ -30,7 +30,7 @@ export function buildOpenApiDocument(serverUrl: string): Record<string, unknown>
     openapi: "3.1.0",
     info: {
       title: "API Socle — Référentiel de la gamme",
-      version: "1.42.0",
+      version: "1.43.0",
       description: [
         "API **en lecture seule** exposant le référentiel central de la gamme : les",
         "**organisations** (et sous-organisations) avec l'intégralité de leur configuration,",
@@ -66,6 +66,10 @@ export function buildOpenApiDocument(serverUrl: string): Record<string, unknown>
         "**`integrations`** : elle sert les **identifiants** du partenaire (Arpège…). Le",
         "**catalogue** des intégrations (`GET /v1/integrations`), lui, ne sert aucun secret et se",
         "lit avec `read`.",
+        "",
+        "L'**annuaire des agents** (`GET /v1/users`) exige le scope **`users`** et une clé",
+        "**rattachée à une application** : il ne sert que les agents à qui le Socle ouvre",
+        "**cette** application.",
         "",
         "## Formats",
         "Réponses en **JSON** (`application/json`, UTF-8). Les dates sont au format ISO 8601.",
@@ -146,6 +150,13 @@ export function buildOpenApiDocument(serverUrl: string): Record<string, unknown>
           "déjà résolu — pour qu'une application ne propose que ce qui se paiera sur un crédit ouvert.",
       },
       { name: "Documents", description: "Accès temporaire aux documents privés." },
+      {
+        name: "Agents",
+        description:
+          "Les agents d'une application et leurs accès : le Socle décide qui accède à quelle " +
+          "application, sur quel organisme, avec quel rôle de base. Les droits fins restent dans " +
+          "l'application.",
+      },
       {
         name: "Portail",
         description:
@@ -549,6 +560,65 @@ export function buildOpenApiDocument(serverUrl: string): Record<string, unknown>
               },
             },
             ...errorResponses("400", "401", "404", "500"),
+          },
+        },
+      },
+      "/v1/users": {
+        get: {
+          tags: ["Agents"],
+          summary: "Agents de l'application sur une collectivité (accès et rôle de base)",
+          description: [
+            "Les agents à qui le Socle ouvre **l'application de la clé** sur l'arborescence d'une",
+            "collectivité, avec leurs accès par organisme et le rôle de base que l'application",
+            "déclare (1.43.0). Une application ne voit **jamais** les accès d'une autre.",
+            "",
+            "**Clé de correspondance : `socle_user_id`.** L'e-mail sert à rattacher l'identité de",
+            "connexion, pas à reconnaître l'agent (il peut changer).",
+            "",
+            "**Ce que l'application en fait** :",
+            "- `is_active: true` ⇒ le compte existe et peut se connecter ; chaque accès",
+            "  `is_active: true` ouvre l'organisme avec `role` ;",
+            "- `is_active: false` (agent suspendu, ou plus aucun accès actif) ⇒ **bannir** le compte,",
+            "  sans le supprimer ;",
+            "- un accès `is_active: false` ⇒ fermer cet organisme seulement ;",
+            "- les droits fins (profils, signataire…) restent l'affaire de l'application.",
+            "",
+            "**Lecture incrémentale** : passez `updated_since` = le `as_of` de l'appel précédent ;",
+            "seuls les agents dont le compte ou un accès a changé depuis reviennent, **avec leur état",
+            "complet**. Un doublon est possible (`as_of` est pris un peu dans le passé), un oubli non.",
+            "Une **réconciliation complète** (sans `updated_since`), une fois par nuit, rattrape les",
+            "suppressions en cascade : un agent **absent** de la liste complète n'a plus d'accès.",
+            "",
+            "Scope `users` absent, ou clé sans application ⇒ `403` ; `tenant_id` ou `updated_since`",
+            "invalide ⇒ `400` ; collectivité hors périmètre ⇒ `404`.",
+          ].join("\n"),
+          parameters: [
+            {
+              name: "tenant_id",
+              in: "query",
+              required: true,
+              description: "Identifiant de la collectivité (organisation du périmètre de la clé).",
+              schema: { type: "string", format: "uuid" },
+            },
+            {
+              name: "updated_since",
+              in: "query",
+              required: false,
+              description:
+                "Date et heure ISO 8601 (le `as_of` de l'appel précédent). Absent = liste complète.",
+              schema: { type: "string", format: "date-time" },
+            },
+          ],
+          responses: {
+            "200": {
+              description: "Agents de l'application, triés par e-mail.",
+              content: {
+                "application/json": {
+                  schema: { $ref: "#/components/schemas/AgentsResponse" },
+                },
+              },
+            },
+            ...errorResponses("400", "401", "403", "404", "500"),
           },
         },
       },
@@ -2109,6 +2179,94 @@ export function buildOpenApiDocument(serverUrl: string): Record<string, unknown>
               description: "Début d'après-midi (fin de la pause), ou `null`.",
             },
             afternoonClose: { type: "string", pattern: "^([01]\\d|2[0-3]):[0-5]\\d$", description: "Fermeture." },
+          },
+        },
+        AgentsResponse: {
+          type: "object",
+          required: ["agents", "as_of"],
+          properties: {
+            agents: { type: "array", items: { $ref: "#/components/schemas/Agent" } },
+            as_of: {
+              type: "string",
+              format: "date-time",
+              description: "À repasser en `updated_since` à l'appel suivant.",
+            },
+          },
+        },
+        Agent: {
+          type: "object",
+          description:
+            "Un agent de l'application appelante. **Données personnelles** : réservé à l'usage " +
+            "interne de l'application (provisionnement des comptes).",
+          required: [
+            "socle_user_id",
+            "email",
+            "first_name",
+            "last_name",
+            "status",
+            "is_active",
+            "accesses",
+            "updated_at",
+          ],
+          properties: {
+            socle_user_id: {
+              type: "string",
+              format: "uuid",
+              description: "Identifiant stable de l'agent dans le Socle : la clé de correspondance.",
+            },
+            email: { type: "string", format: "email", description: "En minuscules." },
+            first_name: { type: ["string", "null"] },
+            last_name: { type: ["string", "null"] },
+            status: {
+              type: "string",
+              enum: ["active", "suspended"],
+              description: "`suspended` = aucun accès à aucune application de la gamme.",
+            },
+            is_active: {
+              type: "boolean",
+              description: "Statut actif ET au moins un accès actif. `false` ⇒ bannir le compte.",
+            },
+            accesses: { type: "array", items: { $ref: "#/components/schemas/AgentAccess" } },
+            updated_at: {
+              type: ["string", "null"],
+              format: "date-time",
+              description: "Dernier changement du compte ou d'un de ses accès.",
+            },
+          },
+          example: {
+            socle_user_id: "3f1d2c4b-8a9e-4b7c-9d1e-2f3a4b5c6d7e",
+            email: "alice.martin@ville.fr",
+            first_name: "Alice",
+            last_name: "Martin",
+            status: "active",
+            is_active: true,
+            accesses: [
+              {
+                organization_id: "7c9e6679-7425-40de-944b-e07fc1f90ae7",
+                role: "gestionnaire",
+                role_label: "Gestionnaire",
+                is_admin: false,
+                is_active: true,
+                updated_at: "2026-10-30T10:00:00.000Z",
+              },
+            ],
+            updated_at: "2026-10-30T10:00:00.000Z",
+          },
+        },
+        AgentAccess: {
+          type: "object",
+          description: "Accès de l'agent à l'application appelante, sur un organisme de la collectivité.",
+          required: ["organization_id", "role", "role_label", "is_admin", "is_active", "updated_at"],
+          properties: {
+            organization_id: { type: "string", format: "uuid" },
+            role: { type: "string", description: "Code du rôle de base déclaré par l'application." },
+            role_label: { type: "string" },
+            is_admin: { type: "boolean", description: "Rôle d'administration de l'application." },
+            is_active: {
+              type: "boolean",
+              description: "`false` = accès retiré : fermer cet organisme à l'agent.",
+            },
+            updated_at: { type: ["string", "null"], format: "date-time" },
           },
         },
         OrganizationAttributions: {

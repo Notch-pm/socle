@@ -39,6 +39,7 @@ import { serializePortalPage } from "./_shared/portalPage.ts";
 import { serializeAgentGuidance } from "./_shared/agentGuidance.ts";
 import { serializePortalOrganizationsInfo, type UserInfoOrganization } from "./_shared/userInfo.ts";
 import { serializeOrganizationAttributions, type AttributionsOrganization } from "./_shared/attributions.ts";
+import { parseUpdatedSince, serializeAgents, type AgentAccessRow, type AgentRoleRow } from "./_shared/agents.ts";
 import {
   partnerDirectory,
   procedureVisibleTo,
@@ -836,6 +837,85 @@ Deno.serve(async (req: Request) => {
           (organizations ?? []) as AttributionsOrganization[],
           (rows ?? []) as Array<{ organization_id: unknown; attributions: unknown; updated_at: unknown }>,
         ),
+        corsHeaders,
+      );
+    }
+
+    // --- /v1/users?tenant_id=&updated_since= ---
+    // Les agents de l'application de la clé sur le sous-arbre d'une
+    // collectivité (annuaire des agents, lot 2). Gardes, dans l'ordre :
+    //   1. scope `users` explicite (403) — `read` ne suffit pas : ce sont des
+    //      données personnelles d'agents ;
+    //   2. clé rattachée à une application (403) — c'est elle qui choisit les
+    //      accès servis, une application ne voit JAMAIS ceux d'une autre ;
+    //   3. collectivité dans le périmètre (404, existence non révélée).
+    // Lecture incrémentale par `updated_since` (pas de webhook) ; `as_of` est
+    // la valeur à repasser à l'appel suivant.
+    if (segments.length === 2 && segments[0] === "v1" && segments[1] === "users") {
+      if (!Array.isArray(apiKey.scopes) || !apiKey.scopes.includes("users")) {
+        return errorResponse(
+          "forbidden",
+          "Cette clé ne porte pas le scope « users » requis pour l'annuaire des agents.",
+          corsHeaders,
+        );
+      }
+      const application = apiKey.consumer;
+      if (!application) {
+        return errorResponse(
+          "forbidden",
+          "Cette clé n'est rattachée à aucune application : ses agents ne peuvent pas être déterminés.",
+          corsHeaders,
+        );
+      }
+      const tenantId = url.searchParams.get("tenant_id") ?? "";
+      if (!isUuid(tenantId)) {
+        return errorResponse("bad_request", "Paramètre tenant_id invalide.", corsHeaders);
+      }
+      if (!inScope(tenantId)) {
+        return errorResponse("not_found", "Collectivité introuvable.", corsHeaders);
+      }
+      const since = parseUpdatedSince(url.searchParams.get("updated_since"));
+      if (since === undefined) {
+        return errorResponse(
+          "bad_request",
+          "Paramètre updated_since invalide (date et heure ISO 8601 attendues).",
+          corsHeaders,
+        );
+      }
+      // Pris AVANT la lecture, et un peu dans le passé : une écriture
+      // concurrente sera relue au prochain appel plutôt qu'oubliée.
+      const asOf = new Date(Date.now() - 5_000).toISOString();
+
+      const { data: subtree, error: subtreeError } = await admin.rpc("org_subtree_ids", { root: tenantId });
+      if (subtreeError) throw subtreeError;
+      const treeIds = Array.isArray(subtree) ? (subtree as string[]) : [];
+
+      const [{ data: rows, error: rowsError }, { data: roles, error: rolesError }] = await Promise.all([
+        treeIds.length === 0
+          ? Promise.resolve({ data: [], error: null })
+          : admin
+            .from("user_application_access")
+            .select(
+              "organization_id, role_code, is_active, updated_at, " +
+                "users!user_application_access_user_id_fkey(id, email, first_name, last_name, status, updated_at)",
+            )
+            .eq("application_id", application)
+            .in("organization_id", treeIds),
+        admin.from("application_roles").select("code, label, is_admin").eq("application_id", application),
+      ]);
+      if (rowsError) throw rowsError;
+      if (rolesError) throw rolesError;
+
+      return jsonResponse(
+        200,
+        {
+          agents: serializeAgents(
+            (rows ?? []) as unknown as AgentAccessRow[],
+            (roles ?? []) as AgentRoleRow[],
+            since,
+          ),
+          as_of: asOf,
+        },
         corsHeaders,
       );
     }

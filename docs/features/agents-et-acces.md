@@ -11,7 +11,7 @@
 |---|---|---|
 | 0 | Étude Keycloak (IdP dédié, fédéré aux annuaires des collectivités) et ADR | à faire |
 | 1 | Annuaire et matrice d'accès dans le Socle | **livré dans le code** (2026-10-30) |
-| 2 | `GET /v1/users` (scope `users`) et signal de changement aux applications | à faire |
+| 2 | `GET /v1/users` (scope `users`), lecture incrémentale | **livré dans le code** (2026-10-30, contrat 1.43.0) |
 | 3 | Consommation par Clara puis Iris (`sync-socle-users`, écrans verrouillés) | à faire |
 | 4 | Connexion OIDC par Keycloak dans chaque application | à faire |
 
@@ -56,6 +56,22 @@ organisme). Les agents sans plus aucun accès sont masqués derrière une case �
   le mot de passe du Socle). Tant que la connexion unique (lot 4) n'est pas en place, chaque
   application invite ses agents.
 - Recherche du compte existant dans `public.users` par e-mail (plus `listUsers`, borné à 1 000).
+
+## `GET /v1/users` (public-api, contrat 1.43.0)
+
+- Gardes : scope `users` (403), clé **rattachée à une application** (403), `tenant_id` dans le
+  périmètre (404). Ne sert que les accès de l'application de la clé (`api_keys.consumer`) : une
+  application ne voit jamais ceux d'une autre. Une clé Iris ou Clara existante doit **gagner le
+  scope `users`** (nouvelle clé ou ajout du scope) avant que l'application consomme.
+- Réponse `{ agents, as_of }` : un agent = son état **complet** (tous ses accès sur le
+  sous-arbre), `is_active` résumé (statut actif ET un accès actif). Sérialisation en liste
+  blanche, pure : `_shared/agents.ts` (`agents.test.ts`).
+- ⚠️ **Pas de webhook** (écart avec le plan initial, décidé en lot 2) : la base n'a pas `pg_net`,
+  et un signal exigerait un secret par application. L'application lit **par incréments**
+  (`updated_since` = `as_of` précédent, pris 5 s dans le passé), par exemple chaque minute.
+- ⚠️ La lecture incrémentale ne voit que ce qui **change** : un accès ne se supprime donc jamais
+  (policy DELETE retirée, privilège révoqué — migration `api_users_scope`). Restent les cascades
+  (organisme ou compte supprimé), rattrapées par la réconciliation complète de la nuit.
 
 ## Code et tests
 

@@ -309,7 +309,8 @@ Envoi des e-mails —, `?section=`, `organizationSections.ts`), gestion superadm
 - Le Socle décide **qui accède à quelle application, sur quel organisme, avec quel rôle de base**
   (`user_application_access`, rôles déclarés dans `application_roles`) ; droits fins dans chaque
   application. Le Socle reste piloté par `user_organizations`. Cible : Keycloak authentifie, le
-  Socle autorise (lots 0-4 dans la fiche).
+  Socle autorise (lots 0-4 dans la fiche). Servi par `GET /v1/users` (scope `users`, clé
+  rattachée à une application, lecture incrémentale — pas de webhook).
 - ⚠️ Retirer un accès = `is_active = false`, jamais DELETE. Suspension (`users.status`) par la
   RPC `set_user_status` seule. ⚠️ `users` : le navigateur n'écrit que prénom et nom (privilèges
   de colonne — sinon `global_role` redevient inscriptible).

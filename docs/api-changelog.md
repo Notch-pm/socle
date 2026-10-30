@@ -1,7 +1,7 @@
 # Journal des évolutions des API publiques
 
 > **Public** : équipes consommatrices (Ariane, Clara, Iris, partenaires) · **Question traitée** :
-> quand un contrat d'API a-t-il changé, et comment ? · **Dernière mise à jour** : 2026-10-25
+> quand un contrat d'API a-t-il changé, et comment ? · **Dernière mise à jour** : 2026-10-30
 
 Journal **append-only** : chaque évolution de la surface de contrat des API publiques
 (`public-api`, `contacts-api`, `ai-api`, `audience-api`) — endpoint, paramètre, champ de réponse,
@@ -10,6 +10,24 @@ réécrite ; une correction s'ajoute sous une nouvelle date. Politique de compat
 consommateur : [integration.md](./integration.md#politique-de-compatibilité-v1).
 
 Format d'une entrée : `## AAAA-MM-JJ — <api> — ajout|correctif|rupture`
+
+---
+
+## 2026-10-30 — public-api — ajout (annuaire des agents, 1.43.0)
+
+- `GET /v1/users?tenant_id=&updated_since=`, scope **`users`** (nouveau) **et** clé rattachée à une
+  application (`403` sinon) : les agents à qui le Socle ouvre **cette** application sur
+  l'arborescence de la collectivité, leurs accès par organisme et le rôle de base que
+  l'application déclare. Réponse `{ agents: Agent[], as_of }`. Une application ne voit jamais
+  les accès d'une autre.
+- **Clé de correspondance : `socle_user_id`** (l'e-mail sert au rattachement de l'identité de
+  connexion). `is_active: false` (agent suspendu, ou plus aucun accès actif) ⇒ bannir le compte
+  sans le supprimer ; un accès `is_active: false` ⇒ fermer cet organisme seulement.
+- **Lecture incrémentale** : `updated_since` = le `as_of` précédent (pris 5 s dans le passé :
+  doublons possibles, oublis non). Pas de webhook. Réconciliation complète conseillée chaque nuit :
+  un agent absent de la liste complète n'a plus d'accès.
+- Côté Socle : un accès ne se supprime plus (DELETE révoqué), il se désactive.
+- Additif : rien ne change pour les appels existants. Clara puis Iris consomment (lot 3).
 
 ---
 

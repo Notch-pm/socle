@@ -45,6 +45,7 @@ describe("buildOpenApiDocument", () => {
         "/v1/document-templates/{id}/signed-url",
         "/v1/quartiers",
         "/v1/documents/signed-url",
+        "/v1/users",
       ]),
     );
     for (const path of paths) {
@@ -330,11 +331,44 @@ describe("contrat — traduction de la communication usager (1.26.0)", () => {
   });
 });
 
+describe("contrat — annuaire des agents (1.43.0)", () => {
+  const doc = buildOpenApiDocument("https://example.supabase.co/functions/v1/public-api") as any;
+  const op = doc.paths["/v1/users"].get;
+
+  it("scope users, clé rattachée à une application : 403 documenté", () => {
+    expect(op.description).toContain("Scope `users` absent, ou clé sans application ⇒ `403`");
+    expect(Object.keys(op.responses)).toEqual(expect.arrayContaining(["200", "400", "403", "404"]));
+    expect(doc.info.description).toContain("**`users`**");
+  });
+
+  it("⚠️ dit que la clé de correspondance est socle_user_id, pas l'e-mail", () => {
+    expect(op.description).toContain("**Clé de correspondance : `socle_user_id`.**");
+  });
+
+  it("⚠️ dit qu'un accès retiré reste servi et qu'on bannit sans supprimer", () => {
+    expect(op.description).toContain("**bannir** le compte");
+    expect(op.description).toContain("sans le supprimer");
+    expect(doc.components.schemas.AgentAccess.properties.is_active.description).toContain("accès retiré");
+  });
+
+  it("lecture incrémentale par updated_since, as_of à repasser, réconciliation complète", () => {
+    expect(op.parameters.map((p: { name: string }) => p.name)).toEqual(["tenant_id", "updated_since"]);
+    expect(doc.components.schemas.AgentsResponse.required).toEqual(["agents", "as_of"]);
+    expect(op.description).toContain("un agent **absent** de la liste complète n'a plus d'accès");
+  });
+
+  it("le schéma Agent liste exactement les champs servis", () => {
+    expect(Object.keys(doc.components.schemas.Agent.properties).sort()).toEqual(
+      ["accesses", "email", "first_name", "is_active", "last_name", "socle_user_id", "status", "updated_at"].sort(),
+    );
+  });
+});
+
 describe("contrat — documents et courriers", () => {
   const doc = buildOpenApiDocument("https://example.supabase.co/functions/v1/public-api") as any;
 
-  it("annonce la version 1.42.0 du contrat", () => {
-    expect(doc.info.version).toBe("1.42.0");
+  it("annonce la version 1.43.0 du contrat", () => {
+    expect(doc.info.version).toBe("1.43.0");
   });
 
   it("une organisation dit les applications souscrites par sa collectivité (1.42.0)", () => {

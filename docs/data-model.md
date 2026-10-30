@@ -139,8 +139,9 @@ aucun endpoint, il décrit ce qui existe **en base**.
 - Trigger `enforce_user_application_access_subscription` (SECURITY DEFINER, EXECUTE révoqué) :
   la racine de l'organisme doit être abonnée à l'application, **à la pose seulement**.
 - **RLS** : lecture `user_id = auth.uid() OR is_admin_of_self_or_ancestor(organization_id)` ·
-  INSERT/UPDATE/DELETE `is_admin_of_self_or_ancestor(organization_id)`.
-- ⚠️ Retirer un accès = `is_active = false`, jamais DELETE côté UI : l'application consommatrice
+  INSERT/UPDATE `is_admin_of_self_or_ancestor(organization_id)` ; **aucun DELETE** (policy retirée et
+  privilège révoqué le 2026-10-30 : `GET /v1/users` se lit par incréments).
+- ⚠️ Retirer un accès = `is_active = false`, jamais DELETE : l'application consommatrice
   doit apprendre le retrait pour bannir le compte.
 
 ### `user_organizations` — appartenance (jointure user↔org)

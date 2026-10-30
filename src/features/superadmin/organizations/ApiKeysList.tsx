@@ -36,6 +36,9 @@ export const SCOPE_LABEL: Record<string, string> = {
   smtp: "Relais SMTP (mot de passe)",
   ai: "Assistant IA (facturé)",
   audience: "Audience du portail (écriture)",
+  integrations: "Intégrations (identifiants)",
+  citizen: "Usager du portail",
+  users: "Annuaire des agents",
 };
 
 const STATUS_LABEL: Record<ApiKeyStatus, string> = {

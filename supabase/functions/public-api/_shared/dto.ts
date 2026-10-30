@@ -63,6 +63,42 @@ export interface OrganizationAttributionsDto {
   updated_at: string | null;
 }
 
+/** Accès d'un agent à l'application appelante, sur un organisme (contrat 1.43.0). */
+export interface AgentAccessDto {
+  organization_id: string;
+  /** Code du rôle de base, tel que l'application le déclare (`application_roles`). */
+  role: string;
+  role_label: string;
+  is_admin: boolean;
+  /** `false` = accès retiré : l'application coupe l'accès de l'agent sur cet organisme. */
+  is_active: boolean;
+  updated_at: string | null;
+}
+
+/** Agent de l'application appelante — `GET /v1/users` (contrat 1.43.0). */
+export interface AgentDto {
+  /** Identifiant stable de l'agent dans le Socle : la clé de correspondance. */
+  socle_user_id: string;
+  /** En minuscules. Sert au rattachement de l'identité de connexion, pas de clé. */
+  email: string;
+  first_name: string | null;
+  last_name: string | null;
+  /** `suspended` = aucun accès à aucune application, quels que soient `accesses`. */
+  status: "active" | "suspended";
+  /** Résumé : `status` actif ET au moins un accès actif. Faux ⇒ bannir le compte. */
+  is_active: boolean;
+  accesses: AgentAccessDto[];
+  /** Dernier changement du compte ou d'un de ses accès (ISO 8601). */
+  updated_at: string | null;
+}
+
+/** Réponse de `GET /v1/users`. */
+export interface AgentsResponseDto {
+  agents: AgentDto[];
+  /** À repasser en `updated_since` à l'appel suivant (légèrement dans le passé : un doublon est inoffensif, un oubli non). */
+  as_of: string;
+}
+
 /** Catégorie de démarches (libellé + icône). */
 export interface CategoryDto {
   id: string;

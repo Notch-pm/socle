@@ -42,6 +42,14 @@ const SCOPE_OPTIONS = [
       + "à ne cocher que pour l'application de la gamme qui exécute l'intégration (Clara…).",
   },
   {
+    scope: "users",
+    label: "Annuaire des agents (lecture)",
+    description:
+      "Les agents à qui le Socle ouvre l'application de la clé, avec leurs accès et rôles — "
+      + "API public-api, GET /v1/users. À ne cocher que pour une application de la gamme qui "
+      + "provisionne ses comptes (Clara, Iris…) ; exige de nommer l'application.",
+  },
+  {
     scope: "ai",
     label: "Assistant IA (jetons facturés)",
     description:
@@ -131,9 +139,10 @@ export function ApiKeyFormDialog({
   const trimmed = name.trim();
   // Le scope facturé exige une application imputable : sans elle, `ai-api`
   // refuserait la clé à l'usage (403). Une clé plateforme l'exige toujours :
-  // c'est l'application qui borne son périmètre.
+  // c'est l'application qui borne son périmètre. L'annuaire des agents aussi :
+  // l'application choisit les accès servis (`GET /v1/users`, 403 sans elle).
   const billed = scopes.includes(BILLED_SCOPE);
-  const applicationRequired = isPlatform || billed;
+  const applicationRequired = isPlatform || billed || scopes.includes("users");
   const consumerValid = consumer !== "";
   const canSubmit =
     trimmed.length > 0 &&
