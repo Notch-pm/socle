@@ -50,6 +50,11 @@ chaque client). Aucun secret ne circule plus à l'arrivée d'un client.
    - relais de messagerie (SMTP) de la collectivité — sans lui, seuls les courriels
      d'authentification partent, par le relais de plateforme ;
    - un premier administrateur invité (bouton « Renvoyer l'invitation » si le courriel s'est perdu) ;
+     depuis le 2026-10-30, c'est aussi **là que s'ouvrent ses accès à Clara et à Iris** (matrice
+     Paramètres › Utilisateurs) : les applications créent les comptes à leur synchronisation et
+     **n'invitent plus** elles-mêmes. Dans Iris, un administrateur doit ensuite lui attribuer un
+     profil de droits (le Socle n'ouvre que l'accès) — voir
+     [agents et accès](features/agents-et-acces.md) ;
    - au moins une catégorie (obligatoire pour créer une démarche) ;
    - une démarche en production, et **activée** par au moins un organisme de l'arbre — une
      démarche que personne n'active n'est servie par aucun portail ;

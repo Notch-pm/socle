@@ -10,10 +10,10 @@
 | Lot | Contenu | État |
 |---|---|---|
 | 0 | Étude Keycloak (IdP dédié, fédéré aux annuaires des collectivités) et ADR | **fait** (2026-10-30) : 6 scénarios en local, [`labs/sso-keycloak/`](../../labs/sso-keycloak/README.md), ADR dans `architecture.md` |
-| 1 | Annuaire et matrice d'accès dans le Socle | **livré dans le code** (2026-10-30) |
-| 2 | `GET /v1/users` (scope `users`), lecture incrémentale | **livré dans le code** (2026-10-30, contrat 1.43.0) |
-| 3 | Consommation par Clara puis Iris (`sync-socle-users`, écrans verrouillés) | Clara : **en ligne** (2026-10-30). Iris : **codé** (branche Iris `feature/agents-geres-par-socle`), accès repris au Socle ; reste le déploiement |
-| 4 | Connexion OIDC par Keycloak dans chaque application | à faire |
+| 1 | Annuaire et matrice d'accès dans le Socle | **en ligne** (2026-10-30) |
+| 2 | `GET /v1/users` (scope `users`), lecture incrémentale | **en ligne** (2026-10-30, contrat 1.43.0) |
+| 3 | Consommation par Clara puis Iris (`sync-socle-users`, écrans verrouillés) | **en ligne** (2026-10-30) : Clara (rôle de base + affectations) et Iris (accès seul) ; vérifiés de bout en bout |
+| 4 | Connexion OIDC par Keycloak dans chaque application | à faire — attend l'hébergement Keycloak et un Entra ID de test ([roadmap](../roadmap.md)) |
 
 Principe : **Keycloak authentifie, le Socle autorise.** Un agent authentifié mais non provisionné
 par le Socle n'entre dans aucune application.

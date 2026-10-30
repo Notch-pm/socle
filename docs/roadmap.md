@@ -2,7 +2,7 @@
 
 > **Public** : tous (devs Socle, équipes consommatrices) · **Question traitée** : quelles
 > évolutions sont envisagées, et lesquelles ont déjà été livrées ? · **Dernière mise à jour** :
-> 2026-10-24
+> 2026-10-30
 
 Liste d'**intentions**, pas d'engagements — sauf mention explicite d'une date de livraison.
 Née du chantier « Clara délègue ses usagers au Socle » (2026-07-16), enrichie depuis. Pour ce qui
@@ -83,6 +83,34 @@ existe réellement aujourd'hui : [architecture.md](./architecture.md),
   existe côté base et alimente déjà l'UI Socle ; reste à l'exposer via un endpoint public.
 - **Backfill de géocodage** des contacts créés avant l'introduction du géocodage automatique
   (adresse renseignée mais `address_lat`/`address_lon` restés nuls).
+
+## Annuaire des agents et connexion unique
+
+Détail et état par lot : [agents et accès](features/agents-et-acces.md).
+
+### Livré
+
+- **2026-10-30** — lots 0 à 3 : matrice agent × application dans le Socle, suspension dans toute
+  la gamme, `GET /v1/users` (1.43.0) ; Clara (rôle de base + affectations) et Iris (accès seul,
+  profils dans Iris) synchronisés chaque minute ; comptes de démonstration repris ; lab Keycloak
+  concluant (`labs/sso-keycloak/`).
+
+### Envisagé, dans l'ordre
+
+1. **Lot 4 — connexion unique par Keycloak.** Préalables côté éditeur : choisir l'hébergement
+   (serveur loué en France, ou Cloud-IAM sur Outscale qualifié SecNumCloud) et disposer d'un
+   annuaire Entra ID de test. Puis : table `organization_identity_providers` (domaines d'e-mail →
+   fournisseur de la collectivité, `auth_mode` password/sso) et son écran superadmin ; provider
+   `keycloak` + inscriptions fermées + bouton « compte de ma collectivité » dans le Socle, Clara et
+   Iris (`scopes: 'openid'`, `kc_idp_hint`) ; plus d'invitation par mot de passe en mode SSO ;
+   déconnexion Keycloak à la suspension.
+2. **Modifier les scopes d'une clé API** sans la révoquer (aujourd'hui : SQL — le scope `users`
+   a été posé ainsi sur les clés Iris et Clara).
+3. **Iris, zone superadmin** : « donner / retirer l'accès » à un tenant contredit le Socle (la
+   synchronisation suivante rétablit son état) — à retirer ou à renvoyer vers le Socle.
+4. **Lot 5 — Ariane** : rattacher ses organisations au Socle, puis la même consommation.
+5. **SCIM** depuis l'annuaire de la collectivité vers le Socle (création automatique des agents ;
+   le Socle garde la décision des accès).
 
 ## APIs / plateforme
 
