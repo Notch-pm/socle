@@ -1,0 +1,84 @@
+# Keycloak de production de la gamme (lot 4 de l'annuaire des agents).
+# Procédure complète : README.md. Décision : docs/architecture.md (ADR du 2026-10-30).
+#
+# Trois conteneurs sur un VPS OVH (VPS-1, 4 Go, datacenter France) :
+#   - caddy     : seul service exposé (80/443), HTTPS automatique (Let's Encrypt) ;
+#   - keycloak  : jamais exposé publiquement — Caddy le sert, et le port 8080 n'écoute
+#                 que sur 127.0.0.1 (console d'administration par tunnel SSH) ;
+#   - postgres  : jamais exposé.
+#
+# ⚠️ Mémoire : le VPS-1 n'a que 4 Go. Les plafonds ci-dessous (≈ 2,2 Go au total)
+# laissent de la marge au système ; Keycloak prend 70 % de son plafond en tas Java.
+# Passer au VPS-2 (sans réinstaller) ⇒ remonter keycloak à 3g.
+services:
+  postgres:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: keycloak
+      POSTGRES_USER: keycloak
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?POSTGRES_PASSWORD requis}
+    command: ["postgres", "-c", "shared_buffers=128MB", "-c", "max_connections=50"]
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U keycloak -d keycloak"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+    mem_limit: 512m
+
+  keycloak:
+    image: quay.io/keycloak/keycloak:26.1.4
+    restart: unless-stopped
+    command: ["start", "--import-realm"]
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      KC_DB: postgres
+      KC_DB_URL: jdbc:postgresql://postgres:5432/keycloak
+      KC_DB_USERNAME: keycloak
+      KC_DB_PASSWORD: ${POSTGRES_PASSWORD}
+      # ⚠️ Une seule adresse publique : c'est aussi l'émetteur (`iss`) des jetons
+      # que vérifie Supabase Auth de chaque application (piège relevé au lab).
+      KC_HOSTNAME: https://${KC_DOMAIN:?KC_DOMAIN requis}
+      # La console d'administration n'est jamais servie au public (Caddy la bloque) :
+      # on l'ouvre par `ssh -L 8080:127.0.0.1:8080`, d'où cette adresse.
+      KC_HOSTNAME_ADMIN: http://localhost:8080
+      KC_HTTP_ENABLED: "true"
+      KC_PROXY_HEADERS: xforwarded
+      KC_HEALTH_ENABLED: "true"
+      # Compte d'amorçage, TEMPORAIRE : remplacé par un administrateur nominatif
+      # puis supprimé (README, étape 6).
+      KC_BOOTSTRAP_ADMIN_USERNAME: ${KC_BOOTSTRAP_ADMIN_USERNAME:-amorcage}
+      KC_BOOTSTRAP_ADMIN_PASSWORD: ${KC_BOOTSTRAP_ADMIN_PASSWORD:?KC_BOOTSTRAP_ADMIN_PASSWORD requis}
+      TZ: Europe/Paris
+    ports:
+      - "127.0.0.1:8080:8080"
+    volumes:
+      # Importé au premier démarrage seulement (un realm existant n'est jamais écrasé).
+      - ./realms:/opt/keycloak/data/import:ro
+    mem_limit: 1536m
+
+  caddy:
+    image: caddy:2.8-alpine
+    restart: unless-stopped
+    depends_on:
+      - keycloak
+    environment:
+      KC_DOMAIN: ${KC_DOMAIN}
+    ports:
+      - "80:80"
+      - "443:443"
+      - "443:443/udp"
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+      - caddy_config:/config
+    mem_limit: 128m
+
+volumes:
+  pgdata:
+  caddy_data:
+  caddy_config:

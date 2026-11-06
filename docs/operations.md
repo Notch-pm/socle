@@ -307,6 +307,14 @@ passe par `npx wrangler rollback`.
 - ⚠️ **Contrainte de version** : ne pas redescendre `vite` en dessous de `6` — `vitest 4` l'exige
   en peer dependency. C'est ce qui avait cassé la CI une semaine en juillet 2026.
 
+## Keycloak (connexion unique, 2026-11-06)
+
+Le fournisseur d'identité de la gamme tourne sur un **VPS OVH en France**, hors Supabase :
+`https://auth.edilumen.fr`. Installation, console d'administration (tunnel SSH seulement),
+sauvegardes, mises à jour et branchement de l'annuaire d'une collectivité :
+[`infra/keycloak/README.md`](../infra/keycloak/README.md). ⚠️ S'il tombe, plus aucune connexion
+par SSO dans toute la gamme — une sonde externe le surveille.
+
 ## Voir aussi
 
 - [architecture.md](./architecture.md) — frontières système et décisions.

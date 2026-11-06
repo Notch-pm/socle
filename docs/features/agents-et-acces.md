@@ -13,7 +13,7 @@
 | 1 | Annuaire et matrice d'accès dans le Socle | **en ligne** (2026-10-30) |
 | 2 | `GET /v1/users` (scope `users`), lecture incrémentale | **en ligne** (2026-10-30, contrat 1.43.0) |
 | 3 | Consommation par Clara puis Iris (`sync-socle-users`, écrans verrouillés) | **en ligne** (2026-10-30) : Clara (rôle de base + affectations) et Iris (accès seul) ; vérifiés de bout en bout |
-| 4 | Connexion OIDC par Keycloak dans chaque application | à faire — attend l'hébergement Keycloak et un Entra ID de test ([roadmap](../roadmap.md)) |
+| 4 | Connexion OIDC par Keycloak dans chaque application | en cours — serveur commandé le 2026-11-06 (VPS OVH, France), kit d'installation dans [`infra/keycloak/`](../../infra/keycloak/README.md) ; attend un Entra ID de test ([roadmap](../roadmap.md)) |
 
 Principe : **Keycloak authentifie, le Socle autorise.** Un agent authentifié mais non provisionné
 par le Socle n'entre dans aucune application.
@@ -100,9 +100,12 @@ Keycloak + Supabase Auth local ([`labs/sso-keycloak/`](../../labs/sso-keycloak/R
 - ⚠️ Keycloak doit avoir **une seule adresse publique**, vue à l'identique par les navigateurs et
   par Supabase Auth (émetteur des jetons).
 
-Reste pour le lot 4 : l'hébergement de production (serveur loué en France ou Cloud-IAM sur
-Outscale), un essai avec un vrai Entra ID de collectivité, et l'écran du Socle qui associe un
-domaine d'e-mail à l'annuaire d'une collectivité.
+Hébergement de production (choisi le 2026-11-06) : un **VPS OVH en France** (VPS-1, Caddy +
+Keycloak + Postgres en Docker, `https://auth.edilumen.fr`), console d'administration fermée au
+public — installation, sauvegardes et branchement d'un annuaire Entra ID dans
+[`infra/keycloak/`](../../infra/keycloak/README.md). Reste pour le lot 4 : un essai avec un vrai
+Entra ID de collectivité, l'écran du Socle qui associe un domaine d'e-mail à l'annuaire d'une
+collectivité, et le bouton de connexion dans chaque application.
 
 ## Iris : le Socle ouvre l'accès, sans rôle (2026-10-30)
 

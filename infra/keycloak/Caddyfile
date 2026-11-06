@@ -1,0 +1,19 @@
+# Certificat Let's Encrypt obtenu et renouvelé automatiquement par Caddy (sans
+# adresse e-mail : Let's Encrypt n'envoie plus d'avis d'expiration depuis 2025).
+{$KC_DOMAIN} {
+	# Le realm `master` (super-administration de Keycloak) et sa console ne sont
+	# jamais servis au public : on les ouvre par tunnel SSH (README, étape 5).
+	# L'API d'administration du realm `edilumen` (/admin/realms/edilumen/…) reste
+	# joignable : elle exige un jeton, et la déconnexion à la suspension en aura besoin.
+	@master path /admin/master* /realms/master*
+	respond @master 404
+
+	reverse_proxy keycloak:8080
+
+	header {
+		Strict-Transport-Security "max-age=31536000; includeSubDomains"
+		X-Content-Type-Options nosniff
+		Referrer-Policy strict-origin-when-cross-origin
+		-Server
+	}
+}
