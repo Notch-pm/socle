@@ -77,6 +77,23 @@ répond en JSON avec `"issuer": "https://auth.edilumen.fr/realms/edilumen"`, et
 
 ### 5. Ouvrir la console d'administration (poste)
 
+⚠️ **Une fois, avant la première ouverture** (serveur) : donner au realm `master` l'adresse du
+tunnel. Sinon la console, servie sur `localhost:8080`, vérifie la session auprès de
+`https://auth.edilumen.fr/realms/master/…` — que Caddy bloque — et affiche « Something went
+wrong » (`Timeout when waiting for 3rd party check iframe message`, piège rencontré le
+2026-11-06). Le réglage vit en base (donc dans les sauvegardes) :
+
+```bash
+cd /opt/keycloak && set -a && . ./.env && set +a
+docker compose exec -T keycloak bash -c "/opt/keycloak/bin/kcadm.sh config credentials   --server http://localhost:8080 --realm master --user \"$KC_BOOTSTRAP_ADMIN_USERNAME\"   --password \"$KC_BOOTSTRAP_ADMIN_PASSWORD\" && /opt/keycloak/bin/kcadm.sh update realms/master   -s attributes.frontendUrl=http://localhost:8080"
+```
+
+Vérifier : `curl -s http://localhost:8080/realms/master/.well-known/openid-configuration` donne
+`"issuer":"http://localhost:8080/realms/master"` (le realm `edilumen`, lui, reste sur
+`https://auth.edilumen.fr`).
+
+Puis, sur le poste :
+
 ```powershell
 ssh -L 8080:127.0.0.1:8080 debian@IP
 ```
