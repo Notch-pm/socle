@@ -88,6 +88,11 @@ existe réellement aujourd'hui : [architecture.md](./architecture.md),
 
 Détail et état par lot : [agents et accès](features/agents-et-acces.md).
 
+> **🏷 Lié au client Vernon** (présentation GRU du 2026-10-30, ville de Vernon + Seine
+> Normandie Agglomération) : chantier suivi pour ce prospect — en particulier le lot 4
+> (connexion unique). Les autres ajustements Vernon sont dans `Iris/docs/backlog.md`
+> § « Client Vernon » et `clara-mailflow-hub/docs/backlog.md`.
+
 ### Livré
 
 - **2026-10-30** — lots 0 à 3 : matrice agent × application dans le Socle, suspension dans toute
