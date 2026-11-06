@@ -103,8 +103,8 @@ Détail et état par lot : [agents et accès](features/agents-et-acces.md).
 ### Envisagé, dans l'ordre
 
 1. **Lot 4 — connexion unique par Keycloak.** Hébergement choisi le 2026-11-06 : VPS OVH en
-   France, kit d'installation dans `infra/keycloak/`. Préalable restant : disposer d'un
-   annuaire Entra ID de test. Puis : table `organization_identity_providers` (domaines d'e-mail →
+   France, kit d'installation dans `infra/keycloak/`. Fédération avec un annuaire Entra ID
+   de test vérifiée le même jour. Puis : table `organization_identity_providers` (domaines d'e-mail →
    fournisseur de la collectivité, `auth_mode` password/sso) et son écran superadmin ; provider
    `keycloak` + inscriptions fermées + bouton « compte de ma collectivité » dans le Socle, Clara et
    Iris (`scopes: 'openid'`, `kc_idp_hint`) ; plus d'invitation par mot de passe en mode SSO ;

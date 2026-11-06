@@ -153,8 +153,15 @@ savent rien (elles passent seulement `kc_idp_hint` = l'alias).
    `https://login.microsoftonline.com/<tenant>/v2.0/.well-known/openid-configuration` ;
    *Client ID / Secret* = ceux d'Entra ; *Client authentication* = « Client secret sent as
    post » ; *Scopes* = `openid email profile` ; **Trust email = ON** ; *Sync mode* = Import.
-3. Tester : `https://auth.edilumen.fr/realms/edilumen/account/?kc_idp_hint=<alias>` doit envoyer
-   droit sur la page Microsoft de la collectivité.
+   ⚠️ Aucune espace parasite en collant le *Discovery endpoint* : l'ajout échoue sans message
+   clair (`Illegal character in scheme name at index 0` dans les journaux) et le fournisseur
+   n'existe pas. Vérifier qu'il apparaît dans la liste.
+3. Tester : ouvrir `https://auth.edilumen.fr/realms/edilumen/account/` en navigation privée et
+   cliquer sur le **bouton** de la collectivité sous le formulaire (jamais le formulaire : il
+   ne connaît que les comptes locaux, un compte Entra y donne `user_not_found`). On doit passer
+   par `login.microsoftonline.com` puis revenir sur la page « Compte ». ⚠️ Ne pas tester avec
+   `/account/?kc_idp_hint=<alias>` : la page compte **perd** l'indice (constaté le 2026-11-06) ;
+   les applications, elles, le passent à l'autorisation et vont droit chez Microsoft.
 
 ⚠️ Un agent authentifié par son annuaire mais **non provisionné** par le Socle est refusé par
 l'application (inscriptions fermées, scénario B du lab) — Keycloak le connaît, ça ne lui ouvre

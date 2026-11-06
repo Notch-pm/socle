@@ -103,8 +103,9 @@ Keycloak + Supabase Auth local ([`labs/sso-keycloak/`](../../labs/sso-keycloak/R
 Hébergement de production (choisi le 2026-11-06) : un **VPS OVH en France** (VPS-1, Caddy +
 Keycloak + Postgres en Docker, `https://auth.edilumen.fr`), console d'administration fermée au
 public — installation, sauvegardes et branchement d'un annuaire Entra ID dans
-[`infra/keycloak/`](../../infra/keycloak/README.md). Reste pour le lot 4 : un essai avec un vrai
-Entra ID de collectivité, l'écran du Socle qui associe un domaine d'e-mail à l'annuaire d'une
+[`infra/keycloak/`](../../infra/keycloak/README.md). Fédération avec un **vrai Entra ID** vérifiée le
+2026-11-06 (annuaire de test, fournisseur `entra-test`) : e-mail, prénom et nom transmis, e-mail
+tenu pour vérifié. Reste pour le lot 4 : l'écran du Socle qui associe un domaine d'e-mail à l'annuaire d'une
 collectivité, et le bouton de connexion dans chaque application.
 
 ## Iris : le Socle ouvre l'accès, sans rôle (2026-10-30)
