@@ -1,7 +1,8 @@
 {
   "realm": "edilumen",
   "displayName": "Edilumen",
-  "displayNameHtml": "Edilumen — connexion à vos applications",
+  "displayNameHtml": "Une seule connexion pour toutes vos applications",
+  "loginTheme": "edilumen",
   "enabled": true,
   "sslRequired": "external",
   "registrationAllowed": false,

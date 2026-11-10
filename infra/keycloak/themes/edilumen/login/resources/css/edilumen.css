@@ -1,0 +1,380 @@
+/*
+ * Habillage Edilumen de la page de connexion (Keycloak 26, thème parent
+ * « keycloak.v2 » / PatternFly 5).
+ *
+ * Charte de la gamme (Notch / Ariane Design System, comme Socle, Iris et
+ * Clara) : vert AA `hsl(153 90% 32%)`, beurre `hsl(42 100% 67%)`, encre
+ * `hsl(160 10% 12%)`, rayon 14 px, ombres douces, Nunito Sans.
+ *
+ * ⚠️ Polices AUTO-HÉBERGÉES (copie de `public/fonts/` du Socle, licence OFL
+ * jointe) : aucune requête vers un tiers depuis la page qui reçoit le mot de
+ * passe des agents.
+ *
+ * ⚠️ On ne surcharge que des VARIABLES PatternFly et quelques sélecteurs de
+ * mise en page : aucun gabarit n'est réécrit, les formulaires restent ceux de
+ * Keycloak (et leurs correctifs suivent les mises à jour).
+ */
+
+@font-face {
+  font-family: "Nunito Sans";
+  font-style: normal;
+  font-weight: 400 700;
+  font-display: swap;
+  src: url("../fonts/nunito-sans-latin-ext.woff2") format("woff2");
+  unicode-range: U+0100-02BA, U+02BD-02C5, U+02C7-02CC, U+02CE-02D7, U+02DD-02FF, U+0304, U+0308, U+0329,
+    U+1D00-1DBF, U+1E00-1E9F, U+1EF2-1EFF, U+2020, U+20A0-20AB, U+20AD-20C0, U+2113, U+2C60-2C7F, U+A720-A7FF;
+}
+
+@font-face {
+  font-family: "Nunito Sans";
+  font-style: normal;
+  font-weight: 400 700;
+  font-display: swap;
+  src: url("../fonts/nunito-sans-latin.woff2") format("woff2");
+  unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329,
+    U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
+}
+
+:root {
+  /* Jetons de la charte, en clair (une page de connexion n'a pas de Tailwind). */
+  --edl-primary: #089b59; /* hsl(153 90% 32%) */
+  --edl-primary-hover: #067a46;
+  --edl-primary-soft: rgba(8, 155, 89, 0.14);
+  --edl-butter: #ffcd57; /* hsl(42 100% 67%) */
+  --edl-ink: #1c2220; /* hsl(160 10% 12%) */
+  --edl-muted: #5c6662; /* hsl(160 5% 38%) */
+  --edl-border: #e1e6e4;
+  --edl-surface: #ffffff;
+  --edl-page: #f6f8f7;
+  --edl-radius: 14px;
+  --edl-radius-control: 10px;
+  --edl-shadow: 0 1px 2px rgba(28, 34, 32, 0.04), 0 12px 32px -12px rgba(28, 34, 32, 0.18);
+
+  /* PatternFly : couleur d'action, liens, police, rayons. */
+  --pf-v5-global--primary-color--100: var(--edl-primary);
+  --pf-v5-global--primary-color--200: var(--edl-primary-hover);
+  --pf-v5-global--link--Color: var(--edl-primary);
+  --pf-v5-global--link--Color--hover: var(--edl-primary-hover);
+  --pf-v5-global--Color--100: var(--edl-ink);
+  --pf-v5-global--Color--200: var(--edl-muted);
+  --pf-v5-global--FontFamily--text: "Nunito Sans", system-ui, -apple-system, "Segoe UI", sans-serif;
+  --pf-v5-global--FontFamily--heading: "Nunito Sans", system-ui, -apple-system, "Segoe UI", sans-serif;
+  --pf-v5-global--BorderRadius--sm: var(--edl-radius-control);
+  --pf-v5-global--BorderColor--300: var(--edl-border);
+  --pf-v5-global--BorderColor--200: var(--edl-border);
+  --pf-v5-global--BorderColor--100: var(--edl-border);
+}
+
+/* ─── Fond de page ───────────────────────────────────────────────────── */
+
+html.login-pf,
+.login-pf body {
+  background: var(--edl-page);
+  background-image:
+    radial-gradient(60rem 40rem at 110% -10%, rgba(8, 155, 89, 0.1), transparent 60%),
+    radial-gradient(50rem 36rem at -10% 110%, rgba(255, 205, 87, 0.16), transparent 60%);
+  min-height: 100%;
+  color: var(--edl-ink);
+  font-family: var(--pf-v5-global--FontFamily--text);
+}
+
+/* ─── Mise en page : une colonne centrée, la carte sous le logo ──────── */
+
+.pf-v5-c-login {
+  min-height: 100vh;
+  align-items: center;
+  justify-content: center;
+  padding: 2.5rem 1rem;
+}
+
+.pf-v5-c-login__container {
+  grid-template-columns: minmax(0, 27rem);
+  grid-template-areas: "header" "main" "footer";
+  padding-inline: 0;
+  max-width: 27rem;
+}
+
+/* ─── En-tête : le logo Edilumen, l'intitulé du realm dessous ────────── */
+
+#kc-header {
+  padding: 0 0 1.5rem;
+  text-align: center;
+}
+
+#kc-header #kc-header-wrapper {
+  /* Keycloak force ici `color: var(--pf-v5-global--Color--light-100) !important`
+     (texte blanc sur sa photo de fond) : on redéfinit la variable plutôt que
+     de surenchérir en !important. */
+  --pf-v5-global--Color--light-100: var(--edl-muted);
+  display: block;
+  padding-top: 3rem;
+  background: url("../img/logo-edilumen.svg") no-repeat center top / auto 30px;
+  color: var(--edl-muted);
+  font-size: 0.9375rem;
+  font-weight: 600;
+  letter-spacing: 0.01em;
+  text-transform: none;
+  white-space: normal;
+}
+
+/* ─── La carte ───────────────────────────────────────────────────────── */
+
+.pf-v5-c-login__main {
+  background: var(--edl-surface);
+  border: 1px solid var(--edl-border);
+  border-radius: var(--edl-radius);
+  box-shadow: var(--edl-shadow);
+  margin-bottom: 0;
+  overflow: hidden;
+}
+
+.pf-v5-c-login__main-header {
+  display: block;
+  padding: 2rem 2rem 0.5rem;
+}
+
+.pf-v5-c-login__main-body {
+  padding: 1rem 2rem 1.75rem;
+}
+
+#kc-page-title {
+  font-family: var(--pf-v5-global--FontFamily--heading);
+  font-size: 1.5rem;
+  font-weight: 700;
+  line-height: 1.25;
+  color: var(--edl-ink);
+}
+
+/* ─── Champs ─────────────────────────────────────────────────────────── */
+
+.pf-v5-c-form {
+  gap: 1.125rem;
+}
+
+/* Groupe laissé vide par Keycloak (« Rester connecté » désactivé) : pas de trou. */
+.pf-v5-c-form__group:empty {
+  display: none;
+}
+
+.pf-v5-c-form__helper-text a {
+  font-size: 0.875rem;
+  font-weight: 600;
+}
+
+.pf-v5-c-form__label-text {
+  font-weight: 600;
+  color: var(--edl-ink);
+}
+
+.pf-v5-c-form-control {
+  --pf-v5-c-form-control--PaddingTop: 0.625rem;
+  --pf-v5-c-form-control--PaddingBottom: 0.625rem;
+  border-radius: var(--edl-radius-control);
+}
+
+.pf-v5-c-form-control::before {
+  border: 1px solid var(--edl-border);
+  border-radius: var(--edl-radius-control);
+}
+
+.pf-v5-c-form-control::after {
+  border: 0;
+}
+
+.pf-v5-c-form-control:hover::before {
+  border-color: #c7cfcb;
+}
+
+.pf-v5-c-form-control:focus-within::before {
+  border-color: var(--edl-primary);
+  box-shadow: 0 0 0 3px var(--edl-primary-soft);
+}
+
+.pf-v5-c-form-control.pf-m-error::before {
+  border-color: var(--pf-v5-global--danger-color--100);
+}
+
+/* Le champ et son bouton (œil du mot de passe) forment un seul bloc. */
+.pf-v5-c-input-group > .pf-v5-c-input-group__item:not(:last-child) .pf-v5-c-form-control,
+.pf-v5-c-input-group > .pf-v5-c-input-group__item:not(:last-child) .pf-v5-c-form-control::before {
+  border-start-end-radius: 0;
+  border-end-end-radius: 0;
+}
+
+.pf-v5-c-input-group .pf-v5-c-button.pf-m-control {
+  border-radius: 0 var(--edl-radius-control) var(--edl-radius-control) 0;
+}
+
+.pf-v5-c-input-group .pf-v5-c-button.pf-m-control::after {
+  border: 1px solid var(--edl-border);
+  border-inline-start: 0;
+  border-radius: 0 var(--edl-radius-control) var(--edl-radius-control) 0;
+}
+
+/* ─── Boutons ────────────────────────────────────────────────────────── */
+
+.pf-v5-c-button {
+  --pf-v5-c-button--FontWeight: 700;
+  --pf-v5-c-button--BorderRadius: var(--edl-radius-control);
+  --pf-v5-c-button--after--BorderRadius: var(--edl-radius-control);
+}
+
+.pf-v5-c-button.pf-m-primary,
+.pf-v5-c-button.pf-m-secondary {
+  min-height: 2.875rem;
+}
+
+.pf-v5-c-button.pf-m-primary:focus-visible {
+  box-shadow: 0 0 0 3px var(--edl-primary-soft);
+}
+
+.pf-v5-c-form__actions {
+  margin-top: 0.5rem;
+}
+
+/* ─── Annuaires des collectivités (fournisseurs d'identité) ──────────── */
+
+.pf-v5-c-login__main-footer {
+  padding: 0 2rem 1.75rem;
+}
+
+.pf-v5-c-login__main-footer-band {
+  border: 0;
+  padding: 0 0 0.75rem;
+  background: none;
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  color: var(--edl-muted);
+  font-size: 0.8125rem;
+}
+
+.pf-v5-c-login__main-footer-band::before,
+.pf-v5-c-login__main-footer-band::after {
+  content: "";
+  flex: 1;
+  height: 1px;
+  background: var(--edl-border);
+}
+
+.pf-v5-c-login__main-footer-band-item {
+  margin: 0;
+  white-space: nowrap;
+}
+
+#kc-social-providers ul.pf-v5-c-login__main-footer-links {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  padding: 0;
+  margin: 0;
+}
+
+#kc-social-providers .pf-v5-c-login__main-footer-links-item {
+  padding: 0;
+}
+
+#kc-social-providers a.pf-v5-c-login__main-footer-links-item-link {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.625rem;
+  width: 100%;
+  min-height: 2.875rem;
+  padding: 0.5rem 1rem;
+  border: 1px solid var(--edl-border);
+  border-radius: var(--edl-radius-control);
+  background: var(--edl-surface);
+  color: var(--edl-ink);
+  font-weight: 700;
+  text-decoration: none;
+  transition: border-color 0.15s, background-color 0.15s;
+}
+
+#kc-social-providers a.pf-v5-c-login__main-footer-links-item-link:hover {
+  border-color: var(--edl-primary);
+  background: rgba(8, 155, 89, 0.04);
+}
+
+#kc-social-providers a.pf-v5-c-login__main-footer-links-item-link > span {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.625rem;
+  text-align: center;
+}
+
+#kc-social-providers a.pf-v5-c-login__main-footer-links-item-link svg {
+  flex: none;
+  width: 1.125rem;
+  height: 1.125rem;
+  fill: currentColor;
+}
+
+/* ─── « Première connexion ? Créer mon compte » ──────────────────────── */
+
+#kc-info {
+  margin-top: 1.25rem;
+}
+
+#kc-registration-container.pf-v5-c-login__main-footer-band {
+  justify-content: center;
+  padding: 1rem 0 0;
+  border-top: 1px solid var(--edl-border);
+  font-size: 0.875rem;
+}
+
+#kc-registration-container.pf-v5-c-login__main-footer-band::before,
+#kc-registration-container.pf-v5-c-login__main-footer-band::after {
+  display: none;
+}
+
+#kc-registration a {
+  font-weight: 700;
+}
+
+/* ─── Messages ───────────────────────────────────────────────────────── */
+
+.pf-v5-c-alert.pf-m-inline {
+  border-radius: var(--edl-radius-control);
+}
+
+/* ─── Pied de page (footer.ftl) ──────────────────────────────────────── */
+
+.edl-footer {
+  grid-area: footer;
+  margin-top: 1.5rem;
+  text-align: center;
+  color: var(--edl-muted);
+  font-size: 0.8125rem;
+  line-height: 1.6;
+}
+
+.edl-footer strong {
+  color: var(--edl-ink);
+  font-weight: 700;
+}
+
+/* ─── Petits écrans ──────────────────────────────────────────────────── */
+
+@media (max-width: 480px) {
+  .pf-v5-c-login {
+    padding: 1.5rem 0.75rem;
+    align-items: flex-start;
+  }
+
+  .pf-v5-c-login__main-header {
+    padding: 1.5rem 1.25rem 0.25rem;
+  }
+
+  .pf-v5-c-login__main-body {
+    padding: 0.75rem 1.25rem 1.5rem;
+  }
+
+  .pf-v5-c-login__main-footer {
+    padding: 0 1.25rem 1.5rem;
+  }
+
+  #kc-page-title {
+    font-size: 1.3125rem;
+  }
+}

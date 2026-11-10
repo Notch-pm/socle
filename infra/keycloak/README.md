@@ -15,8 +15,9 @@ Socle autorise** : un agent ne se connecte à une application que si le Socle la
 | Console d'administration | **jamais publique** : par tunnel SSH (étape 5) |
 
 Contenu du dossier : `docker-compose.yml`, `Caddyfile`, `.env.example`,
-`realms/edilumen-realm.json` (importé au premier démarrage), `bootstrap-server.sh` (préparation
-du VPS), `backup.sh` (sauvegarde quotidienne).
+`realms/edilumen-realm.json` (importé au premier démarrage), `themes/edilumen/` (habillage de
+la page de connexion), `bootstrap-server.sh` (préparation du VPS), `backup.sh` (sauvegarde
+quotidienne).
 
 ## Installation (une fois)
 
@@ -139,6 +140,30 @@ Dans la console, realm **edilumen** :
   provider `keycloak` de Supabase Auth de l'application correspondante (*Authentication →
   Providers → Keycloak*, URL `https://auth.edilumen.fr/realms/edilumen`). ⚠️ À ne faire qu'avec
   le code du lot 4 (bouton « compte de ma collectivité ») et ses inscriptions fermées.
+
+### 9. Thème de connexion
+
+`themes/edilumen/login/` habille la page que voient les agents : charte de la gamme (vert,
+Nunito Sans **auto-hébergée**, logo Edilumen), textes français de la gamme (« Adresse e-mail »,
+« Créer mon compte »…), pied « Un seul compte pour Socle, Iris et Clara ». Il hérite de
+`keycloak.v2` et ne réécrit **aucun** formulaire : seulement des variables PatternFly, la mise en
+page, `footer.ftl` et `messages_fr.properties`.
+
+Déployer ou mettre à jour (poste, puis serveur) :
+
+```bash
+scp -r infra/keycloak/themes infra/keycloak/docker-compose.yml debian@IP:/opt/keycloak/
+```
+
+```bash
+cd /opt/keycloak && docker compose up -d keycloak
+```
+
+Puis, la première fois, dans la console (realm **edilumen**) : *Realm settings → Themes →
+Login theme* = `edilumen` ; *Realm settings → General → HTML display name* = « Une seule
+connexion pour toutes vos applications » (l'import du realm les porte déjà, mais il n'est joué
+qu'au premier démarrage). ⚠️ Keycloak met les thèmes en cache : après une mise à jour du thème,
+`docker compose restart keycloak`.
 
 ## Brancher l'annuaire d'une collectivité (Entra ID)
 

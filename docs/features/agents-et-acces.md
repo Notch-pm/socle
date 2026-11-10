@@ -148,9 +148,10 @@ collectivité, et le bouton de connexion dans chaque application.
 >   « Autre méthode », cette fiche), Iris et Clara (même bouton, `sync-socle-users` sans e-mail).
 >   ⚠️ Ne pas merger avant l'essai réel : sinon les agents ne reçoivent plus de lien pour un mot de
 >   passe et Keycloak n'est pas encore branché.
-> - **Prochaine étape, sur le poste habituel (tunnel SSH)** : console Keycloak, realm `edilumen` —
+> - **Prochaine étape, sur le poste habituel (tunnel SSH)** : déployer le thème de connexion
+>   (`infra/keycloak/themes/edilumen/`, README Keycloak § 9) ; console Keycloak, realm `edilumen` —
 >   secrets des clients `socle` / `clara` / `iris`, SMTP du realm, inscription + vérification
->   d'e-mail + mot de passe oublié, « Organisations » pour le domaine Entra de test ; puis providers
+>   d'e-mail + mot de passe oublié, thème `edilumen`, « Organisations » pour le domaine Entra de test ; puis providers
 >   `keycloak` des trois Supabase ; puis l'essai (check-list ci-dessous). Ensuite seulement :
 >   merge des trois branches, déploiement de `invite-user` (Socle) et des deux
 >   `sync-socle-users` (Clara, Iris).
@@ -252,6 +253,9 @@ Les clients `socle`, `clara` et `iris` sont déclarés dans l'import du realm
   indispensable à la vérification d'e-mail et au mot de passe oublié ;
 - *Realm settings → Login* : « User registration », « Verify email », « Forgot password » et
   « Login with email » activés.
+- *Realm settings → Themes → Login theme* = `edilumen` (thème `infra/keycloak/themes/edilumen/`,
+  déployé par `scp` + `docker compose up -d keycloak` — README Keycloak, § 9) et *HTML display
+  name* = « Une seule connexion pour toutes vos applications ».
 
 **Ordre de bascule** : essai réel sur le Socle (check-list) → réglages du realm ci-dessus →
 providers `keycloak` de Clara et d'Iris → merge des trois branches `feature/sso-lot4` et

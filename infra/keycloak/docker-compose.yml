@@ -59,6 +59,9 @@ services:
     volumes:
       # Importé au premier démarrage seulement (un realm existant n'est jamais écrasé).
       - ./realms:/opt/keycloak/data/import:ro
+      # Thème de connexion Edilumen (README, § « Thème de connexion »). Keycloak
+      # met les thèmes en cache : redémarrer le conteneur après une mise à jour.
+      - ./themes/edilumen:/opt/keycloak/themes/edilumen:ro
     mem_limit: 1536m
 
   caddy:
