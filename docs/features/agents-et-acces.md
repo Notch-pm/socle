@@ -137,6 +137,26 @@ collectivité, et le bouton de connexion dans chaque application.
 
 ## Lot 4 : état et reprise (2026-11-10)
 
+> **Reprise — à lire en premier (fin de session du 2026-11-10).**
+> - **En production** : annuaire multi-organismes (Notch-pm/socle#1, migration
+>   `admin_application_racine`, `invite-user` v21 = code de `main`) ; profil système
+>   « Administrateur » d'Iris (Notch-pm/Iris#1, migration `profil_administrateur_socle`,
+>   `sync-socle-users` Iris v2) ; inscriptions Supabase fermées sur Socle, Iris, Clara ; URL de
+>   retour autorisées (`socle…/login`, `iris…/login`, `clara…/connexion`).
+> - **Prêt, NON mergé, NON déployé** — une branche `feature/sso-lot4` par dépôt :
+>   Socle (bouton Keycloak, message de bienvenue unique dans `invite-user`, mot de passe derrière
+>   « Autre méthode », cette fiche), Iris et Clara (même bouton, `sync-socle-users` sans e-mail).
+>   ⚠️ Ne pas merger avant l'essai réel : sinon les agents ne reçoivent plus de lien pour un mot de
+>   passe et Keycloak n'est pas encore branché.
+> - **Prochaine étape, sur le poste habituel (tunnel SSH)** : console Keycloak, realm `edilumen` —
+>   secrets des clients `socle` / `clara` / `iris`, SMTP du realm, inscription + vérification
+>   d'e-mail + mot de passe oublié, « Organisations » pour le domaine Entra de test ; puis providers
+>   `keycloak` des trois Supabase ; puis l'essai (check-list ci-dessous). Ensuite seulement :
+>   merge des trois branches, déploiement de `invite-user` (Socle) et des deux
+>   `sync-socle-users` (Clara, Iris).
+> - Méthode : le but d'abord, une action à la fois (voir la fin de cette section).
+
+
 Fait :
 - Serveur `auth.edilumen.fr` **en ligne** depuis le 2026-11-06 (VPS OVH, utilisateur `debian`,
   connexion SSH par clé seulement, mots de passe SSH désactivés). Secrets **sur le serveur
