@@ -167,8 +167,11 @@ Suite, dans l'ordre :
    URLs* avec `https://socle.edilumen.fr/login`).
 3. Brancher Keycloak sur le Supabase du Socle et faire l'essai réel — check-list ci-dessous
    (exige le poste habituel : clé SSH du tunnel).
-4. Brancher Clara et Iris (bouton, provider `keycloak` de leur Supabase avec le client `clara` /
-   `iris`, URL de retour de chacun). ⚠️ Question ouverte : avec la fonction « Organisations »
+4. Brancher Clara et Iris : bouton prêt sur la branche `feature/sso-lot4` de chacun (2026-11-10,
+   même module `sso.ts`, testé ; retour sur `/connexion` pour Clara, `/login` pour Iris). Reste,
+   pour chacun : provider `keycloak` de son Supabase (client `clara` / `iris` et son secret),
+   *Redirect URLs* (`https://clara.edilumen.fr/connexion`, `https://iris.edilumen.fr/login`),
+   essai, puis merge. ⚠️ Question ouverte : avec la fonction « Organisations »
    de Keycloak, l'association domaine → annuaire vit dans Keycloak ; la table
    `organization_identity_providers` et son écran superadmin ne servent peut-être plus — à
    trancher après l'essai.
