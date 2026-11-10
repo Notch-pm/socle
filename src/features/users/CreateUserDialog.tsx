@@ -15,7 +15,16 @@ import { Input } from "@/components/ui/input";
 import { Field } from "@/components/ui/field";
 import { useCreateOrgUser } from "@/features/users/useOrgUsers";
 import { AccessRolesFields } from "@/features/users/AccessRolesFields";
-import { NO_ACCESS, SOCLE_APPLICATION_ID, type AccessApplication } from "@/features/users/agentAccess";
+import {
+  grantedEntries,
+  newDraft,
+  NO_ACCESS,
+  SOCLE_APPLICATION_ID,
+  validateDraft,
+  type AccessApplication,
+  type AccessDraft,
+  type ManagedOrganization,
+} from "@/features/users/agentAccess";
 
 const schema = z.object({
   email: z.string().email("Email invalide"),
@@ -25,21 +34,28 @@ const schema = z.object({
 
 type FormValues = z.infer<typeof schema>;
 
-const DEFAULT_ROLES = { [SOCLE_APPLICATION_ID]: "consultant" };
-
 export function CreateUserDialog({
   open,
   onOpenChange,
   organizationId,
   applications,
+  organizations,
+  rootId,
 }: {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   organizationId: string;
   applications: AccessApplication[];
+  /** Sous-arbre géré : l'organisme de la page en tête, puis ses services. */
+  organizations: ManagedOrganization[];
+  rootId: string | null;
 }) {
   const createUser = useCreateOrgUser(organizationId);
-  const [roles, setRoles] = React.useState<Record<string, string>>(DEFAULT_ROLES);
+  const [draft, setDraft] = React.useState<AccessDraft>(() => newDraft(applications, organizationId));
+  // Le catalogue arrive après l'ouverture de la page : le brouillon suit.
+  React.useEffect(() => {
+    if (open) setDraft(newDraft(applications, organizationId));
+  }, [open, applications, organizationId]);
   const [rolesError, setRolesError] = React.useState<string | null>(null);
   const {
     register,
@@ -53,25 +69,32 @@ export function CreateUserDialog({
 
   function close() {
     reset();
-    setRoles(DEFAULT_ROLES);
+    setDraft(newDraft(applications, organizationId));
     setRolesError(null);
     createUser.reset();
     onOpenChange(false);
   }
 
   function onSubmit(values: FormValues) {
-    const socleRole = roles[SOCLE_APPLICATION_ID] ?? NO_ACCESS;
-    const appAccess = applications
-      .map((app) => ({ application_id: app.id, role_code: roles[app.id] ?? NO_ACCESS }))
-      .filter((a) => a.role_code !== NO_ACCESS);
-    if (socleRole === NO_ACCESS && appAccess.length === 0) {
-      setRolesError("Ouvrez l'accès à au moins une application.");
+    const refusal = validateDraft(draft, applications, organizations);
+    if (refusal) {
+      setRolesError(refusal);
       return;
     }
     setRolesError(null);
+    const socle = draft[SOCLE_APPLICATION_ID] ?? { role: NO_ACCESS, organizationIds: [] };
+    const appAccess = grantedEntries(draft)
+      .filter(([id]) => id !== SOCLE_APPLICATION_ID)
+      .map(([application_id, e]) => ({ application_id, role_code: e.role, organization_ids: e.organizationIds }));
     createUser.mutate(
-      { ...values, role: socleRole, organization_id: organizationId, applications: appAccess },
-      { onSuccess: (result) => (result.email_sent || !result.is_new_user || socleRole === NO_ACCESS) && close() },
+      {
+        ...values,
+        role: socle.role,
+        organization_id: organizationId,
+        socle_organization_ids: socle.role === NO_ACCESS ? [] : socle.organizationIds,
+        applications: appAccess,
+      },
+      { onSuccess: (result) => (result.email_sent || !result.is_new_user || socle.role === NO_ACCESS) && close() },
     );
   }
 
@@ -79,7 +102,7 @@ export function CreateUserDialog({
 
   return (
     <Dialog open={open} onOpenChange={(o) => !o && close()}>
-      <DialogContent>
+      <DialogContent className="max-h-[90vh] max-w-2xl overflow-y-auto">
         <DialogHeader>
           <DialogTitle>Nouvel utilisateur</DialogTitle>
           <DialogDescription>
@@ -102,8 +125,10 @@ export function CreateUserDialog({
           <AccessRolesFields
             idPrefix="user-access"
             applications={applications}
-            value={roles}
-            onChange={(app, role) => setRoles((prev) => ({ ...prev, [app]: role }))}
+            organizations={organizations}
+            rootId={rootId}
+            value={draft}
+            onChange={setDraft}
           />
 
           {rolesError ? <p className="text-sm text-destructive">{rolesError}</p> : null}

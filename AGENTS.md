@@ -312,7 +312,9 @@ Envoi des e-mails —, `?section=`, `organizationSections.ts`), gestion superadm
   Socle autorise (lots 0-4 dans la fiche). Servi par `GET /v1/users` (scope `users`, clé
   rattachée à une application, lecture incrémentale — pas de webhook).
 - ⚠️ Retirer un accès = `is_active = false`, jamais DELETE. Suspension (`users.status`) par la
-  RPC `set_user_status` seule. ⚠️ `users` : le navigateur n'écrit que prénom et nom (privilèges
+  RPC `set_user_status` seule. ⚠️ L'écran gère le **sous-arbre** : un rôle par application, des
+  organismes cochés par application ; un rôle d'administration d'application exige la **racine**
+  (contrainte différée) ; un agent ne relève que d'une collectivité. ⚠️ `users` : le navigateur n'écrit que prénom et nom (privilèges
   de colonne — sinon `global_role` redevient inscriptible).
 
 ### [Intégrations partenaires](docs/features/integrations.md)
