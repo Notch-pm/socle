@@ -94,7 +94,7 @@ export function CreateUserDialog({
         socle_organization_ids: socle.role === NO_ACCESS ? [] : socle.organizationIds,
         applications: appAccess,
       },
-      { onSuccess: (result) => (result.email_sent || !result.is_new_user || socle.role === NO_ACCESS) && close() },
+      { onSuccess: (result) => (result.email_sent || !result.is_new_user) && close() },
     );
   }
 
@@ -106,7 +106,8 @@ export function CreateUserDialog({
         <DialogHeader>
           <DialogTitle>Nouvel utilisateur</DialogTitle>
           <DialogDescription>
-            Avec un accès au Socle, un email d'invitation est envoyé pour définir le mot de passe.
+            Un e-mail de bienvenue lui est envoyé avec le lien de chaque application ouverte. Il s'y
+            connectera avec le compte de sa collectivité, un seul pour toute la gamme.
           </DialogDescription>
         </DialogHeader>
 
@@ -137,9 +138,9 @@ export function CreateUserDialog({
           ) : null}
           {result && result.is_new_user && !result.email_sent ? (
             <p className="text-sm text-warning">
-              Utilisateur créé, mais l'email d'invitation n'a pas pu être envoyé
+              Utilisateur créé, mais l'e-mail de bienvenue n'a pas pu être envoyé
               {result.email_error ? ` (${result.email_error})` : ""}. Configurez l'envoi
-              d'emails ou renvoyez l'invitation plus tard.
+              d'emails ou renvoyez le message plus tard.
             </p>
           ) : null}
           {result && !result.is_new_user ? (

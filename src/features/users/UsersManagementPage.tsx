@@ -83,7 +83,7 @@ export function UsersManagementPage({ organizationId }: { organizationId: string
   const [editing, setEditing] = React.useState<OrgAgent | null>(null);
   const [removing, setRemoving] = React.useState<OrgAgent | null>(null);
   const [toggling, setToggling] = React.useState<OrgAgent | null>(null);
-  // Le résultat d'un renvoi d'invitation ou d'un changement de statut, en
+  // Le résultat d'un renvoi du message de bienvenue ou d'un changement de statut, en
   // clair sous la barre d'actions : le serveur tranche et son message
   // s'affiche tel quel.
   const [notice, setNotice] = React.useState<{ tone: "ok" | "error"; text: string } | null>(null);
@@ -94,10 +94,10 @@ export function UsersManagementPage({ organizationId }: { organizationId: string
       onSuccess: (result) =>
         setNotice(
           result.email_sent
-            ? { tone: "ok", text: `Invitation renvoyée à ${user.email}.` }
+            ? { tone: "ok", text: `Message de bienvenue renvoyé à ${user.email}.` }
             : {
                 tone: "error",
-                text: `L'invitation n'a pas pu être envoyée${result.email_error ? ` : ${result.email_error}` : "."}`,
+                text: `Le message n'a pas pu être envoyé${result.email_error ? ` : ${result.email_error}` : "."}`,
               },
         ),
       onError: (error) => setNotice({ tone: "error", text: error.message }),
@@ -244,14 +244,13 @@ export function UsersManagementPage({ organizationId }: { organizationId: string
                       ))}
                       <td className="px-4 py-3">
                         <div className="flex gap-1">
-                          {/* Seul un accès au Socle passe par une invitation
-                              du Socle ; le serveur sait si le compte est
-                              encore inactif (409 sinon). */}
-                          {u.socle ? (
+                          {/* Le message de bienvenue liste les applications
+                              ouvertes : utile à tout agent qui a un accès. */}
+                          {hasAnyAccess(u) ? (
                             <Button
                               variant="ghost"
                               size="icon"
-                              title="Renvoyer l'invitation"
+                              title="Renvoyer le message de bienvenue"
                               disabled={resend.isPending}
                               onClick={() => resendInvitation(u)}
                             >

@@ -127,7 +127,7 @@ export interface CreateUserInput {
   last_name: string;
   /** Rôle Socle, ou `NO_ACCESS` : l'agent n'utilise que d'autres applications. */
   role: string;
-  /** Organisme de la page : périmètre de l'appelant et relais de l'invitation. */
+  /** Organisme de la page : périmètre de l'appelant et relais du message de bienvenue. */
   organization_id: string;
   /** Organismes où ouvrir l'accès au Socle (défaut : `organization_id`). */
   socle_organization_ids: string[];
@@ -293,11 +293,10 @@ export interface ResendInvitationResult {
 }
 
 /**
- * Réémet le lien d'activation d'un compte encore inactif (`invite-user`,
- * action `resend`). Un courriel d'invitation perdu — relais absent au moment
- * de l'invitation, boîte pleine — laissait jusqu'ici un compte que personne
- * ne pouvait activer. Le serveur tranche : compte déjà actif → 409, compte
- * hors de l'organisation → 404 ; le message français remonte tel quel.
+ * Renvoie le message de bienvenue (`invite-user`, action `resend`) : les
+ * applications ouvertes et la façon de s'y connecter (connexion unique, plus
+ * de lien d'activation). Compte hors du périmètre de l'appelant → 404 ; le
+ * message français remonte tel quel.
  */
 export function useResendInvitation(orgId: string) {
   return useMutation({

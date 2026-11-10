@@ -16,17 +16,19 @@ import {
   requestedOrganizationIds,
   type AccessRequest,
 } from "./_shared/accessRequest.ts";
+import { welcomeApps, welcomeMessage, type WelcomeApp } from "./_shared/welcome.ts";
 
-// Invitation d'un utilisateur dans une organisation, et renvoi d'une
-// invitation restée sans suite.
+// Ouverture des accès d'un agent, et renvoi de son message de bienvenue.
 //
 // Deux actions sur le même corps JSON :
-//   • (défaut) créer le compte s'il n'existe pas, le rattacher, envoyer
-//     l'invitation ;
-//   • `action: "resend"` — réémettre le lien d'activation d'un compte encore
-//     inactif. Avant ce bouton, un courriel perdu (relais absent au moment de
-//     l'invitation, boîte pleine) laissait un compte créé que personne ne
-//     pouvait activer, et « mot de passe oublié » passait par le même relais.
+//   • (défaut) créer le compte s'il n'existe pas, le rattacher, envoyer le
+//     message de bienvenue ;
+//   • `action: "resend"` — renvoyer ce message (courriel perdu, boîte pleine).
+//
+// Connexion unique (lot 4, 2026-11-10) : plus de lien « choisissez votre mot
+// de passe ». L'agent s'identifie par Keycloak pour toute la gamme ; le Socle
+// envoie UN message (`_shared/welcome.ts`) qui liste les applications ouvertes
+// et dit comment s'y connecter — Clara et Iris n'envoient plus rien.
 //
 // Le courriel part par le relais de la COLLECTIVITÉ, ou par le relais de
 // PLATEFORME en repli (`_shared/smtp.ts`) : une collectivité qui vient d'être
@@ -52,16 +54,6 @@ function json(status: number, body: unknown): Response {
   });
 }
 
-function buildBrandedEmail(siteName: string, heading: string, bodyHtml: string, ctaLabel: string, ctaUrl: string) {
-  return renderBrandedEmail({
-    primary: "#0aaa6b", // Edilumen primary green — matches src/index.css --primary
-    siteName,
-    heading,
-    bodyHtml,
-    action: { label: ctaLabel, url: ctaUrl },
-  });
-}
-
 async function sendViaSMTP(smtp: SmtpConfig, to: string, subject: string, html: string, text: string) {
   const transporter = nodemailer.createTransport({
     host: smtp.host,
@@ -75,14 +67,14 @@ async function sendViaSMTP(smtp: SmtpConfig, to: string, subject: string, html: 
 }
 
 /**
- * Le courriel d'invitation : relais résolu, lien d'activation, envoi. Rend ce
- * que l'écran affiche — envoyé ou non, et pourquoi — sans jamais lever : le
- * compte et son rattachement existent déjà, l'appelant doit le savoir.
+ * Le message de bienvenue : relais résolu, message composé, envoi. Rend ce que
+ * l'écran affiche — envoyé ou non, et pourquoi — sans jamais lever : le compte
+ * et son rattachement existent déjà, l'appelant doit le savoir.
  */
-async function sendInvitation(
+async function sendWelcome(
   adminClient: SupabaseClient,
   env: Record<string, string | undefined>,
-  args: { email: string; organizationId: string; origin: string },
+  args: { email: string; organizationId: string; apps: WelcomeApp[] },
 ): Promise<{ emailSent: boolean; emailError: string | null }> {
   try {
     // Relais applicable : celui de l'organisation, ou celui de l'ancêtre le
@@ -105,31 +97,22 @@ async function sendInvitation(
       .eq("id", args.organizationId)
       .single();
     const siteName = siteNameFor(org?.name, env);
+    const message = welcomeMessage(siteName, args.apps);
 
-    const { data: linkData, error: genLinkError } = await adminClient.auth.admin.generateLink({
-      type: "invite",
-      email: args.email,
-      options: { redirectTo: `${args.origin}/activer-compte` },
+    const html = renderBrandedEmail({
+      primary: "#0aaa6b", // Edilumen primary green — matches src/index.css --primary
+      siteName,
+      heading: message.heading,
+      bodyHtml: message.bodyHtml,
+      action: message.action ?? undefined,
     });
-    if (genLinkError || !linkData?.properties?.action_link) {
-      throw new Error(genLinkError?.message || "Impossible de générer le lien d'invitation");
-    }
 
-    const confirmationUrl = linkData.properties.action_link;
-    const subject = `Activez votre compte — ${siteName}`;
-    const heading = "Bienvenue !";
-    const bodyText = `Vous avez été invité(e) à rejoindre <strong>${siteName}</strong>. Cliquez sur le bouton ci-dessous pour définir votre mot de passe et activer votre compte.`;
-    const bodyHtml = `<p style="margin:0 0 28px;font-size:14px;line-height:1.6;color:#52525b;">${bodyText}</p>`;
-
-    const html = buildBrandedEmail(siteName, heading, bodyHtml, "Activer mon compte", confirmationUrl);
-    const text = `${heading}\n\n${bodyText.replace(/<[^>]+>/g, "")}\n\nActiver mon compte : ${confirmationUrl}\n\n${siteName}`;
-
-    await sendViaSMTP(smtp, args.email, subject, html, text);
+    await sendViaSMTP(smtp, args.email, message.subject, html, message.text);
     // La SOURCE seule est journalisée (diagnostic), jamais les identifiants.
-    console.log(`Invitation envoyée : org=${args.organizationId}, relais=${smtp.source}`);
+    console.log(`Bienvenue envoyée : org=${args.organizationId}, relais=${smtp.source}`);
     return { emailSent: true, emailError: null };
   } catch (err) {
-    console.error("Failed to send invite email:", err);
+    console.error("Failed to send welcome email:", err);
     return { emailSent: false, emailError: err instanceof Error ? err.message : "Erreur d'envoi de l'email" };
   }
 }
@@ -225,7 +208,6 @@ Deno.serve(async (req: Request) => {
     // inserting into user_organizations for someone else is inherently
     // outside what the caller's own RLS grants would allow.
     const adminClient = createClient(supabaseUrl, serviceRoleKey);
-    const origin = (req.headers.get("origin") || "").replace(/\/$/, "");
 
     // Le compte existant se cherche dans `public.users` (une ligne par compte,
     // posée par le trigger `on_auth_user_created`, e-mail unique et en
@@ -243,28 +225,33 @@ Deno.serve(async (req: Request) => {
     if (action === "resend") {
       if (!existingAuthUser) return json(404, { error: "Aucun compte pour cette adresse." });
 
-      // Un accès au Socle sur l'organisme de la page ou l'un de ses services.
-      const { data: memberships } = await adminClient
-        .from("user_organizations")
-        .select("organization_id")
-        .eq("user_id", existingAuthUser.id);
-      const managed = await Promise.all(
-        (memberships ?? []).map(async (m: { organization_id: string }) => {
-          const { data } = await callerClient.rpc("is_admin_of_self_or_ancestor", { org_id: m.organization_id });
-          return data === true;
-        }),
-      );
+      // Un accès (Socle ou application) sur un organisme que l'appelant gère.
+      const [{ data: memberships }, { data: accesses }] = await Promise.all([
+        adminClient.from("user_organizations").select("organization_id").eq("user_id", existingAuthUser.id),
+        adminClient
+          .from("user_application_access")
+          .select("organization_id, application_id")
+          .eq("user_id", existingAuthUser.id)
+          .eq("is_active", true),
+      ]);
+      const isManaged = async (orgId: string) =>
+        (await callerClient.rpc("is_admin_of_self_or_ancestor", { org_id: orgId })).data === true;
+      const socleManaged = (await Promise.all((memberships ?? []).map((m: { organization_id: string }) => isManaged(m.organization_id)))).some(Boolean);
+      const appRows = (accesses ?? []) as { organization_id: string; application_id: string }[];
+      const managedApps = (
+        await Promise.all(appRows.map(async (a) => ((await isManaged(a.organization_id)) ? a.application_id : null)))
+      ).filter((id): id is string => id !== null);
       // Hors du périmètre de l'appelant = introuvable : on ne renseigne pas sur
       // les comptes des autres.
-      if (!managed.some(Boolean)) return json(404, { error: "Aucun compte pour cette adresse." });
-
-      if (existingAuthUser.email_confirmed_at) {
-        return json(409, {
-          error: "Ce compte est déjà actif : la personne peut se connecter, ou demander un nouveau mot de passe.",
-        });
+      if (!socleManaged && managedApps.length === 0) {
+        return json(404, { error: "Aucun compte pour cette adresse." });
       }
 
-      const sent = await sendInvitation(adminClient, env, { email, organizationId: organization_id, origin });
+      const sent = await sendWelcome(adminClient, env, {
+        email,
+        organizationId: organization_id,
+        apps: welcomeApps(socleManaged, managedApps),
+      });
       return json(200, {
         success: true,
         user_id: existingAuthUser.id,
@@ -364,13 +351,16 @@ Deno.serve(async (req: Request) => {
       if (linkError) return json(500, { error: linkError.message });
     }
 
-    // L'invitation du Socle sert à choisir un mot de passe POUR LE SOCLE : sans
-    // accès au Socle, rien à envoyer (chaque application invite ses agents
-    // tant que la connexion unique n'est pas en place).
+    // Le seul message de la gamme pour un nouvel agent (connexion unique) :
+    // envoyé qu'il ait ou non un accès au Socle.
     let emailSent = false;
     let emailError: string | null = null;
-    if (isNewUser && role) {
-      const sent = await sendInvitation(adminClient, env, { email, organizationId: organization_id, origin });
+    if (isNewUser) {
+      const sent = await sendWelcome(adminClient, env, {
+        email,
+        organizationId: organization_id,
+        apps: welcomeApps(Boolean(role), request.applications.map((a) => a.application_id)),
+      });
       emailSent = sent.emailSent;
       emailError = sent.emailError;
     }

@@ -91,12 +91,12 @@ describe("UsersManagementPage", () => {
     expect(within(bob).getByText("2 organismes")).toBeTruthy();
     expect(within(bob).getByText("Suspendu")).toBeTruthy();
     expect(within(bob).getByTitle("Réactiver")).toBeTruthy();
-    // Pas d'accès au Socle : pas d'invitation du Socle à renvoyer.
-    expect(within(bob).queryByTitle("Renvoyer l'invitation")).toBeNull();
+    // Le message de bienvenue vaut pour tout agent qui a un accès, Socle ou non.
+    expect(within(bob).getByTitle("Renvoyer le message de bienvenue")).toBeTruthy();
 
     const alice = screen.getByText("alice@ville.fr").closest("tr")!;
     expect(within(alice).getByText("Administrateur")).toBeTruthy();
-    expect(within(alice).getByTitle("Renvoyer l'invitation")).toBeTruthy();
+    expect(within(alice).getByTitle("Renvoyer le message de bienvenue")).toBeTruthy();
   });
 
   it("masque par défaut les utilisateurs dont tous les accès sont retirés", () => {

@@ -66,9 +66,17 @@ describe("LoginPage — connexion avec le compte de la collectivité", () => {
     expect((screen.getByRole("button", { name: /compte de ma collectivité/ }) as HTMLButtonElement).disabled).toBe(false);
   });
 
+  it("le mot de passe est replié derrière « Autre méthode de connexion »", () => {
+    renderAt("/login");
+    expect(screen.queryByLabelText("Mot de passe")).toBeNull();
+    fireEvent.click(screen.getByRole("button", { name: "Autre méthode de connexion" }));
+    expect(screen.getByLabelText("Mot de passe")).toBeTruthy();
+  });
+
   it("le mot de passe reste possible, sans passer par Keycloak", async () => {
     h.signInWithPassword.mockResolvedValue({ data: {}, error: null });
     renderAt("/login");
+    fireEvent.click(screen.getByRole("button", { name: "Autre méthode de connexion" }));
     fireEvent.change(screen.getByLabelText("Email"), { target: { value: "agent@accm.fr" } });
     fireEvent.change(screen.getByLabelText("Mot de passe"), { target: { value: "secret" } });
     fireEvent.click(screen.getByRole("button", { name: "Se connecter" }));

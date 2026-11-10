@@ -205,6 +205,38 @@ Les clients `socle`, `clara` et `iris` sont déclarés dans l'import du realm
 6. **Contre-essai** — un compte Entra **non** provisionné doit être refusé (retour sur `/login`
    avec une erreur d'inscription fermée), et un agent suspendu aussi.
 
+### Bascule vers la connexion unique (décisions du 2026-11-10)
+
+- **Tout le monde passe par Keycloak, d'un coup** (comptes de démo seulement). Plus de mot de
+  passe par application : un agent dont la collectivité a relié son annuaire n'en a aucun ; les
+  autres créent **un** compte Keycloak à leur première connexion.
+- **Inscription ouverte dans Keycloak, e-mail vérifié** — et non une création des comptes
+  Keycloak par le Socle : pas de connecteur Socle → Keycloak, et pas de conflit à la première
+  connexion entre un compte local pré-créé et le compte Microsoft d'une collectivité reliée.
+  ⚠️ Sûr parce que les inscriptions **Supabase** sont fermées : un compte Keycloak sans accès au
+  Socle n'ouvre rien, et Supabase ne rattache qu'une adresse **vérifiée**.
+- **Un seul e-mail** : le message de bienvenue du Socle (`invite-user`, `_shared/welcome.ts` —
+  miroir de `suiteApps.ts`, épinglé), envoyé à tout nouvel agent, Socle ou non, avec le lien de
+  chaque application ouverte et la façon de s'y connecter. Plus de lien d'activation, ni au
+  Socle, ni dans `sync-socle-users` de Clara et d'Iris (le compte y est toujours créé, sans mot
+  de passe).
+- **Pages de connexion** (Socle, Clara, Iris) : le bouton Keycloak est l'entrée principale ; le
+  mot de passe reste en secours (admin plateforme, panne de Keycloak) derrière « Autre méthode
+  de connexion ».
+- Pas de reconnexion d'une application à l'autre : la session Keycloak (`auth.edilumen.fr`)
+  renvoie l'agent aussitôt connecté. Facultatif, plus tard : lancer ce passage dès l'arrivée
+  sur la page de connexion, relier les déconnexions.
+
+**Réglages du realm `edilumen`** (console Keycloak, poste habituel), en plus de la check-list :
+- *Realm settings → Email* : l'expéditeur de la plateforme (valeurs `PLATFORM_SMTP_*`) —
+  indispensable à la vérification d'e-mail et au mot de passe oublié ;
+- *Realm settings → Login* : « User registration », « Verify email », « Forgot password » et
+  « Login with email » activés.
+
+**Ordre de bascule** : essai réel sur le Socle (check-list) → réglages du realm ci-dessus →
+providers `keycloak` de Clara et d'Iris → merge des trois branches `feature/sso-lot4` et
+déploiement de `invite-user` (Socle) et `sync-socle-users` (Clara, Iris) dans la foulée.
+
 Restent aussi côté serveur : le SMTP du realm, une sonde externe, une copie des sauvegardes
 hors du serveur. Plus tard : Ariane (lot 5), SCIM.
 
