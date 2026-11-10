@@ -13,7 +13,7 @@
 | 1 | Annuaire et matrice d'accès dans le Socle | **en ligne** (2026-10-30) |
 | 2 | `GET /v1/users` (scope `users`), lecture incrémentale | **en ligne** (2026-10-30, contrat 1.43.0) |
 | 3 | Consommation par Clara puis Iris (`sync-socle-users`, écrans verrouillés) | **en ligne** (2026-10-30) : Clara (rôle de base + affectations) et Iris (accès seul) ; vérifiés de bout en bout |
-| 4 | Connexion OIDC par Keycloak dans chaque application | en cours — `auth.edilumen.fr` en ligne (VPS OVH, France, kit [`infra/keycloak/`](../../infra/keycloak/README.md)), fédération Entra de test vérifiée, bouton de connexion en cours ; état et reprise [plus bas](#lot-4--état-et-reprise-2026-11-10) |
+| 4 | Connexion OIDC par Keycloak dans chaque application | en cours — `auth.edilumen.fr` en ligne (VPS OVH, France, kit [`infra/keycloak/`](../../infra/keycloak/README.md)), fédération Entra de test vérifiée, inscriptions fermées, branchement du Socle à faire ; état et reprise [plus bas](#lot-4--état-et-reprise-2026-11-10) |
 
 Principe : **Keycloak authentifie, le Socle autorise.** Un agent authentifié mais non provisionné
 par le Socle n'entre dans aucune application.
@@ -154,21 +154,53 @@ Fait :
   avec le compte de ma collectivité » dans `LoginPage.tsx` (+ test). Pas encore de migration :
   la table `organization_identity_providers` est prévue, pas écrite.
 
-⚠️ **Bloquant** : les inscriptions Supabase sont **ouvertes en production** (sonde
-`/auth/v1/signup` réussie le 2026-11-06, compte sonde supprimé ensuite). Le lot 4 suppose des
-inscriptions fermées.
+✅ Inscriptions publiques **fermées** sur les trois projets (Socle, Iris, Clara — 2026-11-10). La
+sonde du 2026-11-06 les avait trouvées ouvertes sur le Socle.
 
 Suite, dans l'ordre :
 1. ✅ (2026-11-10) Rien ne dépend de l'inscription publique : Socle, Clara, Iris et Nora créent
    leurs comptes par l'API admin (`admin.createUser`, `generateLink` invite / recovery) ; aucun
    `signUp` ni `/auth/v1/signup`. ⚠️ À fermer sur **chaque** projet où l'agent se connecte par
    Keycloak (Socle, Clara, Iris) : c'est le Supabase de l'application qui reçoit l'agent.
-2. « Allow new users to sign up » fermé sur le Socle et Iris (2026-11-10, geste manuel) ; Clara
-   à vérifier ; puis sonde `/auth/v1/signup` (422 attendu) et essai d'invitation.
-3. Ajouter le provider `keycloak` dans Supabase et le client correspondant dans le realm
-   `edilumen`, puis faire un essai réel avec le compte Entra de test.
-4. Écrire la table `organization_identity_providers` et l'écran superadmin, puis brancher Clara
-   et Iris.
+2. ✅ (2026-11-10) « Allow new users to sign up » fermé sur le Socle, Iris et Clara (geste
+   manuel). URL de retour du Socle vérifiées (*Site URL* `https://socle.edilumen.fr`, *Redirect
+   URLs* avec `https://socle.edilumen.fr/login`).
+3. Brancher Keycloak sur le Supabase du Socle et faire l'essai réel — check-list ci-dessous
+   (exige le poste habituel : clé SSH du tunnel).
+4. Brancher Clara et Iris (bouton, provider `keycloak` de leur Supabase avec le client `clara` /
+   `iris`, URL de retour de chacun). ⚠️ Question ouverte : avec la fonction « Organisations »
+   de Keycloak, l'association domaine → annuaire vit dans Keycloak ; la table
+   `organization_identity_providers` et son écran superadmin ne servent peut-être plus — à
+   trancher après l'essai.
+
+### Check-list de l'étape 3 (Socle)
+
+Les clients `socle`, `clara` et `iris` sont déclarés dans l'import du realm
+(`infra/keycloak/realms/edilumen-realm.json`), chacun avec l'URL de retour de son Supabase.
+
+1. **Secret du client** — *but : Supabase doit se présenter à Keycloak.* Tunnel SSH
+   (`ssh -L 8080:127.0.0.1:8080 debian@auth.edilumen.fr`), console `http://localhost:8080`,
+   realm **edilumen** → *Clients* : vérifier que `socle`, `clara`, `iris` existent → `socle` →
+   *Credentials* → copier le *Client secret* (jamais dans un chat ni un fichier).
+2. **Provider Supabase** — *but : le Supabase du Socle sait envoyer vers Keycloak.* Projet
+   `qhrokbkyxgcvkbpmbmna` → *Authentication → Sign In / Providers → Keycloak* : activé,
+   *Client ID* `socle`, *Secret* (étape 1), *Realm URL* `https://auth.edilumen.fr/realms/edilumen`.
+   L'URL de retour affichée doit être `https://qhrokbkyxgcvkbpmbmna.supabase.co/auth/v1/callback`
+   (celle du client `socle`).
+3. **Organisations** — *but : un domaine d'e-mail va droit à son annuaire, sans `kc_idp_hint`.*
+   Realm **edilumen** → *Realm settings* : « Organizations » activé (pas dans l'import du realm) ;
+   *Organizations* → créer l'organisation de test avec le **domaine du compte Entra de test** →
+   onglet *Identity providers* → lier `entra-test` à ce domaine, « Redirect when email domain
+   matches » activé — comme au lab.
+4. **Agent de test** — *but : un agent provisionné retombe sur son compte.* Dans le Socle, créer
+   l'agent avec l'adresse du compte Entra de test et un accès Socle.
+5. **Essai** — en navigation privée, ouvrir
+   `https://qhrokbkyxgcvkbpmbmna.supabase.co/auth/v1/authorize?provider=keycloak&scopes=openid&redirect_to=https%3A%2F%2Fsocle.edilumen.fr%2Flogin`
+   (le bouton n'est pas encore en ligne) : Keycloak demande l'e-mail → Microsoft → retour sur le
+   Socle, connecté. Vérifier que `auth.identities` porte une identité `keycloak` sur **le même
+   `user_id`** que l'agent créé à l'étape 4.
+6. **Contre-essai** — un compte Entra **non** provisionné doit être refusé (retour sur `/login`
+   avec une erreur d'inscription fermée), et un agent suspendu aussi.
 
 Restent aussi côté serveur : le SMTP du realm, une sonde externe, une copie des sauvegardes
 hors du serveur. Plus tard : Ariane (lot 5), SCIM.
