@@ -13,7 +13,7 @@
 | 1 | Annuaire et matrice d'accès dans le Socle | **en ligne** (2026-10-30) |
 | 2 | `GET /v1/users` (scope `users`), lecture incrémentale | **en ligne** (2026-10-30, contrat 1.43.0) |
 | 3 | Consommation par Clara puis Iris (`sync-socle-users`, écrans verrouillés) | **en ligne** (2026-10-30) : Clara (rôle de base + affectations) et Iris (accès seul) ; vérifiés de bout en bout |
-| 4 | Connexion OIDC par Keycloak dans chaque application | en cours — serveur commandé le 2026-11-06 (VPS OVH, France), kit d'installation dans [`infra/keycloak/`](../../infra/keycloak/README.md) ; attend un Entra ID de test ([roadmap](../roadmap.md)) |
+| 4 | Connexion OIDC par Keycloak dans chaque application | en cours — `auth.edilumen.fr` en ligne (VPS OVH, France, kit [`infra/keycloak/`](../../infra/keycloak/README.md)), fédération Entra de test vérifiée, bouton de connexion en cours ; état et reprise [plus bas](#lot-4--état-et-reprise-2026-11-10) |
 
 Principe : **Keycloak authentifie, le Socle autorise.** Un agent authentifié mais non provisionné
 par le Socle n'entre dans aucune application.
@@ -107,6 +107,44 @@ public — installation, sauvegardes et branchement d'un annuaire Entra ID dans
 2026-11-06 (annuaire de test, fournisseur `entra-test`) : e-mail, prénom et nom transmis, e-mail
 tenu pour vérifié. Reste pour le lot 4 : l'écran du Socle qui associe un domaine d'e-mail à l'annuaire d'une
 collectivité, et le bouton de connexion dans chaque application.
+
+## Lot 4 : état et reprise (2026-11-10)
+
+Fait :
+- Serveur `auth.edilumen.fr` **en ligne** depuis le 2026-11-06 (VPS OVH, utilisateur `debian`,
+  connexion SSH par clé seulement, mots de passe SSH désactivés). Secrets **sur le serveur
+  seulement** (`/opt/keycloak/.env`). Sauvegarde par cron à 03:30. Admin du realm master
+  nominatif, avec OTP ; le compte d'amorçage est supprimé. Console accessible par tunnel SSH
+  seulement (`127.0.0.1:8080`).
+- ⚠️ Realm master : `frontendUrl = http://localhost:8080`, sinon la console affiche « Something
+  went wrong » (elle vérifie la session sur l'adresse publique, qui est bloquée).
+- Fédération Entra ID de test (fournisseur `entra-test`) vérifiée. ⚠️ `/account/?kc_idp_hint=`
+  **perd** l'indice : tester par le bouton de la page de connexion.
+- Routage par domaine d'e-mail validé sur le lab : la fonction « Organisations » de Keycloak
+  envoie un domaine vers son annuaire, les autres adresses vers le mot de passe. Le Socle
+  n'envoie donc **pas** de `kc_idp_hint`.
+- Branche `feature/sso-lot4` (WIP) : `src/features/auth/sso.ts` (+ test) et bouton « Se connecter
+  avec le compte de ma collectivité » dans `LoginPage.tsx` (+ test). Pas encore de migration :
+  la table `organization_identity_providers` est prévue, pas écrite.
+
+⚠️ **Bloquant** : les inscriptions Supabase sont **ouvertes en production** (sonde
+`/auth/v1/signup` réussie le 2026-11-06, compte sonde supprimé ensuite). Le lot 4 suppose des
+inscriptions fermées.
+
+Suite, dans l'ordre :
+1. Vérifier que rien ne dépend de l'inscription publique (invitations par l'API admin ? Iris,
+   Nora ?).
+2. Fermer « Allow new users to sign up » dans le tableau de bord Supabase (geste manuel).
+3. Ajouter le provider `keycloak` dans Supabase et le client correspondant dans le realm
+   `edilumen`, puis faire un essai réel avec le compte Entra de test.
+4. Écrire la table `organization_identity_providers` et l'écran superadmin, puis brancher Clara
+   et Iris.
+
+Restent aussi côté serveur : le SMTP du realm, une sonde externe, une copie des sauvegardes
+hors du serveur. Plus tard : Ariane (lot 5), SCIM.
+
+⚠️ Méthode : pour une manipulation dans la console Keycloak ou Azure, expliquer **le but** avant
+les étapes, puis donner une action à la fois.
 
 ## Iris : le Socle ouvre l'accès, sans rôle (2026-10-30)
 

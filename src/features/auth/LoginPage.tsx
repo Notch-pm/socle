@@ -6,6 +6,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Field } from "@/components/ui/field";
 import logo from "@/assets/logo-edilumen.svg";
+import { readSsoReturnError, ssoSignInCredentials } from "@/features/auth/sso";
 
 export function LoginPage() {
   const { session, profile, loading } = useAuth();
@@ -14,6 +15,16 @@ export function LoginPage() {
   const [password, setPassword] = React.useState("");
   const [error, setError] = React.useState<string | null>(null);
   const [submitting, setSubmitting] = React.useState(false);
+  const [redirecting, setRedirecting] = React.useState(false);
+  // Erreur rapportée au retour de Keycloak (agent non provisionné, suspendu…),
+  // lue une fois au montage, puis effacée de l'URL pour ne pas réapparaître.
+  const [ssoError, setSsoError] = React.useState<string | null>(
+    () => readSsoReturnError(window.location.search, window.location.hash)?.message ?? null,
+  );
+
+  React.useEffect(() => {
+    if (ssoError) window.history.replaceState(null, "", window.location.pathname);
+  }, [ssoError]);
 
   if (session && loading) {
     return (
@@ -31,9 +42,24 @@ export function LoginPage() {
     return <Navigate to={redirectTo} replace />;
   }
 
+  async function handleSso() {
+    setError(null);
+    setSsoError(null);
+    setRedirecting(true);
+    const { error } = await supabase.auth.signInWithOAuth(
+      ssoSignInCredentials(window.location.origin),
+    );
+    // En cas de succès, le navigateur part vers Keycloak : on ne revient ici qu'en échec.
+    if (error) {
+      setRedirecting(false);
+      setSsoError(readSsoReturnError(`?error=${encodeURIComponent(error.message)}`, "")!.message);
+    }
+  }
+
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     setError(null);
+    setSsoError(null);
     setSubmitting(true);
     const { error } = await supabase.auth.signInWithPassword({ email, password });
     setSubmitting(false);
@@ -50,6 +76,32 @@ export function LoginPage() {
           <p className="text-sm text-muted-foreground">
             Connectez-vous pour accéder à votre espace.
           </p>
+        </div>
+
+        <div className="flex flex-col gap-2">
+          <Button
+            type="button"
+            variant="outline"
+            size="lg"
+            disabled={redirecting}
+            onClick={handleSso}
+          >
+            {redirecting ? "Redirection…" : "Se connecter avec le compte de ma collectivité"}
+          </Button>
+          <p className="text-center text-xs text-muted-foreground">
+            Si votre collectivité a relié son annuaire (Microsoft…).
+          </p>
+          {ssoError ? (
+            <p role="alert" className="text-sm text-destructive">
+              {ssoError}
+            </p>
+          ) : null}
+        </div>
+
+        <div className="my-5 flex items-center gap-3 text-xs text-muted-foreground">
+          <span className="h-px flex-1 bg-border" />
+          ou avec votre mot de passe
+          <span className="h-px flex-1 bg-border" />
         </div>
 
         <form onSubmit={handleSubmit} className="flex flex-col gap-4">
