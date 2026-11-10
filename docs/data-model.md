@@ -131,13 +131,20 @@ aucun endpoint, il décrit ce qui existe **en base**.
 ### `application_roles` et `user_application_access` — accès aux applications de la gamme (2026-10-30)
 
 - `application_roles (application_id, code)` PK : rôles de base déclarés par chaque application
-  (seed Clara ; Iris : un seul rôle `acces` depuis le 2026-10-30 — le Socle ouvre l'accès, les profils restent dans Iris ; ni Socle — ses rôles vivent dans `user_organizations` — ni Nora). Lecture
-  `authenticated`, écriture super admin.
+  (seed Clara ; Iris : `acces` depuis le 2026-10-30 — le Socle ouvre l'accès, les profils restent dans Iris —,
+  et `administrateur` depuis le 2026-11-10 — profil système verrouillé d'Iris ; ni Socle — ses rôles vivent
+  dans `user_organizations` — ni Nora). `is_admin` = rôle d'administration, valable pour **toute la
+  collectivité** dans l'application. Lecture `authenticated`, écriture super admin.
 - `user_application_access` : `user_id` (CASCADE), `application_id`, `organization_id` (CASCADE,
   tout organisme de l'arbre), `role_code` (FK composite vers `application_roles`), `is_active`,
   `created_by`, `updated_at` ; **UNIQUE (user_id, application_id, organization_id)**.
 - Trigger `enforce_user_application_access_subscription` (SECURITY DEFINER, EXECUTE révoqué) :
   la racine de l'organisme doit être abonnée à l'application, **à la pose seulement**.
+- ⚠️ Contrainte **différée** `enforce_application_admin_on_root` (2026-11-10, fin de transaction) :
+  un rôle `is_admin` actif sur un service exige le même rôle actif sur la **racine** ; les services
+  en plus restent permis (affectations). Une requête par changement côté écran : promouvoir pose la
+  racine d'abord, rétrograder les services d'abord (`planAccessChanges`). Test :
+  `supabase/tests/admin-racine.test.sql`.
 - **RLS** : lecture `user_id = auth.uid() OR is_admin_of_self_or_ancestor(organization_id)` ·
   INSERT/UPDATE `is_admin_of_self_or_ancestor(organization_id)` ; **aucun DELETE** (policy retirée et
   privilège révoqué le 2026-10-30 : `GET /v1/users` se lit par incréments).
@@ -148,8 +155,11 @@ aucun endpoint, il décrit ce qui existe **en base**.
 
 - `user_id`, `organization_id` **nullables**, FK **CASCADE** des deux côtés ; `role` text NOT NULL
   **sans CHECK** ; **UNIQUE (user_id, organization_id)**.
-- **RLS** : lecture `user_id = auth.uid() OR is_super_admin()` + `is_org_admin(organization_id)` ·
-  écriture INSERT/DELETE `is_super_admin() OR is_org_admin(organization_id)`. **Aucune policy
+- `role` borné à `admin` / `consultant` (CHECK `user_organizations_role_known`, 2026-11-10).
+- **RLS** : lecture `user_id = auth.uid() OR is_super_admin()` + `is_admin_of_self_or_ancestor(organization_id)` ·
+  écriture INSERT/DELETE `is_admin_of_self_or_ancestor(organization_id)` — **sous-arbre** depuis le
+  2026-11-10 (avant : `is_org_admin`, admin direct seulement ; l'admin d'une collectivité ne voyait
+  pas l'accès au Socle posé sur un de ses services). **Aucune policy
   UPDATE** → changer le rôle d'un membre en place est impossible côté client, l'UI doit
   supprimer puis recréer la ligne.
 

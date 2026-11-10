@@ -10,41 +10,64 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Field } from "@/components/ui/field";
 import { useUpdateOrgUser, type OrgAgent } from "@/features/users/useOrgUsers";
-import { AccessRolesFields, withSocle } from "@/features/users/AccessRolesFields";
-import { currentRole, type AccessApplication } from "@/features/users/agentAccess";
+import { AccessRolesFields } from "@/features/users/AccessRolesFields";
+import {
+  draftFromAgent,
+  validateDraft,
+  type AccessApplication,
+  type AccessDraft,
+  type ManagedOrganization,
+} from "@/features/users/agentAccess";
 
 export function EditUserDialog({
   user,
   organizationId,
   applications,
+  organizations,
+  rootId,
   onClose,
 }: {
   user: OrgAgent | null;
   organizationId: string;
   applications: AccessApplication[];
+  /** Sous-arbre géré : l'organisme de la page en tête, puis ses services. */
+  organizations: ManagedOrganization[];
+  rootId: string | null;
   onClose: () => void;
 }) {
   const updateUser = useUpdateOrgUser(organizationId);
   const [firstName, setFirstName] = React.useState("");
   const [lastName, setLastName] = React.useState("");
-  const [roles, setRoles] = React.useState<Record<string, string>>({});
+  const [draft, setDraft] = React.useState<AccessDraft>({});
+  const [draftError, setDraftError] = React.useState<string | null>(null);
 
   React.useEffect(() => {
     if (!user) return;
     setFirstName(user.firstName ?? "");
     setLastName(user.lastName ?? "");
-    setRoles(Object.fromEntries(withSocle(applications).map((app) => [app.id, currentRole(user, app.id)])));
-  }, [user, applications]);
+    setDraft(draftFromAgent(user, applications, organizationId, rootId));
+    setDraftError(null);
+  }, [user, applications, organizationId, rootId]);
 
   function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     if (!user) return;
-    updateUser.mutate({ agent: user, firstName, lastName, roles }, { onSuccess: onClose });
+    // Retirer tous les accès passe par « Retirer » : ici, au moins un accès.
+    const refusal = validateDraft(draft, applications, organizations);
+    if (refusal) {
+      setDraftError(refusal);
+      return;
+    }
+    setDraftError(null);
+    updateUser.mutate(
+      { agent: user, firstName, lastName, draft, applications, rootId },
+      { onSuccess: onClose },
+    );
   }
 
   return (
     <Dialog open={Boolean(user)} onOpenChange={(open) => !open && onClose()}>
-      <DialogContent>
+      <DialogContent className="max-h-[90vh] max-w-2xl overflow-y-auto">
         <DialogHeader>
           <DialogTitle>Modifier l'utilisateur</DialogTitle>
         </DialogHeader>
@@ -72,10 +95,13 @@ export function EditUserDialog({
             <AccessRolesFields
               idPrefix="edit-access"
               applications={applications}
-              value={roles}
-              onChange={(app, role) => setRoles((prev) => ({ ...prev, [app]: role }))}
+              organizations={organizations}
+              rootId={rootId}
+              value={draft}
+              onChange={setDraft}
             />
 
+            {draftError ? <p className="text-sm text-destructive">{draftError}</p> : null}
             {updateUser.isError ? (
               <p className="text-sm text-destructive">{(updateUser.error as Error).message}</p>
             ) : null}

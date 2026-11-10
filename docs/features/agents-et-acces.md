@@ -44,14 +44,41 @@ par le Socle n'entre dans aucune application.
 
 `/parametres/utilisateurs` et la section utilisateurs d'`OrgSettingsPage` (même composant) :
 matrice agent × application (Socle en tête, puis les applications abonnées par la racine), rôle ou
-« — », badge « Suspendu », actions renvoyer l'invitation (accès Socle seulement), modifier,
-suspendre / réactiver, retirer (accès Socle supprimé, accès aux applications désactivés sur cet
-organisme). Les agents sans plus aucun accès sont masqués derrière une case à cocher.
+« — » et le nombre d'organismes ouverts (noms au survol), badge « Suspendu », actions renvoyer
+l'invitation (accès Socle seulement), modifier, suspendre / réactiver, retirer (accès Socle
+supprimés, accès aux applications désactivés sur l'organisme **et ses services**). Les agents sans
+plus aucun accès sont masqués derrière une case à cocher.
+
+**Organismes ouverts** (2026-11-10) : l'écran lit tout le **sous-arbre** de l'organisme de la page
+(`useManagedOrganizations`, `managedOrganizations`). Création et modification proposent, par
+application, **un rôle** puis un tableau **organismes × applications ouvertes** (cases à cocher,
+« Tous / Aucun » par colonne ; l'organisme de la page coché d'office). Logique pure et testée dans
+`agentAccess.ts` (`AccessDraft`, `validateDraft`, `planSocleChanges`, `planAccessChanges`).
+- **Un rôle par application** (vérifié en base le 2026-11-10 : aucun agent n'en avait deux), mais
+  des organismes **propres à chaque application** (5 agents avaient le Socle sur la racine et Clara
+  sur des services).
+- ⚠️ **L'administration d'une application vaut pour toute la collectivité** (Clara et Iris : un
+  administrateur voit tout le tenant). Un rôle `is_admin` exige donc la **racine** ; les services en
+  plus restent permis (affectations Clara). L'écran coche et verrouille la racine, ne propose pas ces
+  rôles à un administrateur de service, et la base tranche (contrainte différée
+  `enforce_application_admin_on_root`, voir data-model). Les 40 accès « Administrateur » Clara posés
+  sur des services par la reprise avaient tous leur pendant sur la racine.
+- ⚠️ **Un agent relève d'une seule collectivité** (le super admin seul fait exception) :
+  `invite-user` refuse (409) un compte déjà rattaché ailleurs, et tous les organismes demandés
+  doivent avoir la racine de l'organisme de la page. Aucun agent multi-collectivité en base au
+  2026-11-10.
 
 ## `invite-user`
 
-- Corps : `role` = rôle Socle **ou vide**, `applications: [{ application_id, role_code }]` ; au
-  moins un accès. Abonnement et rôle **vérifiés avant toute écriture** (pas de compte orphelin).
+- Corps : `role` = rôle Socle **ou vide**, `socle_organization_ids`, `applications: [{ application_id,
+  role_code, organization_ids }]` ; listes absentes = l'organisme de la page (`organization_id`, qui
+  fixe aussi le relais de l'invitation). Au moins un accès. Périmètre de **chaque** organisme
+  (réévalué avec le jeton de l'appelant), même collectivité, abonnement, rôle et règle de la racine
+  **vérifiés avant toute écriture** (pas de compte orphelin) — lecture et règles pures dans
+  `_shared/accessRequest.ts` (testé).
+- Compte existant : 409 s'il a déjà un accès sur l'un des organismes demandés (« modifiez ses
+  accès depuis la liste »), ou s'il est rattaché à une **autre collectivité** (sauf super admin).
+- Renvoi d'invitation : le compte doit avoir un accès au Socle sur un organisme que l'appelant gère.
 - L'invitation par courriel ne part que si l'agent a un **accès au Socle** (elle sert à choisir
   le mot de passe du Socle). Tant que la connexion unique (lot 4) n'est pas en place, chaque
   application invite ses agents.
@@ -132,9 +159,12 @@ Fait :
 inscriptions fermées.
 
 Suite, dans l'ordre :
-1. Vérifier que rien ne dépend de l'inscription publique (invitations par l'API admin ? Iris,
-   Nora ?).
-2. Fermer « Allow new users to sign up » dans le tableau de bord Supabase (geste manuel).
+1. ✅ (2026-11-10) Rien ne dépend de l'inscription publique : Socle, Clara, Iris et Nora créent
+   leurs comptes par l'API admin (`admin.createUser`, `generateLink` invite / recovery) ; aucun
+   `signUp` ni `/auth/v1/signup`. ⚠️ À fermer sur **chaque** projet où l'agent se connecte par
+   Keycloak (Socle, Clara, Iris) : c'est le Supabase de l'application qui reçoit l'agent.
+2. « Allow new users to sign up » fermé sur le Socle et Iris (2026-11-10, geste manuel) ; Clara
+   à vérifier ; puis sonde `/auth/v1/signup` (422 attendu) et essai d'invitation.
 3. Ajouter le provider `keycloak` dans Supabase et le client correspondant dans le realm
    `edilumen`, puis faire un essai réel avec le compte Entra de test.
 4. Écrire la table `organization_identity_providers` et l'écran superadmin, puis brancher Clara
@@ -145,6 +175,16 @@ hors du serveur. Plus tard : Ariane (lot 5), SCIM.
 
 ⚠️ Méthode : pour une manipulation dans la console Keycloak ou Azure, expliquer **le but** avant
 les étapes, puis donner une action à la fois.
+
+## Iris : le rôle « Administrateur » (2026-11-10)
+
+Complète la décision ci-dessous : Iris déclare un second rôle de base, `administrateur`
+(is_admin), qui donne **dans Iris** le **profil système** « Administrateur » de la collectivité
+(administration + tous droits sur toutes les démarches) — un profil verrouillé, présent dans chaque
+collectivité, que seul le Socle attribue ou retire. `acces` reste l'ouverture sans profil ; les
+autres profils restent attribués dans Iris. Détail côté Iris : sa fiche « profils de droits ».
+⚠️ Avant le déploiement d'Iris : remonter au Socle, en `administrateur` sur la racine, les agents
+qui ont aujourd'hui ce profil dans Iris — sinon la synchronisation le leur retirerait.
 
 ## Iris : le Socle ouvre l'accès, sans rôle (2026-10-30)
 
