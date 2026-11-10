@@ -218,8 +218,10 @@ Complète la décision ci-dessous : Iris déclare un second rôle de base, `admi
 (administration + tous droits sur toutes les démarches) — un profil verrouillé, présent dans chaque
 collectivité, que seul le Socle attribue ou retire. `acces` reste l'ouverture sans profil ; les
 autres profils restent attribués dans Iris. Détail côté Iris : sa fiche « profils de droits ».
-⚠️ Avant le déploiement d'Iris : remonter au Socle, en `administrateur` sur la racine, les agents
-qui ont aujourd'hui ce profil dans Iris — sinon la synchronisation le leur retirerait.
+Mis en service le 2026-11-10 dans cet ordre : migration Socle, reprise au Socle des 5
+administrateurs Iris (rôle `administrateur` sur la racine), migration Iris, `sync-socle-users`
+redéployée, synchronisation complète (aucun changement). Dans l'autre ordre, la synchronisation
+aurait retiré le profil aux administrateurs existants.
 
 ## Iris : le Socle ouvre l'accès, sans rôle (2026-10-30)
 
