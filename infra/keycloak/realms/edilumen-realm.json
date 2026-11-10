@@ -3,6 +3,7 @@
   "displayName": "Edilumen",
   "displayNameHtml": "Une seule connexion pour toutes vos applications",
   "loginTheme": "edilumen",
+  "emailTheme": "edilumen",
   "enabled": true,
   "sslRequired": "external",
   "registrationAllowed": false,

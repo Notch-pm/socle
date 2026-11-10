@@ -141,13 +141,20 @@ Dans la console, realm **edilumen** :
   Providers → Keycloak*, URL `https://auth.edilumen.fr/realms/edilumen`). ⚠️ À ne faire qu'avec
   le code du lot 4 (bouton « compte de ma collectivité ») et ses inscriptions fermées.
 
-### 9. Thème de connexion
+### 9. Thèmes : page de connexion et e-mails
 
 `themes/edilumen/login/` habille la page que voient les agents : charte de la gamme (vert,
-Nunito Sans **auto-hébergée**, logo Edilumen), textes français de la gamme (« Adresse e-mail »,
-« Créer mon compte »…), pied « Un seul compte pour Socle, Iris et Clara ». Il hérite de
-`keycloak.v2` et ne réécrit **aucun** formulaire : seulement des variables PatternFly, la mise en
-page, `footer.ftl` et `messages_fr.properties`.
+Nunito Sans **auto-hébergée**, logo Edilumen, favicon du site institutionnel
+`www.edilumen.fr` converti en `favicon.ico` 16/32/48 px), textes français de la gamme
+(« Adresse e-mail », « Créer mon compte »…), pied « Un seul compte pour Socle, Iris et Clara ».
+Il hérite de `keycloak.v2` et ne réécrit **aucun** formulaire : seulement des variables
+PatternFly, la mise en page, `footer.ftl` et `messages_fr.properties`.
+
+`themes/edilumen/email/` habille les e-mails de Keycloak (vérification d'adresse, mot de passe
+oublié, action demandée, changement d'adresse, liaison d'annuaire, essai) avec le **cadre des
+e-mails de la gamme** — reprise de `renderBrandedEmail` (`invite-user/_shared/emailLayout.ts`) :
+colonne de 520 px, bandeau blanc, bouton vert, lien de repli, version Outlook. Les alertes de
+sécurité que le thème ne réécrit pas gardent leur texte, dans le même cadre.
 
 Déployer ou mettre à jour (poste, puis serveur) :
 
@@ -160,7 +167,7 @@ cd /opt/keycloak && docker compose up -d keycloak
 ```
 
 Puis, la première fois, dans la console (realm **edilumen**) : *Realm settings → Themes →
-Login theme* = `edilumen` ; *Realm settings → General → HTML display name* = « Une seule
+Login theme* = `edilumen` et *Email theme* = `edilumen` ; *Realm settings → General → HTML display name* = « Une seule
 connexion pour toutes vos applications » (l'import du realm les porte déjà, mais il n'est joué
 qu'au premier démarrage). ⚠️ Keycloak met les thèmes en cache : après une mise à jour du thème,
 `docker compose restart keycloak`.
