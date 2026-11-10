@@ -37,6 +37,12 @@ export const SLUG_RESERVED: readonly string[] = [
   // Le courrier libre (site Nora → Clara) : `/courrier` pour la collectivité,
   // `/<slug>/courrier` pour un organisme (2026-10-09).
   "courrier",
+  // L'espace usager de Nora à la racine de la collectivité : accès invité
+  // (`/suivi`), compte et « Mes demandes » (`/compte`), désinscription des avis
+  // à l'usager d'Iris (`/notifications/desinscription`) — 2026-11-10.
+  "suivi",
+  "compte",
+  "notifications",
 ];
 
 /**
