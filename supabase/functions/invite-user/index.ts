@@ -9,6 +9,13 @@ import {
   type SmtpRow,
 } from "./_shared/smtp.ts";
 import { renderBrandedEmail } from "./_shared/emailLayout.ts";
+import {
+  accessRows,
+  applicationAccessRefusal,
+  parseAccessRequest,
+  requestedOrganizationIds,
+  type AccessRequest,
+} from "./_shared/accessRequest.ts";
 
 // Invitation d'un utilisateur dans une organisation, et renvoi d'une
 // invitation restée sans suite.
@@ -127,63 +134,51 @@ async function sendInvitation(
   }
 }
 
-interface ApplicationAccessInput {
-  application_id: string;
-  role_code: string;
-}
-
-/** `applications` du corps : absent = aucun ; mal formé = `null` (400). */
-function parseApplicationAccess(value: unknown): ApplicationAccessInput[] | null {
-  if (value === undefined || value === null) return [];
-  if (!Array.isArray(value) || value.length > 20) return null;
-  const seen = new Set<string>();
-  const out: ApplicationAccessInput[] = [];
-  for (const item of value) {
-    const applicationId = (item as Record<string, unknown>)?.application_id;
-    const roleCode = (item as Record<string, unknown>)?.role_code;
-    if (typeof applicationId !== "string" || typeof roleCode !== "string" || !applicationId || !roleCode) {
-      return null;
-    }
-    if (seen.has(applicationId)) return null;
-    seen.add(applicationId);
-    out.push({ application_id: applicationId, role_code: roleCode });
-  }
-  return out;
-}
-
 /**
- * Chaque accès demandé : application abonnée par la racine de l'organisme, et
- * rôle qu'elle déclare. Les mêmes règles que la base (trigger
- * `enforce_user_application_access_subscription`, clé étrangère du rôle),
- * vérifiées ici pour refuser AVANT de créer le compte. Rend le motif du refus.
+ * Abonnements et rôles des applications demandées (mêmes règles que la base :
+ * trigger d'abonnement, clé étrangère du rôle, règle de la racine), vérifiés
+ * AVANT de créer le compte. Rend le motif du refus.
  */
 async function checkApplicationAccess(
   adminClient: SupabaseClient,
-  organizationId: string,
-  access: ApplicationAccessInput[],
+  rootId: string,
+  request: AccessRequest,
 ): Promise<string | null> {
-  const { data: rootId } = await adminClient.rpc("organization_root_id", { p_org_id: organizationId });
-  if (!rootId) return "Organisation introuvable.";
-  const ids = access.map((a) => a.application_id);
+  if (request.applications.length === 0) return null;
+  const ids = request.applications.map((a) => a.application_id);
   const [{ data: subscriptions }, { data: roles }] = await Promise.all([
     adminClient
       .from("organization_applications")
       .select("application_id")
       .eq("organization_id", rootId)
       .in("application_id", ids),
-    adminClient.from("application_roles").select("application_id, code").in("application_id", ids),
+    adminClient.from("application_roles").select("application_id, code, is_admin").in("application_id", ids),
   ]);
   const subscribed = new Set((subscriptions ?? []).map((s: { application_id: string }) => s.application_id));
-  for (const a of access) {
-    if (!subscribed.has(a.application_id)) {
-      return `La collectivité n'est pas abonnée à l'application « ${a.application_id} ».`;
-    }
-    const known = (roles ?? []).some(
-      (r: { application_id: string; code: string }) => r.application_id === a.application_id && r.code === a.role_code,
-    );
-    if (!known) return `Rôle inconnu pour l'application « ${a.application_id} ».`;
-  }
-  return null;
+  return applicationAccessRefusal(request, rootId, subscribed, roles ?? []);
+}
+
+/**
+ * Chaque organisme demandé : dans le périmètre de l'appelant (réévalué avec SON
+ * jeton, la règle reste dans la base) ET dans la même collectivité que
+ * l'organisme de la page — jamais d'agent à cheval sur deux collectivités.
+ */
+async function checkOrganizations(
+  callerClient: SupabaseClient,
+  adminClient: SupabaseClient,
+  rootId: string,
+  organizationIds: string[],
+): Promise<boolean> {
+  const checks = await Promise.all(
+    organizationIds.map(async (id) => {
+      const [{ data: allowed }, { data: root }] = await Promise.all([
+        callerClient.rpc("is_admin_of_self_or_ancestor", { org_id: id }),
+        adminClient.rpc("organization_root_id", { p_org_id: id }),
+      ]);
+      return allowed === true && root === rootId;
+    }),
+  );
+  return checks.every(Boolean);
 }
 
 Deno.serve(async (req: Request) => {
@@ -248,15 +243,20 @@ Deno.serve(async (req: Request) => {
     if (action === "resend") {
       if (!existingAuthUser) return json(404, { error: "Aucun compte pour cette adresse." });
 
-      const { data: membership } = await adminClient
+      // Un accès au Socle sur l'organisme de la page ou l'un de ses services.
+      const { data: memberships } = await adminClient
         .from("user_organizations")
-        .select("id")
-        .eq("organization_id", organization_id)
-        .eq("user_id", existingAuthUser.id)
-        .maybeSingle();
-      // Hors de l'organisation de l'appelant = introuvable : on ne renseigne
-      // pas sur les comptes des autres.
-      if (!membership) return json(404, { error: "Aucun compte pour cette adresse." });
+        .select("organization_id")
+        .eq("user_id", existingAuthUser.id);
+      const managed = await Promise.all(
+        (memberships ?? []).map(async (m: { organization_id: string }) => {
+          const { data } = await callerClient.rpc("is_admin_of_self_or_ancestor", { org_id: m.organization_id });
+          return data === true;
+        }),
+      );
+      // Hors du périmètre de l'appelant = introuvable : on ne renseigne pas sur
+      // les comptes des autres.
+      if (!managed.some(Boolean)) return json(404, { error: "Aucun compte pour cette adresse." });
 
       if (existingAuthUser.email_confirmed_at) {
         return json(409, {
@@ -278,22 +278,28 @@ Deno.serve(async (req: Request) => {
     // `role` : accès au Socle (`admin` / `consultant`), ou vide — l'agent
     // n'utilise alors que d'autres applications. `applications` : ses accès à
     // celles-ci, avec le rôle de base que chacune déclare (`application_roles`).
+    // Organismes : `socle_organization_ids` et `applications[].organization_ids`,
+    // l'organisme de la page par défaut.
     const { first_name, last_name } = body;
-    const role: string = typeof body.role === "string" ? body.role : "";
-    const appAccess = parseApplicationAccess(body.applications);
-    if (!first_name || !last_name || appAccess === null || !["", "admin", "consultant"].includes(role)) {
+    const request = parseAccessRequest(body, organization_id);
+    if (!first_name || !last_name || request === null) {
       return json(400, { error: "Champs obligatoires manquants" });
     }
-    if (!role && appAccess.length === 0) {
+    const role = request.socleRole;
+    if (!role && request.applications.length === 0) {
       return json(400, { error: "Ouvrez l'accès à au moins une application." });
     }
 
     // Tout se vérifie AVANT d'écrire : un accès refusé ne doit pas laisser un
     // compte créé sans rattachement.
-    if (appAccess.length > 0) {
-      const refusal = await checkApplicationAccess(adminClient, organization_id, appAccess);
-      if (refusal) return json(400, { error: refusal });
+    const { data: rootId } = await adminClient.rpc("organization_root_id", { p_org_id: organization_id });
+    if (!rootId) return json(400, { error: "Organisation introuvable." });
+    const organizationIds = requestedOrganizationIds(request);
+    if (!(await checkOrganizations(callerClient, adminClient, rootId, organizationIds))) {
+      return json(403, { error: "Un des organismes choisis est hors de votre périmètre." });
     }
+    const refusal = await checkApplicationAccess(adminClient, rootId, request);
+    if (refusal) return json(400, { error: refusal });
 
     let authUserId: string;
     let isNewUser = false;
@@ -301,25 +307,27 @@ Deno.serve(async (req: Request) => {
     if (existingAuthUser) {
       authUserId = existingAuthUser.id;
 
-      const [{ data: existingLink }, { data: existingAccess }] = await Promise.all([
-        adminClient
-          .from("user_organizations")
-          .select("id")
-          .eq("organization_id", organization_id)
-          .eq("user_id", authUserId)
-          .maybeSingle(),
-        adminClient
-          .from("user_application_access")
-          .select("id")
-          .eq("organization_id", organization_id)
-          .eq("user_id", authUserId)
-          .limit(1),
+      const [{ data: links }, { data: accesses }, { data: account }] = await Promise.all([
+        adminClient.from("user_organizations").select("organization_id").eq("user_id", authUserId),
+        adminClient.from("user_application_access").select("organization_id").eq("user_id", authUserId),
+        adminClient.from("users").select("global_role").eq("id", authUserId).maybeSingle(),
       ]);
+      const attached = [...(links ?? []), ...(accesses ?? [])].map((r: { organization_id: string }) => r.organization_id);
 
-      if (existingLink || existingAccess?.length) {
+      if (attached.some((id) => organizationIds.includes(id))) {
         return json(409, {
           error: "Cet utilisateur est déjà rattaché à cette organisation : modifiez ses accès depuis la liste.",
         });
+      }
+      // Un agent relève d'une seule collectivité (le super admin seul fait
+      // exception) : un compte rattaché ailleurs ne s'ajoute pas ici.
+      if (account?.global_role !== "super_admin" && attached.length > 0) {
+        const roots = await Promise.all(
+          [...new Set(attached)].map(async (id) => (await adminClient.rpc("organization_root_id", { p_org_id: id })).data),
+        );
+        if (roots.some((r) => r !== rootId)) {
+          return json(409, { error: "Ce compte est rattaché à une autre collectivité." });
+        }
       }
     } else {
       const { data: createData, error: createError } = await adminClient.auth.admin.createUser({
@@ -342,23 +350,17 @@ Deno.serve(async (req: Request) => {
       .eq("id", authUserId);
     if (nameError) return json(500, { error: nameError.message });
 
-    if (appAccess.length > 0) {
-      const { error: accessError } = await adminClient.from("user_application_access").insert(
-        appAccess.map((a) => ({
-          user_id: authUserId,
-          organization_id,
-          application_id: a.application_id,
-          role_code: a.role_code,
-          created_by: callerUser.id,
-        })),
-      );
+    if (request.applications.length > 0) {
+      const { error: accessError } = await adminClient
+        .from("user_application_access")
+        .insert(accessRows(request, authUserId, rootId, callerUser.id));
       if (accessError) return json(500, { error: accessError.message });
     }
 
     if (role) {
       const { error: linkError } = await adminClient
         .from("user_organizations")
-        .insert({ organization_id, user_id: authUserId, role });
+        .insert(request.socleOrganizationIds.map((id) => ({ organization_id: id, user_id: authUserId, role })));
       if (linkError) return json(500, { error: linkError.message });
     }
 

@@ -44,14 +44,41 @@ par le Socle n'entre dans aucune application.
 
 `/parametres/utilisateurs` et la section utilisateurs d'`OrgSettingsPage` (même composant) :
 matrice agent × application (Socle en tête, puis les applications abonnées par la racine), rôle ou
-« — », badge « Suspendu », actions renvoyer l'invitation (accès Socle seulement), modifier,
-suspendre / réactiver, retirer (accès Socle supprimé, accès aux applications désactivés sur cet
-organisme). Les agents sans plus aucun accès sont masqués derrière une case à cocher.
+« — » et le nombre d'organismes ouverts (noms au survol), badge « Suspendu », actions renvoyer
+l'invitation (accès Socle seulement), modifier, suspendre / réactiver, retirer (accès Socle
+supprimés, accès aux applications désactivés sur l'organisme **et ses services**). Les agents sans
+plus aucun accès sont masqués derrière une case à cocher.
+
+**Organismes ouverts** (2026-11-10) : l'écran lit tout le **sous-arbre** de l'organisme de la page
+(`useManagedOrganizations`, `managedOrganizations`). Création et modification proposent, par
+application, **un rôle** puis un tableau **organismes × applications ouvertes** (cases à cocher,
+« Tous / Aucun » par colonne ; l'organisme de la page coché d'office). Logique pure et testée dans
+`agentAccess.ts` (`AccessDraft`, `validateDraft`, `planSocleChanges`, `planAccessChanges`).
+- **Un rôle par application** (vérifié en base le 2026-11-10 : aucun agent n'en avait deux), mais
+  des organismes **propres à chaque application** (5 agents avaient le Socle sur la racine et Clara
+  sur des services).
+- ⚠️ **L'administration d'une application vaut pour toute la collectivité** (Clara et Iris : un
+  administrateur voit tout le tenant). Un rôle `is_admin` exige donc la **racine** ; les services en
+  plus restent permis (affectations Clara). L'écran coche et verrouille la racine, ne propose pas ces
+  rôles à un administrateur de service, et la base tranche (contrainte différée
+  `enforce_application_admin_on_root`, voir data-model). Les 40 accès « Administrateur » Clara posés
+  sur des services par la reprise avaient tous leur pendant sur la racine.
+- ⚠️ **Un agent relève d'une seule collectivité** (le super admin seul fait exception) :
+  `invite-user` refuse (409) un compte déjà rattaché ailleurs, et tous les organismes demandés
+  doivent avoir la racine de l'organisme de la page. Aucun agent multi-collectivité en base au
+  2026-11-10.
 
 ## `invite-user`
 
-- Corps : `role` = rôle Socle **ou vide**, `applications: [{ application_id, role_code }]` ; au
-  moins un accès. Abonnement et rôle **vérifiés avant toute écriture** (pas de compte orphelin).
+- Corps : `role` = rôle Socle **ou vide**, `socle_organization_ids`, `applications: [{ application_id,
+  role_code, organization_ids }]` ; listes absentes = l'organisme de la page (`organization_id`, qui
+  fixe aussi le relais de l'invitation). Au moins un accès. Périmètre de **chaque** organisme
+  (réévalué avec le jeton de l'appelant), même collectivité, abonnement, rôle et règle de la racine
+  **vérifiés avant toute écriture** (pas de compte orphelin) — lecture et règles pures dans
+  `_shared/accessRequest.ts` (testé).
+- Compte existant : 409 s'il a déjà un accès sur l'un des organismes demandés (« modifiez ses
+  accès depuis la liste »), ou s'il est rattaché à une **autre collectivité** (sauf super admin).
+- Renvoi d'invitation : le compte doit avoir un accès au Socle sur un organisme que l'appelant gère.
 - L'invitation par courriel ne part que si l'agent a un **accès au Socle** (elle sert à choisir
   le mot de passe du Socle). Tant que la connexion unique (lot 4) n'est pas en place, chaque
   application invite ses agents.
@@ -107,6 +134,18 @@ public — installation, sauvegardes et branchement d'un annuaire Entra ID dans
 2026-11-06 (annuaire de test, fournisseur `entra-test`) : e-mail, prénom et nom transmis, e-mail
 tenu pour vérifié. Reste pour le lot 4 : l'écran du Socle qui associe un domaine d'e-mail à l'annuaire d'une
 collectivité, et le bouton de connexion dans chaque application.
+
+## Iris : le rôle « Administrateur » (2026-11-10)
+
+Complète la décision ci-dessous : Iris déclare un second rôle de base, `administrateur`
+(is_admin), qui donne **dans Iris** le **profil système** « Administrateur » de la collectivité
+(administration + tous droits sur toutes les démarches) — un profil verrouillé, présent dans chaque
+collectivité, que seul le Socle attribue ou retire. `acces` reste l'ouverture sans profil ; les
+autres profils restent attribués dans Iris. Détail côté Iris : sa fiche « profils de droits ».
+Mis en service le 2026-11-10 dans cet ordre : migration Socle, reprise au Socle des 5
+administrateurs Iris (rôle `administrateur` sur la racine), migration Iris, `sync-socle-users`
+redéployée, synchronisation complète (aucun changement). Dans l'autre ordre, la synchronisation
+aurait retiré le profil aux administrateurs existants.
 
 ## Iris : le Socle ouvre l'accès, sans rôle (2026-10-30)
 

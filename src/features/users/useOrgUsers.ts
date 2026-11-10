@@ -4,12 +4,17 @@ import { supabase } from "@/lib/supabase";
 import { useRootApplications } from "@/features/organizations/useFreeMail";
 import {
   accessApplications,
+  managedOrganizations,
+  managedRootId,
   mergeAgents,
   NO_ACCESS,
   planAccessChanges,
+  planSocleChanges,
   SOCLE_APPLICATION_ID,
   type AccessApplication,
+  type AccessDraft,
   type AccessRow,
+  type ManagedOrganization,
   type MembershipRow,
   type OrgAgent,
   type UserStatus,
@@ -21,26 +26,57 @@ const membersKey = (orgId: string) => ["org-users", orgId] as const;
 
 const USER_COLUMNS = "id, email, first_name, last_name, status";
 
+const NO_ORGANIZATIONS: ManagedOrganization[] = [];
+
 /**
- * Les agents d'un organisme : son accès au Socle (`user_organizations`) et ses
- * accès aux autres applications (`user_application_access`), fusionnés par
- * agent. Un agent dont tous les accès sont retirés reste dans la liste
- * (l'écran le masque par défaut) : on peut lui rendre ses accès.
+ * Le sous-arbre que gère l'administrateur : l'organisme de la page et tous ses
+ * services, lus par RLS (un administrateur voit son sous-arbre). `rootId` est
+ * la racine si l'organisme de la page en est une, sinon `null`.
+ */
+export function useManagedOrganizations(orgId: string | undefined) {
+  const query = useQuery({
+    queryKey: ["managed-organizations", orgId ?? "none"] as const,
+    enabled: Boolean(orgId),
+    queryFn: async () => {
+      const { data, error } = await supabase.from("organizations").select("id, name, parent_id").order("name");
+      if (error) throw error;
+      return managedOrganizations(data, orgId!);
+    },
+  });
+  const organizations = query.data ?? NO_ORGANIZATIONS;
+  return {
+    organizations,
+    rootId: managedRootId(organizations),
+    isLoading: query.isLoading,
+    isError: query.isError,
+  };
+}
+
+/**
+ * Les agents du sous-arbre : leur accès au Socle (`user_organizations`) et
+ * leurs accès aux autres applications (`user_application_access`), sur
+ * l'organisme de la page ET ses services, fusionnés par agent. Un agent dont
+ * tous les accès sont retirés reste dans la liste (l'écran le masque par
+ * défaut) : on peut lui rendre ses accès.
  */
 export function useOrgUsers(orgId: string | undefined) {
+  const managed = useManagedOrganizations(orgId);
+  const ids = managed.organizations.map((o) => o.id);
   return useQuery({
-    queryKey: orgId ? membersKey(orgId) : ["org-users", "none"],
-    enabled: Boolean(orgId),
+    queryKey: orgId ? [...membersKey(orgId), ids.length] : ["org-users", "none"],
+    enabled: Boolean(orgId) && ids.length > 0,
     queryFn: async (): Promise<OrgAgent[]> => {
       const [memberships, accesses] = await Promise.all([
         supabase
           .from("user_organizations")
-          .select(`id, role, users(${USER_COLUMNS})`)
-          .eq("organization_id", orgId!),
+          .select(`id, role, organization_id, users(${USER_COLUMNS})`)
+          .in("organization_id", ids),
         supabase
           .from("user_application_access")
-          .select(`id, application_id, role_code, is_active, users!user_application_access_user_id_fkey(${USER_COLUMNS})`)
-          .eq("organization_id", orgId!),
+          .select(
+            `id, application_id, organization_id, role_code, is_active, users!user_application_access_user_id_fkey(${USER_COLUMNS})`,
+          )
+          .in("organization_id", ids),
       ]);
       if (memberships.error) throw memberships.error;
       if (accesses.error) throw accesses.error;
@@ -91,8 +127,11 @@ export interface CreateUserInput {
   last_name: string;
   /** Rôle Socle, ou `NO_ACCESS` : l'agent n'utilise que d'autres applications. */
   role: string;
+  /** Organisme de la page : périmètre de l'appelant et relais de l'invitation. */
   organization_id: string;
-  applications: { application_id: string; role_code: string }[];
+  /** Organismes où ouvrir l'accès au Socle (défaut : `organization_id`). */
+  socle_organization_ids: string[];
+  applications: { application_id: string; role_code: string; organization_ids: string[] }[];
 }
 
 export interface CreateUserResult {
@@ -136,14 +175,16 @@ export interface UpdateAgentInput {
   agent: OrgAgent;
   firstName: string;
   lastName: string;
-  /** Rôle voulu par application (`socle` compris), ou `NO_ACCESS`. */
-  roles: Record<string, string>;
+  /** Par application (`socle` compris) : rôle voulu ou `NO_ACCESS`, et organismes cochés. */
+  draft: AccessDraft;
+  applications: AccessApplication[];
+  rootId: string | null;
 }
 
 export function useUpdateOrgUser(orgId: string) {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: async ({ agent, firstName, lastName, roles }: UpdateAgentInput) => {
+    mutationFn: async ({ agent, firstName, lastName, draft, applications, rootId }: UpdateAgentInput) => {
       // .select() lets us detect RLS silently matching zero rows (no error is
       // thrown in that case — it just looks like a no-op update) instead of
       // reporting success when nothing actually changed.
@@ -159,28 +200,30 @@ export function useUpdateOrgUser(orgId: string) {
 
       // Accès au Socle. No UPDATE policy exists on user_organizations (only
       // SELECT/INSERT/DELETE), so a role change is applied as delete-then-insert.
-      const socleRole = roles[SOCLE_APPLICATION_ID] ?? NO_ACCESS;
-      const currentSocle = agent.socle?.role ?? NO_ACCESS;
-      if (socleRole !== currentSocle) {
-        if (agent.socle) {
-          const { error } = await supabase.from("user_organizations").delete().eq("id", agent.socle.membershipId);
-          if (error) throw error;
-        }
-        if (socleRole !== NO_ACCESS) {
-          const { error } = await supabase
-            .from("user_organizations")
-            .insert({ organization_id: orgId, user_id: agent.userId, role: socleRole });
-          if (error) throw error;
-        }
+      const socle = planSocleChanges(agent.socle, draft[SOCLE_APPLICATION_ID] ?? { role: NO_ACCESS, organizationIds: [] });
+      if (socle.deleteMembershipIds.length > 0) {
+        const { error } = await supabase.from("user_organizations").delete().in("id", socle.deleteMembershipIds);
+        if (error) throw error;
+      }
+      if (socle.insertOrganizationIds.length > 0) {
+        const { error } = await supabase.from("user_organizations").insert(
+          socle.insertOrganizationIds.map((organization_id) => ({
+            organization_id,
+            user_id: agent.userId,
+            role: socle.role,
+          })),
+        );
+        if (error) throw error;
       }
 
       // Accès aux autres applications : retirer = désactiver, jamais supprimer.
-      for (const change of planAccessChanges(agent.access, roles)) {
+      // Une requête par changement, dans l'ordre du plan (règle de la racine).
+      for (const change of planAccessChanges(agent.access, draft, applications, rootId)) {
         const { error } =
           change.kind === "insert"
             ? await supabase.from("user_application_access").insert({
                 user_id: agent.userId,
-                organization_id: orgId,
+                organization_id: change.organizationId,
                 application_id: change.applicationId,
                 role_code: change.roleCode,
               })
@@ -196,25 +239,32 @@ export function useUpdateOrgUser(orgId: string) {
 }
 
 /**
- * Retire l'agent de cet organisme : accès Socle supprimé, accès aux autres
- * applications DÉSACTIVÉS (l'application doit l'apprendre). Son compte et ses
- * rattachements à d'autres organismes ne bougent pas.
+ * Retire l'agent de l'organisme et de ses services : accès Socle supprimés,
+ * accès aux autres applications DÉSACTIVÉS (l'application doit l'apprendre),
+ * en une seule requête — la règle de la racine est vérifiée en fin de
+ * transaction. Son compte et ses rattachements hors de ce sous-arbre ne
+ * bougent pas.
  */
 export function useRemoveOrgUser(orgId: string) {
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: async (agent: OrgAgent) => {
-      if (agent.socle) {
-        const { error } = await supabase.from("user_organizations").delete().eq("id", agent.socle.membershipId);
+      const membershipIds = agent.socle?.memberships.map((m) => m.id) ?? [];
+      if (membershipIds.length > 0) {
+        const { error } = await supabase.from("user_organizations").delete().in("id", membershipIds);
         if (error) throw error;
       }
-      const { error } = await supabase
-        .from("user_application_access")
-        .update({ is_active: false })
-        .eq("organization_id", orgId)
-        .eq("user_id", agent.userId)
-        .eq("is_active", true);
-      if (error) throw error;
+      const accessIds = Object.values(agent.access)
+        .flat()
+        .filter((a) => a.isActive)
+        .map((a) => a.id);
+      if (accessIds.length > 0) {
+        const { error } = await supabase
+          .from("user_application_access")
+          .update({ is_active: false })
+          .in("id", accessIds);
+        if (error) throw error;
+      }
     },
     onSuccess: () => queryClient.invalidateQueries({ queryKey: membersKey(orgId) }),
   });

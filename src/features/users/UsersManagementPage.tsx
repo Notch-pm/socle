@@ -17,6 +17,7 @@ import {
 } from "@/components/ui/alert-dialog";
 import {
   useAccessApplications,
+  useManagedOrganizations,
   useOrgUsers,
   useRemoveOrgUser,
   useResendInvitation,
@@ -27,6 +28,7 @@ import { CreateUserDialog } from "@/features/users/CreateUserDialog";
 import { EditUserDialog } from "@/features/users/EditUserDialog";
 import { withSocle } from "@/features/users/AccessRolesFields";
 import {
+  activeOrganizations,
   currentRole,
   displayName,
   hasAnyAccess,
@@ -36,18 +38,39 @@ import {
 
 const NO_APPLICATIONS: AccessApplication[] = [];
 
-function RoleCell({ agent, application }: { agent: OrgAgent; application: AccessApplication }) {
-  const code = currentRole(agent, application.id);
+function RoleCell({
+  agent,
+  application,
+  rootId,
+  organizationNames,
+}: {
+  agent: OrgAgent;
+  application: AccessApplication;
+  rootId: string | null;
+  organizationNames: Map<string, string>;
+}) {
+  const code = currentRole(agent, application.id, rootId);
   if (code === NO_ACCESS) return <span className="text-muted-foreground">—</span>;
   const role = application.roles.find((r) => r.code === code);
+  const orgs = activeOrganizations(agent, application.id);
+  // Plusieurs organismes ouverts : leur nombre, et leurs noms au survol.
+  const names = orgs.map((id) => organizationNames.get(id) ?? "?").join(", ");
   return (
-    <Badge variant={role?.isAdmin ? "secondary" : "outline"}>{role?.label ?? code}</Badge>
+    <div className="flex items-center gap-1.5" title={names}>
+      <Badge variant={role?.isAdmin ? "secondary" : "outline"}>{role?.label ?? code}</Badge>
+      {orgs.length > 1 ? <span className="text-xs text-muted-foreground">{orgs.length} organismes</span> : null}
+    </div>
   );
 }
 
 export function UsersManagementPage({ organizationId }: { organizationId: string }) {
   const { data: users, isLoading, isError } = useOrgUsers(organizationId);
   const accessApps = useAccessApplications(organizationId);
+  const managed = useManagedOrganizations(organizationId);
+  const organizationNames = React.useMemo(
+    () => new Map(managed.organizations.map((o) => [o.id, o.name])),
+    [managed.organizations],
+  );
   const applications = accessApps.data ?? NO_APPLICATIONS;
   const columns = React.useMemo(() => withSocle(applications), [applications]);
   const removeUser = useRemoveOrgUser(organizationId);
@@ -132,7 +155,10 @@ export function UsersManagementPage({ organizationId }: { organizationId: string
             className="pl-9"
           />
         </div>
-        <Button onClick={() => setCreateOpen(true)} disabled={accessApps.isLoading}>
+        <Button
+          onClick={() => setCreateOpen(true)}
+          disabled={accessApps.isLoading || managed.organizations.length === 0}
+        >
           <Plus />
           Nouvel utilisateur
         </Button>
@@ -208,7 +234,12 @@ export function UsersManagementPage({ organizationId }: { organizationId: string
                       <td className="px-4 py-3 text-muted-foreground">{u.email}</td>
                       {columns.map((app) => (
                         <td key={app.id} className="px-4 py-3">
-                          <RoleCell agent={u} application={app} />
+                          <RoleCell
+                            agent={u}
+                            application={app}
+                            rootId={managed.rootId}
+                            organizationNames={organizationNames}
+                          />
                         </td>
                       ))}
                       <td className="px-4 py-3">
@@ -267,11 +298,15 @@ export function UsersManagementPage({ organizationId }: { organizationId: string
         onOpenChange={setCreateOpen}
         organizationId={organizationId}
         applications={applications}
+        organizations={managed.organizations}
+        rootId={managed.rootId}
       />
       <EditUserDialog
         user={editing}
         organizationId={organizationId}
         applications={applications}
+        organizations={managed.organizations}
+        rootId={managed.rootId}
         onClose={() => setEditing(null)}
       />
 
@@ -280,9 +315,8 @@ export function UsersManagementPage({ organizationId }: { organizationId: string
           <AlertDialogHeader>
             <AlertDialogTitle>Retirer « {removing?.email} » ?</AlertDialogTitle>
             <AlertDialogDescription>
-              Cette personne perdra ses accès sur cette organisation, dans le Socle comme dans les
-              autres applications. Son compte et ses éventuels rattachements à d'autres
-              organisations ne sont pas supprimés.
+              Cette personne perdra ses accès sur cette organisation et ses services, dans le Socle
+              comme dans les autres applications. Son compte n'est pas supprimé.
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>

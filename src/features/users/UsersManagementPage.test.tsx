@@ -2,11 +2,13 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { render, screen, fireEvent, within } from "@testing-library/react";
 import { UsersManagementPage } from "./UsersManagementPage";
-import type { AccessApplication, OrgAgent } from "./agentAccess";
+import type { AccessApplication, ManagedOrganization, OrgAgent } from "./agentAccess";
 
 const h = vi.hoisted(() => ({
   agents: [] as OrgAgent[],
   applications: [] as AccessApplication[],
+  organizations: [] as ManagedOrganization[],
+  createUser: vi.fn(),
 }));
 
 vi.mock("@/features/users/useOrgUsers", () => {
@@ -17,7 +19,13 @@ vi.mock("@/features/users/useOrgUsers", () => {
     useRemoveOrgUser: mutation,
     useResendInvitation: mutation,
     useSetUserStatus: mutation,
-    useCreateOrgUser: mutation,
+    useCreateOrgUser: () => ({ ...mutation(), mutate: h.createUser, data: undefined }),
+    useManagedOrganizations: () => ({
+      organizations: h.organizations,
+      rootId: h.organizations[0]?.parentId === null ? h.organizations[0].id : null,
+      isLoading: false,
+      isError: false,
+    }),
     useUpdateOrgUser: mutation,
   };
 });
@@ -45,17 +53,27 @@ function agent(overrides: Partial<OrgAgent>): OrgAgent {
 }
 
 beforeEach(() => {
+  h.createUser.mockReset();
   h.applications = [CLARA];
+  h.organizations = [
+    { id: "org-1", name: "Ville", parentId: null, depth: 0 },
+    { id: "svc-1", name: "État civil", parentId: "org-1", depth: 1 },
+  ];
   h.agents = [
-    agent({ userId: "u-1", email: "alice@ville.fr", firstName: "Alice", socle: { membershipId: "m-1", role: "admin" } }),
+    agent({ userId: "u-1", email: "alice@ville.fr", firstName: "Alice", socle: { role: "admin", memberships: [{ id: "m-1", organizationId: "org-1" }] } }),
     agent({
       userId: "u-2",
       email: "bob@ville.fr",
       firstName: "Bob",
       status: "suspended",
-      access: { clara: { id: "x-1", roleCode: "elu", isActive: true } },
+      access: {
+        clara: [
+          { id: "x-1", organizationId: "org-1", roleCode: "elu", isActive: true },
+          { id: "x-9", organizationId: "svc-1", roleCode: "elu", isActive: true },
+        ],
+      },
     }),
-    agent({ userId: "u-3", email: "ancien@ville.fr", access: { clara: { id: "x-2", roleCode: "elu", isActive: false } } }),
+    agent({ userId: "u-3", email: "ancien@ville.fr", access: { clara: [{ id: "x-2", organizationId: "org-1", roleCode: "elu", isActive: false }] } }),
   ];
 });
 
@@ -70,6 +88,7 @@ describe("UsersManagementPage", () => {
     render(<UsersManagementPage organizationId="org-1" />);
     const bob = screen.getByText("bob@ville.fr").closest("tr")!;
     expect(within(bob).getByText("Élu")).toBeTruthy();
+    expect(within(bob).getByText("2 organismes")).toBeTruthy();
     expect(within(bob).getByText("Suspendu")).toBeTruthy();
     expect(within(bob).getByTitle("Réactiver")).toBeTruthy();
     // Pas d'accès au Socle : pas d'invitation du Socle à renvoyer.
@@ -85,5 +104,42 @@ describe("UsersManagementPage", () => {
     expect(screen.queryByText("ancien@ville.fr")).toBeNull();
     fireEvent.click(screen.getByLabelText("Afficher les utilisateurs sans accès (1)"));
     expect(screen.getByText("ancien@ville.fr")).toBeTruthy();
+  });
+
+  it("création : un tableau d'organismes par application ouverte, envoyé à invite-user", () => {
+    render(<UsersManagementPage organizationId="org-1" />);
+    fireEvent.click(screen.getByText("Nouvel utilisateur"));
+    fireEvent.change(screen.getByLabelText("Email"), { target: { value: "carole@ville.fr" } });
+    fireEvent.change(screen.getByLabelText("Prénom"), { target: { value: "Carole" } });
+    fireEvent.change(screen.getByLabelText("Nom"), { target: { value: "Durand" } });
+    fireEvent.change(screen.getByLabelText("Clara"), { target: { value: "elu" } });
+    // L'organisme de la page est coché d'office ; on ajoute le service pour Clara.
+    expect((screen.getByLabelText("Clara — Ville") as HTMLInputElement).checked).toBe(true);
+    fireEvent.click(screen.getByLabelText("Clara — État civil"));
+    fireEvent.click(screen.getByText("Créer"));
+    return vi.waitFor(() =>
+      expect(h.createUser).toHaveBeenCalledWith(
+        expect.objectContaining({
+          email: "carole@ville.fr",
+          role: "consultant",
+          organization_id: "org-1",
+          socle_organization_ids: ["org-1"],
+          applications: [{ application_id: "clara", role_code: "elu", organization_ids: ["org-1", "svc-1"] }],
+        }),
+        expect.anything(),
+      ),
+    );
+  });
+
+  it("création : l'administration d'une application coche et verrouille la collectivité", () => {
+    render(<UsersManagementPage organizationId="org-1" />);
+    fireEvent.click(screen.getByText("Nouvel utilisateur"));
+    fireEvent.change(screen.getByLabelText("Clara"), { target: { value: "elu" } });
+    fireEvent.click(screen.getByLabelText("Clara — Ville"));
+    expect((screen.getByLabelText("Clara — Ville") as HTMLInputElement).checked).toBe(false);
+    fireEvent.change(screen.getByLabelText("Clara"), { target: { value: "administrateur" } });
+    const root = screen.getByLabelText("Clara — Ville") as HTMLInputElement;
+    expect(root.checked).toBe(true);
+    expect(root.disabled).toBe(true);
   });
 });
