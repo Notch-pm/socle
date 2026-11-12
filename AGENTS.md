@@ -95,7 +95,7 @@ Projet Supabase : `qhrokbkyxgcvkbpmbmna`.
    voir feature), `/organisations`, `/demarches` et `/demarches/activation` (tableau démarches ×
    organismes), `/site-de-demarches` (éditeur du portail
    usagers — voir feature) et `/site-de-demarches/frequentation`, `/connaissances/{recommandations,attributions,informations-usagers,demarches}`,
-   `/referentiels/{categories,types-pieces,modeles-documents,quartiers}`
+   `/referentiels/{categories,types-pieces,modeles-documents,modeles-courriels,quartiers}`
    (rubrique « Référentiels » du rail), `/parametres/utilisateurs` (icône « Paramètres » de
    l'en-tête), `/integrations` et `/consommation-ia` (consultation seule). Rail en **rubriques à
    bulles** depuis la navigation v2 (2026-10-24) — voir la fiche du shell.
@@ -161,6 +161,7 @@ exécutables par `authenticated` : le RLS les évalue avec les droits de l'appel
   `contact_relations` (référentiel des usagers — voir feature).
 - `quartiers` (découpage du territoire par racine, polygones PostGIS — voir feature).
 - `document_templates` (catalogue de documents à variables par racine, fichiers dans un bucket privé — voir feature).
+- `email_template_defaults` (catalogue plateforme des courriels système, migration seule), `email_templates` (surcharges et modèles créés, par racine), `email_template_applications` — voir feature « modèles de courriels ».
 - `organization_domains` (domaines du portail usagers, `hostname` **unique sur toute la plateforme** — voir feature « site de démarches »).
 - `portal_pages` (composition des pages du portail, `draft` autosauvegardé / `published` explicite — voir feature « site de démarches »).
 - `portal_themes` (apparence du site de démarches — une ligne par racine, `draft`/`published` comme `portal_pages` ; **aucune couleur** : elles vivent dans la charte — voir feature « thème du site »).
@@ -281,6 +282,17 @@ Envoi des e-mails —, `?section=`, `organizationSections.ts`), gestion superadm
 - ⚠️ Le Socle enregistre et publie, **il ne fusionne rien** ; catalogue de variables figé
   (`documentVariables.ts`). ⚠️ Ordre des écritures fichier / ligne à ne pas inverser.
   Code : `src/features/documents/`.
+
+### [Modèles de courriels (`email_templates`)](docs/features/modeles-courriels.md)
+- Courriels **système** (catalogue `email_template_defaults`, posé par migration, ceux qu'Iris
+  envoie aux usagers) : objet et corps modifiables par surcharge, **jamais supprimables** ;
+  plus des modèles **créés** par la racine, avec leurs applications et leurs organismes (cochés
+  nommément). Héritage **résolu à la lecture** (`emailTemplates.ts`, miroir byte-identique).
+- ⚠️ **Un seul catalogue de variables** (clés d'Iris), jumeau SQL : la base **refuse** une
+  variable inconnue — ajouter une variable = migration + `emailVariables.ts` + Iris.
+- ⚠️ Texte brut à variables, **le Socle ne fusionne rien** ; l'habillage reste à l'application.
+  ⚠️ Iris envoie encore ses textes en dur tant qu'il n'est pas branché sur
+  `GET /v1/email-templates`. La `key` d'un courriel système est un contrat.
 
 ### [API publique (`public-api`)](docs/features/public-api.md)
 - Lecture seule (`GET`), clé `api_keys` hachée SHA-256, scope `read` ; isolation au sous-arbre

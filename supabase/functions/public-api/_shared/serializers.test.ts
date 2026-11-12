@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
+  serializeEmailTemplate,
   serializeCategory,
   serializeDocumentTemplate,
   serializeDocumentType,
@@ -1024,5 +1025,30 @@ describe("serializePortalProcedureDetail — le formulaire sort, l'instruction n
     expect(dto.category).toBeNull();
     expect(dto.form_schema).toBeNull();
     expect(dto.requester_config).toBeNull();
+  });
+});
+
+describe("serializeEmailTemplate — whitelist", () => {
+  it("ne sert pas le texte d'origine d'un courriel système (réservé à l'écran)", () => {
+    const dto = serializeEmailTemplate({
+      id: "e1",
+      key: "accuse_reception",
+      organization_id: "o1",
+      name: "Accusé de réception de la demande",
+      description: null,
+      subject: "Bien reçu",
+      body: "Merci",
+      applications: ["iris"],
+      organization_ids: null,
+      is_system: true,
+      is_customized: true,
+      variables: ["demande.reference"],
+      updated_at: "2026-11-12T10:00:00Z",
+      default_subject: "Nous avons bien reçu votre demande",
+      default_body: "…",
+    });
+    expect(dto).not.toHaveProperty("default_subject");
+    expect(dto).not.toHaveProperty("default_body");
+    expect(dto).toMatchObject({ key: "accuse_reception", subject: "Bien reçu", is_customized: true });
   });
 });

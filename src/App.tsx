@@ -11,6 +11,7 @@ import { AudiencePage } from "@/features/dashboard/AudiencePage";
 import { CategoriesPage } from "@/features/categories/CategoriesPage";
 import { DocumentTypesPage } from "@/features/document-types/DocumentTypesPage";
 import { DocumentsPage } from "@/features/documents/DocumentsPage";
+import { EmailTemplatesPage } from "@/features/email-templates/EmailTemplatesPage";
 import { OrganizationsPage } from "@/features/organizations/OrganizationsPage";
 import { OrganizationEditorPage } from "@/features/organizations/OrganizationEditorPage";
 import { ProceduresPage } from "@/features/procedures/ProceduresPage";
@@ -107,6 +108,7 @@ export function App() {
               <Route path="referentiels/categories" element={<CategoriesPage />} />
               <Route path="referentiels/types-pieces" element={<DocumentTypesPage />} />
               <Route path="referentiels/modeles-documents" element={<DocumentsPage />} />
+              <Route path="referentiels/modeles-courriels" element={<EmailTemplatesPage />} />
               <Route path="referentiels/quartiers" element={<QuartiersPage />} />
               {/* Icône « Paramètres » de l'en-tête. */}
               <Route path="parametres/utilisateurs" element={<UtilisateursPage />} />

@@ -25,7 +25,7 @@ aucun endpoint, il décrit ce qui existe **en base**.
 - **Rattachement à une organisation racine** — trigger `enforce_*_root_org` (`BEFORE
   INSERT/UPDATE OF organization_id`) : refuse toute valeur dont l'organisation n'est pas une
   racine (`parent_id IS NULL`). Présent sur `procedures`, `document_types`, `document_templates`,
-  `api_keys`, `contacts`, `contact_roles`, `quartiers`. Par cohérence inter-tables, `contact_role_assignments`
+  `email_templates`, `api_keys`, `contacts`, `contact_roles`, `quartiers`. Par cohérence inter-tables, `contact_role_assignments`
   et `contact_relations` vérifient eux aussi que leurs lignes liées partagent la même racine
   (triggers dédiés, détaillés plus bas). **`categories` fait exception** — voir Points de
   vigilance.
@@ -524,6 +524,35 @@ Modèles de documents et de courriers (`.doc`/`.docx`/`.odt`) porteurs de variab
 - Fichiers dans le bucket privé **`document-templates`** (voir Storage ci-dessous).
 - **Non exposé par les APIs publiques** à ce jour, et non rattaché aux démarches — les deux sont
   en « envisagé » dans [roadmap.md](./roadmap.md).
+
+### Modèles de courriels — `email_template_defaults`, `email_templates`, `email_template_applications` (2026-11-12)
+
+Détail fonctionnel : [features/modeles-courriels.md](./features/modeles-courriels.md). Héritage
+**résolu à la lecture** : une collectivité qui ne personnalise rien n'a aucune ligne.
+
+- **`email_template_defaults`** — catalogue **plateforme** des courriels système : `key` PK
+  (CHECK `^[a-z][a-z0-9_]{1,63}$`, contrat), `name`, `description`, `subject`, `body`,
+  `application_ids text[]`, `variables text[]`, `position`. **RLS** : lecture `authenticated`,
+  **aucune policy d'écriture** (migration seule) — c'est ce qui rend un courriel système
+  insupprimable.
+- **`email_templates`** — par **racine** (`enforce_email_template_root_org`, EXECUTE révoqué) :
+  `system_key` (FK CASCADE vers le catalogue) renseigné = **surcharge** d'un courriel système
+  (seuls `subject`/`body`) ; NULL = **modèle créé** (`name` obligatoire). CHECK
+  `email_templates_name_by_kind`, longueurs bornées (objet 255, corps 20 000, titre 200).
+  Index uniques partiels `(organization_id, system_key)` et `(organization_id, lower(name))`
+  (modèles créés) ; `set_updated_at`. **RLS** : lecture `has_org_access` · écriture
+  `is_org_admin`.
+- **`email_template_applications`** `(email_template_id, application_id)` — applications d'un
+  modèle **créé** (FK `applications`). **RLS** par le modèle parent ; l'écriture exige
+  `system_key IS NULL` (les applications d'un courriel système sont celles du catalogue).
+- **`email_template_organizations`** `(email_template_id, organization_id)` — organismes où un
+  modèle **créé** est proposé, nommément (pas de descendance). Trigger
+  `enforce_email_template_organization_scope` (organisme de l'arbre de la racine, jamais sur un
+  courriel système). **RLS** comme les applications.
+- **Garde des variables** : `trg_guard_email_template_variables` refuse un texte qui cite une clé
+  hors de `email_template_common_variables()` (+ `variables` du courriel système) ;
+  `email_template_text_variables(text)` extrait les clés.
+- Servi résolu par `GET /v1/email-templates` (contrats 1.44.0 puis 1.45.0).
 
 ---
 

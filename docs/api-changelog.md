@@ -1,7 +1,7 @@
 # Journal des évolutions des API publiques
 
 > **Public** : équipes consommatrices (Ariane, Clara, Iris, partenaires) · **Question traitée** :
-> quand un contrat d'API a-t-il changé, et comment ? · **Dernière mise à jour** : 2026-10-30
+> quand un contrat d'API a-t-il changé, et comment ? · **Dernière mise à jour** : 2026-11-12
 
 Journal **append-only** : chaque évolution de la surface de contrat des API publiques
 (`public-api`, `contacts-api`, `ai-api`, `audience-api`) — endpoint, paramètre, champ de réponse,
@@ -10,6 +10,54 @@ réécrite ; une correction s'ajoute sous une nouvelle date. Politique de compat
 consommateur : [integration.md](./integration.md#politique-de-compatibilité-v1).
 
 Format d'une entrée : `## AAAA-MM-JJ — <api> — ajout|correctif|rupture`
+
+---
+
+## 2026-11-12 — public-api — correctif (exemple EmailTemplate, 1.45.1)
+
+- L'exemple du schéma `EmailTemplate` (OpenAPI, `/api-doc`) citait encore `demande.libelle_demarche`
+  et `organisme.nom`, renommés le même jour en `demande.demarche` et `organisation.nom` : un modèle
+  recopié de l'exemple aurait été refusé. L'exemple suit le catalogue ; un test l'y épingle.
+- Aucune forme de requête ni de réponse ne change.
+
+---
+
+## 2026-11-12 — public-api — ajout (modèles de courriels : organismes et variables, 1.45.0)
+
+- `EmailTemplate.organization_ids` : organismes où un modèle **créé** est proposé aux agents,
+  cochés **nommément** (activer la racine n'ouvre pas ses services) ; `[]` = proposé nulle part ;
+  `null` pour un courriel système, qui vaut partout. Nouveau filtre
+  `GET /v1/email-templates?available_in={organisme}` (courriels système + modèles activés pour lui).
+- `GET /v1/email-templates/variables` : le **catalogue unique** des variables, `common` (tout
+  modèle) et `context` (courriels système qui les déclarent), avec libellé et exemple. Les clés
+  sont celles d'Iris ; trois clés des courriels système ont changé de nom le même jour, avant tout
+  consommateur : `demande.libelle_demarche` → `demande.demarche`,
+  `demande.organisme_responsable` → `demande.destinataire`, `organisme.nom` → `organisation.nom`.
+- Le Socle **refuse** désormais à l'enregistrement un modèle qui cite une variable hors catalogue :
+  ce qui est servi est toujours remplissable.
+- Additif pour les appels existants (aucun consommateur ne lisait encore ces modèles).
+
+---
+
+## 2026-11-12 — public-api — ajout (modèles de courriels, 1.44.0)
+
+- `GET /v1/email-templates`, scope `read`, filtres facultatifs `organization_id` (une **racine**
+  du périmètre, sinon `404`), `application` et `key`. Réponse : `EmailTemplate[]`, liste
+  **résolue** par racine — d'abord les courriels **système** (`is_system`, `key` stable :
+  `accuse_reception`, `debut_instruction`, `attente_information`, `reprise_instruction`,
+  `annulation`, `reouverture`, `cloture_positive`, `cloture_negative`, `nouveau_message`,
+  `code_acces`), au texte de la collectivité si elle l'a personnalisé (`is_customized`), sinon au
+  texte du catalogue ; puis les modèles **créés** par la collectivité (`key: null`), avec leurs
+  `applications`.
+- Un courriel système est **toujours** servi (il ne se supprime pas). Citez-le par sa `key`,
+  jamais par `id` (nul tant qu'il n'est pas personnalisé).
+- ⚠️ **Le Socle ne fusionne rien** : `subject` et `body` sont du texte brut à variables
+  `{{domaine.cle}}` (`variables` liste celles que l'application doit fournir) ; une partie entre
+  `{{#cle}}` et `{{/cle}}` n'est rendue que si la variable a une valeur ; une ligne vide sépare
+  deux paragraphes. L'habillage (charte, bouton, pied, désinscription) reste celui de
+  l'application.
+- Additif : rien ne change pour les appels existants. Iris (textes aujourd'hui en dur) puis Clara
+  consommeront.
 
 ---
 

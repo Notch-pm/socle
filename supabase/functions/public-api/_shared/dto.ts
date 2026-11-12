@@ -247,6 +247,42 @@ export interface DocumentTemplateDto {
   updated_at: string | null;
 }
 
+/**
+ * Modèle de courriel (`GET /v1/email-templates`), RÉSOLU pour une racine :
+ * - courriel **système** (`is_system`, `key` renseignée) : envoyé
+ *   automatiquement par une application ; `subject`/`body` sont le texte de la
+ *   collectivité s'il a été personnalisé (`is_customized`), celui du catalogue
+ *   sinon. Titre et applications sont ceux du catalogue.
+ * - modèle **créé** par la collectivité (`key` NULL) : titre, applications,
+ *   texte librement choisis.
+ * Objet et corps sont du texte brut à variables `{{domaine.cle}}` ; le Socle
+ * ne fusionne rien et l'habillage reste celui de l'application qui envoie.
+ */
+export interface EmailTemplateDto {
+  /** Ligne de la collectivité — `null` pour un courriel système jamais personnalisé. */
+  id: string | null;
+  /** Clé stable du courriel système (`accuse_reception`…) — `null` pour un modèle créé. */
+  key: string | null;
+  organization_id: string;
+  name: string;
+  description: string | null;
+  subject: string;
+  body: string;
+  /** Applications qui l'utilisent (`iris`, `clara`, `nora`…), triées. */
+  applications: string[];
+  /**
+   * Organismes où un modèle CRÉÉ est proposé (sans descendance implicite) ;
+   * `null` pour un courriel système, qui vaut partout. `[]` = proposé nulle part.
+   */
+  organization_ids: string[] | null;
+  is_system: boolean;
+  is_customized: boolean;
+  /** Variables que l'application fournit (courriel système) ; vide pour un modèle créé. */
+  variables: string[];
+  /** Dernière modification par la collectivité ; `null` = texte d'origine. */
+  updated_at: string | null;
+}
+
 /** Un document rendu accessible à l'agent depuis une démarche, déjà résolu. */
 export interface ProcedureDocumentDto {
   id: string;

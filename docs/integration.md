@@ -233,6 +233,14 @@ collectivité peut activer d'autres langues ; les libellés traduits des **déma
 
 ## Particularités utiles
 
+- **Modèles de courriels** (`GET /v1/email-templates`, contrats 1.44.0 et 1.45.0) : les textes des courriels
+  à l'usager se lisent dans le Socle, par `key` pour un courriel système
+  (`?organization_id={racine}&key=accuse_reception`). Objet et corps à variables, **non
+  fusionnés** ; votre application remplit les variables et garde son habillage. Un modèle créé
+  n'est proposé que dans ses `organization_ids` (filtre `available_in`). Le catalogue des
+  variables se lit sur `GET /v1/email-templates/variables` : c'est le seul contrat de nommage. Détail :
+  [features/modeles-courriels.md](./features/modeles-courriels.md).
+
 - **Pagination** (`contacts-api`, `limit`/`offset`) : défaut 100, **max 500**, pas de total à ce
   jour (pas de `X-Total-Count` ni d'enveloppe `{items, total}`).
 - **Filtre `status`** absent sur `GET /v1/contacts` = **tous les statuts** (pas de défaut

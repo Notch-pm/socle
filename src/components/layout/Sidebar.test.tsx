@@ -84,13 +84,14 @@ describe("Sidebar", () => {
     fireEvent.click(referentiels());
     expect(referentiels().getAttribute("aria-expanded")).toBe("true");
     expect(
-      ["Catégories", "Types de pièce justificative", "Modèles de documents", "Quartiers"].map((name) =>
+      ["Catégories", "Types de pièce justificative", "Modèles de documents", "Modèles de courriels", "Quartiers"].map((name) =>
         screen.getByRole("link", { name }).getAttribute("href"),
       ),
     ).toEqual([
       "/referentiels/categories",
       "/referentiels/types-pieces",
       "/referentiels/modeles-documents",
+      "/referentiels/modeles-courriels",
       "/referentiels/quartiers",
     ]);
   });
