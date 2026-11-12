@@ -30,7 +30,7 @@ export function buildOpenApiDocument(serverUrl: string): Record<string, unknown>
     openapi: "3.1.0",
     info: {
       title: "API Socle — Référentiel de la gamme",
-      version: "1.45.1",
+      version: "1.46.0",
       description: [
         "API **en lecture seule** exposant le référentiel central de la gamme : les",
         "**organisations** (et sous-organisations) avec l'intégralité de leur configuration,",
@@ -3254,6 +3254,7 @@ export function buildOpenApiDocument(serverUrl: string): Record<string, unknown>
           properties: {
             visibility: { $ref: "#/components/schemas/VisibilityConfig" },
             documents: { $ref: "#/components/schemas/DocumentsConfig" },
+            replyLetters: { $ref: "#/components/schemas/ReplyLettersConfig" },
           },
           example: {
             visibility: {
@@ -3266,6 +3267,25 @@ export function buildOpenApiDocument(serverUrl: string): Record<string, unknown>
               restrictVisibility: true,
               documents: [{ id: "6f1c…", visibility: "toujours" }],
               letters: [{ id: "a92b…", visibility: "negative" }],
+            },
+            replyLetters: { claraOutbound: true },
+          },
+        },
+        ReplyLettersConfig: {
+          type: "object",
+          description:
+            "Bloc « Courriers de réponse » (1.46.0) : comment la réponse à l'usager quitte " +
+            "l'organisme. Absent = `{ claraOutbound: false }`.",
+          properties: {
+            claraOutbound: {
+              type: "boolean",
+              description:
+                "Vrai : le courrier de réponse rédigé dans Iris n'y est **pas envoyé** ; il est " +
+                "déposé dans Clara comme courrier sortant lié à la demande, qui reste en " +
+                "instruction (« Réponse en validation ») jusqu'à ce que Clara signale l'envoi. " +
+                "⚠️ N'a d'effet que si la racine est abonnée à Clara " +
+                "(`Organization.applications` contient `clara`) : la valeur est conservée quand " +
+                "l'abonnement disparaît. Lisez `claraOutbound && \"clara\" ∈ applications`.",
             },
           },
         },

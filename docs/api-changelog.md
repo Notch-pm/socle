@@ -13,6 +13,20 @@ Format d'une entrée : `## AAAA-MM-JJ — <api> — ajout|correctif|rupture`
 
 ---
 
+## 2026-11-12 — public-api — ajout (courriers de réponse via Clara, 1.46.0)
+
+- `Procedure.communication_config.replyLetters` (schéma `ReplyLettersConfig`) : nouveau bloc,
+  `{ claraOutbound: boolean }`. Vrai : le courrier de réponse rédigé dans **Iris** n'y est pas
+  envoyé, il est déposé dans **Clara** comme courrier sortant lié à la demande ; la demande reste
+  en instruction (« Réponse en validation ») jusqu'à ce que Clara signale l'envoi.
+- ⚠️ N'a d'effet que si la racine est abonnée à Clara (`Organization.applications` contient
+  `clara`) : la valeur est conservée quand l'abonnement disparaît. Lire
+  `claraOutbound && "clara" ∈ applications`. Bloc absent = `{ claraOutbound: false }`.
+- Additif : aucune forme existante ne change (le bloc passe par `communication_config`, déjà servi
+  tel quel).
+
+---
+
 ## 2026-11-12 — public-api — correctif (exemple EmailTemplate, 1.45.1)
 
 - L'exemple du schéma `EmailTemplate` (OpenAPI, `/api-doc`) citait encore `demande.libelle_demarche`

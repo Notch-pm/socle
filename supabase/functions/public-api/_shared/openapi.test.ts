@@ -370,8 +370,8 @@ describe("contrat — annuaire des agents (1.43.0)", () => {
 describe("contrat — documents et courriers", () => {
   const doc = buildOpenApiDocument("https://example.supabase.co/functions/v1/public-api") as any;
 
-  it("annonce la version 1.45.1 du contrat", () => {
-    expect(doc.info.version).toBe("1.45.1");
+  it("annonce la version 1.46.0 du contrat", () => {
+    expect(doc.info.version).toBe("1.46.0");
   });
 
   it("une organisation dit les applications souscrites par sa collectivité (1.42.0)", () => {
@@ -1044,5 +1044,18 @@ describe("contrat — exemple EmailTemplate (1.45.1)", () => {
     const cited = [...extractVariables(`${example.subject}\n${example.body}`), ...example.variables];
     expect(cited.length).toBeGreaterThan(0);
     expect(cited.filter((key: string) => !known.has(key))).toEqual([]);
+  });
+});
+
+describe("contrat — courriers de réponse via Clara (1.46.0)", () => {
+  const doc = buildOpenApiDocument("https://example.supabase.co/functions/v1/public-api") as any;
+  const schemas = doc.components.schemas;
+
+  it("documente le bloc replyLetters de CommunicationConfig", () => {
+    expect(schemas.CommunicationConfig.properties.replyLetters).toEqual({
+      $ref: "#/components/schemas/ReplyLettersConfig",
+    });
+    expect(schemas.ReplyLettersConfig.properties.claraOutbound.type).toBe("boolean");
+    expect(schemas.ReplyLettersConfig.properties.claraOutbound.description).toMatch(/clara/);
   });
 });

@@ -6,6 +6,7 @@ import {
   cleanCommunicationConfig,
   parseCommunicationConfig,
   publicationPeriodError,
+  replyViaClaraUnavailableReason,
   type CommunicationConfig,
   type CommunicationDocument,
   type DocumentsConfig,
@@ -13,6 +14,7 @@ import {
 } from "@/features/procedures/communication";
 import { DocumentsBlock } from "@/features/procedures/steps/communication/DocumentsBlock";
 import { useDocumentTemplatesForOrg } from "@/features/documents/useDocumentTemplates";
+import { useRootApplications } from "@/features/organizations/useFreeMail";
 import type { Procedure } from "@/features/procedures/useProcedures";
 
 /** Ligne « libellé + explication » à gauche, commutateur à droite. */
@@ -22,22 +24,40 @@ function ToggleRow({
   description,
   checked,
   onCheckedChange,
+  disabled = false,
+  note,
 }: {
   id: string;
   label: string;
   description: string;
   checked: boolean;
   onCheckedChange: (value: boolean) => void;
+  disabled?: boolean;
+  /** Pourquoi le commutateur est inactif (affiché sous l'explication). */
+  note?: string | null;
 }) {
+  const noteId = note ? `${id}-note` : undefined;
   return (
     <div className="flex items-start justify-between gap-4">
-      <div>
+      <div className={disabled ? "opacity-60" : undefined}>
         <label htmlFor={id} className="text-sm font-medium">
           {label}
         </label>
         <p className="mt-0.5 text-xs text-muted-foreground">{description}</p>
+        {note ? (
+          <p id={noteId} role="note" className="mt-1 text-xs text-muted-foreground">
+            {note}
+          </p>
+        ) : null}
       </div>
-      <Switch id={id} checked={checked} onCheckedChange={onCheckedChange} aria-label={label} />
+      <Switch
+        id={id}
+        checked={checked}
+        onCheckedChange={onCheckedChange}
+        aria-label={label}
+        aria-describedby={noteId}
+        disabled={disabled}
+      />
     </div>
   );
 }
@@ -67,7 +87,7 @@ export function CommunicationStep({
   const [config, setConfig] = React.useState<CommunicationConfig>(() =>
     parseCommunicationConfig(procedure.communication_config),
   );
-  const { visibility, documents } = config;
+  const { visibility, documents, replyLetters } = config;
   const periodError = publicationPeriodError(visibility);
 
   // Le catalogue est celui de l'organisation principale porteuse de la démarche.
@@ -82,6 +102,16 @@ export function CommunicationStep({
   function setDocuments<K extends keyof DocumentsConfig>(key: K, value: DocumentsConfig[K]) {
     setConfig((c) => ({ ...c, documents: { ...c.documents, [key]: value } }));
   }
+
+  // Le circuit Clara n'existe que si la RACINE est abonnée à Clara. Tant que
+  // l'abonnement n'est pas connu, le commutateur reste inactif (au doute, fermé) ;
+  // sans abonnement il est grisé mais garde sa valeur (le réglage gouverne
+  // l'usage, pas la donnée : rien n'est effacé si Clara revient).
+  const { data: rootApplications } = useRootApplications(procedure.organization_id ?? undefined);
+  const claraUnavailable = rootApplications
+    ? replyViaClaraUnavailableReason(rootApplications)
+    : null;
+  const claraToggleDisabled = !rootApplications || claraUnavailable !== null;
 
   function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -180,6 +210,16 @@ export function CommunicationStep({
           restrictVisibility={documents.restrictVisibility}
           onChangeDocuments={(next: CommunicationDocument[]) => setDocuments("documents", next)}
           onChangeLetters={(next: CommunicationDocument[]) => setDocuments("letters", next)}
+        />
+
+        <ToggleRow
+          id="comm-reply-clara"
+          label="Courriers de réponse usager à traiter comme un courrier sortant Clara"
+          description="Dans Iris, l'agent rédige le courrier de réponse sans pouvoir l'envoyer : il est déposé dans Clara comme courrier sortant, lié à la demande, qui reste « Réponse en validation » jusqu'à son envoi par Clara."
+          checked={replyLetters.claraOutbound}
+          onCheckedChange={(v) => setConfig((c) => ({ ...c, replyLetters: { claraOutbound: v } }))}
+          disabled={claraToggleDisabled}
+          note={claraUnavailable}
         />
       </section>
     </form>
