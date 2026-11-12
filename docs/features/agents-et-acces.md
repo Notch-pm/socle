@@ -13,7 +13,7 @@
 | 1 | Annuaire et matrice d'accès dans le Socle | **en ligne** (2026-10-30) |
 | 2 | `GET /v1/users` (scope `users`), lecture incrémentale | **en ligne** (2026-10-30, contrat 1.43.0) |
 | 3 | Consommation par Clara puis Iris (`sync-socle-users`, écrans verrouillés) | **en ligne** (2026-10-30) : Clara (rôle de base + affectations) et Iris (accès seul) ; vérifiés de bout en bout |
-| 4 | Connexion OIDC par Keycloak dans chaque application | en cours — `auth.edilumen.fr` en ligne (VPS OVH, France, kit [`infra/keycloak/`](../../infra/keycloak/README.md)), fédération Entra de test vérifiée, inscriptions fermées, Socle, Clara et Iris branchés et essai réel réussi (2026-11-12), bascule à faire, lot 4b avant la première vraie collectivité ; état et reprise [plus bas](#lot-4--état-et-reprise-2026-11-10) |
+| 4 | Connexion OIDC par Keycloak dans chaque application | **en ligne** (2026-11-12) — `auth.edilumen.fr` en ligne (VPS OVH, France, kit [`infra/keycloak/`](../../infra/keycloak/README.md)), fédération Entra de test vérifiée, inscriptions fermées, Socle, Clara et Iris branchés et basculés (2026-11-12), lot 4b avant la première vraie collectivité ; état et reprise [plus bas](#lot-4--état-et-reprise-2026-11-10) |
 
 Principe : **Keycloak authentifie, le Socle autorise.** Un agent authentifié mais non provisionné
 par le Socle n'entre dans aucune application.
@@ -137,26 +137,23 @@ collectivité, et le bouton de connexion dans chaque application.
 
 ## Lot 4 : état et reprise (2026-11-10)
 
-> **Reprise — à lire en premier (fin de session du 2026-11-10).**
-> - **En production** : annuaire multi-organismes (Notch-pm/socle#1, migration
->   `admin_application_racine`, `invite-user` v21 = code de `main`) ; profil système
->   « Administrateur » d'Iris (Notch-pm/Iris#1, migration `profil_administrateur_socle`,
->   `sync-socle-users` Iris v2) ; inscriptions Supabase fermées sur Socle, Iris, Clara ; URL de
->   retour autorisées (`socle…/login`, `iris…/login`, `clara…/connexion`).
-> - **Prêt, NON mergé, NON déployé** — une branche `feature/sso-lot4` par dépôt :
->   Socle (bouton Keycloak, message de bienvenue unique dans `invite-user`, mot de passe derrière
->   « Autre méthode », cette fiche), Iris et Clara (même bouton, `sync-socle-users` sans e-mail).
->   ⚠️ Ne pas merger avant l'essai réel : sinon les agents ne reçoivent plus de lien pour un mot de
->   passe et Keycloak n'est pas encore branché.
+> **Reprise — à lire en premier (mis à jour le 2026-11-12, bascule faite).**
+> - **Connexion unique EN LIGNE depuis le 2026-11-12** sur le Socle, Clara et Iris : les trois
+>   branches `feature/sso-lot4` sont mergées dans `main` (Socle `0733da0`, Clara `2fe74c8`, Iris
+>   `13d81c3`), `invite-user` v22 (message de bienvenue unique, plus de lien d'activation),
+>   `sync-socle-users` de Clara et d'Iris redéployés (sans e-mail), fronts publiés avec le bouton
+>   « Se connecter avec le compte de ma collectivité » (mot de passe derrière « Autre méthode »).
+> - Déjà en production avant : annuaire multi-organismes (Notch-pm/socle#1), profil
+>   « Administrateur » d'Iris (Notch-pm/Iris#1), inscriptions Supabase fermées sur les trois
+>   projets, URL de retour autorisées (`socle…/login`, `iris…/login`, `clara…/connexion`).
 > - **Fait le 2026-11-12** : thème `edilumen` déployé ; realm `edilumen` réglé (thèmes, SMTP
 >   Mailjet de la plateforme, inscription + vérification d'e-mail + mot de passe oublié,
 >   « Organisations » pour le domaine Entra de test, *Pass login_hint* sur `entra-test`) ;
 >   provider `keycloak` du Supabase du Socle ; **essai réel réussi** et agent suspendu refusé —
 >   voir [l'essai du 2026-11-12](#essai-réel-du-socle-2026-11-12).
 > - Clara et Iris branchés et essayés, contre-essais réussis (2026-11-12).
-> - **Prochaine étape : la bascule** — merge des trois branches, déploiement de `invite-user`
->   (Socle) et des deux `sync-socle-users` (Clara, Iris), fronts. ⚠️ Avant la **première vraie
->   collectivité** : lot 4b (l'administrateur initie le compte Keycloak, risque « Trust Email »).
+> - **Prochaine étape : lot 4b, obligatoire avant la première vraie collectivité** —
+>   l'administrateur initie le compte Keycloak, risque « Trust Email » (`docs/roadmap.md`).
 > - Méthode : le but d'abord, une action à la fois (voir la fin de cette section).
 
 

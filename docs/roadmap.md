@@ -104,10 +104,10 @@ Détail et état par lot : [agents et accès](features/agents-et-acces.md).
 
 1. **Lot 4 — connexion unique par Keycloak.** Hébergement choisi le 2026-11-06 : VPS OVH en
    France, kit d'installation dans `infra/keycloak/`. Fédération avec un annuaire Entra ID
-   de test vérifiée le même jour. **Essai réel réussi le 2026-11-12** sur le Socle, Clara et Iris
+   de test vérifiée le même jour. **En ligne depuis le 2026-11-12** sur le Socle, Clara et Iris
    (providers `keycloak` posés, inscriptions Supabase fermées, routage par domaine via la
-   fonction « Organisations » de Keycloak — sans `kc_idp_hint`). Reste la bascule : merge des
-   branches `feature/sso-lot4`, déploiement de `invite-user` et des `sync-socle-users`.
+   fonction « Organisations » de Keycloak — sans `kc_idp_hint`) ; branches `feature/sso-lot4` mergées,
+   `invite-user` et les `sync-socle-users` déployés, fronts publiés avec le bouton.
 2. **Lot 4b — confiance accordée à Keycloak, obligatoire avant la première vraie collectivité
    reliée** (décidé le 2026-11-12 ; la bascule des comptes de démo se fait sans) :
    - **L'administrateur initie le compte Keycloak** : à la création d'un agent, `invite-user`
