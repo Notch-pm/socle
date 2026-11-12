@@ -13,7 +13,7 @@
 | 1 | Annuaire et matrice d'accès dans le Socle | **en ligne** (2026-10-30) |
 | 2 | `GET /v1/users` (scope `users`), lecture incrémentale | **en ligne** (2026-10-30, contrat 1.43.0) |
 | 3 | Consommation par Clara puis Iris (`sync-socle-users`, écrans verrouillés) | **en ligne** (2026-10-30) : Clara (rôle de base + affectations) et Iris (accès seul) ; vérifiés de bout en bout |
-| 4 | Connexion OIDC par Keycloak dans chaque application | en cours — `auth.edilumen.fr` en ligne (VPS OVH, France, kit [`infra/keycloak/`](../../infra/keycloak/README.md)), fédération Entra de test vérifiée, inscriptions fermées, branchement du Socle à faire ; état et reprise [plus bas](#lot-4--état-et-reprise-2026-11-10) |
+| 4 | Connexion OIDC par Keycloak dans chaque application | en cours — `auth.edilumen.fr` en ligne (VPS OVH, France, kit [`infra/keycloak/`](../../infra/keycloak/README.md)), fédération Entra de test vérifiée, inscriptions fermées, Socle branché et essai réel réussi (2026-11-12), Clara et Iris à brancher ; état et reprise [plus bas](#lot-4--état-et-reprise-2026-11-10) |
 
 Principe : **Keycloak authentifie, le Socle autorise.** Un agent authentifié mais non provisionné
 par le Socle n'entre dans aucune application.
@@ -148,13 +148,17 @@ collectivité, et le bouton de connexion dans chaque application.
 >   « Autre méthode », cette fiche), Iris et Clara (même bouton, `sync-socle-users` sans e-mail).
 >   ⚠️ Ne pas merger avant l'essai réel : sinon les agents ne reçoivent plus de lien pour un mot de
 >   passe et Keycloak n'est pas encore branché.
-> - **Prochaine étape, sur le poste habituel (tunnel SSH)** : déployer le thème de connexion
->   (`infra/keycloak/themes/edilumen/`, README Keycloak § 9) ; console Keycloak, realm `edilumen` —
->   secrets des clients `socle` / `clara` / `iris`, SMTP du realm, inscription + vérification
->   d'e-mail + mot de passe oublié, thèmes `edilumen` (connexion et e-mails), « Organisations » pour le domaine Entra de test ; puis providers
->   `keycloak` des trois Supabase ; puis l'essai (check-list ci-dessous). Ensuite seulement :
+> - **Fait le 2026-11-12** : thème `edilumen` déployé ; realm `edilumen` réglé (thèmes, SMTP
+>   Mailjet de la plateforme, inscription + vérification d'e-mail + mot de passe oublié,
+>   « Organisations » pour le domaine Entra de test, *Pass login_hint* sur `entra-test`) ;
+>   provider `keycloak` du Supabase du Socle ; **essai réel réussi** et agent suspendu refusé —
+>   voir [l'essai du 2026-11-12](#essai-réel-du-socle-2026-11-12).
+> - **Prochaine étape** : finir le contre-essai « inconnu du Socle » (compte Keycloak
+>   réellement créé, puis refusé) ; providers `keycloak` de Clara et d'Iris (secrets des
+>   clients `clara` / `iris`, console par tunnel SSH) et leurs essais. Ensuite seulement :
 >   merge des trois branches, déploiement de `invite-user` (Socle) et des deux
->   `sync-socle-users` (Clara, Iris).
+>   `sync-socle-users` (Clara, Iris). ⚠️ Avant la **première vraie collectivité** : traiter le
+>   risque « Trust Email » (voir l'essai).
 > - Méthode : le but d'abord, une action à la fois (voir la fin de cette section).
 
 
@@ -186,8 +190,8 @@ Suite, dans l'ordre :
 2. ✅ (2026-11-10) « Allow new users to sign up » fermé sur le Socle, Iris et Clara (geste
    manuel). URL de retour du Socle vérifiées (*Site URL* `https://socle.edilumen.fr`, *Redirect
    URLs* avec `https://socle.edilumen.fr/login`).
-3. Brancher Keycloak sur le Supabase du Socle et faire l'essai réel — check-list ci-dessous
-   (exige le poste habituel : clé SSH du tunnel).
+3. ✅ (2026-11-12) Keycloak branché sur le Supabase du Socle, essai réel réussi — check-list
+   ci-dessous, résultats dans [l'essai du 2026-11-12](#essai-réel-du-socle-2026-11-12).
 4. Brancher Clara et Iris : bouton prêt sur la branche `feature/sso-lot4` de chacun (2026-11-10,
    même module `sso.ts`, testé ; retour sur `/connexion` pour Clara, `/login` pour Iris). Reste,
    pour chacun : provider `keycloak` de son Supabase (client `clara` / `iris` et son secret),
@@ -226,6 +230,47 @@ Les clients `socle`, `clara` et `iris` sont déclarés dans l'import du realm
 6. **Contre-essai** — un compte Entra **non** provisionné doit être refusé (retour sur `/login`
    avec une erreur d'inscription fermée), et un agent suspendu aussi.
 
+### Essai réel du Socle (2026-11-12)
+
+Agent de test `agent-test@jacquotlaurentgmail385.onmicrosoft.com` créé dans le Socle (Mairie de
+Saint Laurent), connexion par l'URL `…/auth/v1/authorize?provider=keycloak&scopes=openid&…` :
+adresse tapée sur la page Edilumen → Microsoft (adresse pré-remplie) → retour sur le Socle,
+connecté avec ses droits. `auth.identities` porte une identité `keycloak` sur **le même
+`user_id`** que l'agent, et son adresse passe à « confirmée ».
+
+- ✅ **Agent suspendu refusé** par Supabase Auth : retour sur
+  `/login?error=access_denied&error_code=user_banned&error_description=User+is+banned`. Le
+  message « Votre compte est suspendu… » de `sso.ts` le reconnaît ; il n'est pas en ligne tant
+  que la branche n'est pas mergée (l'écran de `main` reste muet).
+- ⏳ **Inconnu du Socle** : seulement vu côté Keycloak (adresse inconnue ⇒ mot de passe
+  demandé) ; reste à créer réellement un compte Keycloak sans agent et vérifier le refus
+  (`signup_disabled`).
+- **Supabase retire l'identité `email` d'un agent invité jamais activé** quand il ajoute
+  l'identité `keycloak` (compte non confirmé) : l'agent n'a plus que Keycloak. Comportement
+  voulu par la bascule ; le mot de passe de secours ne vaut donc que pour un compte activé.
+- ⚠️ **Risque « Trust Email » — à traiter avant la première vraie collectivité.** Premier essai
+  raté instructif : la fiche Entra d'`agent-test` portait `jacquotlaurent@gmail.com` en
+  *E-mail* de contact ; Keycloak (Trust Email activé sur `entra-test`) a cru cette adresse, et
+  Supabase a rattaché l'identité `keycloak` au compte **super admin** de même adresse
+  (identité retirée à la main ensuite). Une adresse écrite dans une fiche d'annuaire suffit
+  donc à ouvrir le compte Supabase qui la porte. Pistes : n'accepter de chaque annuaire que les
+  adresses de son domaine (mapper / vérification côté Keycloak), désactiver Trust Email pour
+  les annuaires de collectivité, et/ou garder les super admins hors de la connexion unique.
+- Routage par domaine : un compte d'annuaire au domaine **propre au tenant** (`…onmicrosoft.com`),
+  jamais un invité `gmail.com` — déclarer `gmail.com` dans « Organisations » enverrait toutes
+  les adresses Gmail vers ce tenant.
+
+Pièges de console relevés :
+- *Realm settings → General → Organizations* : basculer **et cliquer Save** ; sans cela le menu
+  *Organizations* n'apparaît pas et la page de connexion reste en adresse + mot de passe
+  (l'étape *Organization* du flow `browser`, en « Alternative », est correcte telle quelle).
+- *Create organization* : « Empty Space not allowed » ⇒ l'*Alias* (pré-rempli depuis le nom) ou
+  le domaine contient une espace — alias `collectivite-test-entra`.
+- *Pass login_hint* est dans la section **Advanced** des réglages OpenID Connect du fournisseur,
+  pas dans le bloc *Advanced settings* ; sans lui Microsoft redemande l'adresse.
+- Depuis un `! ssh` de Claude Code, viser l'IP `146.59.145.100` : le poste ne connaît le serveur
+  que sous cette adresse (`Host key verification failed` sur `auth.edilumen.fr`).
+
 ### Bascule vers la connexion unique (décisions du 2026-11-10)
 
 - **Tout le monde passe par Keycloak, d'un coup** (comptes de démo seulement). Plus de mot de
@@ -262,7 +307,7 @@ Les clients `socle`, `clara` et `iris` sont déclarés dans l'import du realm
 providers `keycloak` de Clara et d'Iris → merge des trois branches `feature/sso-lot4` et
 déploiement de `invite-user` (Socle) et `sync-socle-users` (Clara, Iris) dans la foulée.
 
-Restent aussi côté serveur : le SMTP du realm, une sonde externe, une copie des sauvegardes
+Restent aussi côté serveur (le SMTP du realm est fait, 2026-11-12) : une sonde externe, une copie des sauvegardes
 hors du serveur. Plus tard : Ariane (lot 5), SCIM.
 
 ⚠️ Méthode : pour une manipulation dans la console Keycloak ou Azure, expliquer **le but** avant
