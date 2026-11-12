@@ -290,9 +290,30 @@ page s'affiche **sans message**. Code : `readSilentSso` / `markSilentSso` /
 - ⚠️ Au retour silencieux, `readSsoReturnError(…, { silent: true })` tait tout **sauf** « non
   provisionné » et « suspendu » : une session Keycloak valide sans accès à l'application
   doit le dire.
-- Limite connue : se déconnecter d'une application ne ferme pas la session Keycloak. Un nouvel
-  onglet reconnecte donc l'agent. La déconnexion unique (`end_session` Keycloak à la
-  déconnexion) n'est pas faite.
+
+### Déconnexion unique (2026-11-12)
+
+« Se déconnecter » dans une application ferme la session de l'application, **puis celle de
+Keycloak**, et Keycloak ferme celles des autres applications où l'agent est connecté.
+- L'application envoie vers `…/protocol/openid-connect/logout?client_id=<app>&post_logout_redirect_uri=<page de connexion>`
+  (`ssoLogoutRedirect`, `sso.ts`), seulement si le compte a une identité Keycloak et en
+  `https` (rien en développement, rien pour un compte à mot de passe seul).
+- ⚠️ Sans `id_token_hint` (Supabase ne transmet pas le jeton d'identité Keycloak), Keycloak
+  demande « Voulez-vous vous déconnecter ? ». Le thème le confirme pour l'agent : un script dans
+  `infra/keycloak/themes/edilumen/login/footer.ftl` **clique** le bouton `kc-logout` (et non
+  `form.submit()`, car `confirmLogout` doit partir avec le formulaire). Aucun gabarit n'est
+  réécrit. Revers accepté : un lien piégé peut déconnecter un agent de Keycloak, sans autre
+  effet.
+- **Front-channel logout** : Keycloak charge `https://<app>/deconnexion-sso` dans une iframe
+  invisible pour chaque application de la session. La page appelle `signOut({ scope: "local" })`
+  (les autres appareils de l'agent ne sont pas touchés). Les onglets ouverts l'apprennent par
+  supabase-js, qui partage la même origine. L'iframe garde l'accès au stockage parce que
+  `auth.edilumen.fr` et les applications sont du même site (`edilumen.fr`).
+- Réglages par client Keycloak (versionnés dans `realms/edilumen-realm.json`, à reporter dans
+  la console pour le realm existant) : *Valid post logout redirect URIs* = la page de connexion
+  (`/login`, `/connexion` pour Clara) ; *Front channel logout* activé, URL = `/deconnexion-sso`.
+- ⚠️ Clara : `NoProfileFallback` (compte sans profil Clara) se déconnecte **localement**
+  seulement. Un accès Clara manquant ne doit pas sortir l'agent du Socle et d'Iris.
 
 ### Bascule vers la connexion unique (décisions du 2026-11-10)
 

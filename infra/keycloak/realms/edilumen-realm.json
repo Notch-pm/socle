@@ -40,7 +40,12 @@
       "directAccessGrantsEnabled": false,
       "serviceAccountsEnabled": false,
       "redirectUris": ["https://qhrokbkyxgcvkbpmbmna.supabase.co/auth/v1/callback"],
-      "webOrigins": []
+      "webOrigins": [],
+      "frontchannelLogout": true,
+      "attributes": {
+        "post.logout.redirect.uris": "https://socle.edilumen.fr/login",
+        "frontchannel.logout.url": "https://socle.edilumen.fr/deconnexion-sso"
+      }
     },
     {
       "clientId": "clara",
@@ -54,7 +59,12 @@
       "directAccessGrantsEnabled": false,
       "serviceAccountsEnabled": false,
       "redirectUris": ["https://aullweizxcjbvtdspjli.supabase.co/auth/v1/callback"],
-      "webOrigins": []
+      "webOrigins": [],
+      "frontchannelLogout": true,
+      "attributes": {
+        "post.logout.redirect.uris": "https://clara.edilumen.fr/connexion",
+        "frontchannel.logout.url": "https://clara.edilumen.fr/deconnexion-sso"
+      }
     },
     {
       "clientId": "iris",
@@ -68,7 +78,12 @@
       "directAccessGrantsEnabled": false,
       "serviceAccountsEnabled": false,
       "redirectUris": ["https://tqcoqlneybtbrrcvpkpk.supabase.co/auth/v1/callback"],
-      "webOrigins": []
+      "webOrigins": [],
+      "frontchannelLogout": true,
+      "attributes": {
+        "post.logout.redirect.uris": "https://iris.edilumen.fr/login",
+        "frontchannel.logout.url": "https://iris.edilumen.fr/deconnexion-sso"
+      }
     }
   ]
 }
