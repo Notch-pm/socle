@@ -6,7 +6,14 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Field } from "@/components/ui/field";
 import logo from "@/assets/logo-edilumen.svg";
-import { readSsoReturnError, ssoSignInCredentials } from "@/features/auth/sso";
+import {
+  markSilentSso,
+  readSilentSso,
+  readSsoReturnError,
+  silentSsoStorage,
+  ssoSignInCredentials,
+  ssoSilentSignInCredentials,
+} from "@/features/auth/sso";
 
 export function LoginPage() {
   const { session, profile, loading } = useAuth();
@@ -22,18 +29,53 @@ export function LoginPage() {
   const [showPassword, setShowPassword] = React.useState(false);
   // Erreur rapportée au retour de Keycloak (agent non provisionné, suspendu…),
   // lue une fois au montage, puis effacée de l'URL pour ne pas réapparaître.
+  // Connexion silencieuse : un agent déjà connecté à Keycloak par une autre
+  // application entre sans recliquer (une tentative par onglet, voir sso.ts).
+  const [storage] = React.useState(silentSsoStorage);
+  const [silent] = React.useState(() =>
+    readSilentSso(storage, window.location.search, window.location.hash),
+  );
+  const [silentFailed, setSilentFailed] = React.useState(false);
   const [ssoError, setSsoError] = React.useState<string | null>(
-    () => readSsoReturnError(window.location.search, window.location.hash)?.message ?? null,
+    () =>
+      readSsoReturnError(window.location.search, window.location.hash, {
+        silent: silent.returning,
+      })?.message ?? null,
   );
 
   React.useEffect(() => {
     if (ssoError) window.history.replaceState(null, "", window.location.pathname);
   }, [ssoError]);
 
+  React.useEffect(() => {
+    if (silent.returning) markSilentSso(storage, "done");
+  }, [silent.returning, storage]);
+
+  React.useEffect(() => {
+    if (!silent.attempt || loading || session) return;
+    markSilentSso(storage, "pending");
+    void supabase.auth
+      .signInWithOAuth(ssoSilentSignInCredentials(window.location.origin))
+      .then(({ error }) => {
+        if (error) {
+          markSilentSso(storage, "done");
+          setSilentFailed(true);
+        }
+      });
+  }, [silent.attempt, storage, loading, session]);
+
   if (session && loading) {
     return (
       <div className="flex min-h-screen items-center justify-center text-sm text-muted-foreground">
         Chargement…
+      </div>
+    );
+  }
+
+  if (!session && silent.attempt && !silentFailed) {
+    return (
+      <div className="flex min-h-screen items-center justify-center text-sm text-muted-foreground">
+        Connexion…
       </div>
     );
   }

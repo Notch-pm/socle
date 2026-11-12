@@ -275,6 +275,25 @@ Pièges de console relevés :
 - Depuis un `! ssh` de Claude Code, viser l'IP `146.59.145.100` : le poste ne connaît le serveur
   que sous cette adresse (`Host key verification failed` sur `auth.edilumen.fr`).
 
+### Connexion silencieuse entre applications (2026-11-12)
+
+Constat à l'essai : connecté au Socle par Keycloak, l'agent qui passait dans Clara retombait sur
+la page de connexion et devait recliquer. Désormais, la page de connexion de chaque application
+(Socle, Clara, Iris) tente **d'elle-même** `signInWithOAuth` avec `prompt=none` (OpenID
+Connect) : avec une session Keycloak, l'agent entre sans écran ; sans session, Keycloak renvoie
+aussitôt `login_required` (vérifié par curl sur la chaîne Supabase → Keycloak → Clara) et la
+page s'affiche **sans message**. Code : `readSilentSso` / `markSilentSso` /
+`ssoSilentSignInCredentials` dans `sso.ts` (même bloc dans les trois dépôts).
+- ⚠️ **Une tentative par onglet** (`sessionStorage`, clé `edilumen.sso.silent` :
+  `pending` → `done`). Sans ce verrou, une déconnexion relancerait aussitôt la connexion et un
+  échec bouclerait ; stockage inaccessible ⇒ jamais de tentative.
+- ⚠️ Au retour silencieux, `readSsoReturnError(…, { silent: true })` tait tout **sauf** « non
+  provisionné » et « suspendu » : une session Keycloak valide sans accès à l'application
+  doit le dire.
+- Limite connue : se déconnecter d'une application ne ferme pas la session Keycloak. Un nouvel
+  onglet reconnecte donc l'agent. La déconnexion unique (`end_session` Keycloak à la
+  déconnexion) n'est pas faite.
+
 ### Bascule vers la connexion unique (décisions du 2026-11-10)
 
 - **Tout le monde passe par Keycloak, d'un coup** (comptes de démo seulement). Plus de mot de
