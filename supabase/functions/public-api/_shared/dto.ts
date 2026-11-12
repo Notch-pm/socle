@@ -270,6 +270,11 @@ export interface EmailTemplateDto {
   body: string;
   /** Applications qui l'utilisent (`iris`, `clara`, `nora`…), triées. */
   applications: string[];
+  /**
+   * Organismes où un modèle CRÉÉ est proposé (sans descendance implicite) ;
+   * `null` pour un courriel système, qui vaut partout. `[]` = proposé nulle part.
+   */
+  organization_ids: string[] | null;
   is_system: boolean;
   is_customized: boolean;
   /** Variables que l'application fournit (courriel système) ; vide pour un modèle créé. */

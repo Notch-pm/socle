@@ -12,17 +12,18 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Field } from "@/components/ui/field";
+import { cn } from "@/lib/utils";
 import {
   EMAIL_BODY_MAX_LENGTH,
   EMAIL_SUBJECT_MAX_LENGTH,
-  unknownVariables,
   validateEmailTemplate,
   type ResolvedEmailTemplate,
 } from "@/features/email-templates/emailTemplates";
 import {
-  allEmailVariableKeys,
-  emailVariableTitle,
+  allowedEmailVariables,
+  emailVariableLabel,
 } from "@/features/email-templates/emailVariables";
+import type { ManagedOrganization } from "@/features/users/agentAccess";
 
 export interface EmailApplicationOption {
   id: string;
@@ -35,12 +36,11 @@ export interface EmailTemplateFormValues {
   subject: string;
   body: string;
   applications: string[];
+  organizationIds: string[];
 }
 
 const TEXTAREA_CLASS =
   "w-full rounded-lg border border-input bg-background px-3 py-2 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring";
-
-const KNOWN_VARIABLES = allEmailVariableKeys();
 
 /**
  * Création ou modification d'un modèle de courriel.
@@ -54,6 +54,7 @@ export function EmailTemplateFormDialog({
   template,
   existingNames,
   applicationOptions,
+  organizationOptions,
   onSubmit,
   onShowVariables,
   submitting,
@@ -66,6 +67,8 @@ export function EmailTemplateFormDialog({
   /** Titres des modèles créés existants, pour l'unicité côté client. */
   existingNames: string[];
   applicationOptions: EmailApplicationOption[];
+  /** Organismes de la collectivité, à plat dans l'ordre de l'arbre (`managedOrganizations`). */
+  organizationOptions: ManagedOrganization[];
   onSubmit: (values: EmailTemplateFormValues) => void;
   onShowVariables: () => void;
   submitting: boolean;
@@ -77,6 +80,7 @@ export function EmailTemplateFormDialog({
   const [subject, setSubject] = React.useState("");
   const [body, setBody] = React.useState("");
   const [applications, setApplications] = React.useState<string[]>([]);
+  const [organizationIds, setOrganizationIds] = React.useState<string[]>([]);
   const [touched, setTouched] = React.useState(false);
 
   React.useEffect(() => {
@@ -86,10 +90,12 @@ export function EmailTemplateFormDialog({
     setSubject(template?.subject ?? "");
     setBody(template?.body ?? "");
     setApplications(template?.applications ?? []);
+    setOrganizationIds(template?.organization_ids ?? []);
     setTouched(false);
   }, [open, template]);
 
-  const issues = validateEmailTemplate({ isSystem, name, subject, body });
+  const allowedVariables = allowedEmailVariables(template?.variables ?? []);
+  const issues = validateEmailTemplate({ isSystem, name, subject, body, allowedVariables });
   const isDuplicate =
     !isSystem &&
     name.trim() !== "" &&
@@ -98,12 +104,17 @@ export function EmailTemplateFormDialog({
         other.toLocaleLowerCase("fr") === name.trim().toLocaleLowerCase("fr") &&
         other !== template?.name,
     );
-  const unknown = unknownVariables(`${subject}\n${body}`, KNOWN_VARIABLES);
   const hasIssues = Object.keys(issues).length > 0 || isDuplicate;
 
   function toggleApplication(id: string) {
     setApplications((current) =>
       current.includes(id) ? current.filter((app) => app !== id) : [...current, id],
+    );
+  }
+
+  function toggleOrganization(id: string) {
+    setOrganizationIds((current) =>
+      current.includes(id) ? current.filter((org) => org !== id) : [...current, id],
     );
   }
 
@@ -117,6 +128,7 @@ export function EmailTemplateFormDialog({
       subject,
       body,
       applications,
+      organizationIds,
     });
   }
 
@@ -207,6 +219,52 @@ export function EmailTemplateFormDialog({
                   </div>
                 )}
               </Field>
+
+              <Field label="Organismes où il est proposé">
+                {organizationOptions.length === 0 ? (
+                  <p className="text-sm text-muted-foreground">Aucun organisme disponible.</p>
+                ) : (
+                  <div className="flex flex-col gap-2">
+                    <p className="text-xs text-muted-foreground">
+                      Un modèle n'est proposé aux agents que dans les organismes cochés. Cocher
+                      un organisme ne coche pas ses services.
+                    </p>
+                    <div className="flex gap-3 text-xs">
+                      <button
+                        type="button"
+                        className="font-medium text-primary hover:underline"
+                        onClick={() => setOrganizationIds(organizationOptions.map((o) => o.id))}
+                      >
+                        Tous
+                      </button>
+                      <button
+                        type="button"
+                        className="font-medium text-primary hover:underline"
+                        onClick={() => setOrganizationIds([])}
+                      >
+                        Aucun
+                      </button>
+                    </div>
+                    <div className="max-h-56 overflow-y-auto rounded-lg border border-border px-3 py-2">
+                      {organizationOptions.map((org) => (
+                        <label
+                          key={org.id}
+                          className="flex items-center gap-2 py-1 text-sm"
+                          style={{ paddingLeft: `${org.depth * 16}px` }}
+                        >
+                          <input
+                            type="checkbox"
+                            className="size-4 accent-primary"
+                            checked={organizationIds.includes(org.id)}
+                            onChange={() => toggleOrganization(org.id)}
+                          />
+                          <span className={cn(org.depth === 0 && "font-medium")}>{org.name}</span>
+                        </label>
+                      ))}
+                    </div>
+                  </div>
+                )}
+              </Field>
             </>
           )}
 
@@ -219,7 +277,7 @@ export function EmailTemplateFormDialog({
               onChange={(e) => setSubject(e.target.value)}
               aria-invalid={touched && Boolean(issues.subject)}
             />
-            {touched && issues.subject ? (
+            {(touched || issues.subject?.startsWith("Variable")) && issues.subject ? (
               <p className="mt-1.5 text-sm text-destructive">{issues.subject}</p>
             ) : null}
           </Field>
@@ -234,7 +292,7 @@ export function EmailTemplateFormDialog({
               className={`${TEXTAREA_CLASS} font-mono text-[13px] leading-relaxed`}
               aria-invalid={touched && Boolean(issues.body)}
             />
-            {touched && issues.body ? (
+            {(touched || issues.body?.startsWith("Variable")) && issues.body ? (
               <p className="mt-1.5 text-sm text-destructive">{issues.body}</p>
             ) : null}
             <p className="mt-1.5 text-xs text-muted-foreground">
@@ -242,12 +300,6 @@ export function EmailTemplateFormDialog({
               <code>{"{{#variable}}"}</code> et <code>{"{{/variable}}"}</code> n'apparaît que si
               la variable a une valeur.
             </p>
-            {unknown.length > 0 ? (
-              <p className="mt-1.5 text-xs text-warning">
-                Variable inconnue du catalogue : {unknown.map((k) => `{{${k}}}`).join(", ")}.
-                Vérifiez l'orthographe.
-              </p>
-            ) : null}
           </Field>
 
           {isSystem && template && template.variables.length > 0 ? (
@@ -257,7 +309,7 @@ export function EmailTemplateFormDialog({
                 {template.variables.map((key) => (
                   <code
                     key={key}
-                    title={emailVariableTitle(key) ?? undefined}
+                    title={emailVariableLabel(key) ?? undefined}
                     className="rounded bg-muted px-2 py-1 text-xs"
                   >
                     {`{{${key}}}`}

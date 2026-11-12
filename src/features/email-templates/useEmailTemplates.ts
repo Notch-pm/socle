@@ -3,6 +3,7 @@ import { supabase } from "@/lib/supabase";
 import {
   resolveEmailTemplates,
   type EmailTemplateApplicationRow,
+  type EmailTemplateOrganizationRow,
   type EmailTemplateRow,
   type ResolvedEmailTemplate,
 } from "@/features/email-templates/emailTemplates";
@@ -41,7 +42,9 @@ export function useEmailTemplates(organizationId: string | null | undefined) {
     queryFn: async () => {
       const { data, error } = await supabase
         .from("email_templates")
-        .select("*, email_template_applications(application_id)")
+        .select(
+          "*, email_template_applications(application_id), email_template_organizations(organization_id)",
+        )
         .eq("organization_id", organizationId!);
       if (error) throw error;
       return data;
@@ -58,6 +61,12 @@ export function useEmailTemplates(organizationId: string | null | undefined) {
             (row.email_template_applications ?? []).map((link) => ({
               email_template_id: row.id,
               application_id: link.application_id,
+            })),
+          ),
+          rows.data.flatMap((row): EmailTemplateOrganizationRow[] =>
+            (row.email_template_organizations ?? []).map((link) => ({
+              email_template_id: row.id,
+              organization_id: link.organization_id,
             })),
           ),
         )
@@ -132,6 +141,8 @@ export interface CustomEmailTemplateInput {
   subject: string;
   body: string;
   applications: string[];
+  /** Organismes où le modèle est proposé (aucune descendance implicite). */
+  organizationIds: string[];
 }
 
 async function syncApplications(templateId: string, wanted: string[], current: string[]) {
@@ -149,6 +160,25 @@ async function syncApplications(templateId: string, wanted: string[], current: s
     const { error } = await supabase
       .from("email_template_applications")
       .insert(toAdd.map((application_id) => ({ email_template_id: templateId, application_id })));
+    if (error) throw error;
+  }
+}
+
+async function syncOrganizations(templateId: string, wanted: string[], current: string[]) {
+  const toRemove = current.filter((id) => !wanted.includes(id));
+  const toAdd = wanted.filter((id) => !current.includes(id));
+  if (toRemove.length > 0) {
+    const { error } = await supabase
+      .from("email_template_organizations")
+      .delete()
+      .eq("email_template_id", templateId)
+      .in("organization_id", toRemove);
+    if (error) throw error;
+  }
+  if (toAdd.length > 0) {
+    const { error } = await supabase
+      .from("email_template_organizations")
+      .insert(toAdd.map((organization_id) => ({ email_template_id: templateId, organization_id })));
     if (error) throw error;
   }
 }
@@ -172,6 +202,7 @@ export function useCreateEmailTemplate() {
       if (error) throw error;
       try {
         await syncApplications(data.id, input.applications, []);
+        await syncOrganizations(data.id, input.organizationIds, []);
       } catch (linkError) {
         await supabase.from("email_templates").delete().eq("id", data.id);
         throw linkError;
@@ -185,7 +216,11 @@ export function useUpdateEmailTemplate() {
   const invalidate = useInvalidate();
   return useMutation({
     mutationFn: async (
-      input: CustomEmailTemplateInput & { id: string; currentApplications: string[] },
+      input: CustomEmailTemplateInput & {
+        id: string;
+        currentApplications: string[];
+        currentOrganizationIds: string[];
+      },
     ) => {
       const { error } = await supabase
         .from("email_templates")
@@ -199,6 +234,7 @@ export function useUpdateEmailTemplate() {
         .is("system_key", null);
       if (error) throw error;
       await syncApplications(input.id, input.applications, input.currentApplications);
+      await syncOrganizations(input.id, input.organizationIds, input.currentOrganizationIds);
     },
     onSuccess: invalidate,
   });

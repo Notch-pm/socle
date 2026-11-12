@@ -2,6 +2,7 @@ import { describe, it, expect } from "vitest";
 import {
   resolveEmailTemplates,
   filterByApplication,
+  filterByOrganization,
   extractVariables,
   unknownVariables,
   unbalancedSections,
@@ -115,6 +116,29 @@ describe("resolveEmailTemplates", () => {
     );
   });
 
+  it("un modèle créé porte ses organismes ; un courriel système vaut partout (null)", () => {
+    const list = resolveEmailTemplates(
+      ORG,
+      defaults,
+      [row({ id: "c1", name: "Invitation" }), row({ id: "c2", name: "Nulle part" })],
+      [],
+      [
+        { email_template_id: "c1", organization_id: "svc-b" },
+        { email_template_id: "c1", organization_id: "svc-a" },
+      ],
+    );
+    expect(list.find((t) => t.key === "accuse_reception")!.organization_ids).toBeNull();
+    expect(list.find((t) => t.name === "Invitation")!.organization_ids).toEqual(["svc-a", "svc-b"]);
+    expect(list.find((t) => t.name === "Nulle part")!.organization_ids).toEqual([]);
+    expect(filterByOrganization(list, "svc-a").map((t) => t.name)).toEqual([
+      "Accusé de réception de la demande",
+      "Courriel de début d'instruction",
+      "Invitation",
+    ]);
+    // Pas de descendance implicite : un autre organisme ne voit que les courriels système.
+    expect(filterByOrganization(list, ORG)).toHaveLength(2);
+  });
+
   it("filterByApplication ne garde que les modèles de l'application", () => {
     const list = resolveEmailTemplates(
       ORG,
@@ -150,27 +174,40 @@ describe("variables", () => {
 
 describe("validateEmailTemplate — miroir des CHECK SQL", () => {
   it("un courriel système n'exige pas de titre", () => {
-    expect(validateEmailTemplate({ isSystem: true, subject: "Objet", body: "Corps" })).toEqual({});
+    expect(validateEmailTemplate({ isSystem: true, subject: "Objet", body: "Corps", allowedVariables: [] })).toEqual({});
   });
 
   it("un modèle créé exige un titre", () => {
     expect(
-      validateEmailTemplate({ isSystem: false, name: "  ", subject: "Objet", body: "Corps" }).name,
+      validateEmailTemplate({ isSystem: false, name: "  ", subject: "Objet", body: "Corps", allowedVariables: [] }).name,
     ).toBeDefined();
   });
 
   it("objet et corps sont obligatoires et bornés", () => {
-    const issues = validateEmailTemplate({ isSystem: true, subject: " ", body: "" });
+    const issues = validateEmailTemplate({ isSystem: true, subject: " ", body: "", allowedVariables: [] });
     expect(issues.subject).toBeDefined();
     expect(issues.body).toBeDefined();
     expect(
-      validateEmailTemplate({ isSystem: true, subject: "x".repeat(256), body: "y" }).subject,
+      validateEmailTemplate({ isSystem: true, subject: "x".repeat(256), body: "y", allowedVariables: [] }).subject,
     ).toBeDefined();
+  });
+
+  it("refuse une variable hors catalogue, dans l'objet comme dans le corps", () => {
+    const allowed = ["demande.reference"];
+    expect(
+      validateEmailTemplate({ isSystem: false, name: "T", subject: "{{demande.ref}}", body: "x", allowedVariables: allowed }).subject,
+    ).toContain("{{demande.ref}}");
+    expect(
+      validateEmailTemplate({ isSystem: false, name: "T", subject: "x", body: "{{#demande.lien}}y{{/demande.lien}}", allowedVariables: allowed }).body,
+    ).toContain("{{demande.lien}}");
+    expect(
+      validateEmailTemplate({ isSystem: false, name: "T", subject: "{{demande.reference}}", body: "y", allowedVariables: allowed }),
+    ).toEqual({});
   });
 
   it("refuse une section mal fermée dans le corps", () => {
     expect(
-      validateEmailTemplate({ isSystem: true, subject: "Objet", body: "{{#demande.lien}}x" }).body,
+      validateEmailTemplate({ isSystem: true, subject: "Objet", body: "{{#demande.lien}}x", allowedVariables: ["demande.lien"] }).body,
     ).toContain("demande.lien");
   });
 });

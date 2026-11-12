@@ -33,11 +33,14 @@ import {
 import { applicationsByOrganization, rootIdOf } from "./_shared/applications.ts";
 import {
   filterByApplication,
+  filterByOrganization,
   resolveEmailTemplates,
   type EmailTemplateApplicationRow,
+  type EmailTemplateOrganizationRow,
   type EmailTemplateDefaultRow,
   type EmailTemplateRow,
 } from "./_shared/emailTemplates.ts";
+import { EMAIL_COMMON_VARIABLE_GROUPS, EMAIL_CONTEXT_VARIABLE_GROUP } from "./_shared/emailVariables.ts";
 import { buildOrganizationTree, isUuid } from "./_shared/scope.ts";
 import { API_KEY_COLUMNS, evaluateApiKey, scopeRequest, shouldTouchKey, type ApiKeyRow } from "./_shared/apiKeyAuth.ts";
 import { errorResponse, jsonResponse } from "./_shared/errors.ts";
@@ -1341,6 +1344,20 @@ Deno.serve(async (req: Request) => {
       }
     }
 
+    // --- /v1/email-templates/variables ---
+    // Le catalogue UNIQUE des variables (contrat de nommage), tel que la base le
+    // garde : communes à tout modèle, et propres aux courriels système.
+    if (
+      segments[0] === "v1" && segments[1] === "email-templates" &&
+      segments[2] === "variables" && segments.length === 3
+    ) {
+      return jsonResponse(
+        200,
+        { common: EMAIL_COMMON_VARIABLE_GROUPS, context: EMAIL_CONTEXT_VARIABLE_GROUP },
+        corsHeaders,
+      );
+    }
+
     // --- /v1/email-templates ---
     // Liste RÉSOLUE par racine du périmètre : courriels système (texte du
     // catalogue ou personnalisé) puis modèles créés. Filtres : organization_id
@@ -1349,6 +1366,10 @@ Deno.serve(async (req: Request) => {
       const orgParam = url.searchParams.get("organization_id");
       const applicationParam = url.searchParams.get("application");
       const keyParam = url.searchParams.get("key");
+      const availableInParam = url.searchParams.get("available_in");
+      if (availableInParam !== null && !isUuid(availableInParam)) {
+        return errorResponse("bad_request", "Paramètre available_in invalide.", corsHeaders);
+      }
       if (orgParam !== null && !isUuid(orgParam)) {
         return errorResponse("bad_request", "Paramètre organization_id invalide.", corsHeaders);
       }
@@ -1380,7 +1401,7 @@ Deno.serve(async (req: Request) => {
         rootIds.length > 0
           ? admin
               .from("email_templates")
-              .select("id, organization_id, system_key, name, description, subject, body, updated_at, email_template_applications(application_id)")
+              .select("id, organization_id, system_key, name, description, subject, body, updated_at, email_template_applications(application_id), email_template_organizations(organization_id)")
               .in("organization_id", rootIds)
           : Promise.resolve({ data: [], error: null }),
       ]);
@@ -1389,7 +1410,10 @@ Deno.serve(async (req: Request) => {
 
       const defaults = (defaultsRes.data ?? []) as EmailTemplateDefaultRow[];
       const rows = (rowsRes.data ?? []) as Array<
-        EmailTemplateRow & { email_template_applications?: { application_id: string }[] | null }
+        EmailTemplateRow & {
+          email_template_applications?: { application_id: string }[] | null;
+          email_template_organizations?: { organization_id: string }[] | null;
+        }
       >;
       const links: EmailTemplateApplicationRow[] = rows.flatMap((row) =>
         (row.email_template_applications ?? []).map((link) => ({
@@ -1398,11 +1422,19 @@ Deno.serve(async (req: Request) => {
         })),
       );
 
+      const organizationLinks: EmailTemplateOrganizationRow[] = rows.flatMap((row) =>
+        (row.email_template_organizations ?? []).map((link) => ({
+          email_template_id: row.id,
+          organization_id: link.organization_id,
+        })),
+      );
+
       let templates = rootIds.flatMap((rootId) =>
-        resolveEmailTemplates(rootId, defaults, rows, links),
+        resolveEmailTemplates(rootId, defaults, rows, links, organizationLinks),
       );
       if (applicationParam !== null) templates = filterByApplication(templates, applicationParam);
       if (keyParam !== null) templates = templates.filter((template) => template.key === keyParam);
+      if (availableInParam !== null) templates = filterByOrganization(templates, availableInParam);
       return jsonResponse(200, templates.map(serializeEmailTemplate), corsHeaders);
     }
 

@@ -48,6 +48,15 @@ export interface EmailTemplateApplicationRow {
   application_id: string;
 }
 
+/**
+ * Activation d'un modèle créé dans un organisme (`email_template_organizations`).
+ * Pas de descendance implicite : cocher la racine n'ouvre pas ses services.
+ */
+export interface EmailTemplateOrganizationRow {
+  email_template_id: string;
+  organization_id: string;
+}
+
 /** Un courriel tel qu'il s'affiche et se sert : texte effectif, applications. */
 export interface ResolvedEmailTemplate {
   /** Ligne `email_templates` — `null` pour un courriel système jamais personnalisé. */
@@ -60,6 +69,11 @@ export interface ResolvedEmailTemplate {
   subject: string;
   body: string;
   applications: string[];
+  /**
+   * Organismes où un modèle CRÉÉ est proposé, triés ; `null` pour un courriel
+   * système, qui vaut partout. Un modèle créé sans organisme n'est proposé nulle part.
+   */
+  organization_ids: string[] | null;
   is_system: boolean;
   /** Courriel système dont l'objet ou le corps a été personnalisé. */
   is_customized: boolean;
@@ -96,6 +110,7 @@ export function resolveEmailTemplates(
   defaults: readonly EmailTemplateDefaultRow[],
   rows: readonly EmailTemplateRow[],
   links: readonly EmailTemplateApplicationRow[],
+  organizationLinks: readonly EmailTemplateOrganizationRow[] = [],
 ): ResolvedEmailTemplate[] {
   const own = rows.filter((row) => row.organization_id === organizationId);
   const overrides = new Map<string, EmailTemplateRow>();
@@ -114,6 +129,7 @@ export function resolveEmailTemplates(
         subject: override?.subject ?? def.subject,
         body: override?.body ?? def.body,
         applications: sortedUnique(def.application_ids),
+        organization_ids: null,
         is_system: true,
         is_customized: override != null,
         variables: [...def.variables],
@@ -130,6 +146,13 @@ export function resolveEmailTemplates(
     appsByTemplate.set(link.email_template_id, list);
   }
 
+  const orgsByTemplate = new Map<string, string[]>();
+  for (const link of organizationLinks) {
+    const list = orgsByTemplate.get(link.email_template_id) ?? [];
+    list.push(link.organization_id);
+    orgsByTemplate.set(link.email_template_id, list);
+  }
+
   const custom = own
     .filter((row) => row.system_key == null)
     .map((row): ResolvedEmailTemplate => ({
@@ -141,6 +164,7 @@ export function resolveEmailTemplates(
       subject: row.subject,
       body: row.body,
       applications: sortedUnique(appsByTemplate.get(row.id) ?? []),
+      organization_ids: sortedUnique(orgsByTemplate.get(row.id) ?? []),
       is_system: false,
       is_customized: false,
       variables: [],
@@ -162,6 +186,20 @@ export function filterByApplication(
 }
 
 /**
+ * Les modèles proposés dans un organisme : les courriels système toujours, un
+ * modèle créé seulement s'il y est activé nommément.
+ */
+export function filterByOrganization(
+  templates: readonly ResolvedEmailTemplate[],
+  organizationId: string,
+): ResolvedEmailTemplate[] {
+  return templates.filter(
+    (template) =>
+      template.organization_ids === null || template.organization_ids.includes(organizationId),
+  );
+}
+
+/**
  * Les clés citées dans un texte : `{{cle}}`, et les sections `{{#cle}}` /
  * `{{/cle}}` (partie conditionnelle ou boucle). Sans doublon, dans l'ordre
  * d'apparition.
@@ -177,9 +215,8 @@ export function extractVariables(text: string): string[] {
 }
 
 /**
- * Les variables citées qui ne figurent pas dans le catalogue — un SIGNAL pour
- * l'agent (faute de frappe), jamais un refus : l'application qui envoie reste
- * seule juge de ce qu'elle sait remplir.
+ * Les variables citées qui ne figurent pas dans `known`. La base les REFUSE
+ * (`trg_guard_email_template_variables`) : l'écran le dit plus tôt.
  */
 export function unknownVariables(text: string, known: readonly string[]): string[] {
   const catalogue = new Set(known);
@@ -211,12 +248,17 @@ export interface EmailTemplateIssues {
   body?: string;
 }
 
-/** Validation de saisie, miroir des CHECK SQL. `name` n'est exigé que pour un modèle créé. */
+/**
+ * Validation de saisie, miroir des CHECK SQL et de la garde des variables.
+ * `name` n'est exigé que pour un modèle créé ; `allowedVariables` = les variables
+ * communes, plus celles du courriel système (`allowedEmailVariables`).
+ */
 export function validateEmailTemplate(input: {
   isSystem: boolean;
   name?: string | null;
   subject: string;
   body: string;
+  allowedVariables: readonly string[];
 }): EmailTemplateIssues {
   const issues: EmailTemplateIssues = {};
   if (!input.isSystem) {
@@ -225,9 +267,19 @@ export function validateEmailTemplate(input: {
     else if (name.length > EMAIL_NAME_MAX_LENGTH)
       issues.name = `Le titre ne doit pas dépasser ${EMAIL_NAME_MAX_LENGTH} caractères.`;
   }
+  const unknownIssue = (text: string): string | undefined => {
+    const unknown = unknownVariables(text, input.allowedVariables);
+    return unknown.length > 0
+      ? `Variable inconnue : ${unknown.map((k) => `{{${k}}}`).join(", ")}. Choisissez-la dans « Variables disponibles ».`
+      : undefined;
+  };
   if (input.subject.trim() === "") issues.subject = "L'objet est obligatoire.";
   else if (input.subject.length > EMAIL_SUBJECT_MAX_LENGTH)
     issues.subject = `L'objet ne doit pas dépasser ${EMAIL_SUBJECT_MAX_LENGTH} caractères.`;
+  else {
+    const unknown = unknownIssue(input.subject);
+    if (unknown) issues.subject = unknown;
+  }
   if (input.body.trim() === "") issues.body = "Le corps du courriel est obligatoire.";
   else if (input.body.length > EMAIL_BODY_MAX_LENGTH)
     issues.body = `Le corps ne doit pas dépasser ${EMAIL_BODY_MAX_LENGTH} caractères.`;
@@ -235,6 +287,10 @@ export function validateEmailTemplate(input: {
     const broken = unbalancedSections(input.body);
     if (broken.length > 0)
       issues.body = `Section mal fermée : ${broken.map((k) => `{{#${k}}}`).join(", ")}.`;
+    else {
+      const unknown = unknownIssue(input.body);
+      if (unknown) issues.body = unknown;
+    }
   }
   return issues;
 }

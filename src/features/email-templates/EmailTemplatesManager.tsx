@@ -15,8 +15,14 @@ import {
 } from "@/components/ui/alert-dialog";
 import { VariablesDialog } from "@/features/documents/VariablesDialog";
 import { useApplications } from "@/features/superadmin/applications/useApplications";
+import { useAllOrganizations } from "@/features/superadmin/organizations/useOrganizationsAdmin";
+import { managedOrganizations } from "@/features/users/agentAccess";
 import type { ResolvedEmailTemplate } from "@/features/email-templates/emailTemplates";
-import { EMAIL_VARIABLE_GROUPS } from "@/features/email-templates/emailVariables";
+import {
+  EMAIL_COMMON_VARIABLE_GROUPS,
+  EMAIL_CONTEXT_VARIABLE_GROUP,
+  type EmailVariableGroup,
+} from "@/features/email-templates/emailVariables";
 import {
   useEmailTemplates,
   useSaveSystemEmailTemplate,
@@ -31,10 +37,21 @@ import {
   type EmailTemplateFormValues,
 } from "@/features/email-templates/EmailTemplateFormDialog";
 
+/** Le catalogue au format de `VariablesDialog` (titre = libellé). */
+const VARIABLE_DIALOG_GROUPS = [...EMAIL_COMMON_VARIABLE_GROUPS, EMAIL_CONTEXT_VARIABLE_GROUP].map(
+  (group: EmailVariableGroup) => ({
+    key: group.key,
+    title: group.title,
+    description: group.description,
+    variables: group.variables.map((v) => ({ key: v.key, title: v.label, hint: v.hint })),
+  }),
+);
+
 const EMAIL_VARIABLES_DESCRIPTION =
   "Recopiez le jeton tel quel dans l'objet ou le texte du courriel, accolades comprises. " +
   "L'application qui envoie le courriel le remplace par la valeur de la demande. " +
-  "Une partie entre {{#variable}} et {{/variable}} n'apparaît que si la variable a une valeur.";
+  "Une partie entre {{#variable}} et {{/variable}} n'apparaît que si la variable a une valeur. " +
+  "Les variables des courriels automatiques ne s'emploient que dans les courriels système qui les citent.";
 
 function isUniqueViolation(error: unknown): boolean {
   return (
@@ -53,6 +70,11 @@ function isUniqueViolation(error: unknown): boolean {
 export function EmailTemplatesManager({ organizationId }: { organizationId: string }) {
   const { data: templates, isLoading, isError } = useEmailTemplates(organizationId);
   const { data: applications } = useApplications();
+  const { data: allOrganizations } = useAllOrganizations();
+  const organizationOptions = React.useMemo(
+    () => managedOrganizations(allOrganizations ?? [], organizationId),
+    [allOrganizations, organizationId],
+  );
 
   const saveSystem = useSaveSystemEmailTemplate();
   const resetSystem = useResetSystemEmailTemplate();
@@ -105,6 +127,7 @@ export function EmailTemplatesManager({ organizationId }: { organizationId: stri
         await updateTemplate.mutateAsync({
           id: editing.id,
           currentApplications: editing.applications,
+          currentOrganizationIds: editing.organization_ids ?? [],
           ...values,
         });
       } else {
@@ -214,6 +237,21 @@ export function EmailTemplatesManager({ organizationId }: { organizationId: stri
                     ) : (
                       <span className="text-xs text-muted-foreground">Aucune</span>
                     )}
+                    {template.organization_ids !== null ? (
+                      <p
+                        className={
+                          template.organization_ids.length === 0
+                            ? "mt-1 text-xs text-warning"
+                            : "mt-1 text-xs text-muted-foreground"
+                        }
+                      >
+                        {template.organization_ids.length === 0
+                          ? "Proposé dans aucun organisme"
+                          : template.organization_ids.length === 1
+                            ? "1 organisme"
+                            : `${template.organization_ids.length} organismes`}
+                      </p>
+                    ) : null}
                   </td>
                   <td className="max-w-xs truncate px-4 py-3 text-muted-foreground" title={template.subject}>
                     {template.subject}
@@ -269,6 +307,7 @@ export function EmailTemplatesManager({ organizationId }: { organizationId: stri
         template={editing}
         existingNames={existingNames}
         applicationOptions={applicationOptions}
+        organizationOptions={organizationOptions}
         onSubmit={handleSubmit}
         onShowVariables={() => setVariablesOpen(true)}
         submitting={submitting}
@@ -278,7 +317,7 @@ export function EmailTemplatesManager({ organizationId }: { organizationId: stri
       <VariablesDialog
         open={variablesOpen}
         onOpenChange={setVariablesOpen}
-        groups={EMAIL_VARIABLE_GROUPS}
+        groups={VARIABLE_DIALOG_GROUPS}
         description={EMAIL_VARIABLES_DESCRIPTION}
       />
 

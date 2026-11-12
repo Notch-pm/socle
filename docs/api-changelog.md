@@ -13,6 +13,23 @@ Format d'une entrée : `## AAAA-MM-JJ — <api> — ajout|correctif|rupture`
 
 ---
 
+## 2026-11-12 — public-api — ajout (modèles de courriels : organismes et variables, 1.45.0)
+
+- `EmailTemplate.organization_ids` : organismes où un modèle **créé** est proposé aux agents,
+  cochés **nommément** (activer la racine n'ouvre pas ses services) ; `[]` = proposé nulle part ;
+  `null` pour un courriel système, qui vaut partout. Nouveau filtre
+  `GET /v1/email-templates?available_in={organisme}` (courriels système + modèles activés pour lui).
+- `GET /v1/email-templates/variables` : le **catalogue unique** des variables, `common` (tout
+  modèle) et `context` (courriels système qui les déclarent), avec libellé et exemple. Les clés
+  sont celles d'Iris ; trois clés des courriels système ont changé de nom le même jour, avant tout
+  consommateur : `demande.libelle_demarche` → `demande.demarche`,
+  `demande.organisme_responsable` → `demande.destinataire`, `organisme.nom` → `organisation.nom`.
+- Le Socle **refuse** désormais à l'enregistrement un modèle qui cite une variable hors catalogue :
+  ce qui est servi est toujours remplissable.
+- Additif pour les appels existants (aucun consommateur ne lisait encore ces modèles).
+
+---
+
 ## 2026-11-12 — public-api — ajout (modèles de courriels, 1.44.0)
 
 - `GET /v1/email-templates`, scope `read`, filtres facultatifs `organization_id` (une **racine**

@@ -103,6 +103,7 @@ export function serializeEmailTemplate(template: ResolvedEmailTemplate): EmailTe
     subject: template.subject,
     body: template.body,
     applications: [...template.applications],
+    organization_ids: template.organization_ids === null ? null : [...template.organization_ids],
     is_system: template.is_system,
     is_customized: template.is_customized,
     variables: [...template.variables],

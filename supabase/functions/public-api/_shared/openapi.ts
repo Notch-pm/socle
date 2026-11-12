@@ -30,7 +30,7 @@ export function buildOpenApiDocument(serverUrl: string): Record<string, unknown>
     openapi: "3.1.0",
     info: {
       title: "API Socle — Référentiel de la gamme",
-      version: "1.44.0",
+      version: "1.45.0",
       description: [
         "API **en lecture seule** exposant le référentiel central de la gamme : les",
         "**organisations** (et sous-organisations) avec l'intégralité de leur configuration,",
@@ -1149,6 +1149,15 @@ export function buildOpenApiDocument(serverUrl: string): Record<string, unknown>
               schema: { type: "string", example: "accuse_reception" },
               description: "Ne garder que le courriel système de cette clé.",
             },
+            {
+              name: "available_in",
+              in: "query",
+              schema: { type: "string", format: "uuid" },
+              description:
+                "Ne garder que ce qui est proposé dans cet organisme : les courriels système, " +
+                "plus les modèles créés **activés nommément** pour lui (sans descendance : " +
+                "activer la racine n'ouvre pas ses services).",
+            },
           ],
           responses: {
             "200": {
@@ -1163,6 +1172,28 @@ export function buildOpenApiDocument(serverUrl: string): Record<string, unknown>
               },
             },
             ...errorResponses("400", "401", "404", "500"),
+          },
+        },
+      },
+      "/v1/email-templates/variables": {
+        get: {
+          tags: ["Courriels"],
+          summary: "Catalogue unique des variables de courriels",
+          description:
+            "Le contrat de nommage des variables, tel que la base le garde : `common` (disponibles " +
+            "sur toute demande, donc dans tout modèle) et `context` (fournies par l'événement d'un " +
+            "courriel système, et seulement dans les courriels qui les déclarent dans `variables`). " +
+            "Un modèle qui cite une autre clé est **refusé** à l'enregistrement. Scope `read`.",
+          responses: {
+            "200": {
+              description: "Catalogue des variables.",
+              content: {
+                "application/json": {
+                  schema: { $ref: "#/components/schemas/EmailVariableCatalogue" },
+                },
+              },
+            },
+            ...errorResponses("401", "500"),
           },
         },
       },
@@ -3393,6 +3424,7 @@ export function buildOpenApiDocument(serverUrl: string): Record<string, unknown>
             "subject",
             "body",
             "applications",
+            "organization_ids",
             "is_system",
             "is_customized",
             "variables",
@@ -3425,6 +3457,14 @@ export function buildOpenApiDocument(serverUrl: string): Record<string, unknown>
               items: { type: "string" },
               description: "Applications qui l'utilisent (`iris`, `clara`, `nora`…), triées.",
             },
+            organization_ids: {
+              type: ["array", "null"],
+              items: { type: "string", format: "uuid" },
+              description:
+                "Organismes où un modèle **créé** est proposé aux agents, nommément (pas de " +
+                "descendance implicite) ; `[]` = proposé nulle part. `null` pour un courriel " +
+                "système, qui vaut partout.",
+            },
             is_system: { type: "boolean" },
             is_customized: {
               type: "boolean",
@@ -3454,10 +3494,48 @@ export function buildOpenApiDocument(serverUrl: string): Record<string, unknown>
               "{{/demande.libelle_demarche}}(référence {{demande.reference}}) est désormais prise en " +
               "charge par nos services.\n\nStatut : {{demande.statut_usager}}.\n\nCordialement,\n{{organisme.nom}}",
             applications: ["iris"],
+            organization_ids: null,
             is_system: true,
             is_customized: false,
             variables: ["demande.libelle_demarche", "demande.reference", "demande.statut_usager", "demande.lien", "organisme.nom"],
             updated_at: null,
+          },
+        },
+        EmailVariableGroup: {
+          type: "object",
+          required: ["key", "title", "description", "variables"],
+          properties: {
+            key: { type: "string", example: "usager" },
+            title: { type: "string", example: "Usager" },
+            description: { type: "string" },
+            variables: {
+              type: "array",
+              items: {
+                type: "object",
+                required: ["key", "label", "sample"],
+                properties: {
+                  key: { type: "string", example: "usager.nom_complet" },
+                  label: { type: "string", example: "Nom complet" },
+                  sample: { type: "string", description: "Valeur d'exemple pour un aperçu.", example: "Marie Durand" },
+                  hint: { type: "string" },
+                },
+              },
+            },
+          },
+        },
+        EmailVariableCatalogue: {
+          type: "object",
+          required: ["common", "context"],
+          properties: {
+            common: {
+              type: "array",
+              items: { $ref: "#/components/schemas/EmailVariableGroup" },
+              description: "Variables disponibles dans tout modèle.",
+            },
+            context: {
+              $ref: "#/components/schemas/EmailVariableGroup",
+              description: "Variables d'événement, réservées aux courriels système qui les déclarent.",
+            },
           },
         },
         DocumentTemplate: {

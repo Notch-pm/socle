@@ -1040,6 +1040,36 @@ export type Database = {
         }
         Relationships: []
       }
+      email_template_organizations: {
+        Row: {
+          email_template_id: string
+          organization_id: string
+        }
+        Insert: {
+          email_template_id: string
+          organization_id: string
+        }
+        Update: {
+          email_template_id?: string
+          organization_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "email_template_organizations_email_template_id_fkey"
+            columns: ["email_template_id"]
+            isOneToOne: false
+            referencedRelation: "email_templates"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "email_template_organizations_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       email_templates: {
         Row: {
           body: string
@@ -2375,6 +2405,11 @@ export type Database = {
         Returns: Json
       }
       dns_label_from_slug: { Args: { p_slug: string }; Returns: string }
+      email_template_common_variables: { Args: never; Returns: string[] }
+      email_template_text_variables: {
+        Args: { p_text: string }
+        Returns: string[]
+      }
       has_org_access: { Args: { org_id: string }; Returns: boolean }
       immutable_unaccent: { Args: { value: string }; Returns: string }
       internal_service_bearer: { Args: { p_org_id: string }; Returns: string }

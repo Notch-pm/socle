@@ -1039,6 +1039,7 @@ describe("serializeEmailTemplate — whitelist", () => {
       subject: "Bien reçu",
       body: "Merci",
       applications: ["iris"],
+      organization_ids: null,
       is_system: true,
       is_customized: true,
       variables: ["demande.reference"],

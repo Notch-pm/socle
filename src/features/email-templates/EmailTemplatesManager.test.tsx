@@ -45,6 +45,16 @@ vi.mock("@/features/email-templates/useEmailTemplates", () => ({
   useDeleteEmailTemplate: () => ({ mutate: h.remove, isPending: false }),
 }));
 
+vi.mock("@/features/superadmin/organizations/useOrganizationsAdmin", () => ({
+  useAllOrganizations: () => ({
+    data: [
+      { id: "org-1", name: "Ville de Démo", parent_id: null },
+      { id: "svc-1", name: "Voirie", parent_id: "org-1" },
+      { id: "autre", name: "Autre collectivité", parent_id: null },
+    ],
+  }),
+}));
+
 vi.mock("@/features/superadmin/applications/useApplications", () => ({
   useApplications: () => ({
     data: [
@@ -84,6 +94,7 @@ beforeEach(() => {
       },
     ],
     [{ email_template_id: "c1", application_id: "clara" }],
+    [{ email_template_id: "c1", organization_id: "svc-1" }],
   );
 });
 
@@ -141,5 +152,26 @@ describe("EmailTemplatesManager", () => {
     expect(screen.getByLabelText("Clara")).toBeTruthy();
     expect(screen.getByLabelText("Iris")).toBeTruthy();
     expect(screen.queryByLabelText("Socle")).toBeNull();
+  });
+});
+
+describe("EmailTemplatesManager — organismes", () => {
+  it("le tableau dit dans combien d'organismes un modèle créé est proposé", () => {
+    render(<EmailTemplatesManager organizationId={ORG} />);
+    expect(within(rowOf("Invitation")).getByText("1 organisme")).toBeTruthy();
+  });
+
+  it("le dialogue propose l'arbre de la collectivité, et seulement lui, avec les cases cochées", () => {
+    render(<EmailTemplatesManager organizationId={ORG} />);
+    fireEvent.click(within(rowOf("Invitation")).getByTitle("Modifier"));
+    expect((screen.getByLabelText("Voirie") as HTMLInputElement).checked).toBe(true);
+    expect((screen.getByLabelText("Ville de Démo") as HTMLInputElement).checked).toBe(false);
+    expect(screen.queryByLabelText("Autre collectivité")).toBeNull();
+  });
+
+  it("un courriel système n'a pas de cases d'organismes (il vaut partout)", () => {
+    render(<EmailTemplatesManager organizationId={ORG} />);
+    fireEvent.click(within(rowOf("Accusé de réception de la demande")).getByTitle("Modifier"));
+    expect(screen.queryByText("Organismes où il est proposé")).toBeNull();
   });
 });

@@ -368,8 +368,8 @@ describe("contrat — annuaire des agents (1.43.0)", () => {
 describe("contrat — documents et courriers", () => {
   const doc = buildOpenApiDocument("https://example.supabase.co/functions/v1/public-api") as any;
 
-  it("annonce la version 1.44.0 du contrat", () => {
-    expect(doc.info.version).toBe("1.44.0");
+  it("annonce la version 1.45.0 du contrat", () => {
+    expect(doc.info.version).toBe("1.45.0");
   });
 
   it("une organisation dit les applications souscrites par sa collectivité (1.42.0)", () => {
@@ -977,11 +977,12 @@ describe("contrat — modèles de courriels (1.44.0)", () => {
   const doc = buildOpenApiDocument("https://example.supabase.co/functions/v1/public-api") as any;
   const op = doc.paths["/v1/email-templates"].get;
 
-  it("trois filtres facultatifs, 404 documenté", () => {
+  it("quatre filtres facultatifs, 404 documenté", () => {
     expect(op.parameters.map((p: { name: string }) => p.name)).toEqual([
       "organization_id",
       "application",
       "key",
+      "available_in",
     ]);
     expect(Object.keys(op.responses)).toEqual(expect.arrayContaining(["200", "400", "404"]));
   });
@@ -1002,6 +1003,7 @@ describe("contrat — modèles de courriels (1.44.0)", () => {
         subject: "s",
         body: "b",
         applications: [],
+        organization_ids: null,
         is_system: true,
         is_customized: false,
         variables: [],
@@ -1012,5 +1014,21 @@ describe("contrat — modèles de courriels (1.44.0)", () => {
     ).sort();
     expect(Object.keys(doc.components.schemas.EmailTemplate.properties).sort()).toEqual(fields);
     expect([...doc.components.schemas.EmailTemplate.required].sort()).toEqual(fields);
+  });
+});
+
+describe("contrat — modèles de courriels, organismes et variables (1.45.0)", () => {
+  const doc = buildOpenApiDocument("https://example.supabase.co/functions/v1/public-api") as any;
+
+  it("organization_ids : null pour un courriel système, sans descendance pour un modèle créé", () => {
+    const desc = doc.components.schemas.EmailTemplate.properties.organization_ids.description;
+    expect(desc).toContain("pas de descendance implicite");
+    expect(desc).toContain("`null` pour un courriel système");
+  });
+
+  it("publie le catalogue unique des variables", () => {
+    const op = doc.paths["/v1/email-templates/variables"].get;
+    expect(op.description).toContain("**refusé**");
+    expect(doc.components.schemas.EmailVariableCatalogue.required).toEqual(["common", "context"]);
   });
 });

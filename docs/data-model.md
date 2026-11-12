@@ -545,7 +545,14 @@ Détail fonctionnel : [features/modeles-courriels.md](./features/modeles-courrie
 - **`email_template_applications`** `(email_template_id, application_id)` — applications d'un
   modèle **créé** (FK `applications`). **RLS** par le modèle parent ; l'écriture exige
   `system_key IS NULL` (les applications d'un courriel système sont celles du catalogue).
-- Servi résolu par `GET /v1/email-templates` (contrat 1.44.0).
+- **`email_template_organizations`** `(email_template_id, organization_id)` — organismes où un
+  modèle **créé** est proposé, nommément (pas de descendance). Trigger
+  `enforce_email_template_organization_scope` (organisme de l'arbre de la racine, jamais sur un
+  courriel système). **RLS** comme les applications.
+- **Garde des variables** : `trg_guard_email_template_variables` refuse un texte qui cite une clé
+  hors de `email_template_common_variables()` (+ `variables` du courriel système) ;
+  `email_template_text_variables(text)` extrait les clés.
+- Servi résolu par `GET /v1/email-templates` (contrats 1.44.0 puis 1.45.0).
 
 ---
 

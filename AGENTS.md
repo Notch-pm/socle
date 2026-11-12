@@ -286,8 +286,10 @@ Envoi des e-mails —, `?section=`, `organizationSections.ts`), gestion superadm
 ### [Modèles de courriels (`email_templates`)](docs/features/modeles-courriels.md)
 - Courriels **système** (catalogue `email_template_defaults`, posé par migration, ceux qu'Iris
   envoie aux usagers) : objet et corps modifiables par surcharge, **jamais supprimables** ;
-  plus des modèles **créés** par la racine, avec leurs applications. Héritage **résolu à la
-  lecture** (`emailTemplates.ts`, miroir front / `public-api` byte-identique).
+  plus des modèles **créés** par la racine, avec leurs applications et leurs organismes (cochés
+  nommément). Héritage **résolu à la lecture** (`emailTemplates.ts`, miroir byte-identique).
+- ⚠️ **Un seul catalogue de variables** (clés d'Iris), jumeau SQL : la base **refuse** une
+  variable inconnue — ajouter une variable = migration + `emailVariables.ts` + Iris.
 - ⚠️ Texte brut à variables, **le Socle ne fusionne rien** ; l'habillage reste à l'application.
   ⚠️ Iris envoie encore ses textes en dur tant qu'il n'est pas branché sur
   `GET /v1/email-templates`. La `key` d'un courriel système est un contrat.
