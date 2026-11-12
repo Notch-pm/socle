@@ -60,6 +60,9 @@ const h = vi.hoisted(() => {
 });
 
 // Hooks Supabase/TanStack Query court-circuités (mêmes motifs que les tests d'étapes).
+vi.mock("@/features/organizations/useFreeMail", () => ({
+  useRootApplications: () => ({ data: ["iris", "clara"] }),
+}));
 vi.mock("@/features/procedures/useProcedures", () => ({
   PROCEDURE_TYPES: [
     { value: "externe", label: "Externe" },
@@ -169,6 +172,7 @@ describe("ProcedureEditor — pied de page du stepper", () => {
           publicationEnd: null,
         },
         documents: { restrictVisibility: false, documents: [], letters: [] },
+        replyLetters: { claraOutbound: false },
       },
     });
     expect(onStepChange).toHaveBeenCalledWith(5);

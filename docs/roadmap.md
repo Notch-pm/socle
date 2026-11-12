@@ -205,6 +205,24 @@ Détail et état par lot : [agents et accès](features/agents-et-acces.md).
   XML — une détection naïve signalerait des variables absentes qui sont bien là — et `.doc`
   (binaire, non zippé) resterait hors de portée.
 
+## Modèles de courriels
+
+### Livré
+
+- **Modèles de courriels** (`/referentiels/modeles-courriels`, section superadmin, contrat
+  1.44.0 `GET /v1/email-templates`) : les 10 courriels qu'Iris envoie aux usagers, modifiables
+  (objet et corps) mais jamais supprimables, et des modèles créés par la collectivité avec leurs
+  applications — 2026-11-12.
+
+### Envisagé, dans l'ordre
+
+1. **Brancher Iris** sur `GET /v1/email-templates` (par `key`) à la place de ses textes en dur
+   (`_shared/email/{accuse,avisUsager,cloture,codeAcces}.ts`), avec un moteur de rendu des
+   variables et des sections. D'ici là, modifier un courriel système dans le Socle **n'a aucun
+   effet** sur les envois.
+2. **Brancher Clara** sur les modèles qui la citent.
+3. Ariane, le jour où elle consommera le Socle (elle n'est pas au registre `applications`).
+
 ## Portail usagers (Nora) & site de démarches
 
 Le portail usagers est un dépôt à part (`Notch-pm/Nora`, README en tête) ; sa feuille de route

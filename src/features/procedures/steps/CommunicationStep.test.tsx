@@ -24,6 +24,12 @@ vi.mock("@/features/documents/useDocumentTemplates", () => ({
   }),
 }));
 
+// Abonnements de la racine : pilotés par chaque test (Clara ou non).
+const rootApplications = vi.hoisted(() => ({ value: ["iris", "clara"] as string[] | undefined }));
+vi.mock("@/features/organizations/useFreeMail", () => ({
+  useRootApplications: () => ({ data: rootApplications.value }),
+}));
+
 // jsdom n'implémente pas la capture de pointeur utilisée par certaines primitives Radix.
 if (!Element.prototype.hasPointerCapture) {
   Element.prototype.hasPointerCapture = () => false;
@@ -136,6 +142,7 @@ describe("CommunicationStep — bloc Visibilité", () => {
         publicationEnd: "2026-12-31",
       },
       documents: { restrictVisibility: false, documents: [], letters: [] },
+      replyLetters: { claraOutbound: false },
     });
   });
 
@@ -173,6 +180,7 @@ describe("CommunicationStep — bloc Visibilité", () => {
         publicationEnd: "2026-12-31",
       },
       documents: { restrictVisibility: false, documents: [], letters: [] },
+      replyLetters: { claraOutbound: false },
     });
   });
 });
@@ -290,5 +298,39 @@ describe("CommunicationStep — bloc Documents et courriers", () => {
     );
     // Rien n'est affiché pour la référence morte : l'écran montre ce que l'API servira.
     expect(screen.getAllByText("Aucun élément sélectionné.").length).toBeGreaterThan(0);
+  });
+});
+
+describe("CommunicationStep — courriers de réponse via Clara", () => {
+  const label = "Courriers de réponse usager à traiter comme un courrier sortant Clara";
+
+  it("s'active et s'enregistre quand la racine est abonnée à Clara", () => {
+    rootApplications.value = ["iris", "clara"];
+    const { onSubmit, submit } = renderStep(makeProcedure());
+    const toggle = screen.getByRole("switch", { name: label });
+    expect(toggle).not.toHaveProperty("disabled", true);
+    fireEvent.click(toggle);
+    submit();
+    expect(onSubmit.mock.calls[0][0].replyLetters).toEqual({ claraOutbound: true });
+  });
+
+  it("est grisé sans abonnement Clara, avec la raison, et conserve la valeur", () => {
+    rootApplications.value = ["iris"];
+    const { onSubmit, submit } = renderStep(
+      makeProcedure({ replyLetters: { claraOutbound: true } }),
+    );
+    const toggle = screen.getByRole("switch", { name: label });
+    expect(toggle).toHaveProperty("disabled", true);
+    expect(toggle.getAttribute("aria-checked")).toBe("true");
+    expect(screen.getByRole("note").textContent).toMatch(/pas abonnée à Clara/);
+    submit();
+    expect(onSubmit.mock.calls[0][0].replyLetters).toEqual({ claraOutbound: true });
+  });
+
+  it("reste inactif tant que l'abonnement n'est pas connu", () => {
+    rootApplications.value = undefined;
+    renderStep(makeProcedure());
+    expect(screen.getByRole("switch", { name: label })).toHaveProperty("disabled", true);
+    rootApplications.value = ["iris", "clara"];
   });
 });

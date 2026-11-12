@@ -30,7 +30,7 @@ export function buildOpenApiDocument(serverUrl: string): Record<string, unknown>
     openapi: "3.1.0",
     info: {
       title: "API Socle — Référentiel de la gamme",
-      version: "1.43.0",
+      version: "1.46.0",
       description: [
         "API **en lecture seule** exposant le référentiel central de la gamme : les",
         "**organisations** (et sous-organisations) avec l'intégralité de leur configuration,",
@@ -110,6 +110,14 @@ export function buildOpenApiDocument(serverUrl: string): Record<string, unknown>
           "Catalogue de modèles de documents et de courriers (.doc/.docx/.odt) porteurs de " +
           "variables, et fichiers associés. Les documents rattachés à une démarche sont " +
           "servis résolus dans `Procedure.documents`.",
+      },
+      {
+        name: "Courriels",
+        description:
+          "Modèles de courriels de l'organisation principale : les courriels **système** qu'une " +
+          "application envoie aux usagers (texte modifiable par la collectivité, jamais " +
+          "supprimable) et les modèles **créés** par la collectivité. Objet et corps en texte " +
+          "brut à variables ; le Socle ne fusionne rien.",
       },
       {
         name: "Quartiers",
@@ -1096,6 +1104,92 @@ export function buildOpenApiDocument(serverUrl: string): Record<string, unknown>
               content: {
                 "application/json": {
                   schema: { type: "array", items: { $ref: "#/components/schemas/DocumentType" } },
+                },
+              },
+            },
+            ...errorResponses("401", "500"),
+          },
+        },
+      },
+      "/v1/email-templates": {
+        get: {
+          tags: ["Courriels"],
+          summary: "Lister les modèles de courriels (résolus par racine)",
+          description:
+            "Pour chaque organisation principale du périmètre de la clé, la liste **résolue** : " +
+            "d'abord les courriels **système** (`is_system`, repérés par leur `key` stable — " +
+            "`accuse_reception`, `debut_instruction`…), au texte de la collectivité s'il a été " +
+            "personnalisé (`is_customized`), sinon au texte du catalogue ; puis les modèles " +
+            "**créés** par la collectivité (`key` nulle), avec leurs applications. Un courriel " +
+            "système est **toujours** servi : il ne se supprime pas.\n\n" +
+            "Objet et corps sont du **texte brut** à variables `{{domaine.cle}}` ; une partie " +
+            "entre `{{#cle}}` et `{{/cle}}` n'est à rendre que si la variable a une valeur. " +
+            "**Le Socle ne fusionne rien** : l'application remplit les variables et ajoute son " +
+            "habillage (charte, bouton, pied de page, lien de désinscription). Une ligne vide " +
+            "sépare deux paragraphes.\n\n" +
+            "Usage type (Iris) : `?organization_id={racine}&key=accuse_reception`. Scope `read`.",
+          parameters: [
+            {
+              name: "organization_id",
+              in: "query",
+              schema: { type: "string", format: "uuid" },
+              description:
+                "Une organisation **principale** du périmètre. Hors périmètre ou " +
+                "sous-organisation ⇒ `404`.",
+            },
+            {
+              name: "application",
+              in: "query",
+              schema: { type: "string", example: "iris" },
+              description: "Ne garder que les modèles utilisés par cette application.",
+            },
+            {
+              name: "key",
+              in: "query",
+              schema: { type: "string", example: "accuse_reception" },
+              description: "Ne garder que le courriel système de cette clé.",
+            },
+            {
+              name: "available_in",
+              in: "query",
+              schema: { type: "string", format: "uuid" },
+              description:
+                "Ne garder que ce qui est proposé dans cet organisme : les courriels système, " +
+                "plus les modèles créés **activés nommément** pour lui (sans descendance : " +
+                "activer la racine n'ouvre pas ses services).",
+            },
+          ],
+          responses: {
+            "200": {
+              description: "Modèles de courriels, par racine.",
+              content: {
+                "application/json": {
+                  schema: {
+                    type: "array",
+                    items: { $ref: "#/components/schemas/EmailTemplate" },
+                  },
+                },
+              },
+            },
+            ...errorResponses("400", "401", "404", "500"),
+          },
+        },
+      },
+      "/v1/email-templates/variables": {
+        get: {
+          tags: ["Courriels"],
+          summary: "Catalogue unique des variables de courriels",
+          description:
+            "Le contrat de nommage des variables, tel que la base le garde : `common` (disponibles " +
+            "sur toute demande, donc dans tout modèle) et `context` (fournies par l'événement d'un " +
+            "courriel système, et seulement dans les courriels qui les déclarent dans `variables`). " +
+            "Un modèle qui cite une autre clé est **refusé** à l'enregistrement. Scope `read`.",
+          responses: {
+            "200": {
+              description: "Catalogue des variables.",
+              content: {
+                "application/json": {
+                  schema: { $ref: "#/components/schemas/EmailVariableCatalogue" },
                 },
               },
             },
@@ -3160,6 +3254,7 @@ export function buildOpenApiDocument(serverUrl: string): Record<string, unknown>
           properties: {
             visibility: { $ref: "#/components/schemas/VisibilityConfig" },
             documents: { $ref: "#/components/schemas/DocumentsConfig" },
+            replyLetters: { $ref: "#/components/schemas/ReplyLettersConfig" },
           },
           example: {
             visibility: {
@@ -3172,6 +3267,25 @@ export function buildOpenApiDocument(serverUrl: string): Record<string, unknown>
               restrictVisibility: true,
               documents: [{ id: "6f1c…", visibility: "toujours" }],
               letters: [{ id: "a92b…", visibility: "negative" }],
+            },
+            replyLetters: { claraOutbound: true },
+          },
+        },
+        ReplyLettersConfig: {
+          type: "object",
+          description:
+            "Bloc « Courriers de réponse » (1.46.0) : comment la réponse à l'usager quitte " +
+            "l'organisme. Absent = `{ claraOutbound: false }`.",
+          properties: {
+            claraOutbound: {
+              type: "boolean",
+              description:
+                "Vrai : le courrier de réponse rédigé dans Iris n'y est **pas envoyé** ; il est " +
+                "déposé dans Clara comme courrier sortant lié à la demande, qui reste en " +
+                "instruction (« Réponse en validation ») jusqu'à ce que Clara signale l'envoi. " +
+                "⚠️ N'a d'effet que si la racine est abonnée à Clara " +
+                "(`Organization.applications` contient `clara`) : la valeur est conservée quand " +
+                "l'abonnement disparaît. Lisez `claraOutbound && \"clara\" ∈ applications`.",
             },
           },
         },
@@ -3312,6 +3426,135 @@ export function buildOpenApiDocument(serverUrl: string): Record<string, unknown>
               description:
                 "Issue de la demande pour laquelle le document s'applique. Sans effet si " +
                 "`restrict_visibility` est faux.",
+            },
+          },
+        },
+        EmailTemplate: {
+          type: "object",
+          description:
+            "Modèle de courriel résolu pour une organisation principale. Courriel système : " +
+            "titre et applications du catalogue, objet et corps de la collectivité s'ils ont été " +
+            "personnalisés. Modèle créé : tout est choisi par la collectivité.",
+          required: [
+            "id",
+            "key",
+            "organization_id",
+            "name",
+            "description",
+            "subject",
+            "body",
+            "applications",
+            "organization_ids",
+            "is_system",
+            "is_customized",
+            "variables",
+            "updated_at",
+          ],
+          properties: {
+            id: {
+              type: ["string", "null"],
+              format: "uuid",
+              description: "Ligne de la collectivité — `null` pour un courriel système jamais personnalisé.",
+            },
+            key: {
+              type: ["string", "null"],
+              description:
+                "Clé **stable** du courriel système (`accuse_reception`, `debut_instruction`, " +
+                "`attente_information`, `reprise_instruction`, `annulation`, `reouverture`, " +
+                "`cloture_positive`, `cloture_negative`, `nouveau_message`, `code_acces`) — " +
+                "`null` pour un modèle créé. C'est elle qu'une application cite, jamais `id`.",
+            },
+            organization_id: { type: "string", format: "uuid" },
+            name: { type: "string", description: "Titre du courriel." },
+            description: { type: ["string", "null"] },
+            subject: { type: "string", description: "Objet, à variables." },
+            body: {
+              type: "string",
+              description: "Corps en texte brut, à variables ; une ligne vide sépare deux paragraphes.",
+            },
+            applications: {
+              type: "array",
+              items: { type: "string" },
+              description: "Applications qui l'utilisent (`iris`, `clara`, `nora`…), triées.",
+            },
+            organization_ids: {
+              type: ["array", "null"],
+              items: { type: "string", format: "uuid" },
+              description:
+                "Organismes où un modèle **créé** est proposé aux agents, nommément (pas de " +
+                "descendance implicite) ; `[]` = proposé nulle part. `null` pour un courriel " +
+                "système, qui vaut partout.",
+            },
+            is_system: { type: "boolean" },
+            is_customized: {
+              type: "boolean",
+              description: "Courriel système dont la collectivité a modifié l'objet ou le corps.",
+            },
+            variables: {
+              type: "array",
+              items: { type: "string" },
+              description:
+                "Variables que l'application fournit pour ce courriel système (vide pour un modèle créé).",
+            },
+            updated_at: {
+              type: ["string", "null"],
+              format: "date-time",
+              description: "Dernière modification par la collectivité ; `null` = texte d'origine.",
+            },
+          },
+          example: {
+            id: null,
+            key: "debut_instruction",
+            organization_id: "3d1f…",
+            name: "Courriel de début d'instruction",
+            description: "Envoyé quand un agent prend la demande en charge.",
+            subject: "Votre demande {{demande.reference}} est en cours de traitement",
+            body:
+              "Bonjour,\n\nVotre demande {{#demande.demarche}}« {{demande.demarche}} » " +
+              "{{/demande.demarche}}(référence {{demande.reference}}) est désormais prise en " +
+              "charge par nos services.\n\nStatut : {{demande.statut_usager}}.\n\nCordialement,\n{{organisation.nom}}",
+            applications: ["iris"],
+            organization_ids: null,
+            is_system: true,
+            is_customized: false,
+            variables: ["demande.demarche", "demande.reference", "demande.statut_usager", "demande.lien", "organisation.nom"],
+            updated_at: null,
+          },
+        },
+        EmailVariableGroup: {
+          type: "object",
+          required: ["key", "title", "description", "variables"],
+          properties: {
+            key: { type: "string", example: "usager" },
+            title: { type: "string", example: "Usager" },
+            description: { type: "string" },
+            variables: {
+              type: "array",
+              items: {
+                type: "object",
+                required: ["key", "label", "sample"],
+                properties: {
+                  key: { type: "string", example: "usager.nom_complet" },
+                  label: { type: "string", example: "Nom complet" },
+                  sample: { type: "string", description: "Valeur d'exemple pour un aperçu.", example: "Marie Durand" },
+                  hint: { type: "string" },
+                },
+              },
+            },
+          },
+        },
+        EmailVariableCatalogue: {
+          type: "object",
+          required: ["common", "context"],
+          properties: {
+            common: {
+              type: "array",
+              items: { $ref: "#/components/schemas/EmailVariableGroup" },
+              description: "Variables disponibles dans tout modèle.",
+            },
+            context: {
+              $ref: "#/components/schemas/EmailVariableGroup",
+              description: "Variables d'événement, réservées aux courriels système qui les déclarent.",
             },
           },
         },

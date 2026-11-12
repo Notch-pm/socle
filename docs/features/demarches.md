@@ -139,6 +139,18 @@ est fonctionnelle (voir feature « Édition d'organisation » ci-dessous). Param
   **écartent** les références mortes (`resolveDocuments`, testé). UI : `steps/communication/DocumentsBlock.tsx`.
   **En aval** : servi **résolu** dans `Procedure.documents` par `public-api` (contrat 1.6.0), à
   côté du catalogue `GET /v1/document-templates` — voir feature « API publique ».
+  Troisième bloc, **`replyLetters`** (« Courriers de réponse », 2026-11-12, contrat 1.46.0) :
+  `claraOutbound` vrai = dans Iris, l'agent **rédige** le courrier de réponse mais **ne l'envoie
+  pas** ; il est déposé dans Clara comme **courrier sortant** lié à la demande, qui reste « en
+  instruction » (sous-état « Réponse en validation », **pas** de 8ᵉ statut) jusqu'à ce que Clara
+  signale l'envoi ; Iris applique alors l'issue choisie par l'agent. Commutateur en bas du bloc
+  « Documents et courriers ». ⚠️ **Grisé** si la racine n'est pas abonnée à Clara
+  (`useRootApplications`, RPC `organization_root_applications`, helper
+  `replyViaClaraUnavailableReason`) ; inactif tant que l'abonnement n'est pas connu (au doute,
+  fermé). ⚠️ Le réglage gouverne l'usage : un abonnement retiré **conserve** la valeur, sans
+  effet — un consommateur lit `claraOutbound && "clara" ∈ applications` de la racine
+  (`replyViaClaraEffective`). Défaut **faux** : Iris envoie lui-même. Le Socle ne fait que porter
+  le réglage : le dépôt, le sous-état et l'avis d'envoi vivent dans Iris et Clara.
 - **Base de connaissances** → colonne `procedures.knowledge_base` (JSONB) : informations à destination
   de **l'agent et de son assistant LLM**, schéma **possédé** (contrat consommé en aval). Champs : texte
   d'aide agent & procédures (**Markdown**, aperçu via `markdown.ts` — rendu HTML échappé, aucune

@@ -7,6 +7,8 @@ import {
   documentVisibilityLabel,
   parseCommunicationConfig,
   publicationPeriodError,
+  replyViaClaraEffective,
+  replyViaClaraUnavailableReason,
   resolveDocuments,
   templatesForGroup,
 } from "./communication";
@@ -25,6 +27,7 @@ describe("defaultCommunicationConfig", () => {
         documents: [],
         letters: [],
       },
+      replyLetters: { claraOutbound: false },
     });
   });
 });
@@ -63,6 +66,7 @@ describe("parseCommunicationConfig", () => {
       },
       // Bloc absent du stocké : complété par ses défauts vides.
       documents: { restrictVisibility: false, documents: [], letters: [] },
+      replyLetters: { claraOutbound: false },
     });
   });
 
@@ -300,5 +304,33 @@ describe("resolveDocuments", () => {
       catalogue,
     );
     expect(resolved.map((r) => r.template.id)).toEqual(["d1"]);
+  });
+});
+
+describe("bloc courriers de réponse (circuit Clara)", () => {
+  it("est inactif par défaut et pour toute valeur non booléenne", () => {
+    for (const raw of [null, {}, { replyLetters: "oui" }, { replyLetters: { claraOutbound: "true" } }]) {
+      expect(parseCommunicationConfig(raw).replyLetters).toEqual({ claraOutbound: false });
+    }
+  });
+
+  it("relit la valeur enregistrée sans toucher aux autres blocs", () => {
+    const config = parseCommunicationConfig({ replyLetters: { claraOutbound: true, autre: 1 } });
+    expect(config.replyLetters).toEqual({ claraOutbound: true });
+    expect(config.visibility).toEqual(defaultCommunicationConfig().visibility);
+  });
+
+  it("n'est disponible que sous un abonnement Clara de la racine", () => {
+    expect(replyViaClaraUnavailableReason(["iris", "clara"])).toBeNull();
+    expect(replyViaClaraUnavailableReason(["iris"])).toMatch(/pas abonnée à Clara/);
+    expect(replyViaClaraUnavailableReason([])).toMatch(/pas abonnée à Clara/);
+  });
+
+  it("le réglage gouverne l'usage : conservé sans Clara, mais sans effet", () => {
+    const config = parseCommunicationConfig({ replyLetters: { claraOutbound: true } });
+    expect(replyViaClaraEffective(config, ["clara"])).toBe(true);
+    expect(replyViaClaraEffective(config, ["iris"])).toBe(false);
+    expect(cleanCommunicationConfig(config).replyLetters.claraOutbound).toBe(true);
+    expect(replyViaClaraEffective(defaultCommunicationConfig(), ["clara"])).toBe(false);
   });
 });

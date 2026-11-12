@@ -8,6 +8,7 @@ import type {
   BrandingDto,
   CategoryDto,
   DocumentTemplateDto,
+  EmailTemplateDto,
   DocumentTypeDto,
   ProcedureDocumentDto,
   ProcedureDocumentsDto,
@@ -24,6 +25,7 @@ import type {
   TenantDto,
 } from "./dto.ts";
 import { serializePortalTheme } from "./portalTheme.ts";
+import type { ResolvedEmailTemplate } from "./emailTemplates.ts";
 
 /** Ligne DB brute, structure inconnue à la compilation. */
 type Row = Record<string, unknown>;
@@ -84,6 +86,28 @@ export function serializeDocumentTemplate(row: Row): DocumentTemplateDto {
     file_name: str(row.file_name),
     created_at: nullableStr(row.created_at),
     updated_at: nullableStr(row.updated_at),
+  };
+}
+
+/**
+ * Modèle de courriel résolu → DTO. Whitelist : le texte d'origine d'un courriel
+ * système (`default_subject`/`default_body`) sert à l'écran, pas à l'aval.
+ */
+export function serializeEmailTemplate(template: ResolvedEmailTemplate): EmailTemplateDto {
+  return {
+    id: template.id,
+    key: template.key,
+    organization_id: template.organization_id,
+    name: template.name,
+    description: template.description,
+    subject: template.subject,
+    body: template.body,
+    applications: [...template.applications],
+    organization_ids: template.organization_ids === null ? null : [...template.organization_ids],
+    is_system: template.is_system,
+    is_customized: template.is_customized,
+    variables: [...template.variables],
+    updated_at: template.updated_at,
   };
 }
 

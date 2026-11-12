@@ -4,7 +4,7 @@
  * `CommunicationStep` et persistée dans `procedures.communication_config`.
  * Schéma « possédé » — contrat consommé en aval (portail usagers, Ariane, Clara).
  *
- * Le JSON est organisé en **blocs** (`visibility`, `documents`) : les réglages à
+ * Le JSON est organisé en **blocs** (`visibility`, `documents`, `replyLetters`) : les réglages à
  * venir de l'étape s'ajoutent comme clés voisines, sans déplacer l'existant.
  */
 
@@ -60,9 +60,27 @@ export interface DocumentsConfig {
   letters: CommunicationDocument[];
 }
 
+/**
+ * Bloc « Courriers de réponse » : comment la réponse à l'usager quitte l'organisme.
+ *
+ * `claraOutbound` vrai : dans Iris, l'agent rédige le courrier de réponse mais ne
+ * l'envoie pas — il est déposé dans Clara comme **courrier sortant** lié à la
+ * demande, qui reste « en instruction » (sous-état « Réponse en validation »)
+ * jusqu'à ce que Clara signale l'envoi.
+ *
+ * ⚠️ N'a d'effet que si la racine est abonnée à Clara : la valeur stockée est
+ * **conservée** quand l'abonnement disparaît (le réglage gouverne l'usage, pas
+ * la donnée) — un consommateur lit `claraOutbound && "clara" ∈ applications`
+ * de la racine (`replyViaClaraEffective`).
+ */
+export interface ReplyLettersConfig {
+  claraOutbound: boolean;
+}
+
 export interface CommunicationConfig {
   visibility: VisibilityConfig;
   documents: DocumentsConfig;
+  replyLetters: ReplyLettersConfig;
 }
 
 /**
@@ -86,6 +104,8 @@ export function defaultCommunicationConfig(): CommunicationConfig {
       documents: [],
       letters: [],
     },
+    // Au doute, Iris envoie lui-même : le circuit Clara est un choix explicite.
+    replyLetters: { claraOutbound: false },
   };
 }
 
@@ -170,7 +190,36 @@ export function parseCommunicationConfig(raw: unknown): CommunicationConfig {
     };
   }
 
+  const storedReply = root.replyLetters;
+  if (storedReply && typeof storedReply === "object") {
+    const reply = storedReply as Record<string, unknown>;
+    config.replyLetters = { claraOutbound: coerceBool(reply.claraOutbound, false) };
+  }
+
   return config;
+}
+
+/** L'application sans laquelle le circuit des courriers de réponse n'existe pas. */
+export const REPLY_VIA_CLARA_REQUIRED_APPLICATION = "clara";
+
+/**
+ * Pourquoi le circuit Clara est indisponible (phrase pour un administrateur),
+ * ou `null` si la racine est abonnée à Clara.
+ */
+export function replyViaClaraUnavailableReason(subscribed: readonly string[]): string | null {
+  if (subscribed.includes(REPLY_VIA_CLARA_REQUIRED_APPLICATION)) return null;
+  return (
+    "Indisponible : la collectivité n'est pas abonnée à Clara (gestion du courrier). " +
+    "L'abonnement se règle par l'équipe Edilumen."
+  );
+}
+
+/** Le circuit Clara s'applique-t-il vraiment : réglage actif ET racine abonnée à Clara. */
+export function replyViaClaraEffective(
+  config: CommunicationConfig,
+  subscribed: readonly string[],
+): boolean {
+  return config.replyLetters.claraOutbound && replyViaClaraUnavailableReason(subscribed) === null;
 }
 
 /** Normalise des paramètres en mémoire avant persistance (mêmes règles qu'à la lecture). */
