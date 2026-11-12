@@ -19,6 +19,7 @@ import {
   serializeBranding,
   serializeCategory,
   serializeDocumentTemplate,
+  serializeEmailTemplate,
   serializeDocumentType,
   serializeOrganization,
   serializePortalProcedure,
@@ -30,6 +31,13 @@ import {
   readPortalAssistant,
 } from "./_shared/serializers.ts";
 import { applicationsByOrganization, rootIdOf } from "./_shared/applications.ts";
+import {
+  filterByApplication,
+  resolveEmailTemplates,
+  type EmailTemplateApplicationRow,
+  type EmailTemplateDefaultRow,
+  type EmailTemplateRow,
+} from "./_shared/emailTemplates.ts";
 import { buildOrganizationTree, isUuid } from "./_shared/scope.ts";
 import { API_KEY_COLUMNS, evaluateApiKey, scopeRequest, shouldTouchKey, type ApiKeyRow } from "./_shared/apiKeyAuth.ts";
 import { errorResponse, jsonResponse } from "./_shared/errors.ts";
@@ -1331,6 +1339,71 @@ Deno.serve(async (req: Request) => {
           corsHeaders,
         );
       }
+    }
+
+    // --- /v1/email-templates ---
+    // Liste RÉSOLUE par racine du périmètre : courriels système (texte du
+    // catalogue ou personnalisé) puis modèles créés. Filtres : organization_id
+    // (une racine), application, key.
+    if (segments[0] === "v1" && segments[1] === "email-templates" && segments.length === 2) {
+      const orgParam = url.searchParams.get("organization_id");
+      const applicationParam = url.searchParams.get("application");
+      const keyParam = url.searchParams.get("key");
+      if (orgParam !== null && !isUuid(orgParam)) {
+        return errorResponse("bad_request", "Paramètre organization_id invalide.", corsHeaders);
+      }
+      if (applicationParam !== null && !/^[a-z][a-z0-9_-]{1,31}$/.test(applicationParam)) {
+        return errorResponse("bad_request", "Paramètre application invalide.", corsHeaders);
+      }
+      if (keyParam !== null && !/^[a-z][a-z0-9_]{1,63}$/.test(keyParam)) {
+        return errorResponse("bad_request", "Paramètre key invalide.", corsHeaders);
+      }
+
+      const { data: roots, error: rootsErr } = await admin
+        .from("organizations")
+        .select("id, parent_id")
+        .in("id", orgParam !== null ? (inScope(orgParam) ? [orgParam] : []) : scopeIds)
+        .is("parent_id", null);
+      if (rootsErr) throw rootsErr;
+      const rootIds = (roots ?? []).map((row) => String(row.id));
+      // Hors périmètre, ou pas une racine : 404, sans révéler l'existence.
+      if (orgParam !== null && rootIds.length === 0) {
+        return errorResponse(
+          "not_found",
+          "Organisation principale introuvable (les modèles de courriels se rattachent à une racine).",
+          corsHeaders,
+        );
+      }
+
+      const [defaultsRes, rowsRes] = await Promise.all([
+        admin.from("email_template_defaults").select("*").order("position", { ascending: true }),
+        rootIds.length > 0
+          ? admin
+              .from("email_templates")
+              .select("id, organization_id, system_key, name, description, subject, body, updated_at, email_template_applications(application_id)")
+              .in("organization_id", rootIds)
+          : Promise.resolve({ data: [], error: null }),
+      ]);
+      if (defaultsRes.error) throw defaultsRes.error;
+      if (rowsRes.error) throw rowsRes.error;
+
+      const defaults = (defaultsRes.data ?? []) as EmailTemplateDefaultRow[];
+      const rows = (rowsRes.data ?? []) as Array<
+        EmailTemplateRow & { email_template_applications?: { application_id: string }[] | null }
+      >;
+      const links: EmailTemplateApplicationRow[] = rows.flatMap((row) =>
+        (row.email_template_applications ?? []).map((link) => ({
+          email_template_id: row.id,
+          application_id: link.application_id,
+        })),
+      );
+
+      let templates = rootIds.flatMap((rootId) =>
+        resolveEmailTemplates(rootId, defaults, rows, links),
+      );
+      if (applicationParam !== null) templates = filterByApplication(templates, applicationParam);
+      if (keyParam !== null) templates = templates.filter((template) => template.key === keyParam);
+      return jsonResponse(200, templates.map(serializeEmailTemplate), corsHeaders);
     }
 
     // --- /v1/quartiers ---

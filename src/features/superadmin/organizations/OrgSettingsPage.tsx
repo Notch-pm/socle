@@ -1,6 +1,6 @@
 import * as React from "react";
 import { useParams, useNavigate, useSearchParams } from "react-router-dom";
-import { ArrowLeft, BookUser, Briefcase, Settings2, Users as UsersIcon, ListChecks, FileCheck2, FileSignature, MapPin, Mail, Palette, Globe, Languages, LayoutTemplate, KeyRound, Gauge, Tags, ToggleRight, AppWindow, MessagesSquare, MessageCircleQuestion, Plug, type LucideIcon } from "lucide-react";
+import { ArrowLeft, BookUser, Briefcase, Settings2, Users as UsersIcon, ListChecks, FileCheck2, FileSignature, MapPin, Mail, MailPlus, Palette, Globe, Languages, LayoutTemplate, KeyRound, Gauge, Tags, ToggleRight, AppWindow, MessagesSquare, MessageCircleQuestion, Plug, type LucideIcon } from "lucide-react";
 import { Card, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { EmptyState } from "@/components/shared/EmptyState";
@@ -28,6 +28,7 @@ import { ProceduresListPanel } from "@/features/procedures/ProceduresListPanel";
 import { CategoriesManager } from "@/features/categories/CategoriesManager";
 import { DocumentTypesManager } from "@/features/document-types/DocumentTypesManager";
 import { DocumentTemplatesManager } from "@/features/documents/DocumentTemplatesManager";
+import { EmailTemplatesManager } from "@/features/email-templates/EmailTemplatesManager";
 import { QuartiersManager } from "@/features/quartiers/QuartiersManager";
 
 type Section =
@@ -47,6 +48,7 @@ type Section =
   | "activations"
   | "types-pieces"
   | "documents"
+  | "courriels"
   | "quartiers"
   | "smtp"
   | "api"
@@ -69,6 +71,7 @@ const SECTIONS: { key: Exclude<Section, "menu">; title: string; description: str
   { key: "activations", title: "Démarches activées", description: "Quel organisme de l'arbre propose quelle démarche", icon: ToggleRight },
   { key: "types-pieces", title: "Types de pièce justificative", description: "Pièces demandées dans les démarches", icon: FileCheck2 },
   { key: "documents", title: "Documents", description: "Modèles de documents et de courriers à variables", icon: FileSignature },
+  { key: "courriels", title: "Modèles de courriels", description: "Courriels envoyés aux usagers par les applications (modifiables), et modèles créés par la collectivité", icon: MailPlus },
   { key: "quartiers", title: "Quartiers", description: "Découpage du territoire pour rattacher les usagers", icon: MapPin },
   { key: "smtp", title: "Emails (SMTP)", description: "Serveur SMTP utilisé pour les emails de cette organisation", icon: Mail },
   { key: "api", title: "API publique", description: "Clés d'accès des partenaires : référentiel, usagers, relais, assistant IA", icon: KeyRound },
@@ -207,6 +210,8 @@ export function OrgSettingsPage() {
           rootOnly(<DocumentTypesManager organizationId={organization.id} />, "Les types de pièce se paramètrent")}
         {activeSection === "documents" &&
           rootOnly(<DocumentTemplatesManager organizationId={organization.id} />, "Les documents se paramètrent")}
+        {activeSection === "courriels" &&
+          rootOnly(<EmailTemplatesManager organizationId={organization.id} />, "Les modèles de courriels se paramètrent")}
         {activeSection === "quartiers" &&
           rootOnly(<QuartiersManager organizationId={organization.id} />, "Les quartiers se paramètrent")}
         {activeSection === "smtp" && (

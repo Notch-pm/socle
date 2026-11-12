@@ -12,7 +12,22 @@ import {
   DOCUMENT_VARIABLE_GROUPS,
   variableToken,
   type DocumentVariable,
+  type DocumentVariableLoop,
 } from "@/features/documents/documentVariables";
+
+/** Un domaine affiché : celui des documents, ou celui des courriels. */
+export interface VariablesDialogGroup {
+  key: string;
+  title: string;
+  description: string;
+  variables: DocumentVariable[];
+  loops?: DocumentVariableLoop[];
+}
+
+const DOCUMENT_DESCRIPTION =
+  "Recopiez le jeton tel quel dans votre fichier Word ou LibreOffice, accolades " +
+  "comprises. Il sera remplacé par la valeur du dossier au moment de produire le " +
+  "document.";
 
 /** Bouton de copie qui confirme sur place, sans dépendre d'un système de toast. */
 function CopyButton({ text, label }: { text: string; label: string }) {
@@ -70,24 +85,25 @@ function VariableRow({ variable, token }: { variable: DocumentVariable; token: s
 export function VariablesDialog({
   open,
   onOpenChange,
+  groups = DOCUMENT_VARIABLE_GROUPS,
+  description = DOCUMENT_DESCRIPTION,
 }: {
   open: boolean;
   onOpenChange: (open: boolean) => void;
+  /** Catalogue affiché — celui des documents par défaut. */
+  groups?: readonly VariablesDialogGroup[];
+  description?: string;
 }) {
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-h-[85vh] max-w-2xl overflow-y-auto">
         <DialogHeader>
           <DialogTitle>Variables disponibles</DialogTitle>
-          <DialogDescription>
-            Recopiez le jeton tel quel dans votre fichier Word ou LibreOffice, accolades
-            comprises. Il sera remplacé par la valeur du dossier au moment de produire le
-            document.
-          </DialogDescription>
+          <DialogDescription>{description}</DialogDescription>
         </DialogHeader>
 
         <div className="flex flex-col gap-6">
-          {DOCUMENT_VARIABLE_GROUPS.map((group) => (
+          {groups.map((group) => (
             <section key={group.key} className="flex flex-col gap-2">
               <div>
                 <h3 className="text-sm font-semibold">{group.title}</h3>

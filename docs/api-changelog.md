@@ -1,7 +1,7 @@
 # Journal des évolutions des API publiques
 
 > **Public** : équipes consommatrices (Ariane, Clara, Iris, partenaires) · **Question traitée** :
-> quand un contrat d'API a-t-il changé, et comment ? · **Dernière mise à jour** : 2026-10-30
+> quand un contrat d'API a-t-il changé, et comment ? · **Dernière mise à jour** : 2026-11-12
 
 Journal **append-only** : chaque évolution de la surface de contrat des API publiques
 (`public-api`, `contacts-api`, `ai-api`, `audience-api`) — endpoint, paramètre, champ de réponse,
@@ -10,6 +10,28 @@ réécrite ; une correction s'ajoute sous une nouvelle date. Politique de compat
 consommateur : [integration.md](./integration.md#politique-de-compatibilité-v1).
 
 Format d'une entrée : `## AAAA-MM-JJ — <api> — ajout|correctif|rupture`
+
+---
+
+## 2026-11-12 — public-api — ajout (modèles de courriels, 1.44.0)
+
+- `GET /v1/email-templates`, scope `read`, filtres facultatifs `organization_id` (une **racine**
+  du périmètre, sinon `404`), `application` et `key`. Réponse : `EmailTemplate[]`, liste
+  **résolue** par racine — d'abord les courriels **système** (`is_system`, `key` stable :
+  `accuse_reception`, `debut_instruction`, `attente_information`, `reprise_instruction`,
+  `annulation`, `reouverture`, `cloture_positive`, `cloture_negative`, `nouveau_message`,
+  `code_acces`), au texte de la collectivité si elle l'a personnalisé (`is_customized`), sinon au
+  texte du catalogue ; puis les modèles **créés** par la collectivité (`key: null`), avec leurs
+  `applications`.
+- Un courriel système est **toujours** servi (il ne se supprime pas). Citez-le par sa `key`,
+  jamais par `id` (nul tant qu'il n'est pas personnalisé).
+- ⚠️ **Le Socle ne fusionne rien** : `subject` et `body` sont du texte brut à variables
+  `{{domaine.cle}}` (`variables` liste celles que l'application doit fournir) ; une partie entre
+  `{{#cle}}` et `{{/cle}}` n'est rendue que si la variable a une valeur ; une ligne vide sépare
+  deux paragraphes. L'habillage (charte, bouton, pied, désinscription) reste celui de
+  l'application.
+- Additif : rien ne change pour les appels existants. Iris (textes aujourd'hui en dur) puis Clara
+  consommeront.
 
 ---
 

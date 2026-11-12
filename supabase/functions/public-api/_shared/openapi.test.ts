@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { buildOpenApiDocument } from "./openapi.ts";
+import { serializeEmailTemplate } from "./serializers.ts";
 
 describe("buildOpenApiDocument", () => {
   const doc = buildOpenApiDocument("https://example.supabase.co/functions/v1/public-api") as any;
@@ -367,8 +368,8 @@ describe("contrat — annuaire des agents (1.43.0)", () => {
 describe("contrat — documents et courriers", () => {
   const doc = buildOpenApiDocument("https://example.supabase.co/functions/v1/public-api") as any;
 
-  it("annonce la version 1.43.0 du contrat", () => {
-    expect(doc.info.version).toBe("1.43.0");
+  it("annonce la version 1.44.0 du contrat", () => {
+    expect(doc.info.version).toBe("1.44.0");
   });
 
   it("une organisation dit les applications souscrites par sa collectivité (1.42.0)", () => {
@@ -969,5 +970,47 @@ describe("contrat — attributions des organisations (1.33.0)", () => {
       .filter(([path]) => path.startsWith("/v1/portal/"))
       .map(([, spec]) => JSON.stringify(spec));
     for (const spec of portalRefs) expect(spec).not.toContain("OrganizationAttributions");
+  });
+});
+
+describe("contrat — modèles de courriels (1.44.0)", () => {
+  const doc = buildOpenApiDocument("https://example.supabase.co/functions/v1/public-api") as any;
+  const op = doc.paths["/v1/email-templates"].get;
+
+  it("trois filtres facultatifs, 404 documenté", () => {
+    expect(op.parameters.map((p: { name: string }) => p.name)).toEqual([
+      "organization_id",
+      "application",
+      "key",
+    ]);
+    expect(Object.keys(op.responses)).toEqual(expect.arrayContaining(["200", "400", "404"]));
+  });
+
+  it("⚠️ dit qu'un courriel système est toujours servi et que le Socle ne fusionne rien", () => {
+    expect(op.description).toContain("Un courriel système est **toujours** servi");
+    expect(op.description).toContain("**Le Socle ne fusionne rien**");
+  });
+
+  it("le schéma EmailTemplate liste exactement les champs servis par le sérialiseur", () => {
+    const fields = Object.keys(
+      serializeEmailTemplate({
+        id: null,
+        key: "k",
+        organization_id: "o",
+        name: "n",
+        description: null,
+        subject: "s",
+        body: "b",
+        applications: [],
+        is_system: true,
+        is_customized: false,
+        variables: [],
+        updated_at: null,
+        default_subject: "s",
+        default_body: "b",
+      }),
+    ).sort();
+    expect(Object.keys(doc.components.schemas.EmailTemplate.properties).sort()).toEqual(fields);
+    expect([...doc.components.schemas.EmailTemplate.required].sort()).toEqual(fields);
   });
 });

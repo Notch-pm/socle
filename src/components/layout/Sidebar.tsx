@@ -8,6 +8,7 @@ import {
   Database,
   FileCheck2,
   FileSignature,
+  Mail,
   LibraryBig,
   Library,
   House,
@@ -169,6 +170,7 @@ export const RAIL: RailEntry[] = [
           // « Modèles de », pour ne plus se confondre avec les documents des
           // bases de connaissances.
           { to: "/referentiels/modeles-documents", title: "Modèles de documents", icon: FileSignature },
+          { to: "/referentiels/modeles-courriels", title: "Modèles de courriels", icon: Mail },
           { to: "/referentiels/quartiers", title: "Quartiers", icon: MapPin },
         ],
       },

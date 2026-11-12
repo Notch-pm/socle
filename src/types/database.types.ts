@@ -977,6 +977,120 @@ export type Database = {
           },
         ]
       }
+      email_template_applications: {
+        Row: {
+          application_id: string
+          email_template_id: string
+        }
+        Insert: {
+          application_id: string
+          email_template_id: string
+        }
+        Update: {
+          application_id?: string
+          email_template_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "email_template_applications_application_id_fkey"
+            columns: ["application_id"]
+            isOneToOne: false
+            referencedRelation: "applications"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "email_template_applications_email_template_id_fkey"
+            columns: ["email_template_id"]
+            isOneToOne: false
+            referencedRelation: "email_templates"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      email_template_defaults: {
+        Row: {
+          application_ids: string[]
+          body: string
+          description: string | null
+          key: string
+          name: string
+          position: number
+          subject: string
+          variables: string[]
+        }
+        Insert: {
+          application_ids?: string[]
+          body: string
+          description?: string | null
+          key: string
+          name: string
+          position?: number
+          subject: string
+          variables?: string[]
+        }
+        Update: {
+          application_ids?: string[]
+          body?: string
+          description?: string | null
+          key?: string
+          name?: string
+          position?: number
+          subject?: string
+          variables?: string[]
+        }
+        Relationships: []
+      }
+      email_templates: {
+        Row: {
+          body: string
+          created_at: string
+          description: string | null
+          id: string
+          name: string | null
+          organization_id: string
+          subject: string
+          system_key: string | null
+          updated_at: string
+        }
+        Insert: {
+          body: string
+          created_at?: string
+          description?: string | null
+          id?: string
+          name?: string | null
+          organization_id: string
+          subject: string
+          system_key?: string | null
+          updated_at?: string
+        }
+        Update: {
+          body?: string
+          created_at?: string
+          description?: string | null
+          id?: string
+          name?: string | null
+          organization_id?: string
+          subject?: string
+          system_key?: string | null
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "email_templates_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "email_templates_system_key_fkey"
+            columns: ["system_key"]
+            isOneToOne: false
+            referencedRelation: "email_template_defaults"
+            referencedColumns: ["key"]
+          },
+        ]
+      }
       integration_applications: {
         Row: {
           application_id: string
