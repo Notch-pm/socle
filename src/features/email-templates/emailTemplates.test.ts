@@ -205,6 +205,13 @@ describe("validateEmailTemplate — miroir des CHECK SQL", () => {
     ).toEqual({});
   });
 
+  it("borne la description d'un modèle créé à 1 000 caractères (CHECK SQL)", () => {
+    const base = { isSystem: false, name: "T", subject: "Objet", body: "Corps", allowedVariables: [] };
+    expect(validateEmailTemplate({ ...base, description: "x".repeat(1000) }).description).toBeUndefined();
+    expect(validateEmailTemplate({ ...base, description: "x".repeat(1001) }).description).toContain("1000");
+    expect(validateEmailTemplate({ ...base, isSystem: true, description: "x".repeat(1001) }).description).toBeUndefined();
+  });
+
   it("refuse une section mal fermée dans le corps", () => {
     expect(
       validateEmailTemplate({ isSystem: true, subject: "Objet", body: "{{#demande.lien}}x", allowedVariables: ["demande.lien"] }).body,

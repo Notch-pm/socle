@@ -13,6 +13,15 @@ Format d'une entrée : `## AAAA-MM-JJ — <api> — ajout|correctif|rupture`
 
 ---
 
+## 2026-11-12 — public-api — correctif (exemple EmailTemplate, 1.45.1)
+
+- L'exemple du schéma `EmailTemplate` (OpenAPI, `/api-doc`) citait encore `demande.libelle_demarche`
+  et `organisme.nom`, renommés le même jour en `demande.demarche` et `organisation.nom` : un modèle
+  recopié de l'exemple aurait été refusé. L'exemple suit le catalogue ; un test l'y épingle.
+- Aucune forme de requête ni de réponse ne change.
+
+---
+
 ## 2026-11-12 — public-api — ajout (modèles de courriels : organismes et variables, 1.45.0)
 
 - `EmailTemplate.organization_ids` : organismes où un modèle **créé** est proposé aux agents,

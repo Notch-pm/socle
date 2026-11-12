@@ -244,18 +244,20 @@ export function unbalancedSections(text: string): string[] {
 
 export interface EmailTemplateIssues {
   name?: string;
+  description?: string;
   subject?: string;
   body?: string;
 }
 
 /**
  * Validation de saisie, miroir des CHECK SQL et de la garde des variables.
- * `name` n'est exigé que pour un modèle créé ; `allowedVariables` = les variables
+ * `name` n'est exigé, et `description` bornée, que pour un modèle créé ; `allowedVariables` = les variables
  * communes, plus celles du courriel système (`allowedEmailVariables`).
  */
 export function validateEmailTemplate(input: {
   isSystem: boolean;
   name?: string | null;
+  description?: string | null;
   subject: string;
   body: string;
   allowedVariables: readonly string[];
@@ -266,6 +268,8 @@ export function validateEmailTemplate(input: {
     if (name === "") issues.name = "Le titre est obligatoire.";
     else if (name.length > EMAIL_NAME_MAX_LENGTH)
       issues.name = `Le titre ne doit pas dépasser ${EMAIL_NAME_MAX_LENGTH} caractères.`;
+    if ((input.description ?? "").trim().length > EMAIL_DESCRIPTION_MAX_LENGTH)
+      issues.description = `La description ne doit pas dépasser ${EMAIL_DESCRIPTION_MAX_LENGTH} caractères.`;
   }
   const unknownIssue = (text: string): string | undefined => {
     const unknown = unknownVariables(text, input.allowedVariables);

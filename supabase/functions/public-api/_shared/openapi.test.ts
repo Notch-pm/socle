@@ -1,6 +1,8 @@
 import { describe, expect, it } from "vitest";
 import { buildOpenApiDocument } from "./openapi.ts";
 import { serializeEmailTemplate } from "./serializers.ts";
+import { allEmailVariableKeys } from "./emailVariables.ts";
+import { extractVariables } from "./emailTemplates.ts";
 
 describe("buildOpenApiDocument", () => {
   const doc = buildOpenApiDocument("https://example.supabase.co/functions/v1/public-api") as any;
@@ -368,8 +370,8 @@ describe("contrat — annuaire des agents (1.43.0)", () => {
 describe("contrat — documents et courriers", () => {
   const doc = buildOpenApiDocument("https://example.supabase.co/functions/v1/public-api") as any;
 
-  it("annonce la version 1.45.0 du contrat", () => {
-    expect(doc.info.version).toBe("1.45.0");
+  it("annonce la version 1.45.1 du contrat", () => {
+    expect(doc.info.version).toBe("1.45.1");
   });
 
   it("une organisation dit les applications souscrites par sa collectivité (1.42.0)", () => {
@@ -1030,5 +1032,17 @@ describe("contrat — modèles de courriels, organismes et variables (1.45.0)", 
     const op = doc.paths["/v1/email-templates/variables"].get;
     expect(op.description).toContain("**refusé**");
     expect(doc.components.schemas.EmailVariableCatalogue.required).toEqual(["common", "context"]);
+  });
+});
+
+describe("contrat — exemple EmailTemplate (1.45.1)", () => {
+  const doc = buildOpenApiDocument("https://example.supabase.co/functions/v1/public-api") as any;
+
+  it("l'exemple ne cite que des variables du catalogue (la base refuse les autres)", () => {
+    const example = doc.components.schemas.EmailTemplate.example;
+    const known = new Set(allEmailVariableKeys());
+    const cited = [...extractVariables(`${example.subject}\n${example.body}`), ...example.variables];
+    expect(cited.length).toBeGreaterThan(0);
+    expect(cited.filter((key: string) => !known.has(key))).toEqual([]);
   });
 });

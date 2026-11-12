@@ -30,7 +30,7 @@ export function buildOpenApiDocument(serverUrl: string): Record<string, unknown>
     openapi: "3.1.0",
     info: {
       title: "API Socle — Référentiel de la gamme",
-      version: "1.45.0",
+      version: "1.45.1",
       description: [
         "API **en lecture seule** exposant le référentiel central de la gamme : les",
         "**organisations** (et sous-organisations) avec l'intégralité de leur configuration,",
@@ -3490,14 +3490,14 @@ export function buildOpenApiDocument(serverUrl: string): Record<string, unknown>
             description: "Envoyé quand un agent prend la demande en charge.",
             subject: "Votre demande {{demande.reference}} est en cours de traitement",
             body:
-              "Bonjour,\n\nVotre demande {{#demande.libelle_demarche}}« {{demande.libelle_demarche}} » " +
-              "{{/demande.libelle_demarche}}(référence {{demande.reference}}) est désormais prise en " +
-              "charge par nos services.\n\nStatut : {{demande.statut_usager}}.\n\nCordialement,\n{{organisme.nom}}",
+              "Bonjour,\n\nVotre demande {{#demande.demarche}}« {{demande.demarche}} » " +
+              "{{/demande.demarche}}(référence {{demande.reference}}) est désormais prise en " +
+              "charge par nos services.\n\nStatut : {{demande.statut_usager}}.\n\nCordialement,\n{{organisation.nom}}",
             applications: ["iris"],
             organization_ids: null,
             is_system: true,
             is_customized: false,
-            variables: ["demande.libelle_demarche", "demande.reference", "demande.statut_usager", "demande.lien", "organisme.nom"],
+            variables: ["demande.demarche", "demande.reference", "demande.statut_usager", "demande.lien", "organisation.nom"],
             updated_at: null,
           },
         },

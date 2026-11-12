@@ -15,6 +15,7 @@ import { Field } from "@/components/ui/field";
 import { cn } from "@/lib/utils";
 import {
   EMAIL_BODY_MAX_LENGTH,
+  EMAIL_DESCRIPTION_MAX_LENGTH,
   EMAIL_SUBJECT_MAX_LENGTH,
   validateEmailTemplate,
   type ResolvedEmailTemplate,
@@ -95,7 +96,7 @@ export function EmailTemplateFormDialog({
   }, [open, template]);
 
   const allowedVariables = allowedEmailVariables(template?.variables ?? []);
-  const issues = validateEmailTemplate({ isSystem, name, subject, body, allowedVariables });
+  const issues = validateEmailTemplate({ isSystem, name, description, subject, body, allowedVariables });
   const isDuplicate =
     !isSystem &&
     name.trim() !== "" &&
@@ -194,10 +195,15 @@ export function EmailTemplateFormDialog({
                   id="email-template-description"
                   rows={2}
                   value={description}
+                  maxLength={EMAIL_DESCRIPTION_MAX_LENGTH}
                   onChange={(e) => setDescription(e.target.value)}
                   placeholder="À quoi sert ce courriel, et quand l'utiliser."
                   className={TEXTAREA_CLASS}
+                  aria-invalid={Boolean(issues.description)}
                 />
+                {issues.description ? (
+                  <p className="mt-1.5 text-sm text-destructive">{issues.description}</p>
+                ) : null}
               </Field>
 
               <Field label="Applications qui l'utilisent">

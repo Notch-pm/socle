@@ -58,6 +58,8 @@ Il y a deux familles dans une seule liste :
   proposé **nulle part** ; chaque organisme se coche **nommément** — cocher la racine n'ouvre pas
   ses services. Trigger `enforce_email_template_organization_scope` : l'organisme appartient à
   l'arbre de la racine du modèle, et jamais à un courriel système (qui vaut partout).
+- Longueurs bornées en base **et** à l'écran (`validateEmailTemplate`) : objet 255, corps 20 000,
+  titre 200, description 1 000 caractères.
 - Multi-tenant strict : `email_templates` se rattache à une **racine**
   (`enforce_email_template_root_org`, EXECUTE révoqué) ; RLS lecture `has_org_access`, écriture
   `is_org_admin`. Titre d'un modèle créé unique par racine, sans tenir compte de la casse.
