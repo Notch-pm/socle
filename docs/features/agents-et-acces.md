@@ -13,7 +13,7 @@
 | 1 | Annuaire et matrice d'accès dans le Socle | **en ligne** (2026-10-30) |
 | 2 | `GET /v1/users` (scope `users`), lecture incrémentale | **en ligne** (2026-10-30, contrat 1.43.0) |
 | 3 | Consommation par Clara puis Iris (`sync-socle-users`, écrans verrouillés) | **en ligne** (2026-10-30) : Clara (rôle de base + affectations) et Iris (accès seul) ; vérifiés de bout en bout |
-| 4 | Connexion OIDC par Keycloak dans chaque application | en cours — `auth.edilumen.fr` en ligne (VPS OVH, France, kit [`infra/keycloak/`](../../infra/keycloak/README.md)), fédération Entra de test vérifiée, inscriptions fermées, Socle branché et essai réel réussi (2026-11-12), Clara et Iris à brancher ; état et reprise [plus bas](#lot-4--état-et-reprise-2026-11-10) |
+| 4 | Connexion OIDC par Keycloak dans chaque application | en cours — `auth.edilumen.fr` en ligne (VPS OVH, France, kit [`infra/keycloak/`](../../infra/keycloak/README.md)), fédération Entra de test vérifiée, inscriptions fermées, Socle, Clara et Iris branchés et essai réel réussi (2026-11-12), bascule à faire, lot 4b avant la première vraie collectivité ; état et reprise [plus bas](#lot-4--état-et-reprise-2026-11-10) |
 
 Principe : **Keycloak authentifie, le Socle autorise.** Un agent authentifié mais non provisionné
 par le Socle n'entre dans aucune application.
@@ -153,12 +153,10 @@ collectivité, et le bouton de connexion dans chaque application.
 >   « Organisations » pour le domaine Entra de test, *Pass login_hint* sur `entra-test`) ;
 >   provider `keycloak` du Supabase du Socle ; **essai réel réussi** et agent suspendu refusé —
 >   voir [l'essai du 2026-11-12](#essai-réel-du-socle-2026-11-12).
-> - **Prochaine étape** : finir le contre-essai « inconnu du Socle » (compte Keycloak
->   réellement créé, puis refusé) ; providers `keycloak` de Clara et d'Iris (secrets des
->   clients `clara` / `iris`, console par tunnel SSH) et leurs essais. Ensuite seulement :
->   merge des trois branches, déploiement de `invite-user` (Socle) et des deux
->   `sync-socle-users` (Clara, Iris). ⚠️ Avant la **première vraie collectivité** : traiter le
->   risque « Trust Email » (voir l'essai).
+> - Clara et Iris branchés et essayés, contre-essais réussis (2026-11-12).
+> - **Prochaine étape : la bascule** — merge des trois branches, déploiement de `invite-user`
+>   (Socle) et des deux `sync-socle-users` (Clara, Iris), fronts. ⚠️ Avant la **première vraie
+>   collectivité** : lot 4b (l'administrateur initie le compte Keycloak, risque « Trust Email »).
 > - Méthode : le but d'abord, une action à la fois (voir la fin de cette section).
 
 
@@ -242,9 +240,18 @@ connecté avec ses droits. `auth.identities` porte une identité `keycloak` sur 
   `/login?error=access_denied&error_code=user_banned&error_description=User+is+banned`. Le
   message « Votre compte est suspendu… » de `sso.ts` le reconnaît ; il n'est pas en ligne tant
   que la branche n'est pas mergée (l'écran de `main` reste muet).
-- ⏳ **Inconnu du Socle** : seulement vu côté Keycloak (adresse inconnue ⇒ mot de passe
-  demandé) ; reste à créer réellement un compte Keycloak sans agent et vérifier le refus
-  (`signup_disabled`).
+- ✅ **Inconnu du Socle refusé** : compte Keycloak créé par « Créer mon compte »
+  (`jacquotlaurent+inconnu@gmail.com`, adresse vérifiée), présenté au Socle, à Clara et à Iris —
+  aucun des trois Supabase ne crée de compte (inscriptions fermées).
+- ✅ **Clara et Iris** : providers `keycloak` posés par l'API de gestion Supabase (secret lu dans
+  la base de Keycloak par SSH, jamais affiché) ; Agent Test (créé par `sync-socle-users`)
+  connecté dans les deux, identité `keycloak` sur son compte, sans ressaisie entre les deux
+  (session Keycloak partagée — le but de la connexion unique).
+- **Décision (2026-11-12) : l'inscription Keycloak reste ouverte pour la bascule des comptes de
+  démo** ; « l'administrateur initie le compte Keycloak » (création par `invite-user` via l'API
+  d'administration de Keycloak, inscription publique fermée) et le risque « Trust Email »
+  forment le **lot 4b, obligatoire avant la première vraie collectivité** — détail dans
+  `docs/roadmap.md` § « Annuaire des agents et connexion unique ».
 - **Supabase retire l'identité `email` d'un agent invité jamais activé** quand il ajoute
   l'identité `keycloak` (compte non confirmé) : l'agent n'a plus que Keycloak. Comportement
   voulu par la bascule ; le mot de passe de secours ne vaut donc que pour un compte activé.

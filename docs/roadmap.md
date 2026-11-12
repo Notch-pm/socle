@@ -104,17 +104,32 @@ Détail et état par lot : [agents et accès](features/agents-et-acces.md).
 
 1. **Lot 4 — connexion unique par Keycloak.** Hébergement choisi le 2026-11-06 : VPS OVH en
    France, kit d'installation dans `infra/keycloak/`. Fédération avec un annuaire Entra ID
-   de test vérifiée le même jour. Puis : table `organization_identity_providers` (domaines d'e-mail →
-   fournisseur de la collectivité, `auth_mode` password/sso) et son écran superadmin ; provider
-   `keycloak` + inscriptions fermées + bouton « compte de ma collectivité » dans le Socle, Clara et
-   Iris (`scopes: 'openid'`, `kc_idp_hint`) ; plus d'invitation par mot de passe en mode SSO ;
-   déconnexion Keycloak à la suspension.
-2. **Modifier les scopes d'une clé API** sans la révoquer (aujourd'hui : SQL — le scope `users`
+   de test vérifiée le même jour. **Essai réel réussi le 2026-11-12** sur le Socle, Clara et Iris
+   (providers `keycloak` posés, inscriptions Supabase fermées, routage par domaine via la
+   fonction « Organisations » de Keycloak — sans `kc_idp_hint`). Reste la bascule : merge des
+   branches `feature/sso-lot4`, déploiement de `invite-user` et des `sync-socle-users`.
+2. **Lot 4b — confiance accordée à Keycloak, obligatoire avant la première vraie collectivité
+   reliée** (décidé le 2026-11-12 ; la bascule des comptes de démo se fait sans) :
+   - **L'administrateur initie le compte Keycloak** : à la création d'un agent, `invite-user`
+     crée aussi son compte dans Keycloak (API d'administration, client de service) et Keycloak
+     envoie « Définissez votre mot de passe » (`executeActions.ftl`, déjà au thème) ; puis
+     **fermer l'inscription publique** du realm. Aujourd'hui l'agent crée lui-même son compte
+     Keycloak : sûr (un compte que le Socle ne connaît pas n'ouvre rien — contre-essai du
+     2026-11-12), mais annuaire encombrable, e-mails de vérification déclenchables par un robot
+     via notre relais, et geste inattendu pour une DSI. À traiter : agents des collectivités
+     reliées à Microsoft (pas de mot de passe local, rattachement à la première venue),
+     suspension Socle ⇒ compte Keycloak désactivé.
+   - **Risque « Trust Email »** : une adresse écrite dans une fiche d'annuaire suffit à ouvrir le
+     compte Supabase de même adresse, super admin compris (vu à l'essai). N'accepter de chaque
+     annuaire que les adresses de son domaine, et/ou garder les super admins hors SSO.
+   - Trancher le sort de la table `organization_identity_providers` prévue (le routage par
+     domaine vit dans Keycloak).
+3. **Modifier les scopes d'une clé API** sans la révoquer (aujourd'hui : SQL — le scope `users`
    a été posé ainsi sur les clés Iris et Clara).
-3. **Iris, zone superadmin** : « donner / retirer l'accès » à un tenant contredit le Socle (la
+4. **Iris, zone superadmin** : « donner / retirer l'accès » à un tenant contredit le Socle (la
    synchronisation suivante rétablit son état) — à retirer ou à renvoyer vers le Socle.
-4. **Lot 5 — Ariane** : rattacher ses organisations au Socle, puis la même consommation.
-5. **SCIM** depuis l'annuaire de la collectivité vers le Socle (création automatique des agents ;
+5. **Lot 5 — Ariane** : rattacher ses organisations au Socle, puis la même consommation.
+6. **SCIM** depuis l'annuaire de la collectivité vers le Socle (création automatique des agents ;
    le Socle garde la décision des accès).
 
 ## APIs / plateforme
