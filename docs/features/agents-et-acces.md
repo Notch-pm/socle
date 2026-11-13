@@ -305,9 +305,13 @@ Keycloak**, et Keycloak ferme celles des autres applications où l'agent est con
   réécrit. Revers accepté : un lien piégé peut déconnecter un agent de Keycloak, sans autre
   effet.
 - **Front-channel logout** : Keycloak charge `https://<app>/deconnexion-sso` dans une iframe
-  invisible pour chaque application de la session. La page appelle `signOut({ scope: "local" })`
-  (les autres appareils de l'agent ne sont pas touchés). Les onglets ouverts l'apprennent par
-  supabase-js, qui partage la même origine. L'iframe garde l'accès au stockage parce que
+  invisible pour chaque application de la session. ⚠️ C'est une **page statique**
+  (`public/deconnexion-sso.html`) qui efface la clé `sb-…-auth-token` de façon **synchrone** :
+  Keycloak redirige dès que les iframes sont *chargées*. La première version, une page React
+  avec un `signOut` asynchrone, perdait cette course une fois sur deux (essai du 2026-11-13).
+  Les onglets ouverts voient la clé disparaître (événement `storage`, écouté dans
+  l'`AuthProvider`, `isSupabaseSessionKey`) et se déconnectent localement. Les autres appareils
+  de l'agent ne sont pas touchés. L'iframe garde l'accès au stockage parce que
   `auth.edilumen.fr` et les applications sont du même site (`edilumen.fr`).
 - ⚠️ **CSP du realm** : par défaut `frame-src 'self'`, ce qui fait bloquer les iframes du
   front-channel par le navigateur, en silence. Au premier essai du 2026-11-13, la déconnexion

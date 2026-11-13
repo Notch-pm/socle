@@ -1,7 +1,7 @@
 import * as React from "react";
 import type { Session } from "@supabase/supabase-js";
 import { supabase } from "@/lib/supabase";
-import { ssoLogoutRedirect } from "@/features/auth/sso";
+import { isSupabaseSessionKey, ssoLogoutRedirect } from "@/features/auth/sso";
 import type { Tables } from "@/types/database.types";
 
 type Profile = Tables<"users">;
@@ -70,6 +70,18 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       active = false;
     };
   }, [userId]);
+
+  // Déconnexion unique : la page statique /deconnexion-sso (ou un autre onglet) a
+  // effacé la session du localStorage → cet onglet se déconnecte aussi.
+  React.useEffect(() => {
+    function onStorage(event: StorageEvent) {
+      if (isSupabaseSessionKey(event.key) && event.newValue === null) {
+        void supabase.auth.signOut({ scope: "local" });
+      }
+    }
+    window.addEventListener("storage", onStorage);
+    return () => window.removeEventListener("storage", onStorage);
+  }, []);
 
   const signOut = React.useCallback(async () => {
     // Déconnexion unique : on ferme aussi la session Keycloak (voir sso.ts).

@@ -4,8 +4,6 @@ import { ProtectedRoute, SuperAdminRoute } from "@/components/layout/ProtectedRo
 import { AppShell } from "@/components/layout/AppShell";
 import { SuperAdminLayout } from "@/components/layout/SuperAdminLayout";
 import { LoginPage } from "@/features/auth/LoginPage";
-import { SsoLogoutPage } from "@/features/auth/SsoLogoutPage";
-import { SSO_LOGOUT_PATH } from "@/features/auth/sso";
 import { SetPasswordPage } from "@/features/auth/SetPasswordPage";
 import { ForgotPasswordPage } from "@/features/auth/ForgotPasswordPage";
 import { DashboardPage } from "@/features/dashboard/DashboardPage";
@@ -44,7 +42,6 @@ export function App() {
       <AuthProvider>
         <Routes>
           <Route path="/login" element={<LoginPage />} />
-          <Route path={SSO_LOGOUT_PATH} element={<SsoLogoutPage />} />
           <Route path="/mot-de-passe-oublie" element={<ForgotPasswordPage />} />
           <Route path="/activer-compte" element={<SetPasswordPage />} />
           <Route path="/reinitialiser-mot-de-passe" element={<SetPasswordPage />} />
