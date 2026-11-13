@@ -23,6 +23,15 @@
   "maxFailureWaitSeconds": 900,
   "ssoSessionIdleTimeout": 7200,
   "ssoSessionMaxLifespan": 36000,
+  "browserSecurityHeaders": {
+    "contentSecurityPolicy": "frame-src 'self' https://socle.edilumen.fr https://clara.edilumen.fr https://iris.edilumen.fr; frame-ancestors 'self'; object-src 'none';",
+    "contentSecurityPolicyReportOnly": "",
+    "xContentTypeOptions": "nosniff",
+    "referrerPolicy": "no-referrer",
+    "xRobotsTag": "none",
+    "xFrameOptions": "SAMEORIGIN",
+    "strictTransportSecurity": "max-age=31536000; includeSubDomains"
+  },
   "eventsEnabled": true,
   "eventsExpiration": 15552000,
   "adminEventsEnabled": true,

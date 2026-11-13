@@ -309,6 +309,11 @@ Keycloak**, et Keycloak ferme celles des autres applications où l'agent est con
   (les autres appareils de l'agent ne sont pas touchés). Les onglets ouverts l'apprennent par
   supabase-js, qui partage la même origine. L'iframe garde l'accès au stockage parce que
   `auth.edilumen.fr` et les applications sont du même site (`edilumen.fr`).
+- ⚠️ **CSP du realm** : par défaut `frame-src 'self'`, ce qui fait bloquer les iframes du
+  front-channel par le navigateur, en silence. Au premier essai du 2026-11-13, la déconnexion
+  d'Iris laissait le Socle et Clara connectés. *Realm settings → Security defenses → Headers →
+  Content-Security-Policy* = `frame-src 'self' https://socle.edilumen.fr https://clara.edilumen.fr https://iris.edilumen.fr; frame-ancestors 'self'; object-src 'none';`
+  (une application nouvelle s'y ajoute).
 - Réglages par client Keycloak (versionnés dans `realms/edilumen-realm.json`, à reporter dans
   la console pour le realm existant) : *Valid post logout redirect URIs* = la page de connexion
   (`/login`, `/connexion` pour Clara) ; *Front channel logout* activé, URL = `/deconnexion-sso`.
