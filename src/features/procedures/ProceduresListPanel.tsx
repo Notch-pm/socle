@@ -4,6 +4,7 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Switch } from "@/components/ui/switch";
+import { SegmentedControl } from "@/components/ui/segmented-control";
 import { EmptyState } from "@/components/shared/EmptyState";
 import {
   AlertDialog,
@@ -29,6 +30,26 @@ import {
   statusFromProductionToggle,
 } from "@/features/procedures/procedureStatus";
 
+/**
+ * Filtre d'origine de la liste : les démarches propres au catalogue Edilumen,
+ * ou celles importées d'un partenaire (`integration_id` posé — Arpège…).
+ * Simple confort d'affichage : rien n'est enregistré, la liste revient sur
+ * « Toutes » à chaque visite.
+ */
+export type ProcedureOrigin = "toutes" | "edilumen" | "partenaires";
+
+export function matchesOrigin(proc: Pick<Procedure, "integration_id">, origin: ProcedureOrigin): boolean {
+  if (origin === "edilumen") return !proc.integration_id;
+  if (origin === "partenaires") return Boolean(proc.integration_id);
+  return true;
+}
+
+const EMPTY_BY_ORIGIN: Record<ProcedureOrigin, string> = {
+  toutes: "Aucune démarche pour cette organisation.",
+  edilumen: "Aucune démarche Edilumen pour cette organisation.",
+  partenaires: "Aucune démarche partenaire pour cette organisation.",
+};
+
 export function ProceduresListPanel({
   organizationId,
   canDelete,
@@ -46,6 +67,11 @@ export function ProceduresListPanel({
   const deleteProc = useDeleteProcedure();
   const updateProc = useUpdateProcedure();
   const [deleting, setDeleting] = React.useState<Procedure | null>(null);
+  const [origin, setOrigin] = React.useState<ProcedureOrigin>("toutes");
+
+  const all = procedures ?? [];
+  const partnerCount = all.filter((p) => matchesOrigin(p, "partenaires")).length;
+  const visible = all.filter((p) => matchesOrigin(p, origin));
 
   const categoryName = new Map((categories ?? []).map((c) => [c.id, c.name]));
   // Démarches partenaires (Arpège…) : le badge porte le nom du partenaire.
@@ -65,8 +91,18 @@ export function ProceduresListPanel({
 
   return (
     <div className="flex flex-col gap-4">
-      <div className="flex justify-end">
-        <Button onClick={onNew}>
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <SegmentedControl
+          value={origin}
+          onChange={setOrigin}
+          aria-label="Origine des démarches"
+          options={[
+            { value: "toutes", label: `Toutes les démarches (${all.length})` },
+            { value: "edilumen", label: `Démarches Edilumen (${all.length - partnerCount})` },
+            { value: "partenaires", label: `Démarches partenaires (${partnerCount})` },
+          ]}
+        />
+        <Button onClick={onNew} className="ml-auto">
           <Plus />
           Nouvelle démarche
         </Button>
@@ -85,9 +121,9 @@ export function ProceduresListPanel({
             </div>
           ) : isError ? (
             <p className="p-4 text-sm text-destructive">Impossible de charger les démarches.</p>
-          ) : !procedures?.length ? (
+          ) : visible.length === 0 ? (
             <div className="p-4">
-              <EmptyState message="Aucune démarche pour cette organisation." />
+              <EmptyState message={EMPTY_BY_ORIGIN[origin]} />
             </div>
           ) : (
             <table className="w-full text-sm">
@@ -102,7 +138,7 @@ export function ProceduresListPanel({
                 </tr>
               </thead>
               <tbody>
-                {procedures.map((proc) => (
+                {visible.map((proc) => (
                   <tr key={proc.id} className="border-t border-border hover:bg-muted/30">
                     <td className="px-4 py-3 tabular-nums text-muted-foreground">
                       {proc.order_index ?? "—"}

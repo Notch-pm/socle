@@ -40,6 +40,10 @@ est fonctionnelle (voir feature « Édition d'organisation » ci-dessous). Param
   **« Brouillon »** dans la liste et dans l'en-tête de l'éditeur. **Au bout du stepper**, un
   enregistrement sur la dernière étape propose la mise en production par une modale — le moment où
   la question se pose d'elle-même. Le geste est **réversible** dans les deux sens.
+- **Filtre d'origine** de la liste (2026-11-13, même composant partagé) : « Toutes les démarches » /
+  « Démarches Edilumen » / « Démarches partenaires », avec le compte de chacune ; partenaire =
+  `integration_id` posé (`matchesOrigin`). Confort d'affichage seul : rien n'est enregistré, la
+  liste revient sur « Toutes » à chaque visite.
   ⚠️ Ne pas confondre avec les deux autres notions qui s'y cumulent : `organization_procedures.
   is_enabled` (quelles organisations la proposent) et `communication_config.visibility` (où et
   quand). `status` dit si le **paramétrage est fini** ; une démarche en brouillon n'est proposée

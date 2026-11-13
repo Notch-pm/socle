@@ -28,6 +28,14 @@ const h = vi.hoisted(() => {
     procedures: [
       { ...base, id: "p-draft", name: "Démarche en cours", status: "brouillon" },
       { ...base, id: "p-prod", name: "Démarche livrée", status: "production", order_index: 2 },
+      {
+        ...base,
+        id: "p-arpege",
+        name: "Démarche Arpège",
+        status: "production",
+        order_index: 3,
+        integration_id: "int-arpege",
+      },
     ],
     mutateUpdate: vi.fn(),
   };
@@ -101,5 +109,48 @@ describe("ProceduresListPanel — état brouillon / production", () => {
     renderPanel();
     fireEvent.click(within(row("Démarche livrée")).getByRole("switch"));
     expect(h.mutateUpdate).toHaveBeenCalledWith({ id: "p-prod", status: "brouillon" });
+  });
+});
+
+describe("ProceduresListPanel — filtre d'origine", () => {
+  const names = () =>
+    screen
+      .queryAllByRole("row")
+      .slice(1)
+      .map((r) => r.querySelector("td:nth-child(2)")?.textContent ?? "");
+
+  it("par défaut, toutes les démarches, avec le compte de chaque origine", () => {
+    renderPanel();
+    expect(screen.getByRole("tab", { name: "Toutes les démarches (3)" }).getAttribute("aria-selected")).toBe("true");
+    expect(screen.getByRole("tab", { name: "Démarches Edilumen (2)" })).toBeTruthy();
+    expect(screen.getByRole("tab", { name: "Démarches partenaires (1)" })).toBeTruthy();
+    expect(names()).toHaveLength(3);
+  });
+
+  it("« Démarches Edilumen » écarte les démarches importées d'un partenaire", () => {
+    renderPanel();
+    fireEvent.click(screen.getByRole("tab", { name: /Démarches Edilumen/ }));
+    expect(screen.queryByText("Démarche Arpège")).toBeNull();
+    expect(screen.getByText("Démarche en cours")).toBeTruthy();
+    expect(screen.getByText("Démarche livrée")).toBeTruthy();
+  });
+
+  it("« Démarches partenaires » ne garde que celles qui portent une intégration", () => {
+    renderPanel();
+    fireEvent.click(screen.getByRole("tab", { name: /Démarches partenaires/ }));
+    expect(screen.getByText("Démarche Arpège")).toBeTruthy();
+    expect(screen.queryByText("Démarche en cours")).toBeNull();
+    expect(screen.queryByText("Démarche livrée")).toBeNull();
+  });
+
+  it("un filtre sans résultat le dit, sans laisser croire que le catalogue est vide", () => {
+    const saved = h.procedures.splice(2, 1);
+    try {
+      renderPanel();
+      fireEvent.click(screen.getByRole("tab", { name: /Démarches partenaires/ }));
+      expect(screen.getByText("Aucune démarche partenaire pour cette organisation.")).toBeTruthy();
+    } finally {
+      h.procedures.push(...saved);
+    }
   });
 });
