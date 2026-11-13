@@ -284,9 +284,15 @@ Connect) : avec une session Keycloak, l'agent entre sans écran ; sans session, 
 aussitôt `login_required` (vérifié par curl sur la chaîne Supabase → Keycloak → Clara) et la
 page s'affiche **sans message**. Code : `readSilentSso` / `markSilentSso` /
 `ssoSilentSignInCredentials` dans `sso.ts` (même bloc dans les trois dépôts).
-- ⚠️ **Une tentative par onglet** (`sessionStorage`, clé `edilumen.sso.silent` :
-  `pending` → `done`). Sans ce verrou, une déconnexion relancerait aussitôt la connexion et un
-  échec bouclerait ; stockage inaccessible ⇒ jamais de tentative.
+- Une tentative part à **chaque arrivée** sur la page de connexion (F5 compris) et au **retour
+  sur l'onglet** (`visibilitychange`, jamais formulaire de mot de passe ouvert). Ainsi, un onglet
+  resté sur la page de connexion entre dès que l'agent s'est connecté ailleurs (demande du
+  2026-11-13). La première version ne tentait qu'une fois par onglet : F5 restait sur la page.
+- ⚠️ **Au plus une tentative toutes les 15 s par onglet** (`sessionStorage` :
+  `edilumen.sso.silent` = `pending` → `done`, `edilumen.sso.silent.at` = l'heure). Sans ce délai,
+  Clara, qui déconnecte d'office un compte sans profil, le reconnecterait en boucle. Le retour
+  d'une tentative ne relance jamais de tentative, et son erreur s'efface de l'URL (sinon un F5
+  la relirait). Stockage inaccessible ⇒ jamais de tentative.
 - ⚠️ Au retour silencieux, `readSsoReturnError(…, { silent: true })` tait tout **sauf** « non
   provisionné » et « suspendu » : une session Keycloak valide sans accès à l'application
   doit le dire.

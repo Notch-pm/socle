@@ -3,7 +3,7 @@ import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { render, screen, fireEvent, waitFor } from "@testing-library/react";
 import { MemoryRouter } from "react-router-dom";
 import { LoginPage } from "./LoginPage";
-import { SILENT_SSO_KEY } from "./sso";
+import { SILENT_SSO_AT_KEY, SILENT_SSO_KEY } from "./sso";
 
 // La page de connexion offre deux portes : le compte de la collectivité (Keycloak,
 // lot 4 de l'annuaire des agents) et le mot de passe du Socle.
@@ -33,8 +33,9 @@ beforeEach(() => {
   h.signInWithOAuth.mockReset();
   h.signInWithPassword.mockReset();
   h.signInWithOAuth.mockResolvedValue({ data: {}, error: null });
-  // Par défaut, la tentative silencieuse a déjà eu lieu dans cet onglet.
+  // Par défaut, une tentative silencieuse vient d'avoir lieu dans cet onglet.
   window.sessionStorage.setItem(SILENT_SSO_KEY, "done");
+  window.sessionStorage.setItem(SILENT_SSO_AT_KEY, String(Date.now()));
 });
 
 afterEach(() => {
@@ -115,6 +116,29 @@ describe("LoginPage — connexion silencieuse (session Keycloak d'une autre appl
     expect(screen.queryByRole("alert")).toBeNull();
     expect(h.signInWithOAuth).not.toHaveBeenCalled();
     expect(window.sessionStorage.getItem(SILENT_SSO_KEY)).toBe("done");
+    // L'erreur est effacée de l'URL : un F5 pourra retenter.
+    expect(window.location.hash).toBe("");
+  });
+
+  it("F5 sur la page, la dernière tentative est ancienne : on retente", async () => {
+    window.sessionStorage.setItem(SILENT_SSO_AT_KEY, "0");
+    renderAt("/login");
+    await waitFor(() => expect(h.signInWithOAuth).toHaveBeenCalledTimes(1));
+  });
+
+  it("retour sur l'onglet : on retente, sauf formulaire de mot de passe ouvert", async () => {
+    renderAt("/login");
+    window.sessionStorage.setItem(SILENT_SSO_AT_KEY, "0");
+    fireEvent.click(screen.getByRole("button", { name: "Autre méthode de connexion" }));
+    document.dispatchEvent(new Event("visibilitychange"));
+    expect(h.signInWithOAuth).not.toHaveBeenCalled();
+  });
+
+  it("retour sur l'onglet, formulaire fermé, délai passé : on retente", async () => {
+    renderAt("/login");
+    window.sessionStorage.setItem(SILENT_SSO_AT_KEY, "0");
+    document.dispatchEvent(new Event("visibilitychange"));
+    await waitFor(() => expect(h.signInWithOAuth).toHaveBeenCalledTimes(1));
   });
 
   it("retour silencieux d'un agent non provisionné : le message reste affiché", () => {
